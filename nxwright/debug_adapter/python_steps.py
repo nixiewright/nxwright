@@ -19,6 +19,7 @@ from pathlib import Path
 import reprlib
 import sys
 
+from nxwright.debug_adapter.replay import path_key
 from nxwright.testing.recording import PythonPlace, Recorder
 
 # How much of a value the debugger shows: its text cut short, and the first
@@ -39,7 +40,7 @@ class PythonTracer:
         # since an exception class may define __eq__ and so not be hashable;
         # the exception is kept, so that its id is not reused.
         self._raised = {}
-        self._prefix = os.path.normcase(os.path.abspath(folder)) + os.sep
+        self._prefix = path_key(str(folder)) + os.sep
         self._traced = {}   # {file name of a code object: whether it is traced}
 
     @contextmanager
@@ -61,8 +62,8 @@ class PythonTracer:
         if name not in self._traced:
             # Code with no file, such as "<string>", would otherwise resolve
             # against the current folder, which may be the folder of tests.
-            self._traced[name] = not name.startswith("<") and os.path.normcase(
-                os.path.abspath(name)).startswith(self._prefix)
+            self._traced[name] = not name.startswith("<") and path_key(name).startswith(
+                self._prefix)
         return self._traced[name]
 
     def _on_call(self, frame, event: str, argument):

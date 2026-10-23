@@ -6,6 +6,7 @@ import io
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -233,9 +234,11 @@ class PythonStepsTest(DebuggerTestCase):
     def test_the_tests_lines_and_its_runs_in_order(self):
         recorder, failures = self.traced("test_page.TwoRunsTest.test_two_runs")
         self.assertEqual(failures, [])
-        test_file = str(self.tests / "test_page.py")
+        # Compared as the debugger compares files: the folder of tests runs
+        # resolved, which may spell its path otherwise than self.tests does.
+        test_file = path_key(str(self.tests / "test_page.py"))
         lines = [(index, step.place.line) for index, step in enumerate(recorder.steps)
-                 if step.run is None and step.place.file == test_file]
+                 if step.run is None and path_key(step.place.file) == test_file]
         self.assertEqual([line for _, line in lines],
                          [test_line("first = load(3)"), test_line('first["title.txt"]'),
                           test_line("second = load(4)"), test_line('second["sys0"]')])
@@ -565,6 +568,26 @@ class TestCommandTest(DebuggerTestCase):
                                  "test_part": "failed"})
 
 
+
+
+class PathKeyTest(unittest.TestCase):
+    """A breakpoint's file, as the code editor gives it, and the file a step
+    ran from may spell one path two ways: through a link, as macOS's /var
+    is one to /private/var, or by a Windows short name, as RUNNER~1."""
+
+    def test_a_path_through_a_link_is_the_same_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            # Both the folder and its link are inside the temporary folder, so
+            # that removing it can only ever remove what the test made.
+            real, link = Path(folder) / "real folder", Path(folder) / "link"
+            real.mkdir()
+            (real / "page0.nx").write_text("", encoding="utf-8")
+            if sys.platform == "win32":
+                import _winapi
+                _winapi.CreateJunction(str(real), str(link))
+            else:
+                link.symlink_to(real, target_is_directory=True)
+            self.assertEqual(path_key(str(link / "page0.nx")), path_key(str(real / "page0.nx")))
 
 
 class RollingRecordingTest(unittest.TestCase):

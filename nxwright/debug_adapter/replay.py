@@ -179,5 +179,9 @@ class Timeline:
 
 
 def path_key(path: str) -> str:
-    """Returns the form of a path that compares equal for every way of writing it."""
-    return os.path.normcase(os.path.abspath(path))
+    """Returns the form of a path that compares equal for every way of writing it.
+
+    Links and Windows short names are resolved too. A code editor and Python
+    may spell one file two ways: macOS's /var is a link to /private/var, and
+    a Windows user folder may also go by a short name, such as RUNNER~1."""
+    return os.path.normcase(os.path.realpath(path))

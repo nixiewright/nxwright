@@ -627,7 +627,9 @@ class DrawingInProgressTest(SimulationTestCase):
         live.simulation.changes += 1
         live._send_news(busy=True)
         self.assertEqual(news.count("drawing"), 1)      # too soon after the last
-        live._drawn_at -= LIVE_DRAWING
+        # The wait is the longer of LIVE_DRAWING and the last drawing's time,
+        # which a slow machine can make the longer.
+        live._drawn_at -= max(LIVE_DRAWING, live._drawing_time)
         live._send_news(busy=True)
         self.assertEqual(news.count("drawing"), 2)      # its turn
         live.simulation.changes += 1
