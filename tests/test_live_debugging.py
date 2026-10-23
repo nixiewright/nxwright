@@ -618,7 +618,10 @@ class DrawingInProgressTest(SimulationTestCase):
         # followed by a drawing, which holds them up.
         self.program("page page0\n")
         news = []
-        live = LiveSimulation(self.root, notify=lambda kind, body: news.append(kind))
+        # A clock moved by hand, so that neither the machine's speed nor its
+        # clock's resolution decides when the wait is over.
+        wall = ManualWallClock()
+        live = LiveSimulation(self.root, notify=lambda kind, body: news.append(kind), wall=wall)
         live.simulation = Simulation(self.root)
         self.assertFalse(live._more_waiting())
         live.act(lambda simulation: None)
@@ -627,9 +630,7 @@ class DrawingInProgressTest(SimulationTestCase):
         live.simulation.changes += 1
         live._send_news(busy=True)
         self.assertEqual(news.count("drawing"), 1)      # too soon after the last
-        # The wait is the longer of LIVE_DRAWING and the last drawing's time,
-        # which a slow machine can make the longer.
-        live._drawn_at -= max(LIVE_DRAWING, live._drawing_time)
+        wall.move(LIVE_DRAWING)
         live._send_news(busy=True)
         self.assertEqual(news.count("drawing"), 2)      # its turn
         live.simulation.changes += 1
