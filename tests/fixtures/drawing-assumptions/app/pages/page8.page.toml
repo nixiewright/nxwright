@@ -1,0 +1,179 @@
+[page]
+name = "page8"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "slCrop"
+type = "sliding-text"
+x = 10
+y = 10
+w = 180
+h = 140
+txt = "line one\r\nline two"
+sta = 0
+picc = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+
+[[component]]
+name = "fbCrop"
+type = "file-browser"
+x = 210
+y = 10
+w = 180
+h = 140
+dir = "sd0/nxprobe_agent-a_none/"
+sta = 0
+picc = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+
+[[component]]
+name = "drCrop"
+type = "data-record"
+x = 410
+y = 10
+w = 180
+h = 140
+sta = 0
+picc = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+
+[[component]]
+name = "seCrop"
+type = "select"
+x = 610
+y = 10
+w = 180
+h = 140
+path = "one\r\ntwo\r\nthree"
+sta = 0
+picc = 1
+style = 1
+borderw = 6
+borderc = 63488
+
+[[component]]
+name = "slPic"
+type = "sliding-text"
+x = 10
+y = 165
+w = 180
+h = 140
+txt = "line one\r\nline two"
+sta = 2
+pic = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+
+[[component]]
+name = "fbPic"
+type = "file-browser"
+x = 210
+y = 165
+w = 180
+h = 140
+dir = "sd0/nxprobe_agent-a_none/"
+sta = 2
+pic = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+
+[[component]]
+name = "drPic"
+type = "data-record"
+x = 410
+y = 165
+w = 180
+h = 140
+sta = 2
+pic = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+
+[[component]]
+name = "sePic"
+type = "select"
+x = 610
+y = 165
+w = 180
+h = 140
+path = "one\r\ntwo\r\nthree"
+sta = 2
+pic = 1
+style = 1
+borderw = 6
+borderc = 63488
+
+[[component]]
+name = "slNone"
+type = "sliding-text"
+x = 10
+y = 320
+w = 180
+h = 140
+txt = "line one\r\nline two"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+
+[[component]]
+name = "fbNone"
+type = "file-browser"
+x = 210
+y = 320
+w = 180
+h = 140
+dir = "sd0/nxprobe_agent-a_none/"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+
+[[component]]
+name = "drNone"
+type = "data-record"
+x = 410
+y = 320
+w = 180
+h = 140
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+
+[[component]]
+name = "seNone"
+type = "select"
+x = 610
+y = 320
+w = 180
+h = 140
+path = "one\r\ntwo\r\nthree"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488

@@ -1,0 +1,470 @@
+[page]
+name = "schedule"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = "schedule/normal"
+
+[[component]]
+name = "title"
+type = "text"
+x = 24
+y = 20
+w = 400
+h = 32
+sta = 0
+font = "SansBold24"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "Schedule"
+txt_maxl = 20
+
+[[component]]
+name = "clock"
+type = "text"
+x = 640
+y = 20
+w = 136
+h = 32
+sta = 0
+font = "SansBold24"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 2
+txt = "00:00"
+txt_maxl = 5
+
+[[component]]
+name = "navHome"
+type = "button"
+x = 0
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "schedule/normal"
+picc2 = "schedule/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Home"
+
+[[component]]
+name = "navSchedule"
+type = "button"
+x = 200
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "schedule/normal"
+picc2 = "schedule/pressed"
+pco = "#ff8a42"
+pco2 = "#ff8a42"
+ycen = 2
+txt = "Schedule"
+
+[[component]]
+name = "navDay"
+type = "button"
+x = 400
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "schedule/normal"
+picc2 = "schedule/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Day"
+
+[[component]]
+name = "navSettings"
+type = "button"
+x = 600
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "schedule/normal"
+picc2 = "schedule/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Settings"
+
+[[component]]
+name = "tick"
+type = "timer"
+tim = 1000
+
+[[component]]
+name = "wakeMarker"
+type = "picture"
+x = 26
+y = 88
+w = 6
+h = 40
+pic = "marker/on"
+
+[[component]]
+name = "wakeName"
+type = "text"
+x = 100
+y = 93
+w = 150
+h = 30
+sta = 0
+font = "Sans20"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "Wake"
+
+[[component]]
+name = "wakeTime"
+type = "text"
+x = 270
+y = 90
+w = 110
+h = 36
+sta = 0
+font = "SansBold24"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "06:30"
+
+[[component]]
+name = "wakeTemp"
+type = "text"
+x = 392
+y = 90
+w = 112
+h = 36
+sta = 0
+font = "SansBold24"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 2
+txt = "21.0°"
+
+[[component]]
+name = "awayMarker"
+type = "picture"
+x = 26
+y = 169
+w = 6
+h = 40
+pic = "marker/off"
+
+[[component]]
+name = "awayName"
+type = "text"
+x = 100
+y = 174
+w = 150
+h = 30
+sta = 0
+font = "Sans20"
+picc = "schedule/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Away"
+
+[[component]]
+name = "awayTime"
+type = "text"
+x = 270
+y = 171
+w = 110
+h = 36
+sta = 0
+font = "SansBold24"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "08:30"
+
+[[component]]
+name = "awayTemp"
+type = "text"
+x = 392
+y = 171
+w = 112
+h = 36
+sta = 0
+font = "SansBold24"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 2
+txt = "17.0°"
+
+[[component]]
+name = "homeMarker"
+type = "picture"
+x = 26
+y = 250
+w = 6
+h = 40
+pic = "marker/off"
+
+[[component]]
+name = "homeName"
+type = "text"
+x = 100
+y = 255
+w = 150
+h = 30
+sta = 0
+font = "Sans20"
+picc = "schedule/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Home"
+
+[[component]]
+name = "homeTime"
+type = "text"
+x = 270
+y = 252
+w = 110
+h = 36
+sta = 0
+font = "SansBold24"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "17:30"
+
+[[component]]
+name = "homeTemp"
+type = "text"
+x = 392
+y = 252
+w = 112
+h = 36
+sta = 0
+font = "SansBold24"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 2
+txt = "21.5°"
+
+[[component]]
+name = "sleepMarker"
+type = "picture"
+x = 26
+y = 331
+w = 6
+h = 40
+pic = "marker/off"
+
+[[component]]
+name = "sleepName"
+type = "text"
+x = 100
+y = 336
+w = 150
+h = 30
+sta = 0
+font = "Sans20"
+picc = "schedule/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Sleep"
+
+[[component]]
+name = "sleepTime"
+type = "text"
+x = 270
+y = 333
+w = 110
+h = 36
+sta = 0
+font = "SansBold24"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "22:30"
+
+[[component]]
+name = "sleepTemp"
+type = "text"
+x = 392
+y = 333
+w = 112
+h = 36
+sta = 0
+font = "SansBold24"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 2
+txt = "18.0°"
+
+[[component]]
+name = "selectedName"
+type = "text"
+x = 552
+y = 88
+w = 216
+h = 30
+sta = 0
+font = "SansBold24"
+picc = "schedule/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "Wake"
+
+[[component]]
+name = "startCaption"
+type = "text"
+x = 552
+y = 140
+w = 216
+h = 22
+sta = 0
+picc = "schedule/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Starts at"
+
+[[component]]
+name = "earlier"
+type = "button"
+x = 552
+y = 160
+w = 56
+h = 56
+sta = 0
+picc = "schedule/normal"
+picc2 = "schedule/pressed"
+txt = ""
+
+[[component]]
+name = "startText"
+type = "text"
+x = 612
+y = 168
+w = 96
+h = 40
+sta = 0
+font = "SansBold32"
+picc = "schedule/normal"
+pco = "#eff3f7"
+txt = "06:30"
+
+[[component]]
+name = "later"
+type = "button"
+x = 712
+y = 160
+w = 56
+h = 56
+sta = 0
+picc = "schedule/normal"
+picc2 = "schedule/pressed"
+txt = ""
+
+[[component]]
+name = "targetCaption"
+type = "text"
+x = 552
+y = 244
+w = 216
+h = 22
+sta = 0
+picc = "schedule/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Temperature"
+txt_maxl = 20
+
+[[component]]
+name = "cooler"
+type = "button"
+x = 552
+y = 264
+w = 56
+h = 56
+sta = 0
+picc = "schedule/normal"
+picc2 = "schedule/pressed"
+txt = ""
+
+[[component]]
+name = "targetText"
+type = "text"
+x = 612
+y = 272
+w = 96
+h = 40
+sta = 0
+font = "SansBold32"
+picc = "schedule/normal"
+pco = "#eff3f7"
+txt = "21.0°"
+
+[[component]]
+name = "warmer"
+type = "button"
+x = 712
+y = 264
+w = 56
+h = 56
+sta = 0
+picc = "schedule/normal"
+picc2 = "schedule/pressed"
+txt = ""
+
+[[component]]
+name = "hint"
+type = "text"
+x = 552
+y = 334
+w = 216
+h = 44
+sta = 0
+picc = "schedule/normal"
+pco = "#63717b"
+xcen = 0
+txt = "Each period lasts until the next one starts."
+txt_maxl = 60
+isbr = 1
+
+[[component]]
+name = "wakeRow"
+type = "hotspot"
+x = 16
+y = 72
+w = 504
+h = 73
+
+[[component]]
+name = "awayRow"
+type = "hotspot"
+x = 16
+y = 153
+w = 504
+h = 73
+
+[[component]]
+name = "homeRow"
+type = "hotspot"
+x = 16
+y = 234
+w = 504
+h = 73
+
+[[component]]
+name = "sleepRow"
+type = "hotspot"
+x = 16
+y = 315
+w = 504
+h = 73

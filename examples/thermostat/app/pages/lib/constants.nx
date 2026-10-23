@@ -1,0 +1,48 @@
+// Constants every page can use: program.nx includes this file.
+
+// Temperatures are whole numbers of hundredths of a degree Celsius, so that
+// the simulated room can change by less than the tenth the screen shows.
+
+// The target's range, and how far one touch moves it.
+const TARGET_MIN = 1000
+const TARGET_MAX = 3000
+const TARGET_STEP = 50
+
+// The schedule's periods start on quarter hours.
+const START_STEP = 15
+const DAY_MINUTES = 1440
+
+// The simulated room. Each minute, a share of the difference with the
+// outdoors leaks out: 1/240 of it. Heating or cooling adds or removes a
+// fixed amount. A minute passes each second.
+// The outdoors suits the mode: a hot day while cooling, a cold day otherwise.
+const OUTDOOR_COLD = 800
+const OUTDOOR_HOT = 3000
+const LEAK_MINUTES = 240
+const HEAT_RATE = 15
+const COOL_RATE = 15
+// Heating or cooling starts this far from the target, then runs until it is reached.
+const DEADBAND = 30
+
+// The mode the user chose.
+const MODE_OFF = 0
+const MODE_HEAT = 1
+const MODE_COOL = 2
+
+// What the system is doing.
+const RUN_IDLE = 0
+const RUN_HEATING = 1
+const RUN_COOLING = 2
+
+const UNIT_CELSIUS = 0
+const UNIT_FAHRENHEIT = 1
+
+// Colours as the screen stores them: 5 bits of red, 6 of green, 5 of blue.
+// The art's colours, in the same order: #eef1f5, #8b95a5, #ff8a45, #4cb6ff,
+// #3fd6b0, #7a8596.
+const WHITE = 61342
+const MUTED = 36020
+const HEAT = 64584
+const COOL = 19903
+const TEAL = 16054
+const GREY = 31794

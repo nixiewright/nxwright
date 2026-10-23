@@ -1,0 +1,149 @@
+[page]
+name = "page5"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 65535
+
+[[component]]
+name = "d32"
+type = "data-record"
+x = 0
+y = 4
+w = 200
+h = 34
+format = "120^400"
+dez = 2
+dir = "first record^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d32.data"
+
+[[component]]
+name = "d33"
+type = "data-record"
+x = 0
+y = 40
+w = 200
+h = 34
+format = "120^400"
+dez = 2
+dir = "first record^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d33.data"
+
+[[component]]
+name = "d34"
+type = "data-record"
+x = 0
+y = 76
+w = 200
+h = 34
+format = "120^400"
+dez = 2
+dir = "first record^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d34.data"
+
+[[component]]
+name = "d35"
+type = "data-record"
+x = 0
+y = 112
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "first record^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d35.data"
+
+[[component]]
+name = "d36"
+type = "data-record"
+x = 0
+y = 148
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "first record^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d36.data"
+
+[[component]]
+name = "d37"
+type = "data-record"
+x = 0
+y = 184
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "first record^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d37.data"
+
+[[component]]
+name = "d38"
+type = "data-record"
+x = 0
+y = 220
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "first record^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d38.data"

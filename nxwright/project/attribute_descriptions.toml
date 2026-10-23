@@ -1,0 +1,1524 @@
+# What each attribute of each component type is, in nxwright's own words, for
+# the language server's hovers, completion, and the Properties section
+# (attribute_descriptions.py). Written by hand, from what the Editor's
+# Attribute panel shows of each attribute and what nxwright does with it;
+# never copied from the Editor's hints, which are not nxwright's to publish.
+#
+# A table per type, named as component_defaults.toml names types, and a table
+# common, for an attribute that means the same on every type having it. A
+# type's own entry replaces the common one. Each entry has a description; the
+# choices of an attribute whose value is one of a few numbers; code_can_change,
+# whether code may change it, which the Editor shows by its name's colour
+# (where the Editor never showed it, true unless its compile refused an
+# assignment); where it is not shown with a field to edit, properties:
+# "value-only", "hidden", or "never-shown"; and, for a method, which code
+# calls rather than sets, as d0.insert("a^b"), method = true.
+#
+# What the screen keeps of a number code stores, as the Nextion Editor's
+# simulator kept it: code_range = [lowest, highest], where a number outside
+# is refused; or code_wraps, "u8", "u16", or "s16", where any number is cut
+# to that many bytes, unsigned or signed. With neither, it keeps any number.
+# A type's entry of only code_range or code_wraps adds it to the common
+# entry, keeping the common words.
+
+[common.vscope]
+description = "Whether the component's values last beyond its page. A local component starts again from the page file each time its page opens; a global one keeps its values from page to page, and code on other pages can reach it."
+choices = { 0 = "local", 1 = "global" }
+code_can_change = false
+
+[common.lockobj]
+description = "Whether the component is locked. A locked component shows a padlock at its top right corner, in the page preview as in the Nextion Editor's design view. The preview then keeps it from being moved by dragging, the arrow keys, or arranging. The Nextion Editor's panel never shows it; its Lock and Unlock commands are taken to set it."
+choices = { 0 = "unlocked", 1 = "locked" }
+code_can_change = true
+properties = "never-shown"
+
+[common.groupid0]
+description = "With groupid1, the component's group, in the page preview and in the Nextion Editor's design view. The components of a page that share both, groupid0 not 0, are one group: selecting a member tints them all, and moving one moves them all. 0 is no group. The preview's Group gives the smallest groupid0 the page does not use, and groupid1 0. The Nextion Editor's Create Group gives a new group two large numbers. The Nextion Editor's panel never shows it."
+code_can_change = true
+properties = "never-shown"
+
+[common.groupid1]
+description = "With groupid0, the component's group, in the page preview and in the Nextion Editor's design view (see groupid0). With groupid0 0, it makes no group. The Nextion Editor's panel never shows it."
+code_can_change = true
+properties = "never-shown"
+
+[common.path_m]
+description = "The most bytes `path` holds. The build refuses a longer one, and code storing a longer one keeps its first bytes."
+code_can_change = true
+properties = "value-only"
+
+[common.loop]
+description = "Whether playing starts again from the beginning when it ends. Without it, the last frame stays, and `en` becomes 0."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = true
+code_range = [0, 1]
+
+[common.stim]
+description = "How long the whole file plays, in milliseconds, which the file sets."
+code_can_change = false
+
+[common.molloc_s]
+description = "The Nextion Editor's panel never shows it, and its use is not known. By its name, it may be memory the component takes, but no memory is counted for it, and a video plays even with it set below one frame."
+code_can_change = true
+properties = "never-shown"
+
+[common.molloc]
+description = "The Nextion Editor's panel never shows it, and its use is not known. By its name, it may be memory the component takes, but no memory is counted for it, and a video plays even with it set below one frame."
+code_can_change = true
+properties = "never-shown"
+
+[common.drag]
+description = "Whether a touch can drag the component across the screen. The Basic, Enhanced, and Discovery series refuse code that sets it."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = true
+code_range = [0, 1]
+
+[common.sendkey]
+description = "Whether the screen sends the component's ID when it is touched: as it is pressed, as it is released, or both. It sends 0x65, the page's ID, the component's ID, and 1 for a press or 0 for a release, then FF FF FF. In the Nextion Editor, it is the \"Send Component ID\" ticks of the Touch Press and Touch Release events."
+choices = { 0 = "none", 1 = "release", 2 = "press", 3 = "both" }
+code_can_change = true
+
+[common.aph]
+description = "How opaque the component is drawn, from 0, not drawn at all, to 127, fully opaque. Each part is blended in turn over what lies under it: a text's background, then its words. The Basic, Enhanced, and Discovery series refuse code that sets it."
+code_can_change = true
+code_range = [0, 127]
+
+[common.movex]
+description = "The Nextion Editor's panel never shows it, and its use is not known. 0 by default. On the Edge and Intelligent series, code reading it reads 0, even while `move` moves the component. The Basic, Enhanced, and Discovery series refuse code naming it at all."
+code_can_change = false
+properties = "never-shown"
+
+[common.movey]
+description = "The Nextion Editor's panel never shows it, and its use is not known. 0 by default. On the Edge and Intelligent series, code reading it reads 0, even while `move` moves the component. The Basic, Enhanced, and Discovery series refuse code naming it at all."
+code_can_change = false
+properties = "never-shown"
+
+[common.x]
+description = "How far the component's left edge is from the page's, in pixels. The Basic, Enhanced, and Discovery series refuse code that sets it."
+code_can_change = true
+code_range = [-6000, 6000]
+
+[common.y]
+description = "How far the component's top edge is from the page's, in pixels. The Basic, Enhanced, and Discovery series refuse code that sets it."
+code_can_change = true
+code_range = [-6000, 6000]
+
+[common.w]
+description = "The component's width, in pixels."
+code_can_change = false
+
+[common.h]
+description = "The component's height, in pixels."
+code_can_change = false
+
+[common.effect]
+description = "How the component comes into view as its page opens: at once, or sliding in from an edge or a corner of the screen. On the Basic, Enhanced, and Discovery series, code cannot set it, and the simulator shows the component at once."
+choices = { 0 = "at once", 1 = "from the top", 2 = "from the bottom", 3 = "from the left", 4 = "from the right", 5 = "from the top left", 6 = "from the top right", 7 = "from the bottom left", 8 = "from the bottom right" }
+code_can_change = true
+code_range = [0, 8]
+
+[common.first]
+description = "The order in which the components' effects run as the page opens: a higher number runs sooner. At most 100. The Basic, Enhanced, and Discovery series refuse code that sets it."
+code_can_change = true
+
+[common.time]
+description = "How long the component's effect takes as the page opens, in milliseconds, from 150 to 65535. The Basic, Enhanced, and Discovery series refuse code that sets it."
+code_can_change = true
+
+[common.sta]
+description = "What fills the component's background. The Basic, Enhanced, and Discovery series refuse 3."
+choices = { 0 = "a crop of a picture", 1 = "a colour", 2 = "a picture", 3 = "nothing, so the page shows through" }
+code_can_change = false
+
+[common.style]
+description = "How the component's edge is drawn."
+choices = { 0 = "flat", 1 = "a border", 2 = "sunken", 3 = "raised" }
+code_can_change = false
+
+[common.borderc]
+description = "The border's colour, when the style draws a border. The Basic, Enhanced, and Discovery series refuse code that sets it on a button, a dual-state button, or a text."
+code_can_change = true
+
+[common.borderw]
+description = "The border's width in pixels, from 0 to 255, when the style draws a border. The Basic, Enhanced, and Discovery series refuse code that sets it on a button, a dual-state button, or a text."
+code_can_change = true
+
+[common.font]
+description = "The font of the component's text, by its ID among the project's fonts."
+code_can_change = true
+
+[common.pic]
+description = "The picture drawn as the background, when the background is a picture."
+code_can_change = true
+
+[common.picc]
+description = "The picture a part of which shows as the background, when the background is a crop of a picture: the part behind the component. The picture must be as large as the screen."
+code_can_change = true
+
+[common.bco]
+description = "The background's colour, when the background is a colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[common.pco]
+description = "The text's colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[common.xcen]
+description = "Where the text sits across the component."
+choices = { 0 = "left", 1 = "centre", 2 = "right" }
+code_can_change = true
+code_range = [0, 2]
+
+[common.ycen]
+description = "Where the text sits up and down the component."
+choices = { 0 = "top", 1 = "middle", 2 = "bottom" }
+code_can_change = true
+code_range = [0, 2]
+
+[common.txt_maxl]
+description = "The most bytes `txt` can hold, which the screen sets aside in its memory."
+code_can_change = false
+
+[common.isbr]
+description = "Whether a text too long for a line goes on to the next."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = true
+code_range = [0, 1]
+
+[common.spax]
+description = "Space added between characters, in pixels, from 0 to 255. The Basic, Enhanced, and Discovery series refuse code that sets it on a button, a dual-state button, or a text."
+code_can_change = true
+code_range = [0, 255]
+
+[common.spay]
+description = "Space added between lines, in pixels, from 0 to 255. The Basic, Enhanced, and Discovery series refuse code that sets it on a button, a dual-state button, or a text."
+code_can_change = true
+code_range = [0, 255]
+
+[common.format_m]
+description = "The most bytes code can store in `format`: it keeps the first bytes of a longer one. A longer one in the page file is kept whole, and the screen shows all of it."
+code_can_change = true
+properties = "value-only"
+
+[common.dir_m]
+description = "The most bytes `dir` holds. The build refuses a longer one, and code storing a longer one keeps its first bytes."
+code_can_change = true
+properties = "value-only"
+
+[common.autoleft]
+description = "The Nextion Editor's panel never shows it, and its use is not known. A data record and a file browser have it. 0 by default; 1 changes nothing seen. Code can read it."
+code_can_change = false
+properties = "never-shown"
+
+[common.left]
+description = "Whether a scroll bar shows."
+choices = { 0 = "never", 1 = "while scrolling", 2 = "always" }
+code_can_change = true
+code_range = [0, 2]
+
+[common.filter_m]
+description = "The most bytes `filter` holds. The build refuses a longer one, and code storing a longer one keeps its first bytes."
+code_can_change = true
+properties = "value-only"
+
+[common.txt_m]
+description = "The most bytes `txt` holds. The build refuses a longer one."
+code_can_change = true
+properties = "value-only"
+
+[common.maxval_y]
+description = "How far the content can scroll down, which the screen works out from the content as it runs. Code can read it but not set it."
+code_can_change = false
+
+[common.val_y]
+description = "How far the content is scrolled down, from 0 to `maxval_y`."
+code_can_change = true
+
+[common.vvs2_m]
+description = "The most bytes `vvs2` holds. The build refuses a longer one, and code storing a longer one keeps its first bytes."
+code_can_change = true
+properties = "value-only"
+
+[common.key]
+description = "The keyboard that opens when the component is touched, so that it can be typed in, or 255 for none."
+code_can_change = false
+
+[audio.from]
+description = "Where the file played comes from."
+choices = { 0 = "the project", 1 = "a file on the screen" }
+code_can_change = false
+
+[audio.vid]
+description = "The sound played, by its ID among the project's sounds, when it comes from the project. Code setting another plays it from its start. Code setting the one playing changes nothing."
+code_can_change = true
+
+[audio.path]
+description = "The file played when it comes from the screen, as a path such as \"sd0/1.wav\". Code may name it only while `from` is 1. Code setting it plays the file from its start, even the file playing."
+code_can_change = true
+
+[audio.path_m]
+description = "The most bytes `path` holds: code storing a longer one keeps its first bytes. While `from` is 1, the build refuses a longer one; while it is 0, it takes one."
+code_can_change = true
+properties = "value-only"
+
+[audio.en]
+description = "Whether it plays: 1 plays, 2 pauses where it is, and 0 stops it, back at its beginning. It becomes 0 when playing that does not loop ends."
+choices = { 0 = "stopped", 1 = "playing", 2 = "paused" }
+code_can_change = true
+code_wraps = "u8"
+
+[audio.dis]
+description = "The Nextion Editor's panel never shows it, and its use is not known. Unlike a video's `dis`, it does not change the sound's speed."
+code_can_change = true
+code_wraps = "u16"
+properties = "never-shown"
+
+[audio.fps]
+description = "The Nextion Editor's panel never shows it, and its use is not known. It does not change the sound's speed."
+code_can_change = false
+properties = "never-shown"
+
+[audio.tim]
+description = "How far the playing has gone, in milliseconds, from 0 at each start. Code setting it moves the playing there."
+code_can_change = true
+
+[audio.qty]
+description = "The Nextion Editor's panel never shows it, and its use is not known. It does not change the sound's speed."
+code_can_change = false
+properties = "never-shown"
+
+[button.style]
+description = "How the button's edge is drawn."
+choices = { 0 = "flat", 1 = "a border", 2 = "sunken", 3 = "raised", 4 = "raised, and sunken while pressed" }
+code_can_change = false
+
+[button.pic]
+description = "The background picture when the button is not pressed, when the background is a picture."
+code_can_change = true
+
+[button.picc]
+description = "The picture a part of which shows behind the button when it is not pressed, when the background is a crop of a picture. It must be as large as the screen."
+code_can_change = true
+
+[button.bco]
+description = "The background's colour when the button is not pressed, when the background is a colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[button.pic2]
+description = "The background picture while the button is pressed, when the background is a picture."
+code_can_change = true
+
+[button.picc2]
+description = "The picture a part of which shows behind the button while it is pressed, when the background is a crop of a picture. It must be as large as the screen."
+code_can_change = true
+
+[button.bco2]
+description = "The background's colour while the button is pressed, when the background is a colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[button.pco]
+description = "The text's colour when the button is not pressed."
+code_can_change = true
+code_range = [0, 65535]
+
+[button.pco2]
+description = "The text's colour while the button is pressed."
+code_can_change = true
+code_range = [0, 65535]
+
+[button.val]
+description = "Whether the button is pressed: 1 while it is held, and 0 once it is released, set before its Touch Press and Touch Release events run. The Nextion Editor's panel never shows it."
+choices = { 0 = "released", 1 = "pressed" }
+code_can_change = true
+code_range = [0, 1]
+properties = "value-only"
+
+[button.txt]
+description = "The text shown on the button."
+code_can_change = true
+
+[checkbox.pco]
+description = "The tick's colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[checkbox.val]
+description = "Whether the box is ticked."
+choices = { 0 = "not ticked", 1 = "ticked" }
+code_can_change = true
+code_range = [0, 1]
+
+[combo-box.dis]
+description = "How round the corners of the box, its items, and its scroll marks are, as a percentage of half their shorter side, from 0, square, to 100. A border or a 3D style draws the box square."
+code_can_change = true
+code_range = [0, 100]
+
+[combo-box.txt]
+description = "The text the box shows: the item chosen, which follows `val`. Code may set any text, without changing `val`."
+code_can_change = true
+
+[combo-box.up]
+description = "Whether an arrow shows in the box."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = true
+code_range = [0, 1]
+
+[combo-box.pco3]
+description = "The arrow's colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[combo-box.bco1]
+description = "The items' background colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[combo-box.pco1]
+description = "The items' text colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[combo-box.path]
+description = "The items to choose from, one a line. A new one changes neither `val` nor `txt`."
+code_can_change = true
+
+[combo-box.path_m]
+description = "The most bytes `path` can hold. The build refuses a longer one, and code storing a longer one keeps its first bytes."
+code_can_change = false
+
+[combo-box.dir]
+description = "Which way the list opens."
+choices = { 0 = "up", 1 = "down", 2 = "left", 3 = "right" }
+code_can_change = true
+code_wraps = "u8"
+
+[combo-box.qty]
+description = "The most items the open list shows at once, from 1 to 254."
+code_can_change = true
+code_wraps = "u8"
+
+[combo-box.vvs0]
+description = "The space between the open list's items, from 0 to 255."
+code_can_change = true
+code_wraps = "u8"
+
+[combo-box.val]
+description = "The number of the item chosen, from 0. Changing it changes `txt` to that item's text, and an open list moves to show it. A number past the last item is refused."
+code_can_change = true
+
+[combo-box.bco2]
+description = "The chosen item's background colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[combo-box.pco2]
+description = "The chosen item's text colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[combo-box.hig]
+description = "Each item's height in the open list, or its width when the list opens sideways, from 16 to 255."
+code_can_change = true
+code_wraps = "u8"
+
+[combo-box.down]
+description = "Whether the list is open. A tap on the box opens and closes it, and code may set it."
+choices = { 0 = "closed", 1 = "open" }
+code_can_change = true
+code_wraps = "u8"
+
+[combo-box.mode]
+description = "What shows that the open list scrolls."
+choices = { 0 = "nothing", 1 = "a triangle", 2 = "a background and a triangle" }
+code_can_change = true
+code_wraps = "u8"
+
+[combo-box.wid]
+description = "The size of the mark that shows the list scrolls, from 8 to 255."
+code_can_change = true
+code_wraps = "u8"
+
+[combo-box.vvs1]
+description = "The space between the mark that shows the list scrolls and the items, from 0 to 255."
+code_can_change = true
+code_wraps = "u8"
+
+[combo-box.ch]
+description = "How long the list keeps moving after a swipe, from 0, stopping at once, to 32."
+code_can_change = true
+code_range = [0, 32]
+
+[combo-box.drastate]
+description = "The Nextion Editor's panel never shows it, and its use is not known. 0 by default, and only 0 or 1 is taken. Code reading it reads 0, also with the list open."
+code_can_change = false
+properties = "never-shown"
+
+[crop.picc]
+description = "The picture a part of which the crop shows: the part behind the crop's place. It must be as large as the screen."
+code_can_change = true
+
+[crop.vvs0]
+description = "Where the crop's picture starts across: the crop shows the part of `picc` this many pixels right of its own `x`, nothing where that passes the picture's edge. Code setting it draws the crop again at once. 0 by default. The Nextion Editor's panel never shows it. The Basic, Enhanced, and Discovery series refuse code that sets it."
+code_can_change = true
+code_wraps = "s16"
+
+[crop.vvs1]
+description = "Where the crop's picture starts down: the crop shows the part of `picc` this many pixels below its own `y`, nothing where that passes the picture's edge. Code setting it draws the crop again at once. 0 by default. The Nextion Editor's panel never shows it. The Basic, Enhanced, and Discovery series refuse code that sets it."
+code_can_change = true
+code_wraps = "s16"
+
+[data-record.init]
+description = "The Nextion Editor's panel never shows it. 0 by default. At 1, set in the page file, the data record does not open its data file: it shows its titles and no records, makes no missing file, and lets another data record open the file. Its methods change nothing, and send no error code. Once code sets its path, even to the same file, it works as at 0. Not seen: a data record of local scope, whose path goes back to the page file's as its page opens again; nxwright's simulator then opens the file, as code set its path once."
+code_can_change = false
+properties = "value-only"
+
+[data-record.path]
+description = "The data file the records are kept in, as a path such as \"sd0/1.data\"."
+code_can_change = true
+
+[data-record.lenth]
+description = "The most bytes each record of the data file holds."
+code_can_change = false
+
+[data-record.maxval]
+description = "The most records the data file keeps: a newer record then replaces the oldest."
+code_can_change = false
+
+[data-record.dez]
+description = "How many fields each record of the data file has, from 1 to 12."
+code_can_change = false
+
+[data-record.format]
+description = "The columns' widths, separated by `^`, such as \"100^100\". Without them, the columns share the table's width; wider, the table scrolls across."
+code_can_change = true
+
+[data-record.dir]
+description = "The columns' titles, separated by `^`. Without them, the top record takes the titles' row, in `pco`."
+code_can_change = true
+
+[data-record.dir_m]
+description = "The most bytes code can store in `dir`: it keeps the first bytes of a longer one. A longer one in the page file is kept whole, and the screen shows all of it."
+code_can_change = true
+properties = "value-only"
+
+[data-record.mode]
+description = "Whether the data file is made when its path finds none."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = true
+code_range = [0, 1]
+
+[data-record.dis]
+description = "Whether touching a record chooses it."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = true
+code_range = [0, 1]
+
+[data-record.order]
+description = "Where new records show in the table: at the top, the newest first, or at the bottom."
+choices = { 0 = "first", 1 = "last" }
+code_can_change = true
+code_range = [0, 1]
+
+[data-record.qty]
+description = "How many records the data file holds."
+code_can_change = false
+
+[data-record.hig]
+description = "Each row's height, from 1 to 255."
+code_can_change = true
+code_wraps = "u8"
+
+[data-record.gdc]
+description = "The colour of the table's lines."
+code_can_change = true
+code_range = [0, 65535]
+
+[data-record.gdw]
+description = "The width of the lines across the table, 0 for none."
+code_can_change = true
+code_wraps = "u8"
+
+[data-record.gdh]
+description = "The width of the lines up and down the table, 0 for none."
+code_can_change = true
+code_wraps = "u8"
+
+[data-record.bco1]
+description = "The titles' background colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[data-record.pco1]
+description = "The titles' text colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[data-record.bco2]
+description = "The chosen record's background colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[data-record.pco2]
+description = "The chosen record's text colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[data-record.filter]
+description = "The Nextion Editor's panel never shows it, and its use is not known. An empty text by default, of at most `filter_m` bytes. With it set to `ap`, by the page file or by code, the data record still shows every record, those without `ap` among them."
+code_can_change = true
+properties = "never-shown"
+
+[data-record.val]
+description = "The number of the record chosen, from 0, the oldest, or -1 for none. Changing it loads that record into `txt`; a number past the last record is refused."
+code_can_change = true
+
+[data-record.txt]
+description = "The fields of the record chosen, which follow `val`. Code can read it but not set it."
+code_can_change = false
+
+[data-record.insert]
+description = "The method adding a record after the newest: `d0.insert(\"a^b^c\")` or `d0.insert(t0.txt)`, its fields separated by `^`. Once the file holds `maxval` records, the new one takes the oldest one's place. One longer than `lenth` bytes is refused, and a number adds nothing."
+code_can_change = true
+method = true
+properties = "hidden"
+
+[data-record.delete]
+description = "The method deleting records: `d0.delete(n, count)` deletes `count` records from record `n`, numbered from 0, the oldest."
+code_can_change = true
+method = true
+properties = "hidden"
+
+[data-record.up]
+description = "The method changing a record: `d0.up(\"a^b^c\", n)` puts the text in place of record `n`, numbered from 0, the oldest."
+code_can_change = true
+method = true
+properties = "hidden"
+
+[data-record.clear]
+description = "The method deleting every record: `d0.clear()`."
+code_can_change = true
+method = true
+properties = "hidden"
+
+[data-record.ch]
+description = "How long the table keeps moving after a swipe, from 0, stopping at once, to 32."
+code_can_change = true
+code_range = [0, 32]
+
+[data-record.maxval_x]
+description = "How far the content can scroll across, which the screen works out from the content as it runs. Code can read it but not set it."
+code_can_change = false
+
+[data-record.val_x]
+description = "How far the content is scrolled across, from 0 to `maxval_x`."
+code_can_change = true
+
+[dual-state-button.style]
+description = "How the button's edge is drawn."
+choices = { 0 = "flat", 1 = "a border", 2 = "sunken", 3 = "raised", 4 = "raised, and sunken in the second state" }
+code_can_change = false
+
+[dual-state-button.pic]
+description = "The background picture in the first state, when the background is a picture."
+code_can_change = true
+
+[dual-state-button.picc]
+description = "The picture a part of which shows behind the button in the first state, when the background is a crop of a picture. It must be as large as the screen."
+code_can_change = true
+
+[dual-state-button.bco]
+description = "The background's colour in the first state, when the background is a colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[dual-state-button.pic2]
+description = "The background picture in the second state, when the background is a picture."
+code_can_change = true
+
+[dual-state-button.picc2]
+description = "The picture a part of which shows behind the button in the second state, when the background is a crop of a picture. It must be as large as the screen."
+code_can_change = true
+
+[dual-state-button.bco2]
+description = "The background's colour in the second state, when the background is a colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[dual-state-button.pco]
+description = "The text's colour in the first state."
+code_can_change = true
+code_range = [0, 65535]
+
+[dual-state-button.pco2]
+description = "The text's colour in the second state."
+code_can_change = true
+code_range = [0, 65535]
+
+[dual-state-button.val]
+description = "Whether the button is in its second state, or its first."
+choices = { 0 = "first state", 1 = "second state" }
+code_can_change = true
+code_range = [0, 1]
+
+[dual-state-button.txt]
+description = "The text shown on the button."
+code_can_change = true
+
+[external-picture.path]
+description = "The picture file shown, as a path on the screen, such as \"sd0/1.jpg\"."
+code_can_change = true
+
+[file-browser.pco]
+description = "The files' names' colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[file-browser.pco2]
+description = "The chosen file's name's colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[file-browser.bco2]
+description = "The chosen file's background colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[file-browser.xcen]
+description = "The Nextion Editor's panel never shows it for a file browser, and its use there is not known. 1 by default."
+code_can_change = true
+code_range = [0, 2]
+properties = "never-shown"
+
+[file-browser.ch]
+description = "How long the list keeps moving after a swipe, from 0, stopping at once, to 32."
+code_can_change = true
+code_range = [0, 32]
+
+[file-browser.dir]
+description = "The folder listed. Setting it lists the folder again."
+code_can_change = true
+
+[file-browser.filter]
+description = "Which files are listed: patterns separated by `|`, such as \"*.txt|*.data\"."
+code_can_change = true
+
+[file-browser.val]
+description = "The number of the file chosen. Changing it changes `txt` to that file's name."
+code_can_change = true
+
+[file-browser.txt]
+description = "The name of the file chosen, which follows `val`. Code can read it but not set it."
+code_can_change = false
+
+[file-browser.qty]
+description = "How many files the listing found. Code can read it but not set it."
+code_can_change = false
+
+[file-browser.dis]
+description = "How many lines a file's name may take."
+code_can_change = true
+code_wraps = "u8"
+
+[file-browser.spax]
+description = "Space added between the characters of files' names, in pixels, from 0 to 255."
+code_can_change = true
+code_wraps = "u8"
+
+[file-browser.spay]
+description = "Space added between the lines of files' names, in pixels, from 0 to 255."
+code_can_change = true
+code_wraps = "u8"
+
+[file-browser.val_y]
+description = "How far the entries are scrolled down: a touch scrolls them from 0 to `maxval_y`, and code up to 32 pixels further."
+code_can_change = true
+
+[file-browser.psta]
+description = "Whether the folders inside the one listed are listed too."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = false
+
+[file-browser.pic1]
+description = "The icon shown beside a folder."
+code_can_change = true
+
+[file-browser.pic2]
+description = "The icon shown beside a file."
+code_can_change = true
+code_wraps = "u8"
+
+[file-browser.vvs2]
+description = "Icons of their own for kinds of files: patterns, each with a picture's ID, such as \"*.txt/2*.data/3\"."
+code_can_change = true
+
+[file-browser.buffsize]
+description = "The bytes set aside for the names the listing finds; 32000 is suggested."
+code_can_change = false
+
+[file-browser.buff]
+description = "The Nextion Editor's panel never shows it, and its use is not known. 0 by default; 1 changes nothing seen. Code can read it."
+code_can_change = false
+properties = "never-shown"
+
+[file-browser.up]
+description = "The method showing the folder above `dir`: `fb0.up()`, no higher than the card's own folder. Code can read it, but cannot assign to it. The Nextion Editor's panel never shows it."
+code_can_change = true
+method = true
+properties = "hidden"
+
+[file-browser.fwarning]
+description = "Whether the build warns of file names not in UTF-8. Only the build uses it, and the screen does not hold it: code cannot set it, code reading it reads 0, and a typed line naming it answers 0x1A, an invalid variable."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = false
+
+[file-stream.val]
+description = "Where the next read or write takes place in the open file, in bytes from its start. Opening a file sets it to 0, and reading or writing moves it. Code may set it from 0, past the end of the file too; the screen refuses a value below 0."
+code_can_change = true
+
+[file-stream.qty]
+description = "The open file's size in bytes. Code can read it but not set it."
+code_can_change = false
+
+[file-stream.en]
+description = "Whether a file is open. Code can read it but not set it."
+choices = { 0 = "closed", 1 = "open" }
+code_can_change = false
+
+[file-stream.open]
+description = "A method, which code calls to open a file."
+code_can_change = true
+method = true
+properties = "hidden"
+
+[file-stream.read]
+description = "A method, which code calls to read from the open file."
+code_can_change = true
+method = true
+properties = "hidden"
+
+[file-stream.write]
+description = "A method, which code calls to write to the open file."
+code_can_change = true
+method = true
+properties = "hidden"
+
+[file-stream.close]
+description = "A method, which code calls to close the open file."
+code_can_change = true
+method = true
+properties = "hidden"
+
+[file-stream.find]
+description = "A method, which code calls with a file's path, as `fs0.find(\"sd0/a.txt\")`, to look for a file. It reports success and changes nothing seen, whether or not the card has the file. What a real screen does with it is not known."
+code_can_change = true
+method = true
+properties = "hidden"
+
+[gauge.pic]
+description = "The dial's picture."
+code_can_change = true
+
+[gauge.val]
+description = "The needle's angle, in degrees, from 0 to 360: 0 points left, 90 up, 180 right, and 270 down."
+code_can_change = true
+code_range = [0, 360]
+
+[gauge.format]
+description = "Degrees added to `val`: the needle points at `val` plus `format`."
+code_can_change = true
+code_range = [0, 360]
+
+[gauge.up]
+description = "How far the needle's tip is from the gauge's middle, at most half the gauge's height less a pixel, which 32767 asks for."
+code_can_change = true
+
+[gauge.down]
+description = "How far the needle's foot is from its widest point, away from its tip."
+code_can_change = true
+
+[gauge.left]
+description = "How far the needle's widest point, and its foot with it, are moved from the gauge's middle toward its tip, from 0 to 1024."
+code_can_change = true
+code_range = [0, 1024]
+
+[gauge.pco]
+description = "The needle's colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[gauge.pco2]
+description = "The colour of the needle's centre."
+code_can_change = true
+code_range = [0, 65535]
+
+[gauge.hig]
+description = "The diameter of the needle's centre, at most 100: 0 draws no centre."
+code_can_change = true
+code_range = [0, 100]
+
+[gauge.wid]
+description = "The Nextion Editor's panel never shows it for a gauge, and its use there is not known. 2 by default. It takes 1 to 20, whatever the gauge's size. On the Edge and Intelligent series, the screen does not hold it: code reading it reads 0, and code storing it fails and changes nothing. Setting it to 10 or 30 on a gauge of style 3 changes nothing seen."
+code_can_change = true
+properties = "never-shown"
+
+[gauge.vvs0]
+description = "The needle's width at its tip, at most 128: n pixels each side of a middle pixel less one, so 1 draws a line a pixel wide."
+code_can_change = true
+code_range = [0, 128]
+
+[gauge.vvs1]
+description = "The needle's width at its widest point, at most 128, counted as `vvs0` is."
+code_can_change = true
+code_range = [0, 128]
+
+[gauge.vvs2]
+description = "The needle's width at its foot, at most 128, counted as `vvs0` is, kept as a character whose code is the width."
+code_can_change = true
+code_range = [0, 128]
+
+[gmov.from]
+description = "The Nextion Editor's panel never shows it. 0, the default, plays the animation that `vid` gives. 1 plays no file from an SD card: the animation then has no `vid` for code to read, and it plays the project's first animation, whatever `vid` and `path` hold."
+code_can_change = false
+properties = "value-only"
+
+[gmov.vid]
+description = "The animation played, by its ID among the project's animations. Code may name it only while `from` is 0. Code setting another plays it from its start. Code setting the one playing changes nothing."
+code_can_change = true
+
+[gmov.path]
+description = "The Nextion Editor's panel never shows it. Code can set it and read it back, but no animation plays from an SD card, whatever path it holds, with `from` 0 or 1."
+code_can_change = true
+properties = "value-only"
+
+[gmov.en]
+description = "Whether it plays: 1 plays, 2 pauses where it is, and 0 stops it, back at its beginning, its first frame showing. It becomes 0 when playing that does not loop ends."
+choices = { 0 = "stopped", 1 = "playing", 2 = "paused" }
+code_can_change = true
+code_wraps = "u8"
+
+[gmov.dis]
+description = "The speed of playing, as a percentage. The Nextion Editor's panel gives its range as 10 to 1000, but code may set it lower or higher, and it plays that fast."
+code_can_change = true
+code_wraps = "u16"
+
+[gmov.tim]
+description = "How far the playing has gone, in milliseconds, from 0 at each start. Code setting it moves the playing there."
+code_can_change = true
+
+[gmov.qty]
+description = "How many frames the animation has, which its file sets."
+code_can_change = false
+
+[hotspot.drag]
+description = "The Nextion Editor's panel never shows it for a hotspot, which draws nothing. 0 by default, and only 0 or 1 is taken in the page file. Code may set it, but not on the Basic, Enhanced, and Discovery series. What it does on a hotspot is not known."
+code_can_change = true
+code_range = [0, 0]
+properties = "never-shown"
+
+[hotspot.aph]
+description = "The Nextion Editor's panel never shows it for a hotspot, which draws nothing, so it changes nothing seen. 127 by default, and at most 127. Code may set it, but not on the Basic, Enhanced, and Discovery series."
+code_can_change = true
+code_range = [127, 127]
+properties = "never-shown"
+
+[hotspot.effect]
+description = "The Nextion Editor's panel never shows it for a hotspot, which draws nothing. 0 by default, and at most 8. Code may set it, but not on the Basic, Enhanced, and Discovery series. While it is not 0, the hotspot has `first` and `time`. What it does on a hotspot is not known."
+code_can_change = true
+code_range = [0, 0]
+properties = "never-shown"
+
+[hotspot.first]
+description = "The Nextion Editor's panel never shows it for a hotspot, which draws nothing. The Basic, Enhanced, and Discovery series refuse code that sets it."
+code_can_change = true
+properties = "never-shown"
+
+[hotspot.time]
+description = "The Nextion Editor's panel never shows it for a hotspot, which draws nothing. The Basic, Enhanced, and Discovery series refuse code that sets it."
+code_can_change = true
+properties = "never-shown"
+
+[number.val]
+description = "The number shown, a whole number from -2147483648 to 2147483647."
+code_can_change = true
+
+[number.lenth]
+description = "How many characters the number shows, its sign aside, at most 15: fewer are padded with zeros on the left, more cut to the first ones. 0 shows as many as it needs."
+code_can_change = true
+code_range = [0, 15]
+
+[number.format]
+description = "How the number is written."
+choices = { 0 = "in decimal", 1 = "with thousands separated", 2 = "in hexadecimal" }
+code_can_change = true
+code_range = [0, 2]
+
+[page.drag]
+description = "The Nextion Editor's panel never shows it for a page, which cannot be dragged. 0 by default, and 1 is taken too. Code reading it reads 0."
+code_can_change = false
+properties = "never-shown"
+
+[page.aph]
+description = "The Nextion Editor's panel never shows it for a page. 127 by default, and at most 127; a page of 50 looks no different. Code reading it reads 0."
+code_can_change = false
+properties = "never-shown"
+
+[page.x]
+description = "The page's left edge, always 0."
+code_can_change = false
+
+[page.y]
+description = "The page's top edge, always 0."
+code_can_change = false
+
+[page.w]
+description = "The page's width: the screen's."
+code_can_change = false
+
+[page.h]
+description = "The page's height: the screen's."
+code_can_change = false
+
+[page.effect]
+description = "How the page comes into view as it opens: at once, sliding in from an edge or a corner of the screen, fading in, or growing from the middle. The Basic, Enhanced, and Discovery series refuse code that sets it."
+choices = { 0 = "at once", 1 = "from the top", 2 = "from the bottom", 3 = "from the left", 4 = "from the right", 5 = "from the top left", 6 = "from the top right", 7 = "from the bottom left", 8 = "from the bottom right", 9 = "fading in", 10 = "growing from the middle" }
+code_can_change = true
+
+[page.up]
+description = "The page a swipe up the screen opens, by ID, or 255 for none."
+code_can_change = true
+
+[page.down]
+description = "The page a swipe down the screen opens, by ID, or 255 for none."
+code_can_change = true
+
+[page.left]
+description = "The page a swipe to the left opens, by ID, or 255 for none."
+code_can_change = true
+
+[page.right]
+description = "The page a swipe to the right opens, by ID, or 255 for none."
+code_can_change = true
+
+[page.sta]
+description = "What fills the page's background."
+choices = { 0 = "nothing", 1 = "a colour", 2 = "a picture" }
+code_can_change = false
+
+[page.bco]
+description = "The page's background colour, when its background is a colour."
+code_can_change = true
+
+[page.pic]
+description = "The page's background picture, when its background is a picture. It must be as large as the screen."
+code_can_change = true
+
+[picture.pic]
+description = "The picture shown."
+code_can_change = true
+
+[progress-bar.sta]
+description = "What draws the bar."
+choices = { 0 = "colours", 1 = "pictures" }
+code_can_change = false
+
+[progress-bar.dez]
+description = "Whether the bar fills across or upward."
+choices = { 0 = "across", 1 = "upward" }
+code_can_change = false
+
+[progress-bar.val]
+description = "How full the bar is, from 0 to 100."
+code_can_change = true
+code_range = [0, 100]
+
+[progress-bar.dis]
+description = "How round the outer corners are, as a percentage, from 0, square, to 100."
+code_can_change = true
+code_range = [0, 100]
+
+[progress-bar.bco]
+description = "The colour of the bar's empty part, when the bar is drawn in colours."
+code_can_change = true
+code_range = [0, 65535]
+
+[progress-bar.bpic]
+description = "The picture of the bar's empty part, when the bar is drawn in pictures."
+code_can_change = true
+
+[progress-bar.pco]
+description = "The colour of the bar's filled part, when the bar is drawn in colours."
+code_can_change = true
+code_range = [0, 65535]
+
+[progress-bar.ppic]
+description = "The picture of the bar's filled part, when the bar is drawn in pictures."
+code_can_change = true
+
+[qr-code.sta]
+description = "Whether a logo picture shows in the code's middle."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = false
+
+[qr-code.dis]
+description = "The empty margin around the code."
+code_can_change = true
+code_range = [0, 255]
+
+[qr-code.pco]
+description = "The code's colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[qr-code.pic]
+description = "The logo picture, when the code shows one."
+code_can_change = true
+
+[qr-code.txt]
+description = "The text the code holds."
+code_can_change = true
+
+[qr-code.txt_maxl]
+description = "The most bytes `txt` can hold, from 0 to 630, which the screen sets aside in its memory."
+code_can_change = false
+
+[radio.pco]
+description = "The dot's colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[radio.val]
+description = "Whether the button is chosen."
+choices = { 0 = "not chosen", 1 = "chosen" }
+code_can_change = true
+code_range = [0, 1]
+
+[scrolling-text.dir]
+description = "Which way the text moves."
+choices = { 0 = "left to right", 1 = "right to left", 2 = "top to bottom", 3 = "bottom to top" }
+code_can_change = true
+code_range = [0, 3]
+
+[scrolling-text.dis]
+description = "How far the text moves at each step, in pixels, from 2 to 50."
+code_can_change = true
+code_range = [2, 50]
+
+[scrolling-text.tim]
+description = "The time between two steps, in milliseconds, from 80 to 65534; the first step comes that long after its page opens."
+code_can_change = true
+
+[scrolling-text.en]
+description = "Whether the text scrolls."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = true
+code_range = [0, 1]
+
+[scrolling-text.txt]
+description = "The text that scrolls."
+code_can_change = true
+
+[scrolling-text.vvs0]
+description = "Where its text is as it moves across: its left, in pixels from the page's, which the screen sets as the page opens and at each step; 32767 while it moves up or down. The Nextion Editor's panel never shows it."
+code_can_change = true
+code_wraps = "s16"
+properties = "value-only"
+
+[scrolling-text.vvs1]
+description = "Where its text is as it moves up or down: its top, in pixels from the page's, which the screen sets as the page opens and at each step; 32767 while it moves across. The Nextion Editor's panel never shows it."
+code_can_change = true
+code_wraps = "s16"
+properties = "value-only"
+
+[scrolling-text.vvs2]
+description = "Its text's width, in pixels, in its font: 10 for `a`, and 88 for `abcdefghij`, in a font 24 pixels high. The Nextion Editor's panel never shows it. 0 by default. What setting it changes is not known."
+code_can_change = true
+code_wraps = "s16"
+properties = "value-only"
+
+[scrolling-text.vvs3]
+description = "Its text's height, in pixels: its font's, as 24 in a font 24 pixels high. The Nextion Editor's panel never shows it. 0 by default. What setting it changes is not known."
+code_can_change = true
+code_wraps = "s16"
+properties = "value-only"
+
+[select.style]
+description = "How the edge is drawn. A select has no sunken edge: the build refuses 2."
+choices = { 0 = "flat", 1 = "a border" }
+code_can_change = false
+
+[select.pco]
+description = "The items' text colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[select.pco2]
+description = "The chosen item's text colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[select.hig]
+description = "Each item's height, from 16 to 255."
+code_can_change = true
+code_range = [0, 255]
+
+[select.dis]
+description = "Whether a line marks the item chosen."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = true
+code_range = [0, 1]
+
+[select.pco1]
+description = "The colour of the line marking the item chosen."
+code_can_change = true
+code_range = [0, 65535]
+
+[select.txt]
+description = "The text of the item chosen, which follows `val`. Code can read it but not set it."
+code_can_change = false
+
+[select.txt_maxl]
+description = "The Nextion Editor's panel never shows it for a select, and its use there is not known. 255 by default. The screen does not hold it: code reading it reads 0, and a typed line naming it answers 0x1A."
+code_can_change = false
+properties = "never-shown"
+
+[select.val]
+description = "The number of the item chosen. Changing it changes `txt` to that item's text."
+code_can_change = true
+
+[select.ch]
+description = "How long the list keeps moving after a swipe, from 0, stopping at once, to 32."
+code_can_change = true
+code_range = [0, 32]
+
+[select.path]
+description = "The items to choose from, one a line."
+code_can_change = true
+
+[select.path_m]
+description = "The most bytes the items can hold, which the screen sets aside in its memory. The build refuses longer items, and code storing longer ones keeps their first bytes."
+code_can_change = false
+
+[slider.mode]
+description = "Whether the slider lies across or stands up."
+choices = { 0 = "across", 1 = "upright" }
+code_can_change = false
+
+[slider.sta]
+description = "What fills the slider's background."
+choices = { 0 = "a crop of a picture", 1 = "a colour", 2 = "a picture" }
+code_can_change = false
+
+[slider.psta]
+description = "The knob's shape. The Basic, Enhanced, and Discovery series refuse 2."
+choices = { 0 = "round", 1 = "a picture", 2 = "square" }
+code_can_change = false
+
+[slider.wid]
+description = "The knob's width in pixels: 255 sizes it automatically, and 0 draws no knob."
+code_can_change = true
+code_wraps = "u8"
+
+[slider.hig]
+description = "The knob's height in pixels: 255 sizes it automatically, and 0 draws no knob."
+code_can_change = true
+code_wraps = "u8"
+
+[slider.dis]
+description = "How round the track's outer corners are, as a percentage, from 0, square, to 100."
+code_can_change = true
+code_range = [0, 100]
+
+[slider.pic1]
+description = "The picture of the track's part up to the knob."
+code_can_change = true
+
+[slider.picc1]
+description = "The picture a part of which shows on the track up to the knob. It must be as large as the screen."
+code_can_change = true
+
+[slider.bco1]
+description = "The colour of the track's part up to the knob."
+code_can_change = true
+code_range = [0, 65535]
+
+[slider.pic2]
+description = "The knob's picture, when the knob is a picture."
+code_can_change = true
+
+[slider.pco]
+description = "The knob's colour, when it is not a picture."
+code_can_change = true
+code_range = [0, 65535]
+
+[slider.val]
+description = "Where the knob is, from `minval` to `maxval`."
+code_can_change = true
+code_wraps = "u16"
+
+[slider.maxval]
+description = "The largest value, from 0 to 65535."
+code_can_change = true
+code_wraps = "u16"
+
+[slider.minval]
+description = "The smallest value, from 0 to 65535."
+code_can_change = true
+code_wraps = "u16"
+
+[slider.ch]
+description = "The track's breadth as a percentage of the slider's: 0 draws no track."
+code_can_change = true
+code_range = [0, 100]
+
+[sliding-text.leftshow]
+description = "The Nextion Editor's panel never shows it, and its use is not known. 0 by default; 1 changes nothing seen. Code reading it reads 0."
+code_can_change = false
+properties = "never-shown"
+
+[sliding-text.ch]
+description = "How long the text keeps sliding after a swipe, from 0, stopping at once, to 32."
+code_can_change = true
+code_range = [0, 32]
+
+[sliding-text.txt]
+description = "The text, which a touch slides up and down."
+code_can_change = true
+
+[sliding-text.path]
+description = "The Nextion Editor's panel never shows it, and its use is not known. An empty text by default. The build takes code giving it a text, and refuses a number. Yet code storing a text in it fails (0x1C), adding it to a text fails too (0x1B), and `covx` reads it as 0."
+code_can_change = true
+properties = "never-shown"
+
+[sliding-text.path_m]
+description = "The space kept for the text's lines: half of it is the most lines the text can have. 0 makes it equal to `txt_maxl`."
+code_can_change = false
+
+[sliding-text.val_y]
+description = "How far the lines are scrolled up, in pixels: a touch scrolls them from 0 to `maxval_y`, and code up to 32 pixels further, but not so far that the last line goes above the top."
+code_can_change = true
+
+[sliding-text.font]
+code_wraps = "u8"
+
+[sliding-text.isbr]
+code_wraps = "u8"
+
+[sliding-text.left]
+code_wraps = "u8"
+
+[sliding-text.spax]
+code_wraps = "u8"
+
+[sliding-text.spay]
+code_wraps = "u8"
+
+[sliding-text.xcen]
+code_wraps = "u8"
+
+[switch.dez]
+description = "Whether the switch lies across or stands up."
+choices = { 0 = "across", 1 = "upright" }
+code_can_change = false
+
+[switch.val]
+description = "Whether the switch is on."
+choices = { 0 = "off", 1 = "on" }
+code_can_change = true
+code_range = [0, 1]
+
+[switch.bco]
+description = "The background's colour when the switch is off."
+code_can_change = true
+code_range = [0, 65535]
+
+[switch.pco]
+description = "The switch's colour when it is off."
+code_can_change = true
+code_range = [0, 65535]
+
+[switch.bco2]
+description = "The background's colour when the switch is on."
+code_can_change = true
+code_range = [0, 65535]
+
+[switch.pco2]
+description = "The switch's colour when it is on."
+code_can_change = true
+code_range = [0, 65535]
+
+[switch.pco1]
+description = "The text's colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[switch.dis]
+description = "How round the outer corners are, as a percentage, from 0, square, to 100."
+code_can_change = true
+code_range = [0, 100]
+
+[switch.txt]
+description = "The words shown, at most 24 characters, split at the first \"/\": the first while the switch is off, the second while it is on, as \"False/True\"."
+code_can_change = true
+
+[switch.txt_maxl]
+description = "The Nextion Editor's panel never shows it for a switch, and its use there is not known. 24 by default. Code can read it."
+code_can_change = false
+properties = "never-shown"
+
+[text.pw]
+description = "Whether the text shows as typed, or as stars, as a password does."
+choices = { 0 = "as typed", 1 = "as stars" }
+code_can_change = true
+code_range = [0, 1]
+
+[text.txt]
+description = "The text shown."
+code_can_change = true
+
+[timer.tim]
+description = "The time between two timer events, in milliseconds, from 50 to 65535."
+code_can_change = true
+
+[timer.en]
+description = "Whether the timer runs."
+choices = { 0 = "no", 1 = "yes" }
+code_can_change = true
+
+[touch-capture.val]
+description = "The ID of the component the last touch landed on, 0 for the page. It is set as a touch begins and as it ends, before the touch capture's events run, which run before the component's own."
+code_can_change = false
+
+[variable.sta]
+description = "What the variable holds."
+choices = { 0 = "a number", 1 = "a text" }
+code_can_change = false
+
+[variable.txt]
+description = "The text the variable starts with, when it holds a text."
+code_can_change = true
+
+[variable.val]
+description = "The number the variable starts with, a whole number from -2147483648 to 2147483647, when it holds a number."
+code_can_change = true
+
+[video.from]
+description = "Where the file played comes from."
+choices = { 0 = "the project", 1 = "a file on the screen" }
+code_can_change = false
+
+[video.vid]
+description = "The video played, by its ID among the project's videos, when it comes from the project. Code may name it only while `from` is 0. Code setting another plays it from its start. Code setting the one playing changes nothing."
+code_can_change = true
+
+[video.path]
+description = "The file played when it comes from the screen, as a path such as \"sd0/1.video\". Code may name it only while `from` is 1. Code setting it plays the file from its start, even the file playing."
+code_can_change = true
+
+[video.path_m]
+description = "The most bytes `path` holds: code storing a longer one keeps its first bytes. While `from` is 1, the build refuses a longer one; while it is 0, it takes one."
+code_can_change = true
+properties = "value-only"
+
+[video.en]
+description = "Whether it plays: 1 plays, 2 pauses where it is, and 0 stops it, back at its beginning, its first frame showing. It becomes 0 when playing that does not loop ends."
+choices = { 0 = "stopped", 1 = "playing", 2 = "paused" }
+code_can_change = true
+code_wraps = "u8"
+
+[video.dis]
+description = "The speed of playing, as a percentage. The Nextion Editor's panel gives its range as 10 to 1000, but code may set it lower or higher, and it plays that fast."
+code_can_change = true
+code_wraps = "u16"
+
+[video.tim]
+description = "How far the playing has gone, in milliseconds, from 0 at each start. Code setting it moves the playing there."
+code_can_change = true
+
+[video.qty]
+description = "How many frames the video has, which its file sets."
+code_can_change = false
+
+[video.fps]
+description = "How many frames a second the video plays. It comes from the video's file."
+code_can_change = false
+properties = "value-only"
+
+[waveform.dir]
+description = "Which way the curves move."
+choices = { 0 = "left to right", 1 = "right to left", 2 = "kept to the right" }
+code_can_change = false
+
+[waveform.ch]
+description = "How many channels the waveform draws."
+choices = { 1 = "one", 2 = "two", 3 = "three", 4 = "four" }
+code_can_change = false
+
+[waveform.gdc]
+description = "The grid's colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[waveform.gdw]
+description = "The width of the grid's cells, in pixels: 0 draws no lines up and down."
+code_can_change = true
+code_range = [0, 255]
+
+[waveform.gdh]
+description = "The height of the grid's cells, in pixels: 0 draws no lines across."
+code_can_change = true
+code_range = [0, 255]
+
+[waveform.objWid]
+description = "The Nextion Editor's panel never shows it, and its use is not known. 0 by default. Code reading it reads 0, though a typed `get` of it answers 0x1A, an invalid variable."
+code_can_change = false
+properties = "never-shown"
+
+[waveform.objHig]
+description = "The Nextion Editor's panel never shows it, and its use is not known. 0 by default. Code reading it reads 0, though a typed `get` of it answers 0x1A, an invalid variable."
+code_can_change = false
+properties = "never-shown"
+
+[waveform.pco0]
+description = "Channel 0's colour."
+code_can_change = true
+code_range = [0, 65535]
+
+[waveform.pco1]
+description = "Channel 1's colour."
+code_can_change = true
+
+[waveform.pco2]
+description = "Channel 2's colour."
+code_can_change = true
+
+[waveform.pco3]
+description = "Channel 3's colour."
+code_can_change = true
+
+[waveform.inittrue]
+description = "The Nextion Editor's panel never shows it, and its use is not known. 0 by default. Code reading it reads 0, though a typed `get` of it answers 0x1A, an invalid variable."
+code_can_change = false
+properties = "never-shown"
+
+[waveform.dis]
+description = "How the channels' values are scaled, as a percentage, from 10 to 1000."
+code_can_change = true
+code_range = [10, 1000]
+
+[xfloat.val]
+description = "The number shown, as a whole number from -2147483648 to 2147483647, which `vvs0` and `vvs1` place the decimal point in."
+code_can_change = true
+
+[xfloat.vvs0]
+description = "How many digits show before the decimal point: fewer are padded with zeros on the left, more cut to the first ones. 0 shows as many as it needs."
+code_can_change = true
+code_range = [0, 10]
+
+[xfloat.vvs1]
+description = "How many digits show after the decimal point: `val` is the number times 10 to this power. 0 shows no point."
+code_can_change = true
+code_range = [0, 8]

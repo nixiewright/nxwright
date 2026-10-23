@@ -1,0 +1,9 @@
+on page1.load:
+  d0.val_x=45
+  d1.val_x=46
+  d2.val_x=47
+  d3.val_x=48
+  d4.val_x=49
+  d5.val_x=50
+  d6.val_x=51
+  d7.val_x=8

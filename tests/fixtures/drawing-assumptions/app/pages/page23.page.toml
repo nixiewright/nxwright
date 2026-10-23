@@ -1,0 +1,54 @@
+[page]
+name = "page23"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+type = "data-record"
+w = 300
+h = 140
+format = "120^120^120"
+dez = 3
+dir = "alpha^bravo^charlie"
+style = 0
+mode = 1
+name = "dLeft"
+x = 0
+y = 10
+xcen = 0
+path = "sd0/nxprobe_agent-a_d0.data"
+
+[[component]]
+type = "data-record"
+w = 300
+h = 140
+format = "120^120^120"
+dez = 3
+dir = "alpha^bravo^charlie"
+style = 0
+mode = 1
+name = "dCentre"
+x = 0
+y = 200
+xcen = 1
+path = "sd0/nxprobe_agent-a_d1.data"
+
+[[component]]
+type = "data-record"
+w = 300
+h = 140
+format = "120^120^120"
+dez = 3
+dir = "alpha^bravo^charlie"
+style = 0
+mode = 1
+name = "dInside"
+x = 330
+y = 10
+xcen = 0
+path = "sd0/nxprobe_agent-a_d2.data"

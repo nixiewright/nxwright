@@ -1,0 +1,19 @@
+[page]
+name = "page9"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "n"
+type = "number"
+x = 700
+y = 440
+w = 90
+h = 30
+sta = 1
+bco = 65535

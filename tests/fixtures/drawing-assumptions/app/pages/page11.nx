@@ -1,0 +1,9 @@
+on page11.loadend:
+  line 10,330,14,332,RED
+  line 34,332,30,330,BLUE
+  line 50,330,52,334,GREEN
+  line 72,334,70,330,YELLOW
+  line 100,330,200,380,RED
+  line 320,380,220,330,BLUE
+  line 360,330,385,380,RED
+  line 425,380,400,330,BLUE

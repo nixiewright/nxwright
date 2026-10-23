@@ -1,0 +1,169 @@
+[page]
+name = "page3"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 65535
+
+[[component]]
+name = "d16"
+type = "data-record"
+x = 0
+y = 4
+w = 200
+h = 34
+format = "60^400"
+dez = 2
+dir = "W^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d16.data"
+
+[[component]]
+name = "d17"
+type = "data-record"
+x = 0
+y = 40
+w = 200
+h = 34
+format = "60^400"
+dez = 2
+dir = "W^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d17.data"
+
+[[component]]
+name = "d18"
+type = "data-record"
+x = 0
+y = 76
+w = 200
+h = 34
+format = "60^400"
+dez = 2
+dir = "W^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d18.data"
+
+[[component]]
+name = "d19"
+type = "data-record"
+x = 0
+y = 112
+w = 200
+h = 34
+format = "60^400"
+dez = 2
+dir = "W^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d19.data"
+
+[[component]]
+name = "d20"
+type = "data-record"
+x = 0
+y = 148
+w = 200
+h = 34
+format = "60^400"
+dez = 2
+dir = "W^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d20.data"
+
+[[component]]
+name = "d21"
+type = "data-record"
+x = 0
+y = 184
+w = 200
+h = 34
+format = "60^400"
+dez = 2
+dir = "head0^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d21.data"
+
+[[component]]
+name = "d22"
+type = "data-record"
+x = 0
+y = 220
+w = 200
+h = 34
+format = "60^400"
+dez = 2
+dir = "head0^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d22.data"
+
+[[component]]
+name = "d23"
+type = "data-record"
+x = 0
+y = 256
+w = 200
+h = 34
+format = "60^400"
+dez = 2
+dir = "head0^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d23.data"

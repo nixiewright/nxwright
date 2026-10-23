@@ -1,0 +1,45 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 480
+h = 800
+sta = 1
+bco = 16904
+
+[[component]]
+name = "ePng"
+type = "external-picture"
+x = 0
+y = 0
+w = 200
+h = 200
+path = "sd0/nxprobe_agent-a_mark.png"
+
+[[component]]
+name = "eJpg"
+type = "external-picture"
+x = 280
+y = 0
+w = 200
+h = 200
+path = "sd0/nxprobe_agent-a_mark.jpg"
+
+[[component]]
+name = "eXiOwn"
+type = "external-picture"
+x = 0
+y = 250
+w = 200
+h = 200
+path = "sd0/nxprobe_agent-a_m90.xi"
+
+[[component]]
+name = "eXi0"
+type = "external-picture"
+x = 280
+y = 250
+w = 200
+h = 200
+path = "sd0/nxprobe_agent-a_m0.xi"

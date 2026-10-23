@@ -1,0 +1,22 @@
+// Runs once at power-on: the state every page shares, then the first page.
+include "pages/lib/constants.nx"
+
+// Temperatures are in hundredths of a degree Celsius: 2150 is 21.5 degrees.
+int room=2050, target=2100
+// The mode the user chose, and what the system is doing about it.
+int mode=1, running=0
+// 1 while the target follows the schedule, 0 while it is held by hand.
+int following=1
+// 0 for Celsius, 1 for Fahrenheit.
+int unit=0
+// The schedule: when each period starts, in minutes after midnight, and its target.
+int wakeStart=390, wakeTarget=2100
+int awayStart=510, awayTarget=1700
+int homeStart=1050, homeTarget=2150
+int sleepStart=1350, sleepTarget=1800
+// The period the schedule page shows, from 0 (Wake) to 3 (Sleep).
+int selectedPeriod=0
+
+baud = 9600
+dim = 80
+page home

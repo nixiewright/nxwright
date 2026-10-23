@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nxwright"
+version = "0.1.0"
+description = "A toolchain for Nextion Editor projects: text source, the nxwright language, and tests."
+readme = "README.md"
+license = "Apache-2.0 AND OFL-1.1"
+license-files = ["LICENSE", "nxwright/project/fonts/OFL.txt"]
+requires-python = ">=3.11"
+dependencies = [
+    # Its wheels carry FreeType itself, 2.13.2 in 2.5.1, whose drawing sets
+    # the pixels of every font nxwright draws: a newer one waits until the
+    # fonts are checked against the Editor's again (tests/test_font_drawing.py).
+    "freetype-py>=2.5.1,<2.6",
+    "pillow>=13.0,<14",
+    "pygls>=2.1,<3",
+    "pyserial>=3.5",
+    "qrcode>=8.2,<9",
+    "tomli-w>=1.2,<2",
+    "zeromcp>=1.10,<2",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Topic :: Software Development :: Build Tools",
+]
+
+[project.urls]
+Homepage = "https://github.com/nixiewright/nxwright"
+Repository = "https://github.com/nixiewright/nxwright"
+Issues = "https://github.com/nixiewright/nxwright/issues"
+
+[project.scripts]
+nxwright = "nxwright.cli:main"
+
+[tool.setuptools]
+# Listed by name, as setuptools ships docs/, a folder outside the package,
+# only as a package listed so (nxwright.docs, for nxwright mcp's about tool).
+# A new package goes in this list too; tests/test_mcp_server.py checks it.
+packages = ["nxwright", "nxwright.debug_adapter", "nxwright.drawing", "nxwright.language",
+            "nxwright.language_server", "nxwright.mcp_server", "nxwright.project",
+            "nxwright.source", "nxwright.testing", "nxwright.docs"]
+
+[tool.setuptools.package-dir]
+"nxwright.docs" = "docs"
+
+[tool.setuptools.package-data]
+"nxwright.project" = ["fonts/NotoSans-Regular.ttf", "fonts/OFL.txt", "memory_costs.toml",
+                      "component_defaults.toml", "attribute_descriptions.toml"]
+"nxwright.mcp_server" = ["guide.md"]
+"nxwright.docs" = ["*.md"]
+
+# The contributors' writing guide, of no use to an agent working on an app.
+[tool.setuptools.exclude-package-data]
+"nxwright.docs" = ["STYLE.md"]

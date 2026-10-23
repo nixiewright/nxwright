@@ -1,0 +1,19 @@
+on page27.load:
+  g50.clear()
+  g50.insert("first record^second one^third one")
+  g50.val_x=50
+  g60.clear()
+  g60.insert("first record^second one^third one")
+  g60.val_x=60
+  g70.clear()
+  g70.insert("first record^second one^third one")
+  g70.val_x=70
+  g80.clear()
+  g80.insert("first record^second one^third one")
+  g80.val_x=80
+  g90.clear()
+  g90.insert("first record^second one^third one")
+  g90.val_x=90
+  g100.clear()
+  g100.insert("first record^second one^third one")
+  g100.val_x=100

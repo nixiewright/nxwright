@@ -1,0 +1,127 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "nxwright",
+  "scopeName": "source.nxwright",
+  "patterns": [
+    { "include": "#heading" },
+    { "include": "#function-heading" },
+    { "include": "#macro-heading" },
+    { "include": "#label" },
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#reference" },
+    { "include": "#declaration" },
+    { "include": "#goto" },
+    { "include": "#keyword" },
+    { "include": "#command" },
+    { "include": "#system-variable" },
+    { "include": "#member" },
+    { "include": "#number" },
+    { "include": "#operator" }
+  ],
+  "repository": {
+    "heading": {
+      "comment": "An event heading in a .nx file: on <object>.<event>:",
+      "match": "^(on)\\s+([A-Za-z0-9_]+)(\\.)([a-z]+)(:)$",
+      "captures": {
+        "1": { "name": "keyword.other.event.nxwright" },
+        "2": { "name": "entity.name.type.object.nxwright" },
+        "3": { "name": "punctuation.accessor.nxwright" },
+        "4": { "name": "entity.name.function.event.nxwright" },
+        "5": { "name": "punctuation.separator.nxwright" }
+      }
+    },
+    "function-heading": {
+      "comment": "A function of nxlang: function <name>(<parameters>) -> <type>:",
+      "match": "^(function)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "storage.type.function.nxwright" },
+        "2": { "name": "entity.name.function.nxwright" }
+      }
+    },
+    "macro-heading": {
+      "comment": "A macro's heading in macros.nx: macro <name>:, its name letters, digits, underscores, and spaces, starting with a letter or an underscore, as macros_source.py's MACRO_NAME.",
+      "match": "^(macro) ([A-Za-z_](?:[A-Za-z0-9_ ]*[A-Za-z0-9_])?)(:)$",
+      "captures": {
+        "1": { "name": "keyword.other.macro.nxwright" },
+        "2": { "name": "entity.name.function.macro.nxwright" },
+        "3": { "name": "punctuation.separator.nxwright" }
+      }
+    },
+    "label": {
+      "comment": "A label of the Editor's code, which a goto jumps to: a name and a colon, alone on its line but for a comment after it, as code_lines.py's LABEL. A keyword ending a line of nxlang, as else: or default:, is no label.",
+      "match": "^\\s*(?!(?:if|else|while|for|return|break|continue|switch|case|default|goto)\\b)([A-Za-z_][A-Za-z0-9_]*)(:)(?=\\s*(?://.*)?$)",
+      "captures": {
+        "1": { "name": "entity.name.label.nxwright" },
+        "2": { "name": "punctuation.separator.label.nxwright" }
+      }
+    },
+    "comment": {
+      "match": "//.*$",
+      "name": "comment.line.double-slash.nxwright"
+    },
+    "string": {
+      "comment": "Strings are single-line; ending at the line end keeps a stray quote from colouring the rest of the file.",
+      "begin": "\"",
+      "end": "\"|$",
+      "name": "string.quoted.double.nxwright",
+      "patterns": [
+        { "match": "\\\\.", "name": "constant.character.escape.nxwright" }
+      ]
+    },
+    "reference": {
+      "comment": "A picture, font, animation, video, or sound by name, replaced with its ID at build: @pic(mono-dark/toast)",
+      "match": "(@(?:pic|font|animation|video|sound))(\\()([^()]*)(\\))",
+      "captures": {
+        "1": { "name": "support.function.reference.nxwright" },
+        "2": { "name": "punctuation.section.parens.nxwright" },
+        "3": { "name": "string.unquoted.resource-name.nxwright" },
+        "4": { "name": "punctuation.section.parens.nxwright" }
+      }
+    },
+    "declaration": {
+      "comment": "int declares a program variable; const, var, and include belong to nxlang.",
+      "match": "\\b(int|const|var|include)\\b",
+      "name": "storage.type.nxwright"
+    },
+    "goto": {
+      "comment": "A goto of the Editor's code, and the label it jumps to: goto again",
+      "match": "\\b(goto)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.control.goto.nxwright" },
+        "2": { "name": "entity.name.label.nxwright" }
+      }
+    },
+    "keyword": {
+      "match": "\\b(if|else|while|for|return|break|continue|switch|case|default|goto)\\b(?!\\.)",
+      "name": "keyword.control.nxwright"
+    },
+    "command": {
+      "comment": "Instructions of the Nextion instruction set, at the start of a statement.",
+      "match": "(?:^|(?<=[{}]))[ \\t]*(page|cls|ref|ref_stop|ref_star|click|vis|tsw|get|print|prints|printh|add|addt|cle|rest|doevents|sendme|com_stop|com_star|code_c|ucopy|udelete|randset|covx|cov|strlen|btlen|substr|spstr|wepo|repo|wept|rept|cfgpio|xstr|fill|line|draw|cir|cirs|xpic|pic|picq|play|twfile|newfile|delfile|refile|findfile|rdfile|newdir|deldir|redir|finddir|setlayer|move|crcrest|crcputs|crcputh|crcputu|beep|touch_j|lcd_dev|getpassw|lcd_refx|lhmi_cle|showqq|getv|init|setbaudz|pa_q|whmi_cle|fstr|nstr|rfpt|strsize|wfpt|pa_txt|timerset|zstr|comok|draw3d|qrcode|draw_h|setbrush|sets|i|cfguart|cuts|gets|meup|xnum|beepset|piccolor)(?=\\(|$|[ \\t]++(?![-+*/%&|^]?=(?!=)|\\+\\+|--))",
+      "name": "support.function.command.nxwright"
+    },
+    "system-variable": {
+      "match": "\\b(dp|dim|dims|baud|bauds|bkcmd|rand|thup|thsp|ussp|sendxy|delay|sleep|wup|usup|rtc[0-6]|pio[0-7]|pwm[4-7]|pwmf|audio[01]|volume|crcval|lowpower|recmod|addr|usize|appid|tch[0-3]|eql|eqm|eqh|eq[0-9]|spax|spay|thc|thdra|sya[01]|scache|bcpu|tpdir|runmod|portbusy|tprc|aph)\\b(?!\\.)",
+      "name": "support.variable.system.nxwright"
+    },
+    "member": {
+      "comment": "object.attribute, as in title.pco or settings.theme.txt",
+      "match": "\\b([A-Za-z_][A-Za-z0-9_]*)((?:\\.[A-Za-z_][A-Za-z0-9_]*)*)(\\.)([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": { "name": "variable.other.object.nxwright" },
+        "2": { "name": "variable.other.object.nxwright" },
+        "3": { "name": "punctuation.accessor.nxwright" },
+        "4": { "name": "variable.other.property.nxwright" }
+      }
+    },
+    "number": {
+      "match": "\\b(0x[0-9A-Fa-f]+|[0-9]+)\\b",
+      "name": "constant.numeric.nxwright"
+    },
+    "operator": {
+      "match": "==|!=|>=|<=|\\+\\+|--|\\+=|-=|\\*=|/=|<<|>>|&&|\\|\\||[=<>+\\-*/%&|^?]|(?<= ):(?= )",
+      "name": "keyword.operator.nxwright"
+    }
+  }
+}

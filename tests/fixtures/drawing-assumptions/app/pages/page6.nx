@@ -1,0 +1,8 @@
+on page6.loadend:
+  for(n.val=0;n.val<100;n.val++)
+  {
+    add wave.id,0,n.val
+    add wave.id,1,99-n.val
+    add wave.id,2,50
+    add wave.id,3,20
+  }

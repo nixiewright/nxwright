@@ -1,0 +1,6 @@
+on watch.timer:
+  covx plain.val,valShown.txt,0,0
+  txtShown.txt = plain.txt
+
+on next.up:
+  page browsers

@@ -1,0 +1,19 @@
+on page25.load:
+  f20_1.clear()
+  f20_1.insert("first record^second one^third one")
+  f20_1.val_x=20
+  f40_1.clear()
+  f40_1.insert("first record^second one^third one")
+  f40_1.val_x=40
+  f55_1.clear()
+  f55_1.insert("first record^second one^third one")
+  f55_1.val_x=55
+  f20_3.clear()
+  f20_3.insert("first record^second one^third one")
+  f20_3.val_x=20
+  f40_3.clear()
+  f40_3.insert("first record^second one^third one")
+  f40_3.val_x=40
+  f55_3.clear()
+  f55_3.insert("first record^second one^third one")
+  f55_3.val_x=55

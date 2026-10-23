@@ -1,0 +1,32 @@
+on tm0.timer:
+  covx sa.maxval_y,samaxvaly.txt,0,0
+  covx sa.val_y,savaly.txt,0,0
+  covx sb.maxval_y,sbmaxvaly.txt,0,0
+  covx sb.val_y,sbvaly.txt,0,0
+  covx sc.maxval_y,scmaxvaly.txt,0,0
+  covx sc.val_y,scvaly.txt,0,0
+  covx sd.maxval_y,sdmaxvaly.txt,0,0
+  covx sd.val_y,sdvaly.txt,0,0
+  covx se.maxval_y,semaxvaly.txt,0,0
+  covx se.val_y,sevaly.txt,0,0
+
+on b10.up:
+  sa.val_y=10
+  sb.val_y=10
+  sc.val_y=10
+  sd.val_y=10
+  se.val_y=10
+
+on b25.up:
+  sa.val_y=25
+  sb.val_y=25
+  sc.val_y=25
+  sd.val_y=25
+  se.val_y=25
+
+on b1000.up:
+  sa.val_y=1000
+  sb.val_y=1000
+  sc.val_y=1000
+  sd.val_y=1000
+  se.val_y=1000

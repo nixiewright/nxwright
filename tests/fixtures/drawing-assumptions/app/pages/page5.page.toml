@@ -1,0 +1,207 @@
+[page]
+name = "page5"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "tCRLF"
+type = "text"
+x = 20
+y = 20
+w = 150
+h = 130
+isbr = 1
+txt = "aa\u000d\u000abb\u000d\u000acc"
+txt_maxl = 40
+sta = 1
+bco = 65535
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "stCRLF"
+type = "sliding-text"
+x = 190
+y = 20
+w = 150
+h = 130
+txt = "line 0\u000d\u000aline 1\u000d\u000aline 2\u000d\u000aline 3\u000d\u000aline 4\u000d\u000aline 5\u000d\u000aline 6\u000d\u000aline 7"
+txt_maxl = 200
+sta = 1
+bco = 65535
+xcen = 0
+
+[[component]]
+name = "slCRLF"
+type = "select"
+x = 360
+y = 20
+w = 120
+h = 130
+sta = 1
+path = "01\u000d\u000a02\u000d\u000a03\u000d\u000a04"
+path_m = 100
+
+[[component]]
+name = "cbCRLF"
+type = "combo-box"
+x = 500
+y = 20
+w = 120
+h = 36
+sta = 1
+down = 1
+qty = 3
+hig = 30
+txt = "x"
+path = "p\u000d\u000aq\u000d\u000ar"
+path_m = 100
+
+[[component]]
+name = "nCRLF"
+type = "number"
+x = 660
+y = 20
+w = 120
+h = 40
+sta = 1
+val = 0
+
+[[component]]
+name = "tCR"
+type = "text"
+x = 20
+y = 170
+w = 150
+h = 130
+isbr = 1
+txt = "aa\u000dbb\u000dcc"
+txt_maxl = 40
+sta = 1
+bco = 65535
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "stCR"
+type = "sliding-text"
+x = 190
+y = 170
+w = 150
+h = 130
+txt = "line 0\u000dline 1\u000dline 2\u000dline 3\u000dline 4\u000dline 5\u000dline 6\u000dline 7"
+txt_maxl = 200
+sta = 1
+bco = 65535
+xcen = 0
+
+[[component]]
+name = "slCR"
+type = "select"
+x = 360
+y = 170
+w = 120
+h = 130
+sta = 1
+path = "01\u000d02\u000d03\u000d04"
+path_m = 100
+
+[[component]]
+name = "cbCR"
+type = "combo-box"
+x = 500
+y = 170
+w = 120
+h = 36
+sta = 1
+down = 1
+qty = 3
+hig = 30
+txt = "x"
+path = "p\u000dq\u000dr"
+path_m = 100
+
+[[component]]
+name = "nCR"
+type = "number"
+x = 660
+y = 170
+w = 120
+h = 40
+sta = 1
+val = 0
+
+[[component]]
+name = "tLF"
+type = "text"
+x = 20
+y = 320
+w = 150
+h = 130
+isbr = 1
+txt = "aa\u000abb\u000acc"
+txt_maxl = 40
+sta = 1
+bco = 65535
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "stLF"
+type = "sliding-text"
+x = 190
+y = 320
+w = 150
+h = 130
+txt = "line 0\u000aline 1\u000aline 2\u000aline 3\u000aline 4\u000aline 5\u000aline 6\u000aline 7"
+txt_maxl = 200
+sta = 1
+bco = 65535
+xcen = 0
+
+[[component]]
+name = "slLF"
+type = "select"
+x = 360
+y = 320
+w = 120
+h = 130
+sta = 1
+path = "01\u000a02\u000a03\u000a04"
+path_m = 100
+
+[[component]]
+name = "cbLF"
+type = "combo-box"
+x = 500
+y = 320
+w = 120
+h = 36
+sta = 1
+down = 1
+qty = 3
+hig = 30
+txt = "x"
+path = "p\u000aq\u000ar"
+path_m = 100
+
+[[component]]
+name = "nLF"
+type = "number"
+x = 660
+y = 320
+w = 120
+h = 40
+sta = 1
+val = 0
+
+[[component]]
+name = "n"
+type = "variable"
+sta = 0
+val = 0

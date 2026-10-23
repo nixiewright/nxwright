@@ -1,0 +1,164 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+bco = 33808
+
+[[component]]
+name = "da"
+type = "data-record"
+x = 10
+y = 10
+w = 380
+h = 150
+path = "sd0/probe7a.data"
+dir = "Name^Value^Note"
+left = 2
+font = "NotoSans20"
+
+[[component]]
+name = "db"
+type = "data-record"
+x = 410
+y = 10
+w = 380
+h = 150
+path = "sd0/probe7b.data"
+dir = "Name^Value^Note"
+format = "200^200^200"
+xcen = 1
+gdw = 2
+gdh = 0
+hig = 40
+gdc = 63488
+left = 2
+font = "NotoSans20"
+
+[[component]]
+name = "dc"
+type = "data-record"
+x = 10
+y = 220
+w = 380
+h = 150
+path = "sd0/probe7c.data"
+dir = ""
+dis = 0
+order = 1
+left = 0
+style = 1
+borderw = 3
+borderc = 2016
+font = "NotoSans20"
+
+[[component]]
+name = "go"
+type = "button"
+x = 410
+y = 220
+w = 120
+h = 50
+txt = "val_y"
+font = "NotoSans20"
+
+[[component]]
+name = "gx"
+type = "button"
+x = 540
+y = 220
+w = 120
+h = 50
+txt = "val_x"
+font = "NotoSans20"
+
+[[component]]
+name = "ma"
+type = "text"
+x = 10
+y = 165
+w = 120
+h = 28
+txt = ""
+txt_maxl = 40
+xcen = 0
+font = "NotoSans20"
+
+[[component]]
+name = "va"
+type = "text"
+x = 140
+y = 165
+w = 120
+h = 28
+txt = ""
+txt_maxl = 40
+xcen = 0
+font = "NotoSans20"
+
+[[component]]
+name = "mb"
+type = "text"
+x = 410
+y = 165
+w = 120
+h = 28
+txt = ""
+txt_maxl = 40
+xcen = 0
+font = "NotoSans20"
+
+[[component]]
+name = "vb"
+type = "text"
+x = 540
+y = 165
+w = 120
+h = 28
+txt = ""
+txt_maxl = 40
+xcen = 0
+font = "NotoSans20"
+
+[[component]]
+name = "xb"
+type = "text"
+x = 670
+y = 165
+w = 120
+h = 28
+txt = ""
+txt_maxl = 40
+xcen = 0
+font = "NotoSans20"
+
+[[component]]
+name = "vc"
+type = "text"
+x = 410
+y = 300
+w = 120
+h = 28
+txt = ""
+txt_maxl = 40
+xcen = 0
+font = "NotoSans20"
+
+[[component]]
+name = "log"
+type = "text"
+x = 410
+y = 340
+w = 380
+h = 28
+txt = ""
+txt_maxl = 40
+xcen = 0
+font = "NotoSans20"
+
+[[component]]
+name = "tm0"
+type = "timer"
+tim = 50

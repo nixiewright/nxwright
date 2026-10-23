@@ -1,0 +1,2 @@
+# The Editor writes program.s with CRLF line ends: kept byte for byte.
+program.s -text

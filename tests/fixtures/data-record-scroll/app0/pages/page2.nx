@@ -1,0 +1,9 @@
+on page2.load:
+  d8.val_x=9
+  d9.val_x=10
+  d10.val_x=11
+  d11.val_x=12
+  d12.val_x=13
+  d13.val_x=14
+  d14.val_x=14
+  d15.val_x=15

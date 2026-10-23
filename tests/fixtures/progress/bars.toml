@@ -1,0 +1,293 @@
+[page]
+name = "bars"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#e0e0e0"
+
+[[component]]
+name = "a0_0"
+type = "progress-bar"
+x = 20
+y = 20
+w = 160
+h = 30
+sta = 0
+dez = 0
+val = 0
+dis = 0
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "a0_25"
+type = "progress-bar"
+x = 210
+y = 20
+w = 160
+h = 30
+sta = 0
+dez = 0
+val = 25
+dis = 0
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "a0_50"
+type = "progress-bar"
+x = 400
+y = 20
+w = 160
+h = 30
+sta = 0
+dez = 0
+val = 50
+dis = 0
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "a0_100"
+type = "progress-bar"
+x = 590
+y = 20
+w = 160
+h = 30
+sta = 0
+dez = 0
+val = 100
+dis = 0
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "a25_0"
+type = "progress-bar"
+x = 20
+y = 70
+w = 160
+h = 30
+sta = 0
+dez = 0
+val = 0
+dis = 25
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "a25_25"
+type = "progress-bar"
+x = 210
+y = 70
+w = 160
+h = 30
+sta = 0
+dez = 0
+val = 25
+dis = 25
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "a25_50"
+type = "progress-bar"
+x = 400
+y = 70
+w = 160
+h = 30
+sta = 0
+dez = 0
+val = 50
+dis = 25
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "a25_100"
+type = "progress-bar"
+x = 590
+y = 70
+w = 160
+h = 30
+sta = 0
+dez = 0
+val = 100
+dis = 25
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "round10"
+type = "progress-bar"
+x = 20
+y = 120
+w = 160
+h = 30
+sta = 0
+dez = 0
+val = 50
+dis = 10
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "round50"
+type = "progress-bar"
+x = 210
+y = 120
+w = 160
+h = 30
+sta = 0
+dez = 0
+val = 50
+dis = 50
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "round100"
+type = "progress-bar"
+x = 400
+y = 120
+w = 160
+h = 30
+sta = 0
+dez = 0
+val = 50
+dis = 100
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "d0_0"
+type = "progress-bar"
+x = 20
+y = 180
+w = 30
+h = 160
+sta = 0
+dez = 1
+val = 0
+dis = 0
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "d0_25"
+type = "progress-bar"
+x = 70
+y = 180
+w = 30
+h = 160
+sta = 0
+dez = 1
+val = 25
+dis = 0
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "d0_50"
+type = "progress-bar"
+x = 120
+y = 180
+w = 30
+h = 160
+sta = 0
+dez = 1
+val = 50
+dis = 0
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "d0_100"
+type = "progress-bar"
+x = 170
+y = 180
+w = 30
+h = 160
+sta = 0
+dez = 1
+val = 100
+dis = 0
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "d25_50"
+type = "progress-bar"
+x = 220
+y = 180
+w = 30
+h = 160
+sta = 0
+dez = 1
+val = 50
+dis = 25
+bco = "#4060ff"
+pco = "#ff4000"
+
+[[component]]
+name = "picAcross"
+type = "progress-bar"
+x = 300
+y = 180
+w = 160
+h = 30
+sta = 1
+dez = 0
+val = 50
+dis = 0
+bpic = "backAcross"
+ppic = "fillAcross"
+
+[[component]]
+name = "picDown"
+type = "progress-bar"
+x = 300
+y = 230
+w = 30
+h = 160
+sta = 1
+dez = 1
+val = 50
+dis = 0
+bpic = "backDown"
+ppic = "fillDown"
+
+[[component]]
+name = "noPath"
+type = "external-picture"
+x = 500
+y = 180
+w = 120
+h = 80
+path = ""
+
+[[component]]
+name = "missing"
+type = "external-picture"
+x = 640
+y = 180
+w = 120
+h = 80
+path = "sd0/missing.jpg"
+
+[[component]]
+name = "next"
+type = "button"
+x = 600
+y = 400
+w = 180
+h = 60
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "next page"
+txt_maxl = 20

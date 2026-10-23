@@ -1,0 +1,341 @@
+[page]
+name = "settings"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = "settings/normal"
+
+[[component]]
+name = "title"
+type = "text"
+x = 24
+y = 20
+w = 400
+h = 32
+sta = 0
+font = "SansBold24"
+picc = "settings/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "Settings"
+txt_maxl = 20
+
+[[component]]
+name = "clock"
+type = "text"
+x = 640
+y = 20
+w = 136
+h = 32
+sta = 0
+font = "SansBold24"
+picc = "settings/normal"
+pco = "#eff3f7"
+xcen = 2
+txt = "00:00"
+txt_maxl = 5
+
+[[component]]
+name = "navHome"
+type = "button"
+x = 0
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "settings/normal"
+picc2 = "settings/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Home"
+
+[[component]]
+name = "navSchedule"
+type = "button"
+x = 200
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "settings/normal"
+picc2 = "settings/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Schedule"
+
+[[component]]
+name = "navDay"
+type = "button"
+x = 400
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "settings/normal"
+picc2 = "settings/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Day"
+
+[[component]]
+name = "navSettings"
+type = "button"
+x = 600
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "settings/normal"
+picc2 = "settings/pressed"
+pco = "#ff8a42"
+pco2 = "#ff8a42"
+ycen = 2
+txt = "Settings"
+
+[[component]]
+name = "tick"
+type = "timer"
+tim = 1000
+
+[[component]]
+name = "unitsCaption"
+type = "text"
+x = 40
+y = 88
+w = 200
+h = 22
+sta = 0
+picc = "settings/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Units"
+
+[[component]]
+name = "celsius"
+type = "button"
+x = 36
+y = 120
+w = 166
+h = 60
+sta = 0
+font = "Sans20"
+picc = "settings/normal"
+picc2 = "settings/pressed"
+pco = "#eff3f7"
+pco2 = "#eff3f7"
+txt = "Celsius"
+
+[[component]]
+name = "fahrenheit"
+type = "button"
+x = 206
+y = 120
+w = 166
+h = 60
+sta = 0
+font = "Sans20"
+picc = "settings/normal"
+picc2 = "settings/pressed"
+pco = "#8c96a5"
+pco2 = "#eff3f7"
+txt = "Fahrenheit"
+
+[[component]]
+name = "brightCaption"
+type = "text"
+x = 40
+y = 228
+w = 200
+h = 22
+sta = 0
+picc = "settings/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Brightness"
+
+[[component]]
+name = "brightnessText"
+type = "text"
+x = 280
+y = 228
+w = 88
+h = 22
+sta = 0
+picc = "settings/normal"
+pco = "#eff3f7"
+xcen = 2
+txt = "80%"
+
+[[component]]
+name = "brightness"
+type = "slider"
+x = 64
+y = 281
+w = 280
+h = 40
+sta = 0
+psta = 1
+wid = 28
+hig = 28
+picc = "settings/normal"
+picc1 = "settings/pressed"
+pic2 = "knob"
+val = 80
+minval = 10
+
+[[component]]
+name = "brightnessHint"
+type = "text"
+x = 40
+y = 344
+w = 330
+h = 22
+sta = 0
+picc = "settings/normal"
+pco = "#63717b"
+xcen = 0
+txt = "Drag to dim the screen."
+txt_maxl = 30
+
+[[component]]
+name = "clockCaption"
+type = "text"
+x = 432
+y = 88
+w = 200
+h = 22
+sta = 0
+picc = "settings/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Clock"
+
+[[component]]
+name = "setTime"
+type = "text"
+x = 424
+y = 120
+w = 344
+h = 56
+sta = 0
+font = "Sans56"
+picc = "settings/normal"
+pco = "#eff3f7"
+txt = "00:00"
+txt_maxl = 5
+
+[[component]]
+name = "hourDown"
+type = "button"
+x = 424
+y = 196
+w = 48
+h = 48
+sta = 0
+picc = "settings/normal"
+picc2 = "settings/pressed"
+txt = ""
+
+[[component]]
+name = "hourCaption"
+type = "text"
+x = 472
+y = 209
+w = 72
+h = 22
+sta = 0
+picc = "settings/normal"
+pco = "#8c96a5"
+txt = "Hour"
+
+[[component]]
+name = "hourUp"
+type = "button"
+x = 544
+y = 196
+w = 48
+h = 48
+sta = 0
+picc = "settings/normal"
+picc2 = "settings/pressed"
+txt = ""
+
+[[component]]
+name = "minuteDown"
+type = "button"
+x = 600
+y = 196
+w = 48
+h = 48
+sta = 0
+picc = "settings/normal"
+picc2 = "settings/pressed"
+txt = ""
+
+[[component]]
+name = "minuteCaption"
+type = "text"
+x = 648
+y = 209
+w = 72
+h = 22
+sta = 0
+picc = "settings/normal"
+pco = "#8c96a5"
+txt = "Minute"
+
+[[component]]
+name = "minuteUp"
+type = "button"
+x = 720
+y = 196
+w = 48
+h = 48
+sta = 0
+picc = "settings/normal"
+picc2 = "settings/pressed"
+txt = ""
+
+[[component]]
+name = "logo"
+type = "picture"
+x = 424
+y = 306
+w = 64
+h = 64
+pic = "logo"
+
+[[component]]
+name = "aboutTitle"
+type = "text"
+x = 504
+y = 310
+w = 264
+h = 28
+sta = 0
+font = "Sans20"
+picc = "settings/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "Thermostat demo"
+txt_maxl = 20
+
+[[component]]
+name = "aboutText"
+type = "text"
+x = 504
+y = 340
+w = 264
+h = 22
+sta = 0
+picc = "settings/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Made with nxwright"
+txt_maxl = 20

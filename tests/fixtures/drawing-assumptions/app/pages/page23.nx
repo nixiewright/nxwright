@@ -1,0 +1,13 @@
+on page23.load:
+  dLeft.clear()
+  dLeft.insert("first record^second one^third one")
+  dLeft.insert("another row^more text^last bit")
+  dLeft.val_x=50
+  dCentre.clear()
+  dCentre.insert("first record^second one^third one")
+  dCentre.insert("another row^more text^last bit")
+  dCentre.val_x=50
+  dInside.clear()
+  dInside.insert("first record^second one^third one")
+  dInside.insert("another row^more text^last bit")
+  dInside.val_x=50

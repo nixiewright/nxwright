@@ -1,0 +1,55 @@
+[page]
+name = "page44"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "cB"
+type = "checkbox"
+x = 10
+y = 10
+w = 80
+h = 80
+
+[[component]]
+name = "tC"
+type = "text"
+x = 60
+y = 50
+w = 200
+h = 80
+txt = "TC"
+pco = 0
+txt_maxl = 20
+sta = 3
+
+[[component]]
+name = "stS"
+type = "sliding-text"
+x = 400
+y = 10
+w = 300
+h = 150
+txt = "line 0\u000d\u000aline 1\u000d\u000aline 2\u000d\u000aline 3\u000d\u000aline 4\u000d\u000aline 5\u000d\u000aline 6\u000d\u000aline 7\u000d\u000aline 8\u000d\u000aline 9\u000d\u000aline 10\u000d\u000aline 11\u000d\u000aline 12\u000d\u000aline 13\u000d\u000aline 14\u000d\u000aline 15\u000d\u000aline 16\u000d\u000aline 17\u000d\u000aline 18\u000d\u000aline 19"
+txt_maxl = 400
+sta = 1
+bco = 65535
+xcen = 0
+left = 1
+
+[[component]]
+name = "tS"
+type = "text"
+x = 600
+y = 100
+w = 180
+h = 100
+txt = "TS"
+pco = 0
+txt_maxl = 20
+sta = 3

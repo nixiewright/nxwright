@@ -1,0 +1,39 @@
+[page]
+name = "page43"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "tSl"
+type = "text"
+x = 500
+y = 10
+w = 200
+h = 80
+txt = "SL"
+pco = 0
+txt_maxl = 20
+sta = 1
+bco = 65504
+effect = 3
+time = 3000
+
+[[component]]
+name = "tDiag"
+type = "text"
+x = 300
+y = 250
+w = 150
+h = 60
+txt = "D"
+pco = 0
+txt_maxl = 20
+sta = 1
+bco = 2047
+effect = 5
+time = 3000

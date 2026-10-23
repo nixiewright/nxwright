@@ -1,0 +1,200 @@
+[page]
+name = "needles"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#808080"
+
+[[component]]
+name = "h1"
+type = "gauge"
+x = 5
+y = 5
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 0
+val = 30
+
+[[component]]
+name = "h2"
+type = "gauge"
+x = 163
+y = 5
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 0
+val = 30
+left = 10
+
+[[component]]
+name = "h3"
+type = "gauge"
+x = 321
+y = 5
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 0
+val = 30
+left = 20
+
+[[component]]
+name = "h4"
+type = "gauge"
+x = 479
+y = 5
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 0
+val = 30
+left = 40
+
+[[component]]
+name = "h5"
+type = "gauge"
+x = 637
+y = 5
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 0
+val = 30
+down = 50
+
+[[component]]
+name = "h6"
+type = "gauge"
+x = 5
+y = 163
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 0
+val = 30
+up = 50
+
+[[component]]
+name = "h7"
+type = "gauge"
+x = 163
+y = 163
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 0
+val = 30
+up = 100
+
+[[component]]
+name = "h8"
+type = "gauge"
+x = 321
+y = 163
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 0
+val = 0
+vvs0 = 1
+vvs1 = 1
+vvs2 = "\u0001"
+
+[[component]]
+name = "h9"
+type = "gauge"
+x = 479
+y = 163
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 0
+val = 90
+vvs1 = 20
+
+[[component]]
+name = "h10"
+type = "gauge"
+x = 637
+y = 163
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 0
+val = 30
+format = 30
+
+[[component]]
+name = "h11"
+type = "gauge"
+x = 5
+y = 321
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 24
+val = 135
+
+[[component]]
+name = "h12"
+type = "gauge"
+x = 163
+y = 321
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+hig = 100
+val = 30
+
+[[component]]
+name = "h13"
+type = "gauge"
+x = 321
+y = 321
+sta = 1
+bco = "#ffffff"
+w = 100
+h = 150
+hig = 0
+val = 90
+
+[[component]]
+name = "h14"
+type = "gauge"
+x = 479
+y = 321
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 100
+hig = 0
+val = 0
+
+[[component]]
+name = "h15"
+type = "gauge"
+x = 637
+y = 321
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 100
+hig = 0
+val = 90

@@ -1,0 +1,91 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+bco = 0
+
+[[component]]
+name = "white"
+type = "text"
+x = 400
+y = 0
+w = 400
+h = 480
+font = "NotoSans20"
+bco = 65535
+txt = ""
+
+[[component]]
+name = "r0"
+type = "text"
+x = 250
+y = 20
+w = 300
+h = 50
+font = "NotoSans20"
+bco = 63488
+txt = ""
+aph = 0
+
+[[component]]
+name = "r1"
+type = "text"
+x = 250
+y = 95
+w = 300
+h = 50
+font = "NotoSans20"
+bco = 63488
+txt = ""
+aph = 16
+
+[[component]]
+name = "r2"
+type = "text"
+x = 250
+y = 170
+w = 300
+h = 50
+font = "NotoSans20"
+bco = 63488
+txt = ""
+aph = 32
+
+[[component]]
+name = "r3"
+type = "text"
+x = 250
+y = 245
+w = 300
+h = 50
+font = "NotoSans20"
+bco = 63488
+txt = ""
+aph = 64
+
+[[component]]
+name = "r4"
+type = "text"
+x = 250
+y = 320
+w = 300
+h = 50
+font = "NotoSans20"
+bco = 63488
+txt = ""
+aph = 96
+
+[[component]]
+name = "r5"
+type = "text"
+x = 250
+y = 395
+w = 300
+h = 50
+font = "NotoSans20"
+bco = 63488
+txt = ""
+aph = 127

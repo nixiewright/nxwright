@@ -1,0 +1,456 @@
+[page]
+name = "page7"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "dsCrop"
+type = "dual-state-button"
+x = 10
+y = 10
+w = 180
+h = 50
+txt = "left"
+sta = 0
+picc = 1
+picc2 = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "stCrop"
+type = "scrolling-text"
+x = 210
+y = 10
+w = 180
+h = 50
+txt = "left"
+en = 0
+sta = 0
+picc = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "xCrop"
+type = "xfloat"
+x = 410
+y = 10
+w = 180
+h = 50
+val = 7
+sta = 0
+picc = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "cbCrop"
+type = "combo-box"
+x = 610
+y = 10
+w = 180
+h = 50
+txt = "left"
+path = "left\r\nright"
+sta = 0
+picc = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "dsPic"
+type = "dual-state-button"
+x = 10
+y = 80
+w = 180
+h = 50
+txt = "left"
+sta = 2
+pic = 1
+pic2 = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "stPic"
+type = "scrolling-text"
+x = 210
+y = 80
+w = 180
+h = 50
+txt = "left"
+en = 0
+sta = 2
+pic = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "xPic"
+type = "xfloat"
+x = 410
+y = 80
+w = 180
+h = 50
+val = 7
+sta = 2
+pic = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "cbPic"
+type = "combo-box"
+x = 610
+y = 80
+w = 180
+h = 50
+txt = "left"
+path = "left\r\nright"
+sta = 2
+pic = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "dsNone"
+type = "dual-state-button"
+x = 10
+y = 150
+w = 180
+h = 50
+txt = "left"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "stNone"
+type = "scrolling-text"
+x = 210
+y = 150
+w = 180
+h = 50
+txt = "left"
+en = 0
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "xNone"
+type = "xfloat"
+x = 410
+y = 150
+w = 180
+h = 50
+val = 7
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "cbNone"
+type = "combo-box"
+x = 610
+y = 150
+w = 180
+h = 50
+txt = "left"
+path = "left\r\nright"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "c21"
+type = "checkbox"
+x = 10
+y = 230
+w = 21
+h = 20
+val = 1
+bco = 65535
+pco = 0
+
+[[component]]
+name = "c22"
+type = "checkbox"
+x = 55
+y = 230
+w = 22
+h = 20
+val = 1
+bco = 65535
+pco = 0
+
+[[component]]
+name = "c23"
+type = "checkbox"
+x = 100
+y = 230
+w = 23
+h = 20
+val = 1
+bco = 65535
+pco = 0
+
+[[component]]
+name = "c30"
+type = "checkbox"
+x = 145
+y = 230
+w = 30
+h = 20
+val = 1
+bco = 65535
+pco = 0
+
+[[component]]
+name = "c31"
+type = "checkbox"
+x = 190
+y = 230
+w = 31
+h = 20
+val = 1
+bco = 65535
+pco = 0
+
+[[component]]
+name = "c33"
+type = "checkbox"
+x = 235
+y = 230
+w = 33
+h = 20
+val = 1
+bco = 65535
+pco = 0
+
+[[component]]
+name = "xV5"
+type = "xfloat"
+x = 290
+y = 220
+w = 80
+h = 40
+val = 12345
+vvs1 = 5
+sta = 1
+bco = 65535
+
+[[component]]
+name = "xV6"
+type = "xfloat"
+x = 375
+y = 220
+w = 80
+h = 40
+val = 12345
+vvs1 = 6
+sta = 1
+bco = 65535
+
+[[component]]
+name = "xV7"
+type = "xfloat"
+x = 460
+y = 220
+w = 80
+h = 40
+val = 12345
+vvs1 = 7
+sta = 1
+bco = 65535
+
+[[component]]
+name = "xV8"
+type = "xfloat"
+x = 545
+y = 220
+w = 80
+h = 40
+val = 12345
+vvs1 = 8
+sta = 1
+bco = 65535
+
+[[component]]
+name = "xW9"
+type = "xfloat"
+x = 300
+y = 440
+w = 55
+h = 30
+val = 7
+vvs0 = 9
+sta = 1
+bco = 65535
+
+[[component]]
+name = "xW10"
+type = "xfloat"
+x = 360
+y = 440
+w = 55
+h = 30
+val = 7
+vvs0 = 10
+sta = 1
+bco = 65535
+
+[[component]]
+name = "nL9"
+type = "number"
+x = 560
+y = 440
+w = 55
+h = 30
+val = 7
+lenth = 9
+sta = 1
+bco = 65535
+
+[[component]]
+name = "nL10"
+type = "number"
+x = 620
+y = 440
+w = 55
+h = 30
+val = 7
+lenth = 10
+sta = 1
+bco = 65535
+
+[[component]]
+name = "nL11"
+type = "number"
+x = 680
+y = 440
+w = 55
+h = 30
+val = 7
+lenth = 11
+sta = 1
+bco = 65535
+
+[[component]]
+name = "nL12"
+type = "number"
+x = 740
+y = 440
+w = 55
+h = 30
+val = 7
+lenth = 12
+sta = 1
+bco = 65535
+
+[[component]]
+name = "xTwelve"
+type = "xfloat"
+x = 720
+y = 220
+w = 70
+h = 40
+val = -5
+sta = 1
+bco = 65535
+
+[[component]]
+name = "qWide"
+type = "qr-code"
+x = 10
+y = 280
+w = 150
+h = 150
+sta = 1
+pic = 2
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "qNarrow"
+type = "qr-code"
+x = 180
+y = 280
+w = 100
+h = 100
+sta = 1
+pic = 3
+txt = "hello there"
+dis = 2
+
+[[component]]
+name = "cbRound"
+type = "combo-box"
+x = 320
+y = 290
+w = 180
+h = 42
+txt = "pic"
+path = "pic\r\nround"
+sta = 2
+pic = 1
+dis = 40
+
+[[component]]
+name = "cbOpen"
+type = "combo-box"
+x = 540
+y = 290
+w = 180
+h = 42
+txt = "one"
+path = "one\r\ntwo\r\nthree"
+sta = 1
+bco = 65535
+dis = 40
+down = 1
+style = 1
+borderw = 4
+borderc = 63488

@@ -1,0 +1,46 @@
+# What the Editor's simulator did with the combo box cb of events.page.toml
+# and events.nx, a list of six items showing four, opening down.
+#
+# Each run starts as the page opens; its taps are page pixels, each a press
+# then a release. Each event of cb writes "cd" (Touch Press) or "cu" (Touch
+# Release) to the text log, then cb's `val` and `down` as the event runs,
+# such as "cu0/1"; the buttons ua and ub, ua before cb in ID order and ub
+# after it, both where cb's list opens, write "ad", "au", "bd", and "bu";
+# the page writes "pd" and "pu"; and the button code, which sets cb.val=5,
+# writes "k".
+
+[[run]]
+# Open, choose the second item, open, tap the page, close, tap the top mark
+# while closed, open, set val 5 by code while open, close.
+taps = [[370, 41], [370, 155], [370, 41], [700, 330], [370, 41], [370, 75], [370, 41],
+        [675, 45], [370, 41]]
+log = "cd0/0 cu0/1 cd0/1 cu1/0 cd1/0 cu1/1 pd pu cd1/1 cu1/0 pd pu cd1/0 cu1/1 k cd5/1 cu5/0 "
+
+[[run]]
+# Open, then tap the bottom mark, the top mark, and the gap between the
+# first two items, opening again before each.
+taps = [[370, 41], [370, 283], [370, 41], [370, 75], [370, 41], [370, 130]]
+log = "cd0/0 cu0/1 cd0/1 cu0/0 cd0/0 cu0/1 cd0/1 cu0/0 cd0/0 cu0/1 cd0/1 cu0/0 "
+
+[[run]]
+# Open, choose the third item, over ua; open, tap ub, over the list; close,
+# open, and tap the bottom mark of the list scrolled to its end.
+taps = [[370, 41], [370, 200], [370, 41], [370, 250], [370, 41], [370, 41], [370, 284]]
+log = "cd0/0 cu0/1 cd0/1 cu2/0 cd2/0 cu2/1 bd bu cd2/1 cu2/0 cd2/0 cu2/1 cd2/1 cu2/0 "
+
+# Code setting cb's attributes, from the page's opening, each instruction
+# in turn, and cb's `val` and `txt` after them.
+[[code]]
+instructions = ["cb.val=9"]
+val = 0
+txt = "40V"
+
+[[code]]
+instructions = ["cb.val=1", 'cb.path="aa\rbb\rc"']
+val = 1
+txt = "60V"
+
+[[code]]
+instructions = ["cb.val=1", 'cb.txt="zz"']
+val = 1
+txt = "zz"

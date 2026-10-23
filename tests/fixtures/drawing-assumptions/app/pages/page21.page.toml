@@ -1,0 +1,69 @@
+[page]
+name = "page21"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+type = "select"
+path = "one\r\ntwo\r\nthree"
+sta = 3
+name = "eRight"
+x = 700
+y = 10
+w = 180
+h = 140
+
+[[component]]
+type = "select"
+path = "one\r\ntwo\r\nthree"
+sta = 3
+name = "eRightFar"
+x = 740
+y = 170
+w = 180
+h = 140
+
+[[component]]
+type = "select"
+path = "one\r\ntwo\r\nthree"
+sta = 3
+name = "eBottom"
+x = 10
+y = 360
+w = 180
+h = 140
+
+[[component]]
+type = "select"
+path = "one\r\ntwo\r\nthree"
+sta = 3
+name = "eBottomFar"
+x = 210
+y = 390
+w = 180
+h = 140
+
+[[component]]
+type = "select"
+path = "one\r\ntwo\r\nthree"
+sta = 3
+name = "eBoth"
+x = 700
+y = 370
+w = 180
+h = 140
+
+[[component]]
+type = "select"
+path = "one\r\ntwo\r\nthree"
+sta = 3
+name = "eInside"
+x = 400
+y = 10
+w = 180
+h = 140

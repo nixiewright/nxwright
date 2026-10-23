@@ -1,0 +1,117 @@
+[page]
+name = "page15"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "qw176"
+type = "qr-code"
+x = 10
+y = 10
+w = 200
+h = 200
+sta = 1
+pic = 33
+txt = "hello"
+dis = 10
+
+[[component]]
+name = "qw177"
+type = "qr-code"
+x = 215
+y = 10
+w = 200
+h = 200
+sta = 1
+pic = 34
+txt = "hello"
+dis = 10
+
+[[component]]
+name = "qw188"
+type = "qr-code"
+x = 420
+y = 10
+w = 200
+h = 200
+sta = 1
+pic = 35
+txt = "hello"
+dis = 10
+
+[[component]]
+name = "qw189"
+type = "qr-code"
+x = 625
+y = 10
+w = 200
+h = 200
+sta = 1
+pic = 36
+txt = "hello"
+dis = 10
+
+[[component]]
+name = "qw87"
+type = "qr-code"
+x = 10
+y = 250
+w = 100
+h = 100
+sta = 1
+pic = 37
+txt = "hello"
+dis = 2
+
+[[component]]
+name = "qw88"
+type = "qr-code"
+x = 115
+y = 250
+w = 100
+h = 100
+sta = 1
+pic = 38
+txt = "hello"
+dis = 2
+
+[[component]]
+name = "qw89"
+type = "qr-code"
+x = 220
+y = 250
+w = 100
+h = 100
+sta = 1
+pic = 39
+txt = "hello"
+dis = 2
+
+[[component]]
+name = "qw92"
+type = "qr-code"
+x = 325
+y = 250
+w = 100
+h = 100
+sta = 1
+pic = 40
+txt = "hello"
+dis = 2
+
+[[component]]
+name = "qw93"
+type = "qr-code"
+x = 430
+y = 250
+w = 100
+h = 100
+sta = 1
+pic = 41
+txt = "hello"
+dis = 2

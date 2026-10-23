@@ -1,0 +1,967 @@
+# What the Nextion Editor's compile counts in memory, as
+# tools/editor/memory_probe.py measured it (docs/format.md, Memory).
+# Written by the probe: measure again rather than edit.
+
+editor = "3.1.73"
+
+[memory]
+NX1060P070 = 524288
+NX1060P101 = 524288
+NX3224F024 = 3584
+NX3224F028 = 3584
+NX3224K024 = 3584
+NX3224K028 = 3584
+NX3224T024 = 3584
+NX3224T028 = 3584
+NX4024K032 = 3584
+NX4024T032 = 3584
+NX4827K043 = 8192
+NX4827P043 = 524288
+NX4827T043 = 3584
+NX4832F035 = 3584
+NX4832K035 = 8192
+NX4832T035 = 3584
+NX4848E021 = 524288
+NX4848E028 = 524288
+NX4848E040 = 524288
+NX4880E043 = 524288
+NX8048K050 = 8192
+NX8048K070 = 8192
+NX8048P043 = 524288
+NX8048P050 = 524288
+NX8048P070 = 524288
+NX8048T050 = 3584
+NX8048T070 = 3584
+
+[series.E]
+page = 76
+global = 4
+int = 4
+global_component = 4
+
+[series.E.objects]
+bytes = 0
+
+[series.E.refused_values.data-record]
+dir_m = [
+    256,
+]
+path_m = [
+    256,
+]
+txt_m = [
+    256,
+]
+vscope = [
+    0,
+]
+
+[series.E.refused_values.file-stream]
+vscope = [
+    1,
+]
+
+[series.E.refused_values.gauge]
+up = [
+    32768,
+]
+
+[series.E.refused_values.switch]
+dis = [
+    101,
+]
+
+[series.E.refused_values.text]
+txt_maxl = [
+    65535,
+]
+
+[series.E.types.audio]
+cost = 64108
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4, times = "from" },
+]
+
+[series.E.types.button]
+cost = 88
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.checkbox]
+cost = 72
+
+[series.E.types.combo-box]
+cost = 144
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+    { attribute = "path_m", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.crop]
+cost = 68
+
+[series.E.types.data-record]
+cost = 11008
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "format_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "dir_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "filter_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "txt_m", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.data-record.unmeasured]
+vscope = 1
+
+[series.E.types.dual-state-button]
+cost = 88
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.external-picture]
+cost = 68
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.file-browser]
+cost = 164
+parts = [
+    { attribute = "dir_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "filter_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "txt_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "vvs2_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "buffsize", bytes = 1, round = 4 },
+]
+
+[series.E.types.file-stream]
+cost = 10800
+
+[series.E.types.file-stream.unmeasured]
+vscope = 0
+
+[series.E.types.gauge]
+cost = 84
+
+[series.E.types.gmov]
+cost = 12108
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.hotspot]
+cost = 60
+
+[series.E.types.number]
+cost = 84
+
+[series.E.types.picture]
+cost = 64
+
+[series.E.types.progress-bar]
+cost = 68
+
+[series.E.types.qr-code]
+cost = 76
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.radio]
+cost = 68
+
+[series.E.types.scrolling-text]
+cost = 96
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.select]
+cost = 112
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+    { attribute = "path_m", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.slider]
+cost = 88
+
+[series.E.types.sliding-text]
+cost = 120
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4, fallback = "txt_maxl" },
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.sliding-text.unmeasured]
+path = ""
+
+[series.E.types.switch]
+cost = 80
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.text]
+cost = 88
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.E.types.timer]
+cost = 36
+
+[series.E.types.touch-capture]
+cost = 36
+
+[series.E.types.variable]
+cost = 20
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4, times = "sta" },
+]
+
+[series.E.types.video]
+cost = 64108
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4, times = "from" },
+]
+
+[series.E.types.waveform]
+cost = 96
+parts = [
+    { attribute = "ch", bytes = 16 },
+    { attribute = "w", bytes = 13, units = 10, round = 4, times = "ch" },
+]
+
+[series.E.types.xfloat]
+cost = 84
+
+[series.F]
+page = 16
+global = 4
+int = 4
+global_component = 0
+refused = [
+    "audio",
+    "combo-box",
+    "data-record",
+    "external-picture",
+    "file-browser",
+    "file-stream",
+    "gmov",
+    "select",
+    "sliding-text",
+    "switch",
+    "video",
+]
+
+[series.F.objects]
+bytes = 1
+round = 4
+
+[series.F.refused_values.button]
+aph = [
+    128,
+]
+
+[series.F.refused_values.checkbox]
+val = [
+    2,
+]
+
+[series.F.refused_values.gauge]
+sta = [
+    3,
+]
+up = [
+    32768,
+]
+
+[series.F.refused_values.page]
+aph = [
+    128,
+]
+
+[series.F.types.button]
+cost = 12
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 2, round = 4 },
+]
+
+[series.F.types.checkbox]
+cost = 12
+
+[series.F.types.crop]
+cost = 8
+
+[series.F.types.dual-state-button]
+cost = 12
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 2, round = 4 },
+]
+
+[series.F.types.gauge]
+cost = 24
+
+[series.F.types.hotspot]
+cost = 0
+
+[series.F.types.number]
+cost = 24
+
+[series.F.types.picture]
+cost = 4
+
+[series.F.types.progress-bar]
+cost = 8
+
+[series.F.types.qr-code]
+cost = 16
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.F.types.qr-code.temporary]
+attribute = "txt_maxl"
+steps = [
+    [
+        0,
+        0,
+    ],
+    [
+        17,
+        295,
+    ],
+    [
+        32,
+        405,
+    ],
+    [
+        53,
+        539,
+    ],
+    [
+        78,
+        693,
+    ],
+    [
+        106,
+        867,
+    ],
+    [
+        134,
+        1061,
+    ],
+    [
+        154,
+        1257,
+    ],
+    [
+        192,
+        1491,
+    ],
+    [
+        230,
+        1745,
+    ],
+]
+together = "largest"
+
+[series.F.types.radio]
+cost = 8
+
+[series.F.types.scrolling-text]
+cost = 36
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.F.types.slider]
+cost = 28
+
+[series.F.types.text]
+cost = 8
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 2, round = 4 },
+]
+
+[series.F.types.timer]
+cost = 4
+
+[series.F.types.touch-capture]
+cost = 4
+
+[series.F.types.variable]
+cost = 4
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4, times = "sta" },
+]
+
+[series.F.types.waveform]
+cost = 36
+parts = [
+    { attribute = "ch", bytes = 16 },
+    { attribute = "w", bytes = 13, units = 10, round = 4, times = "ch" },
+]
+
+[series.F.types.xfloat]
+cost = 24
+
+[series.K]
+page = 16
+global = 4
+int = 4
+global_component = 0
+refused = [
+    "audio",
+    "combo-box",
+    "data-record",
+    "external-picture",
+    "file-browser",
+    "file-stream",
+    "gmov",
+    "select",
+    "sliding-text",
+    "switch",
+    "video",
+]
+
+[series.K.objects]
+bytes = 1
+round = 4
+
+[series.K.refused_values.button]
+aph = [
+    128,
+]
+
+[series.K.refused_values.checkbox]
+val = [
+    2,
+]
+
+[series.K.refused_values.gauge]
+sta = [
+    3,
+]
+up = [
+    32768,
+]
+
+[series.K.refused_values.page]
+aph = [
+    128,
+]
+
+[series.K.refused_values.qr-code]
+txt_maxl = [
+    193,
+    195,
+    198,
+    205,
+    230,
+]
+
+[series.K.types.button]
+cost = 12
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 2, round = 4 },
+]
+
+[series.K.types.checkbox]
+cost = 12
+
+[series.K.types.crop]
+cost = 8
+
+[series.K.types.dual-state-button]
+cost = 12
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 2, round = 4 },
+]
+
+[series.K.types.gauge]
+cost = 24
+
+[series.K.types.hotspot]
+cost = 0
+
+[series.K.types.number]
+cost = 24
+
+[series.K.types.picture]
+cost = 4
+
+[series.K.types.progress-bar]
+cost = 8
+
+[series.K.types.qr-code]
+cost = 16
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.K.types.qr-code.temporary]
+attribute = "txt_maxl"
+steps = [
+    [
+        0,
+        0,
+    ],
+    [
+        17,
+        586,
+    ],
+    [
+        32,
+        851,
+    ],
+    [
+        49,
+        1182,
+    ],
+    [
+        78,
+        1565,
+    ],
+    [
+        106,
+        1997,
+    ],
+    [
+        134,
+        2383,
+    ],
+    [
+        154,
+        2823,
+    ],
+    [
+        192,
+        3382,
+    ],
+]
+together = "largest"
+
+[series.K.types.radio]
+cost = 8
+
+[series.K.types.scrolling-text]
+cost = 36
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.K.types.slider]
+cost = 28
+
+[series.K.types.text]
+cost = 8
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 2, round = 4 },
+]
+
+[series.K.types.timer]
+cost = 4
+
+[series.K.types.touch-capture]
+cost = 4
+
+[series.K.types.variable]
+cost = 4
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4, times = "sta" },
+]
+
+[series.K.types.waveform]
+cost = 36
+parts = [
+    { attribute = "ch", bytes = 16 },
+    { attribute = "w", bytes = 13, units = 10, round = 4, times = "ch" },
+]
+
+[series.K.types.xfloat]
+cost = 24
+
+[series.P]
+page = 76
+global = 4
+int = 4
+global_component = 4
+
+[series.P.objects]
+bytes = 0
+
+[series.P.refused_values.data-record]
+dir_m = [
+    256,
+]
+path_m = [
+    256,
+]
+txt_m = [
+    256,
+]
+vscope = [
+    0,
+]
+
+[series.P.refused_values.file-stream]
+vscope = [
+    1,
+]
+
+[series.P.refused_values.gauge]
+up = [
+    32768,
+]
+
+[series.P.refused_values.switch]
+dis = [
+    101,
+]
+
+[series.P.refused_values.text]
+txt_maxl = [
+    65535,
+]
+
+[series.P.types.audio]
+cost = 64108
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4, times = "from" },
+]
+
+[series.P.types.button]
+cost = 88
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.checkbox]
+cost = 72
+
+[series.P.types.combo-box]
+cost = 144
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+    { attribute = "path_m", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.crop]
+cost = 68
+
+[series.P.types.data-record]
+cost = 11008
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "format_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "dir_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "filter_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "txt_m", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.data-record.unmeasured]
+vscope = 1
+
+[series.P.types.dual-state-button]
+cost = 88
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.external-picture]
+cost = 68
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.file-browser]
+cost = 164
+parts = [
+    { attribute = "dir_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "filter_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "txt_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "vvs2_m", bytes = 1, add = 1, round = 4 },
+    { attribute = "buffsize", bytes = 1, round = 4 },
+]
+
+[series.P.types.file-stream]
+cost = 10800
+
+[series.P.types.file-stream.unmeasured]
+vscope = 0
+
+[series.P.types.gauge]
+cost = 84
+
+[series.P.types.gmov]
+cost = 12108
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.hotspot]
+cost = 60
+
+[series.P.types.number]
+cost = 84
+
+[series.P.types.picture]
+cost = 64
+
+[series.P.types.progress-bar]
+cost = 68
+
+[series.P.types.qr-code]
+cost = 76
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.radio]
+cost = 68
+
+[series.P.types.scrolling-text]
+cost = 96
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.select]
+cost = 112
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+    { attribute = "path_m", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.slider]
+cost = 88
+
+[series.P.types.sliding-text]
+cost = 120
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4, fallback = "txt_maxl" },
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.sliding-text.unmeasured]
+path = ""
+
+[series.P.types.switch]
+cost = 80
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.text]
+cost = 88
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.P.types.timer]
+cost = 36
+
+[series.P.types.touch-capture]
+cost = 36
+
+[series.P.types.variable]
+cost = 20
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4, times = "sta" },
+]
+
+[series.P.types.video]
+cost = 64108
+parts = [
+    { attribute = "path_m", bytes = 1, add = 1, round = 4, times = "from" },
+]
+
+[series.P.types.waveform]
+cost = 96
+parts = [
+    { attribute = "ch", bytes = 16 },
+    { attribute = "w", bytes = 13, units = 10, round = 4, times = "ch" },
+]
+
+[series.P.types.xfloat]
+cost = 84
+
+[series.T]
+page = 16
+global = 4
+int = 4
+global_component = 0
+refused = [
+    "audio",
+    "combo-box",
+    "data-record",
+    "external-picture",
+    "file-browser",
+    "file-stream",
+    "gmov",
+    "select",
+    "sliding-text",
+    "switch",
+    "video",
+]
+
+[series.T.objects]
+bytes = 1
+round = 4
+
+[series.T.refused_values.button]
+aph = [
+    128,
+]
+
+[series.T.refused_values.checkbox]
+val = [
+    2,
+]
+
+[series.T.refused_values.gauge]
+sta = [
+    3,
+]
+up = [
+    32768,
+]
+
+[series.T.refused_values.page]
+aph = [
+    128,
+]
+
+[series.T.refused_values.qr-code]
+txt_maxl = [
+    193,
+    195,
+    198,
+    205,
+    230,
+]
+
+[series.T.types.button]
+cost = 12
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 2, round = 4 },
+]
+
+[series.T.types.checkbox]
+cost = 12
+
+[series.T.types.crop]
+cost = 8
+
+[series.T.types.dual-state-button]
+cost = 12
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 2, round = 4 },
+]
+
+[series.T.types.gauge]
+cost = 24
+
+[series.T.types.hotspot]
+cost = 0
+
+[series.T.types.number]
+cost = 24
+
+[series.T.types.picture]
+cost = 4
+
+[series.T.types.progress-bar]
+cost = 8
+
+[series.T.types.qr-code]
+cost = 16
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.T.types.qr-code.temporary]
+attribute = "txt_maxl"
+steps = [
+    [
+        0,
+        0,
+    ],
+    [
+        17,
+        586,
+    ],
+    [
+        32,
+        851,
+    ],
+    [
+        49,
+        1182,
+    ],
+    [
+        78,
+        1565,
+    ],
+    [
+        106,
+        1997,
+    ],
+    [
+        134,
+        2383,
+    ],
+    [
+        154,
+        2823,
+    ],
+    [
+        192,
+        3382,
+    ],
+]
+together = "largest"
+
+[series.T.types.radio]
+cost = 8
+
+[series.T.types.scrolling-text]
+cost = 36
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4 },
+]
+
+[series.T.types.slider]
+cost = 28
+
+[series.T.types.text]
+cost = 8
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 2, round = 4 },
+]
+
+[series.T.types.timer]
+cost = 4
+
+[series.T.types.touch-capture]
+cost = 4
+
+[series.T.types.variable]
+cost = 4
+parts = [
+    { attribute = "txt_maxl", bytes = 1, add = 1, round = 4, times = "sta" },
+]
+
+[series.T.types.waveform]
+cost = 36
+parts = [
+    { attribute = "ch", bytes = 16 },
+    { attribute = "w", bytes = 13, units = 10, round = 4, times = "ch" },
+]
+
+[series.T.types.xfloat]
+cost = 24

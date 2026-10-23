@@ -1,0 +1,3 @@
+on page10.loadend:
+  stIn.vvs0=560
+  stOut.vvs0=720

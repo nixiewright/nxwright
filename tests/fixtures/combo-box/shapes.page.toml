@@ -1,0 +1,344 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+bco = 33808
+
+[[component]]
+name = "s0"
+type = "combo-box"
+x = 10
+y = 10
+w = 120
+h = 42
+dis = 5
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s1"
+type = "combo-box"
+x = 140
+y = 10
+w = 120
+h = 42
+dis = 10
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s2"
+type = "combo-box"
+x = 270
+y = 10
+w = 120
+h = 42
+dis = 15
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s3"
+type = "combo-box"
+x = 400
+y = 10
+w = 120
+h = 42
+dis = 20
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s4"
+type = "combo-box"
+x = 530
+y = 10
+w = 120
+h = 42
+dis = 25
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s5"
+type = "combo-box"
+x = 660
+y = 10
+w = 120
+h = 42
+dis = 30
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s6"
+type = "combo-box"
+x = 10
+y = 60
+w = 120
+h = 42
+dis = 35
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s7"
+type = "combo-box"
+x = 140
+y = 60
+w = 120
+h = 42
+dis = 40
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s8"
+type = "combo-box"
+x = 270
+y = 60
+w = 120
+h = 42
+dis = 45
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s9"
+type = "combo-box"
+x = 400
+y = 60
+w = 120
+h = 42
+dis = 50
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s10"
+type = "combo-box"
+x = 530
+y = 60
+w = 120
+h = 42
+dis = 60
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s11"
+type = "combo-box"
+x = 660
+y = 60
+w = 120
+h = 42
+dis = 70
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s12"
+type = "combo-box"
+x = 10
+y = 110
+w = 120
+h = 42
+dis = 80
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s13"
+type = "combo-box"
+x = 140
+y = 110
+w = 120
+h = 42
+dis = 90
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s14"
+type = "combo-box"
+x = 270
+y = 110
+w = 120
+h = 42
+dis = 100
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s15"
+type = "combo-box"
+x = 400
+y = 110
+w = 120
+h = 30
+dis = 25
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s16"
+type = "combo-box"
+x = 530
+y = 110
+w = 120
+h = 30
+dis = 50
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s17"
+type = "combo-box"
+x = 660
+y = 110
+w = 120
+h = 30
+dis = 100
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s18"
+type = "combo-box"
+x = 10
+y = 160
+w = 120
+h = 60
+dis = 25
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s19"
+type = "combo-box"
+x = 140
+y = 160
+w = 120
+h = 60
+dis = 50
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s20"
+type = "combo-box"
+x = 270
+y = 160
+w = 120
+h = 60
+dis = 100
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s21"
+type = "combo-box"
+x = 400
+y = 160
+w = 120
+h = 24
+dis = 25
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s22"
+type = "combo-box"
+x = 530
+y = 160
+w = 120
+h = 24
+dis = 50
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s23"
+type = "combo-box"
+x = 660
+y = 160
+w = 120
+h = 24
+dis = 100
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s24"
+type = "combo-box"
+x = 10
+y = 228
+w = 40
+h = 100
+dis = 25
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s25"
+type = "combo-box"
+x = 60
+y = 228
+w = 40
+h = 100
+dis = 50
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s26"
+type = "combo-box"
+x = 110
+y = 228
+w = 40
+h = 100
+dis = 100
+up = 0
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "s27"
+type = "combo-box"
+x = 160
+y = 228
+w = 60
+h = 42
+dis = 50
+up = 0
+txt = ""
+font = "NotoSans20"

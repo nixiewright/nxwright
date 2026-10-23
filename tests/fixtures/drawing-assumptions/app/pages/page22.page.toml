@@ -1,0 +1,88 @@
+[page]
+name = "page22"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+type = "combo-box"
+w = 180
+h = 42
+txt = "one"
+path = "one\r\ntwo\r\nthree\r\nfour"
+sta = 1
+bco = 65535
+dis = 40
+down = 1
+qty = 4
+name = "cUpFar"
+x = 20
+y = 60
+dir = "\u0000"
+
+[[component]]
+type = "combo-box"
+w = 180
+h = 42
+txt = "one"
+path = "one\r\ntwo\r\nthree\r\nfour"
+sta = 1
+bco = 65535
+dis = 40
+down = 1
+qty = 4
+name = "cUpNear"
+x = 230
+y = 150
+dir = "\u0000"
+
+[[component]]
+type = "combo-box"
+w = 180
+h = 42
+txt = "one"
+path = "one\r\ntwo\r\nthree\r\nfour"
+sta = 1
+bco = 65535
+dis = 40
+down = 1
+qty = 4
+name = "cLeft"
+x = 60
+y = 300
+dir = "\u0002"
+
+[[component]]
+type = "combo-box"
+w = 180
+h = 42
+txt = "one"
+path = "one\r\ntwo\r\nthree\r\nfour"
+sta = 1
+bco = 65535
+dis = 40
+down = 1
+qty = 4
+name = "cRight"
+x = 560
+y = 200
+dir = "\u0003"
+
+[[component]]
+type = "combo-box"
+w = 180
+h = 42
+txt = "one"
+path = "one\r\ntwo\r\nthree\r\nfour"
+sta = 1
+bco = 65535
+dis = 40
+down = 1
+qty = 4
+name = "cDown"
+x = 440
+y = 380

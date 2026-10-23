@@ -1,0 +1,119 @@
+include "lib/frame.nx"
+include "lib/numbers.nx"
+
+// Before the page shows: every value, and the selected looks.
+on home.load:
+  showClock()
+  showRoom()
+  showTarget()
+  showMode()
+  showFollowing()
+
+// Each second, a simulated minute passes.
+on tick.timer:
+  passMinute()
+  showClock()
+  showRoom()
+  showTarget()
+
+// Lower or raise the target. A target set by hand is held: the schedule
+// stops changing it until the switch is turned back on.
+on lower.up:
+  setTarget(target - TARGET_STEP)
+
+on raise.up:
+  setTarget(target + TARGET_STEP)
+
+// The schedule switch. Turning it on takes the schedule's target at once.
+on follow.up:
+  if (following == 1) {
+    following = 0
+  } else {
+    following = 1
+    target = scheduledTarget(minutesNow())
+    showTarget()
+  }
+  showFollowing()
+
+on modeOff.up:
+  setMode(MODE_OFF)
+
+on modeHeat.up:
+  setMode(MODE_HEAT)
+
+on modeCool.up:
+  setMode(MODE_COOL)
+
+function setTarget(value: number):
+  target = clamp(value, TARGET_MIN, TARGET_MAX)
+  following = 0
+  showTarget()
+  showFollowing()
+
+function setMode(value: number):
+  mode = value
+  running = nextRunning(room, target, mode, running)
+  showMode()
+  showRoom()
+
+// The room's temperature, and what the system is doing about it.
+function showRoom():
+  roomText.txt = temperatureText(room)
+  switch (running) {
+    case RUN_HEATING:
+      stateIcon.pic = @pic(state/heating)
+      stateText.txt = "Heating"
+      stateText.pco = HEAT
+      break
+    case RUN_COOLING:
+      stateIcon.pic = @pic(state/cooling)
+      stateText.txt = "Cooling"
+      stateText.pco = COOL
+      break
+    default:
+      if (mode == MODE_OFF) {
+        stateIcon.pic = @pic(state/off)
+        stateText.txt = "Off"
+        stateText.pco = GREY
+      } else {
+        stateIcon.pic = @pic(state/idle)
+        stateText.txt = "At target"
+        stateText.pco = TEAL
+      }
+  }
+
+function showTarget():
+  targetText.txt = temperatureText(target)
+
+// The selected mode shows its pressed look, in white.
+function showMode():
+  if (mode == MODE_OFF) {
+    modeOff.picc = @pic(home/pressed)
+    modeOff.pco = WHITE
+  } else {
+    modeOff.picc = @pic(home/normal)
+    modeOff.pco = MUTED
+  }
+  if (mode == MODE_HEAT) {
+    modeHeat.picc = @pic(home/pressed)
+    modeHeat.pco = WHITE
+  } else {
+    modeHeat.picc = @pic(home/normal)
+    modeHeat.pco = MUTED
+  }
+  if (mode == MODE_COOL) {
+    modeCool.picc = @pic(home/pressed)
+    modeCool.pco = WHITE
+  } else {
+    modeCool.picc = @pic(home/normal)
+    modeCool.pco = MUTED
+  }
+
+// The switch shows its pressed look, switched on, while the target follows
+// the schedule.
+function showFollowing():
+  if (following == 1) {
+    follow.picc = @pic(home/pressed)
+  } else {
+    follow.picc = @pic(home/normal)
+  }

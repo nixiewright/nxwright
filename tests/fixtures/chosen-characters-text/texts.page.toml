@@ -1,0 +1,103 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 320
+h = 480
+
+[[component]]
+name = "t0"
+type = "text"
+x = 10
+y = 10
+w = 300
+h = 30
+font = "NotoSans16-specified"
+xcen = 0
+txt_maxl = 40
+txt = "Az0é Ω€"
+
+[[component]]
+name = "t1"
+type = "text"
+x = 10
+y = 50
+w = 300
+h = 30
+font = "NotoSans16-specified"
+xcen = 0
+txt_maxl = 40
+txt = "AqA"
+
+[[component]]
+name = "t2"
+type = "text"
+x = 10
+y = 90
+w = 300
+h = 30
+font = "NotoSans16-specified"
+xcen = 0
+txt_maxl = 40
+txt = "zÿĀ😀A"
+
+[[component]]
+name = "t3"
+type = "text"
+x = 10
+y = 130
+w = 300
+h = 30
+font = "NotoSans16-ascii"
+xcen = 0
+txt_maxl = 40
+txt = "Hi, 0-9!"
+
+[[component]]
+name = "t4"
+type = "text"
+x = 10
+y = 170
+w = 300
+h = 30
+font = "NotoSans16-ascii"
+xcen = 0
+txt_maxl = 40
+txt = "AéA€"
+
+[[component]]
+name = "t5"
+type = "text"
+x = 10
+y = 210
+w = 300
+h = 44
+font = "NotoSans32-u0001"
+xcen = 0
+txt_maxl = 40
+txt = "AA"
+
+[[component]]
+name = "t6"
+type = "text"
+x = 10
+y = 264
+w = 300
+h = 44
+font = "NotoSans32-u0001"
+xcen = 0
+txt_maxl = 40
+txt = "AqA"
+
+[[component]]
+name = "t7"
+type = "text"
+x = 10
+y = 318
+w = 300
+h = 44
+font = "NotoSans32-u0001"
+xcen = 0
+txt_maxl = 40
+txt = "A\u0001A"

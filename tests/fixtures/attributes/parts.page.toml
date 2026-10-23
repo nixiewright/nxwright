@@ -1,0 +1,47 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+bco = 0
+
+[[component]]
+name = "white"
+type = "text"
+x = 400
+y = 0
+w = 400
+h = 480
+bco = 65535
+txt = ""
+font = "NotoSans20"
+
+[[component]]
+name = "t0"
+type = "text"
+x = 250
+y = 100
+w = 300
+h = 100
+bco = 63488
+pco = 65535
+txt = "WWWWWWWWWWWWWWWWWWWW"
+font = "NotoSans20"
+aph = 64
+txt_maxl = 30
+
+[[component]]
+name = "t1"
+type = "text"
+x = 250
+y = 260
+w = 300
+h = 100
+bco = 63488
+pco = 65535
+txt = "WWWWWWWWWWWWWWWWWWWW"
+font = "NotoSans20"
+aph = 127
+txt_maxl = 30

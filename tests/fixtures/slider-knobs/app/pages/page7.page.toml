@@ -1,0 +1,120 @@
+[page]
+name = "page7"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 65535
+
+[[component]]
+name = "hsq24"
+type = "slider"
+x = 10
+y = 10
+w = 241
+h = 24
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+psta = 2
+
+[[component]]
+name = "hsq25"
+type = "slider"
+x = 10
+y = 42
+w = 241
+h = 25
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+psta = 2
+
+[[component]]
+name = "hsq26"
+type = "slider"
+x = 10
+y = 75
+w = 241
+h = 26
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+psta = 2
+
+[[component]]
+name = "hsq40"
+type = "slider"
+x = 10
+y = 109
+w = 241
+h = 40
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+psta = 2
+
+[[component]]
+name = "hsqb41k20"
+type = "slider"
+x = 10
+y = 157
+w = 240
+h = 41
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+psta = 2
+wid = 20
+hig = 20
+
+[[component]]
+name = "hpic20"
+type = "slider"
+x = 10
+y = 206
+w = 241
+h = 30
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+psta = 1
+pic2 = 0
+
+[[component]]
+name = "hpic21"
+type = "slider"
+x = 10
+y = 244
+w = 241
+h = 30
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+psta = 1
+pic2 = 1
+
+[[component]]
+name = "hpic21g20"
+type = "slider"
+x = 10
+y = 282
+w = 241
+h = 30
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+psta = 1
+pic2 = 1
+wid = 20
+hig = 20

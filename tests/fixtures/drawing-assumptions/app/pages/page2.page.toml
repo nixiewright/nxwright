@@ -1,0 +1,79 @@
+[page]
+name = "page2"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "tPicL"
+type = "text"
+x = 20
+y = 20
+w = 200
+h = 50
+sta = 2
+pic = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+txt = "left"
+
+[[component]]
+name = "bCropL"
+type = "button"
+x = 240
+y = 20
+w = 200
+h = 50
+sta = 0
+picc = 1
+picc2 = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+txt = "left"
+
+[[component]]
+name = "nCropL"
+type = "number"
+x = 460
+y = 20
+w = 200
+h = 50
+sta = 0
+picc = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+val = 7
+
+[[component]]
+name = "bColourL"
+type = "button"
+x = 240
+y = 100
+w = 200
+h = 50
+sta = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+txt = "left"
+
+[[component]]
+name = "n"
+type = "variable"
+sta = 0
+val = 0

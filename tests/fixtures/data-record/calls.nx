@@ -1,0 +1,32 @@
+on d0.down:
+  log.txt+="dd"
+  covx d0.val,tmp.txt,0,0
+  log.txt+=tmp.txt+" "
+
+on d0.up:
+  log.txt+="du"
+  covx d0.val,tmp.txt,0,0
+  log.txt+=tmp.txt+" "
+
+on bins.up:
+  d0.insert("one^1^first")
+
+on bins2.up:
+  d0.insert("two^2^second")
+
+on bdel.up:
+  d0.delete(0,1)
+
+on bclr.up:
+  d0.clear()
+
+on bval.up:
+  d0.val=1
+
+on bup.up:
+  d0.up("upd^9^changed",0)
+
+on tm0.timer:
+  covx d0.qty,tq.txt,0,0
+  covx d0.val,tv.txt,0,0
+  tt.txt=d0.txt

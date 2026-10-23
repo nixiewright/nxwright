@@ -1,0 +1,8 @@
+format = 1
+language = "nxlang"
+screen = "NX8048P050"
+rotation = 0
+encoding = "iso-8859-1"
+pages = ["browsers", "browsers2", "selects"]
+pictures = ["folder", "file", "textFile"]
+fonts = ["Sans16"]

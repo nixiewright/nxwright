@@ -1,0 +1,8 @@
+format = 1
+language = "nextion"
+screen = "NX8048P050"
+rotation = 0
+encoding = "iso-8859-1"
+pages = ["page0", "page1", "page2", "page3", "page4", "page5", "page6", "page7", "page8", "page9", "page10", "page11", "page12", "page13", "page14", "page15", "page16", "page17", "page18", "page19", "page20", "page21", "page22", "page23", "page24", "page25", "page26", "page27", "page28", "page29", "page30", "page31", "page32", "page33", "page34", "page35", "page36", "page37", "page38", "page39", "page40", "page41", "page42", "page43", "page44", "page45", "page46", "page47", "page48"]
+pictures = ["page", "crop", "back", "fill", "l100", "l142", "l143", "l150", "l151", "t143", "l140", "l141", "t140", "t141", "l110", "l120", "l130", "a100x56", "a70x80", "a100x50", "w131", "w132", "w133", "w134", "w135", "w136", "w137", "w138", "w139", "h133", "h135", "h137", "h139", "w176", "w177", "w188", "w189", "w87", "w88", "w89", "w92", "w93", "i40", "i60x30"]
+fonts = ["NotoSans24"]

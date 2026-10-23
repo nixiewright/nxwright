@@ -1,0 +1,160 @@
+[page]
+name = "page10"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "ql100"
+type = "qr-code"
+x = 10
+y = 10
+w = 150
+h = 150
+sta = 1
+pic = 4
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "ql142"
+type = "qr-code"
+x = 165
+y = 10
+w = 150
+h = 150
+sta = 1
+pic = 5
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "ql143"
+type = "qr-code"
+x = 320
+y = 10
+w = 150
+h = 150
+sta = 1
+pic = 6
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "ql150"
+type = "qr-code"
+x = 475
+y = 10
+w = 150
+h = 150
+sta = 1
+pic = 7
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "ql151"
+type = "qr-code"
+x = 630
+y = 10
+w = 150
+h = 150
+sta = 1
+pic = 8
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "qt143"
+type = "qr-code"
+x = 10
+y = 170
+w = 150
+h = 150
+sta = 1
+pic = 9
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "drPic2"
+type = "data-record"
+x = 170
+y = 170
+w = 180
+h = 140
+path = "sd0/nxprobe_agent-a_d1.data"
+sta = 2
+pic = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+
+[[component]]
+name = "drNone2"
+type = "data-record"
+x = 370
+y = 170
+w = 180
+h = 140
+path = "sd0/nxprobe_agent-a_d2.data"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+
+[[component]]
+name = "cbDeep"
+type = "combo-box"
+x = 570
+y = 360
+w = 180
+h = 42
+txt = "one"
+path = "one\r\ntwo"
+sta = 1
+bco = 65535
+dis = 40
+down = 1
+
+[[component]]
+name = "stIn"
+type = "scrolling-text"
+x = 570
+y = 170
+w = 200
+h = 50
+txt = "a long text here"
+txt_maxl = 20
+sta = 1
+bco = 65535
+en = 0
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 1
+
+[[component]]
+name = "stOut"
+type = "scrolling-text"
+x = 570
+y = 240
+w = 200
+h = 50
+txt = "a long text here"
+txt_maxl = 20
+sta = 1
+bco = 65535
+en = 0
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 1

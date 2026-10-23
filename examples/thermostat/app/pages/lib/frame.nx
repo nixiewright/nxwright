@@ -1,0 +1,20 @@
+// What every page shares: the clock at the top right, and the navigation bar
+// at the bottom. Every page has components of these names.
+include "text.nx"
+include "room.nx"
+
+// The navigation bar: each tab opens its page.
+on navHome.up:
+  page home
+
+on navSchedule.up:
+  page schedule
+
+on navDay.up:
+  page day
+
+on navSettings.up:
+  page settings
+
+function showClock():
+  clock.txt = timeText(minutesNow())

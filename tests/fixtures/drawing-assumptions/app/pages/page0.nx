@@ -1,0 +1,9 @@
+on page0.loadend:
+  for(n.val=0;n.val<100;n.val++)
+  {
+    add gGrid.id,0,n.val
+    add gHalf.id,0,n.val
+    add gDouble.id,0,n.val
+    add gLeft.id,0,n.val
+    add gRight.id,0,n.val
+  }

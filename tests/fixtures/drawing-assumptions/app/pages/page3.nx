@@ -1,0 +1,3 @@
+on page3.loadend:
+  nCrop.val=stCrop.maxval_y
+  nColour.val=stColour.maxval_y

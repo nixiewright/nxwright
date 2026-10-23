@@ -1,0 +1,11 @@
+on page24.load:
+  eCentreIn.clear()
+  eCentreIn.insert("first record^second one^third one")
+  eCentreIn.insert("another row^more text^last bit")
+  eRightCentre.clear()
+  eRightCentre.insert("first record^second one^third one")
+  eRightCentre.insert("another row^more text^last bit")
+  eRightLeft.clear()
+  eRightLeft.insert("first record^second one^third one")
+  eRightLeft.insert("another row^more text^last bit")
+  eCentreIn.val_x=50

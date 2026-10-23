@@ -1,0 +1,9 @@
+on page4.load:
+  d24.val_x=53
+  d25.val_x=54
+  d26.val_x=55
+  d27.val_x=56
+  d28.val_x=89
+  d29.val_x=90
+  d30.val_x=91
+  d31.val_x=92

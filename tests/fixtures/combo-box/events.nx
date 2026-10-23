@@ -1,0 +1,40 @@
+on page0.down:
+  log.txt+="pd "
+
+on page0.up:
+  log.txt+="pu "
+
+on cb.down:
+  log.txt+="cd"
+  covx cb.val,tmp.txt,0,0
+  log.txt+=tmp.txt
+  covx cb.down,tmp.txt,0,0
+  log.txt+="/"+tmp.txt+" "
+
+on cb.up:
+  log.txt+="cu"
+  covx cb.val,tmp.txt,0,0
+  log.txt+=tmp.txt
+  covx cb.down,tmp.txt,0,0
+  log.txt+="/"+tmp.txt+" "
+
+on ua.down:
+  log.txt+="ad "
+
+on ua.up:
+  log.txt+="au "
+
+on ub.down:
+  log.txt+="bd "
+
+on ub.up:
+  log.txt+="bu "
+
+on code.up:
+  cb.val=5
+  log.txt+="k "
+
+on tm0.timer:
+  covx cb.val,tval.txt,0,0
+  covx cb.down,tdown.txt,0,0
+  ttxt.txt=cb.txt

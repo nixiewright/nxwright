@@ -1,0 +1,177 @@
+[page]
+name = "page5"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 65535
+
+[[component]]
+name = "hl241n24"
+type = "slider"
+x = 10
+y = 10
+w = 241
+h = 24
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 255
+hig = 255
+
+[[component]]
+name = "hl241n25"
+type = "slider"
+x = 10
+y = 42
+w = 241
+h = 25
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 255
+hig = 255
+
+[[component]]
+name = "hl241n26"
+type = "slider"
+x = 10
+y = 75
+w = 241
+h = 26
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 255
+hig = 255
+
+[[component]]
+name = "hl241n40"
+type = "slider"
+x = 10
+y = 109
+w = 241
+h = 40
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 255
+hig = 255
+
+[[component]]
+name = "hl243n40"
+type = "slider"
+x = 10
+y = 157
+w = 243
+h = 40
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 255
+hig = 255
+
+[[component]]
+name = "hl241n40v30"
+type = "slider"
+x = 10
+y = 205
+w = 241
+h = 40
+val = 30
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 255
+hig = 255
+
+[[component]]
+name = "hb41k20"
+type = "slider"
+x = 10
+y = 253
+w = 240
+h = 41
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 20
+hig = 20
+
+[[component]]
+name = "hb43k20"
+type = "slider"
+x = 10
+y = 302
+w = 240
+h = 43
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 20
+hig = 20
+
+[[component]]
+name = "hb41k21"
+type = "slider"
+x = 10
+y = 353
+w = 240
+h = 41
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 21
+hig = 21
+
+[[component]]
+name = "hw20h21"
+type = "slider"
+x = 10
+y = 402
+w = 240
+h = 30
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 20
+hig = 21
+
+[[component]]
+name = "hw21h20"
+type = "slider"
+x = 10
+y = 440
+w = 240
+h = 30
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 21
+hig = 20
+
+[[component]]
+name = "hw30h16"
+type = "slider"
+x = 280
+y = 10
+w = 240
+h = 30
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 30
+hig = 16

@@ -1,0 +1,190 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "tNone"
+type = "text"
+x = 20
+y = 20
+w = 160
+h = 40
+sta = 3
+style = 0
+txt = "none"
+
+[[component]]
+name = "tCrop"
+type = "text"
+x = 200
+y = 20
+w = 160
+h = 40
+sta = 0
+picc = 1
+style = 0
+txt = "crop"
+
+[[component]]
+name = "tCropB"
+type = "text"
+x = 380
+y = 20
+w = 160
+h = 40
+sta = 0
+picc = 1
+style = 1
+borderw = 3
+borderc = 63488
+txt = "border"
+
+[[component]]
+name = "gGrid"
+type = "waveform"
+x = 20
+y = 80
+w = 240
+h = 120
+gdw = 20
+gdh = 15
+dis = 100
+dir = "\u0000"
+sta = 1
+bco = 0
+gdc = 65504
+ch = 1
+pco0 = 2016
+
+[[component]]
+name = "gHalf"
+type = "waveform"
+x = 280
+y = 80
+w = 240
+h = 120
+gdw = 0
+gdh = 0
+dis = 50
+dir = "\u0000"
+sta = 1
+bco = 0
+gdc = 65504
+ch = 1
+pco0 = 2016
+
+[[component]]
+name = "gDouble"
+type = "waveform"
+x = 540
+y = 80
+w = 240
+h = 120
+gdw = 0
+gdh = 0
+dis = 200
+dir = "\u0000"
+sta = 1
+bco = 0
+gdc = 65504
+ch = 1
+pco0 = 2016
+
+[[component]]
+name = "gLeft"
+type = "waveform"
+x = 20
+y = 220
+w = 240
+h = 120
+gdw = 0
+gdh = 0
+dis = 100
+dir = "\u0001"
+sta = 1
+bco = 0
+gdc = 65504
+ch = 1
+pco0 = 2016
+
+[[component]]
+name = "gRight"
+type = "waveform"
+x = 280
+y = 220
+w = 240
+h = 120
+gdw = 0
+gdh = 0
+dis = 100
+dir = "\u0002"
+sta = 1
+bco = 0
+gdc = 65504
+ch = 1
+pco0 = 2016
+
+[[component]]
+name = "jRound"
+type = "progress-bar"
+x = 20
+y = 360
+w = 200
+h = 40
+sta = 1
+bpic = 2
+ppic = 3
+dis = 50
+val = 40
+
+[[component]]
+name = "jHalf"
+type = "progress-bar"
+x = 260
+y = 360
+w = 150
+h = 40
+sta = 0
+dis = 0
+val = 33
+bco = 17183
+pco = 64000
+
+[[component]]
+name = "jHalf2"
+type = "progress-bar"
+x = 440
+y = 360
+w = 150
+h = 40
+sta = 0
+dis = 0
+val = 67
+bco = 17183
+pco = 64000
+
+[[component]]
+name = "jDown"
+type = "progress-bar"
+x = 620
+y = 350
+w = 40
+h = 125
+sta = 0
+dis = 0
+val = 33
+dez = 1
+bco = 17183
+pco = 64000
+
+[[component]]
+name = "n"
+type = "variable"
+sta = 0
+val = 0

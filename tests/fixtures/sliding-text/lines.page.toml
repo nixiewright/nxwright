@@ -1,0 +1,176 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+
+[[component]]
+name = "sa"
+type = "sliding-text"
+font = "NotoSans20"
+x = 10
+y = 10
+w = 180
+h = 150
+left = 2
+bco = 65535
+
+[[component]]
+name = "samaxvaly"
+type = "text"
+x = 10
+y = 170
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "savaly"
+type = "text"
+x = 10
+y = 200
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "sb"
+type = "sliding-text"
+font = "NotoSans20"
+x = 210
+y = 10
+w = 180
+h = 150
+left = 2
+bco = 65535
+style = 1
+borderw = 3
+
+[[component]]
+name = "sbmaxvaly"
+type = "text"
+x = 210
+y = 170
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "sbvaly"
+type = "text"
+x = 210
+y = 200
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "s1"
+type = "sliding-text"
+font = "NotoSans20"
+x = 410
+y = 10
+w = 180
+h = 100
+left = 2
+bco = 65504
+txt = "one"
+
+[[component]]
+name = "s1maxvaly"
+type = "text"
+x = 410
+y = 170
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "s1valy"
+type = "text"
+x = 410
+y = 200
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "s3"
+type = "sliding-text"
+font = "NotoSans20"
+x = 610
+y = 10
+w = 180
+h = 100
+left = 2
+bco = 65504
+txt = "one\r\ntwo\r\nthree"
+
+[[component]]
+name = "s3maxvaly"
+type = "text"
+x = 610
+y = 170
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "s3valy"
+type = "text"
+x = 610
+y = 200
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "plus"
+type = "button"
+x = 10
+y = 400
+w = 140
+h = 60
+font = "NotoSans20"
+txt = "+1"
+
+[[component]]
+name = "big"
+type = "button"
+x = 170
+y = 400
+w = 140
+h = 60
+font = "NotoSans20"
+txt = "1000"
+
+[[component]]
+name = "tm0"
+type = "timer"
+tim = 50

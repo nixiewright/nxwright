@@ -1,0 +1,33 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+
+[[component]]
+name = "d0"
+type = "data-record"
+x = 10
+y = 10
+w = 250
+h = 140
+path = ""
+dir = "A^B"
+dez = 2
+mode = 1
+left = 2
+
+[[component]]
+name = "d1"
+type = "data-record"
+x = 270
+y = 10
+w = 250
+h = 140
+path = ""
+dir = "A^B"
+dez = 2
+mode = 1
+left = 2

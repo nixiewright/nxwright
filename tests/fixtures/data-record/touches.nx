@@ -1,0 +1,56 @@
+on page0.loadend:
+  da.clear()
+  db.clear()
+  dc.clear()
+  da.insert("a^1^x")
+  dc.insert("a^1^x")
+  da.insert("b^2^y")
+  dc.insert("b^2^y")
+  da.insert("c^3^z")
+  dc.insert("c^3^z")
+  db.insert("r0^0^n0")
+  db.insert("r1^1^n1")
+  db.insert("r2^2^n2")
+  db.insert("r3^3^n3")
+  db.insert("r4^4^n4")
+  db.insert("r5^5^n5")
+  db.insert("r6^6^n6")
+  db.insert("r7^7^n7")
+
+on sc.up:
+  db.val_y=40
+
+on cl.up:
+  log.txt=""
+
+on da.down:
+  covx da.val,tmp.txt,0,0
+  log.txt+="ad"+tmp.txt+" "
+
+on da.up:
+  covx da.val,tmp.txt,0,0
+  log.txt+="au"+tmp.txt+" "
+
+on db.down:
+  covx db.val,tmp.txt,0,0
+  log.txt+="bd"+tmp.txt+" "
+
+on db.up:
+  covx db.val,tmp.txt,0,0
+  log.txt+="bu"+tmp.txt+" "
+
+on dc.down:
+  covx dc.val,tmp.txt,0,0
+  log.txt+="cd"+tmp.txt+" "
+
+on dc.up:
+  covx dc.val,tmp.txt,0,0
+  log.txt+="cu"+tmp.txt+" "
+
+on tm0.timer:
+  covx da.val,va.txt,0,0
+  ta.txt=da.txt
+  covx db.val,vb.txt,0,0
+  tb.txt=db.txt
+  covx dc.val,vc.txt,0,0
+  tc.txt=dc.txt

@@ -1,0 +1,92 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 16904
+
+[[component]]
+name = "ePng"
+type = "external-picture"
+x = 0
+y = 0
+w = 200
+h = 200
+path = "sd0/nxprobe_agent-a_mark.png"
+
+[[component]]
+name = "eJpg"
+type = "external-picture"
+x = 220
+y = 0
+w = 200
+h = 200
+path = "sd0/nxprobe_agent-a_mark.jpg"
+
+[[component]]
+name = "eXiOwn"
+type = "external-picture"
+x = 440
+y = 0
+w = 200
+h = 200
+path = "sd0/nxprobe_agent-a_m180.xi"
+
+[[component]]
+name = "eXi0"
+type = "external-picture"
+x = 0
+y = 250
+w = 200
+h = 200
+path = "sd0/nxprobe_agent-a_m0.xi"
+
+[[component]]
+name = "eBig"
+type = "external-picture"
+x = 220
+y = 250
+w = 200
+h = 150
+path = "sd0/nxprobe_agent-a_big.png"
+
+[[component]]
+name = "eCut"
+type = "external-picture"
+x = 440
+y = 250
+w = 150
+h = 100
+path = "sd0/nxprobe_agent-a_mark.png"
+
+[[component]]
+name = "vUp"
+type = "video"
+x = 600
+y = 250
+w = 200
+h = 100
+from = 1
+path = "sd0/nxprobe_agent-a_v0.video"
+
+[[component]]
+name = "vOwn"
+type = "video"
+x = 600
+y = 370
+w = 200
+h = 100
+from = 1
+path = "sd0/nxprobe_agent-a_v180.video"
+
+[[component]]
+name = "eXi90"
+type = "external-picture"
+x = 660
+y = 0
+w = 140
+h = 200
+path = "sd0/nxprobe_agent-a_m90.xi"

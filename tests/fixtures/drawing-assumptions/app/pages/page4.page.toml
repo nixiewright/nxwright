@@ -1,0 +1,53 @@
+[page]
+name = "page4"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "sl0"
+type = "select"
+x = 20
+y = 20
+w = 160
+h = 150
+sta = 0
+picc = 1
+
+[[component]]
+name = "sl1"
+type = "select"
+x = 200
+y = 20
+w = 160
+h = 150
+sta = 1
+
+[[component]]
+name = "sl2"
+type = "select"
+x = 380
+y = 20
+w = 160
+h = 150
+sta = 2
+pic = 1
+
+[[component]]
+name = "sl3"
+type = "select"
+x = 560
+y = 20
+w = 160
+h = 150
+sta = 3
+
+[[component]]
+name = "n"
+type = "variable"
+sta = 0
+val = 0

@@ -1,0 +1,4 @@
+on page5.loadend:
+  nCRLF.val=stCRLF.maxval_y
+  nCR.val=stCR.maxval_y
+  nLF.val=stLF.maxval_y

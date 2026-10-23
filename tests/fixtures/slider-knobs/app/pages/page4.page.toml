@@ -1,0 +1,141 @@
+[page]
+name = "page4"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 65535
+
+[[component]]
+name = "hw25"
+type = "slider"
+x = 10
+y = 10
+w = 240
+h = 25
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 25
+
+[[component]]
+name = "hh25"
+type = "slider"
+x = 270
+y = 10
+w = 240
+h = 25
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+hig = 25
+
+[[component]]
+name = "hw40"
+type = "slider"
+x = 10
+y = 45
+w = 240
+h = 40
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 40
+
+[[component]]
+name = "hh40"
+type = "slider"
+x = 270
+y = 45
+w = 240
+h = 40
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+hig = 40
+
+[[component]]
+name = "p29"
+type = "slider"
+x = 10
+y = 95
+w = 300
+h = 40
+val = 50
+bco = 1024
+bco1 = 64235
+pco = 16384
+
+[[component]]
+name = "f25"
+type = "slider"
+x = 10
+y = 145
+w = 240
+h = 25
+val = 50
+bco = 17183
+bco1 = 64000
+pco = 9220
+
+[[component]]
+name = "vw25"
+type = "slider"
+x = 540
+y = 10
+w = 25
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 25
+
+[[component]]
+name = "vh25"
+type = "slider"
+x = 540
+y = 240
+w = 25
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+hig = 25
+
+[[component]]
+name = "vw40"
+type = "slider"
+x = 585
+y = 10
+w = 40
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 40
+
+[[component]]
+name = "vh40"
+type = "slider"
+x = 585
+y = 240
+w = 40
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+hig = 40

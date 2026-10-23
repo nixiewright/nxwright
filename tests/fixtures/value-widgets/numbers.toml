@@ -1,0 +1,317 @@
+[page]
+name = "numbers"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#808080"
+
+[[component]]
+name = "a1"
+type = "number"
+x = 8
+y = 8
+w = 188
+h = 40
+val = -42
+format = 0
+lenth = 5
+
+[[component]]
+name = "a2"
+type = "number"
+x = 204
+y = 8
+w = 188
+h = 40
+val = 255
+format = 2
+lenth = 4
+
+[[component]]
+name = "a3"
+type = "number"
+x = 400
+y = 8
+w = 188
+h = 40
+val = 255
+format = 2
+lenth = 1
+
+[[component]]
+name = "a4"
+type = "number"
+x = 596
+y = 8
+w = 188
+h = 40
+val = 1234567
+format = 1
+lenth = 5
+
+[[component]]
+name = "a5"
+type = "number"
+x = 8
+y = 56
+w = 188
+h = 40
+val = 1234
+format = 1
+lenth = 6
+
+[[component]]
+name = "a6"
+type = "number"
+x = 204
+y = 56
+w = 188
+h = 40
+val = 0
+format = 0
+lenth = 0
+
+[[component]]
+name = "a7"
+type = "number"
+x = 400
+y = 56
+w = 188
+h = 40
+val = 0
+format = 0
+lenth = 3
+
+[[component]]
+name = "a8"
+type = "number"
+x = 596
+y = 56
+w = 188
+h = 40
+val = -1234567
+format = 0
+lenth = 3
+
+[[component]]
+name = "a9"
+type = "number"
+x = 8
+y = 104
+w = 188
+h = 40
+val = 2147483647
+format = 0
+lenth = 0
+
+[[component]]
+name = "a10"
+type = "number"
+x = 204
+y = 104
+w = 188
+h = 40
+val = -2147483648
+format = 0
+lenth = 0
+
+[[component]]
+name = "a11"
+type = "number"
+x = 400
+y = 104
+w = 188
+h = 40
+val = 0
+format = 2
+lenth = 0
+
+[[component]]
+name = "a12"
+type = "number"
+x = 596
+y = 104
+w = 188
+h = 40
+val = 5
+format = 0
+lenth = 15
+
+[[component]]
+name = "a13"
+type = "number"
+x = 8
+y = 152
+w = 188
+h = 40
+val = 1234567
+format = 1
+lenth = 3
+
+[[component]]
+name = "a14"
+type = "number"
+x = 204
+y = 152
+w = 188
+h = 40
+val = -255
+format = 2
+lenth = 0
+
+[[component]]
+name = "a15"
+type = "number"
+x = 400
+y = 152
+w = 188
+h = 40
+val = 1000
+format = 1
+lenth = 0
+
+[[component]]
+name = "a16"
+type = "number"
+x = 596
+y = 152
+w = 188
+h = 40
+val = -1234
+format = 1
+lenth = 0
+
+[[component]]
+name = "b1"
+type = "xfloat"
+x = 8
+y = 216
+w = 188
+h = 40
+val = 0
+vvs0 = 0
+vvs1 = 2
+
+[[component]]
+name = "b2"
+type = "xfloat"
+x = 204
+y = 216
+w = 188
+h = 40
+val = 5
+vvs0 = 0
+vvs1 = 2
+
+[[component]]
+name = "b3"
+type = "xfloat"
+x = 400
+y = 216
+w = 188
+h = 40
+val = -5
+vvs0 = 0
+vvs1 = 2
+
+[[component]]
+name = "b4"
+type = "xfloat"
+x = 596
+y = 216
+w = 188
+h = 40
+val = 12345
+vvs0 = 3
+vvs1 = 4
+
+[[component]]
+name = "b5"
+type = "xfloat"
+x = 8
+y = 264
+w = 188
+h = 40
+val = 7
+vvs0 = 0
+vvs1 = 0
+
+[[component]]
+name = "b6"
+type = "xfloat"
+x = 204
+y = 264
+w = 188
+h = 40
+val = 100
+vvs0 = 0
+vvs1 = 3
+
+[[component]]
+name = "b7"
+type = "xfloat"
+x = 400
+y = 264
+w = 188
+h = 40
+val = -12345
+vvs0 = 1
+vvs1 = 2
+
+[[component]]
+name = "b8"
+type = "xfloat"
+x = 596
+y = 264
+w = 188
+h = 40
+val = 2147483647
+vvs0 = 0
+vvs1 = 5
+
+[[component]]
+name = "b9"
+type = "xfloat"
+x = 8
+y = 312
+w = 188
+h = 40
+val = -2147483648
+vvs0 = 0
+vvs1 = 3
+
+[[component]]
+name = "b10"
+type = "xfloat"
+x = 204
+y = 312
+w = 188
+h = 40
+val = 5
+vvs0 = 2
+vvs1 = 0
+
+[[component]]
+name = "b11"
+type = "xfloat"
+x = 400
+y = 312
+w = 188
+h = 40
+val = 123
+vvs0 = 0
+vvs1 = 5
+
+[[component]]
+name = "b12"
+type = "xfloat"
+x = 596
+y = 312
+w = 188
+h = 40
+val = -123
+vvs0 = 4
+vvs1 = 1

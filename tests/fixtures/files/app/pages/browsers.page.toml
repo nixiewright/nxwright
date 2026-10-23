@@ -1,0 +1,242 @@
+[page]
+name = "browsers"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#e0e0e0"
+
+[[component]]
+name = "plain"
+type = "file-browser"
+x = 8
+y = 6
+w = 190
+h = 200
+dir = "sd1/"
+
+[[component]]
+name = "style0"
+type = "file-browser"
+x = 206
+y = 6
+w = 190
+h = 200
+dir = "sd1/"
+style = 0
+
+[[component]]
+name = "style1"
+type = "file-browser"
+x = 404
+y = 6
+w = 190
+h = 200
+dir = "sd1/"
+style = 1
+
+[[component]]
+name = "twoLines"
+type = "file-browser"
+x = 602
+y = 6
+w = 190
+h = 200
+dir = "sd1/"
+dis = 2
+
+[[component]]
+name = "sta3"
+type = "file-browser"
+x = 8
+y = 214
+w = 190
+h = 200
+dir = "sd1/"
+sta = 3
+
+[[component]]
+name = "tight"
+type = "file-browser"
+x = 206
+y = 214
+w = 190
+h = 200
+dir = "sd1/"
+spax = 0
+spay = 0
+
+[[component]]
+name = "noFolders"
+type = "file-browser"
+x = 404
+y = 214
+w = 190
+h = 200
+dir = "sd1/"
+psta = 0
+
+[[component]]
+name = "oneLine"
+type = "file-browser"
+x = 602
+y = 214
+w = 190
+h = 200
+dir = "sd1/"
+dis = 1
+
+[[component]]
+name = "dirLabel"
+type = "text"
+x = 8
+y = 420
+w = 40
+h = 26
+txt = "dir"
+txt_maxl = 3
+bco = "#e0e0e0"
+
+[[component]]
+name = "dirShown"
+type = "text"
+x = 50
+y = 420
+w = 200
+h = 26
+txt = ""
+txt_maxl = 60
+bco = "#ffffff"
+xcen = 0
+
+[[component]]
+name = "txtLabel"
+type = "text"
+x = 260
+y = 420
+w = 40
+h = 26
+txt = "txt"
+txt_maxl = 3
+bco = "#e0e0e0"
+
+[[component]]
+name = "txtShown"
+type = "text"
+x = 302
+y = 420
+w = 380
+h = 26
+txt = ""
+txt_maxl = 60
+bco = "#ffffff"
+xcen = 0
+
+[[component]]
+name = "valLabel"
+type = "text"
+x = 8
+y = 448
+w = 40
+h = 26
+txt = "val"
+txt_maxl = 3
+bco = "#e0e0e0"
+
+[[component]]
+name = "valShown"
+type = "text"
+x = 50
+y = 448
+w = 110
+h = 26
+txt = ""
+txt_maxl = 60
+bco = "#ffffff"
+xcen = 0
+
+[[component]]
+name = "qtyLabel"
+type = "text"
+x = 166
+y = 448
+w = 40
+h = 26
+txt = "qty"
+txt_maxl = 3
+bco = "#e0e0e0"
+
+[[component]]
+name = "qtyShown"
+type = "text"
+x = 208
+y = 448
+w = 60
+h = 26
+txt = ""
+txt_maxl = 60
+bco = "#ffffff"
+xcen = 0
+
+[[component]]
+name = "valyLabel"
+type = "text"
+x = 276
+y = 448
+w = 60
+h = 26
+txt = "val_y"
+txt_maxl = 5
+bco = "#e0e0e0"
+
+[[component]]
+name = "valyShown"
+type = "text"
+x = 338
+y = 448
+w = 70
+h = 26
+txt = ""
+txt_maxl = 60
+bco = "#ffffff"
+xcen = 0
+
+[[component]]
+name = "maxyLabel"
+type = "text"
+x = 414
+y = 448
+w = 90
+h = 26
+txt = "maxval_y"
+txt_maxl = 8
+bco = "#e0e0e0"
+
+[[component]]
+name = "maxyShown"
+type = "text"
+x = 506
+y = 448
+w = 70
+h = 26
+txt = ""
+txt_maxl = 60
+bco = "#ffffff"
+xcen = 0
+
+[[component]]
+name = "watch"
+type = "timer"
+tim = 200
+
+[[component]]
+name = "next"
+type = "button"
+x = 690
+y = 440
+w = 100
+h = 34
+txt = "next"
+txt_maxl = 10

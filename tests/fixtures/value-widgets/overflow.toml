@@ -1,0 +1,68 @@
+[page]
+name = "overflow"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#808080"
+
+[[component]]
+name = "t0"
+type = "text"
+x = 20
+y = 20
+w = 30
+h = 40
+txt = "False"
+xcen = 0
+
+[[component]]
+name = "t1"
+type = "text"
+x = 100
+y = 20
+w = 30
+h = 40
+txt = "False"
+xcen = 1
+
+[[component]]
+name = "t2"
+type = "text"
+x = 180
+y = 20
+w = 30
+h = 40
+txt = "False"
+xcen = 2
+
+[[component]]
+name = "t3"
+type = "text"
+x = 260
+y = 20
+w = 60
+h = 14
+txt = "False"
+ycen = 1
+
+[[component]]
+name = "t4"
+type = "text"
+x = 340
+y = 20
+w = 60
+h = 14
+txt = "False"
+ycen = 2
+
+[[component]]
+name = "s0"
+type = "switch"
+x = 420
+y = 20
+w = 30
+h = 80
+dez = 1

@@ -1,0 +1,133 @@
+[page]
+name = "page29"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "t0"
+type = "text"
+x = 10
+y = 10
+w = 150
+h = 60
+txt = "old"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+
+[[component]]
+name = "t1"
+type = "text"
+x = 170
+y = 10
+w = 150
+h = 60
+txt = "same"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+
+[[component]]
+name = "n0"
+type = "number"
+x = 330
+y = 10
+w = 150
+h = 60
+val = 1
+sta = 1
+bco = 65535
+
+[[component]]
+name = "b0"
+type = "button"
+x = 490
+y = 10
+w = 150
+h = 60
+txt = "button"
+
+[[component]]
+name = "j0"
+type = "progress-bar"
+x = 10
+y = 100
+w = 300
+h = 40
+val = 20
+
+[[component]]
+name = "c0"
+type = "checkbox"
+x = 330
+y = 100
+w = 40
+h = 40
+val = 1
+
+[[component]]
+name = "x0"
+type = "xfloat"
+x = 400
+y = 100
+w = 150
+h = 60
+val = 1234
+vvs1 = 2
+sta = 1
+bco = 65535
+
+[[component]]
+name = "h0"
+type = "slider"
+x = 10
+y = 180
+w = 300
+h = 40
+val = 10
+
+[[component]]
+name = "t2"
+type = "text"
+x = 330
+y = 180
+w = 150
+h = 60
+txt = "font"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+
+[[component]]
+name = "t3"
+type = "text"
+x = 490
+y = 180
+w = 150
+h = 60
+txt = "place"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+
+[[component]]
+name = "t4"
+type = "text"
+x = 10
+y = 260
+w = 150
+h = 60
+txt = "hidden"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40

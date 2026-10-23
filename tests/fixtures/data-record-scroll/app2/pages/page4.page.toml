@@ -1,0 +1,29 @@
+[page]
+name = "page4"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 65535
+
+[[component]]
+name = "d102"
+type = "data-record"
+x = 0
+y = 4
+w = 200
+h = 34
+format = "120^400"
+dez = 2
+dir = "alpha^z"
+mode = 1
+xcen = 0
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d102.data"

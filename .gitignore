@@ -1,0 +1,8 @@
+__pycache__/
+editors/vscode/node_modules/
+editors/vscode/.vscode-test/
+editors/vscode/out/
+tools/editor/build/
+# What `pip install` builds in a copy of the repository.
+/build/
+*.egg-info/

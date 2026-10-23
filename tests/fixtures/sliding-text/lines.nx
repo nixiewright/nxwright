@@ -1,0 +1,17 @@
+on tm0.timer:
+  covx sa.maxval_y,samaxvaly.txt,0,0
+  covx sa.val_y,savaly.txt,0,0
+  covx sb.maxval_y,sbmaxvaly.txt,0,0
+  covx sb.val_y,sbvaly.txt,0,0
+  covx s1.maxval_y,s1maxvaly.txt,0,0
+  covx s1.val_y,s1valy.txt,0,0
+  covx s3.maxval_y,s3maxvaly.txt,0,0
+  covx s3.val_y,s3valy.txt,0,0
+
+on plus.up:
+  sa.val_y+=1
+  sb.val_y+=1
+
+on big.up:
+  s1.val_y=1000
+  s3.val_y=1000

@@ -1,0 +1,9 @@
+// `value`, kept between `low` and `high`.
+function clamp(value: number, low: number, high: number) -> number:
+  var result = value
+  if (result < low) {
+    result = low
+  } else if (result > high) {
+    result = high
+  }
+  return result

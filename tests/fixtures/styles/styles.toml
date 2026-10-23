@@ -1,0 +1,262 @@
+[page]
+name = "styles"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#208040"
+
+[[component]]
+name = "text0"
+type = "text"
+x = 20
+y = 20
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "text 0"
+txt_maxl = 20
+style = 0
+
+[[component]]
+name = "text1"
+type = "text"
+x = 175
+y = 20
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "text 1"
+txt_maxl = 20
+style = 1
+
+[[component]]
+name = "text2"
+type = "text"
+x = 330
+y = 20
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "text 2"
+txt_maxl = 20
+style = 2
+
+[[component]]
+name = "text3"
+type = "text"
+x = 485
+y = 20
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "text 3"
+txt_maxl = 20
+style = 3
+
+[[component]]
+name = "button0"
+type = "button"
+x = 20
+y = 120
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "button 0"
+txt_maxl = 20
+style = 0
+bco2 = "#ffc080"
+pco2 = "#800000"
+
+[[component]]
+name = "button1"
+type = "button"
+x = 175
+y = 120
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "button 1"
+txt_maxl = 20
+style = 1
+bco2 = "#ffc080"
+pco2 = "#800000"
+
+[[component]]
+name = "button2"
+type = "button"
+x = 330
+y = 120
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "button 2"
+txt_maxl = 20
+style = 2
+bco2 = "#ffc080"
+pco2 = "#800000"
+
+[[component]]
+name = "button3"
+type = "button"
+x = 485
+y = 120
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "button 3"
+txt_maxl = 20
+style = 3
+bco2 = "#ffc080"
+pco2 = "#800000"
+
+[[component]]
+name = "button4"
+type = "button"
+x = 640
+y = 120
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "button 4"
+txt_maxl = 20
+style = 4
+bco2 = "#ffc080"
+pco2 = "#800000"
+
+[[component]]
+name = "thickText"
+type = "text"
+x = 20
+y = 220
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "text 3, 5 wide"
+txt_maxl = 20
+style = 3
+borderw = 5
+borderc = "#ff0000"
+
+[[component]]
+name = "thickButton"
+type = "button"
+x = 175
+y = 220
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "button 4, 5"
+txt_maxl = 20
+style = 4
+bco2 = "#ffc080"
+pco2 = "#800000"
+borderw = 5
+borderc = "#ff0000"
+
+[[component]]
+name = "thickDown"
+type = "button"
+x = 330
+y = 220
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "button 2, 5"
+txt_maxl = 20
+style = 2
+bco2 = "#ffc080"
+pco2 = "#800000"
+borderw = 5
+borderc = "#ff0000"
+
+[[component]]
+name = "thinBorder"
+type = "button"
+x = 485
+y = 220
+w = 140
+h = 60
+sta = 1
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "button 1, 1"
+txt_maxl = 20
+style = 1
+bco2 = "#ffc080"
+pco2 = "#800000"
+borderw = 1
+borderc = "#ff0000"
+
+[[component]]
+name = "onPicture"
+type = "button"
+x = 20
+y = 320
+w = 140
+h = 60
+sta = 2
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "button 4, pic"
+txt_maxl = 20
+style = 4
+bco2 = "#ffc080"
+pco2 = "#800000"
+pic = "logo"
+
+[[component]]
+name = "onCrop"
+type = "text"
+x = 175
+y = 320
+w = 140
+h = 60
+sta = 0
+bco = "#c0c0ff"
+pco = "#000000"
+font = "Sans20"
+txt = "text 3, crop"
+txt_maxl = 20
+style = 3
+picc = "logo"

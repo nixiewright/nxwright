@@ -1,0 +1,295 @@
+[page]
+name = "page2"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 65535
+
+[[component]]
+name = "v10"
+type = "slider"
+x = 10
+y = 10
+w = 10
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v11"
+type = "slider"
+x = 30
+y = 10
+w = 11
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v15"
+type = "slider"
+x = 51
+y = 10
+w = 15
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v16"
+type = "slider"
+x = 76
+y = 10
+w = 16
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v20"
+type = "slider"
+x = 102
+y = 10
+w = 20
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v21"
+type = "slider"
+x = 132
+y = 10
+w = 21
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v24"
+type = "slider"
+x = 163
+y = 10
+w = 24
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v25"
+type = "slider"
+x = 197
+y = 10
+w = 25
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v26"
+type = "slider"
+x = 232
+y = 10
+w = 26
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v30"
+type = "slider"
+x = 268
+y = 10
+w = 30
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v31"
+type = "slider"
+x = 308
+y = 10
+w = 31
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v35"
+type = "slider"
+x = 349
+y = 10
+w = 35
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v39"
+type = "slider"
+x = 394
+y = 10
+w = 39
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v40"
+type = "slider"
+x = 443
+y = 10
+w = 40
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v41"
+type = "slider"
+x = 493
+y = 10
+w = 41
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v45"
+type = "slider"
+x = 544
+y = 10
+w = 45
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v50"
+type = "slider"
+x = 599
+y = 10
+w = 50
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v51"
+type = "slider"
+x = 659
+y = 10
+w = 51
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v60"
+type = "slider"
+x = 720
+y = 10
+w = 60
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v61"
+type = "slider"
+x = 10
+y = 240
+w = 61
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v80"
+type = "slider"
+x = 81
+y = 240
+w = 80
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+
+[[component]]
+name = "v81"
+type = "slider"
+x = 171
+y = 240
+w = 81
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1

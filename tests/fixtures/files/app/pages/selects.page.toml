@@ -1,0 +1,127 @@
+[page]
+name = "selects"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#e0e0e0"
+
+[[component]]
+name = "plain"
+type = "select"
+x = 8
+y = 6
+w = 120
+h = 300
+
+[[component]]
+name = "picked"
+type = "select"
+x = 140
+y = 6
+w = 120
+h = 300
+val = 5
+
+[[component]]
+name = "noLines"
+type = "select"
+x = 272
+y = 6
+w = 120
+h = 300
+dis = 0
+
+[[component]]
+name = "lowRows"
+type = "select"
+x = 404
+y = 6
+w = 120
+h = 300
+hig = 24
+
+[[component]]
+name = "colours"
+type = "select"
+x = 536
+y = 6
+w = 120
+h = 300
+pco = "#c00000"
+pco2 = "#008000"
+pco1 = "#ff8000"
+bco = "#ffffe0"
+
+[[component]]
+name = "threeLines"
+type = "select"
+x = 668
+y = 6
+w = 120
+h = 300
+path = "one\r\ntwo\r\nthree"
+val = 1
+
+[[component]]
+name = "valLabel"
+type = "text"
+x = 8
+y = 420
+w = 40
+h = 26
+txt = "val"
+txt_maxl = 3
+bco = "#e0e0e0"
+
+[[component]]
+name = "valShown"
+type = "text"
+x = 50
+y = 420
+w = 110
+h = 26
+txt = ""
+txt_maxl = 60
+bco = "#ffffff"
+xcen = 0
+
+[[component]]
+name = "txtLabel"
+type = "text"
+x = 170
+y = 420
+w = 40
+h = 26
+txt = "txt"
+txt_maxl = 3
+bco = "#e0e0e0"
+
+[[component]]
+name = "txtShown"
+type = "text"
+x = 212
+y = 420
+w = 200
+h = 26
+txt = ""
+txt_maxl = 60
+bco = "#ffffff"
+xcen = 0
+
+[[component]]
+name = "watch"
+type = "timer"
+tim = 200
+
+[[component]]
+name = "next"
+type = "button"
+x = 690
+y = 440
+w = 100
+h = 34
+txt = "next"
+txt_maxl = 10

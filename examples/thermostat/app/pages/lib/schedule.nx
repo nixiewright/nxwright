@@ -1,0 +1,97 @@
+// The schedule's four periods, numbered in the order they start: Wake, Away,
+// Home, and Sleep. Their starts and targets are program.nx's variables.
+include "numbers.nx"
+
+// The target the schedule sets at `minute` after midnight. Before the first
+// period of the day starts, the last one of the day before still runs.
+// The periods' starts are in order: changeStart keeps them so.
+function scheduledTarget(minute: number) -> number:
+  var result = sleepTarget
+  if (minute >= wakeStart) {
+    result = wakeTarget
+  }
+  if (minute >= awayStart) {
+    result = awayTarget
+  }
+  if (minute >= homeStart) {
+    result = homeTarget
+  }
+  if (minute >= sleepStart) {
+    result = sleepTarget
+  }
+  return result
+
+function periodStart(period: number) -> number:
+  var start = sleepStart
+  switch (period) {
+    case 0:
+      start = wakeStart
+      break
+    case 1:
+      start = awayStart
+      break
+    case 2:
+      start = homeStart
+      break
+  }
+  return start
+
+function periodTarget(period: number) -> number:
+  var goal = sleepTarget
+  switch (period) {
+    case 0:
+      goal = wakeTarget
+      break
+    case 1:
+      goal = awayTarget
+      break
+    case 2:
+      goal = homeTarget
+      break
+  }
+  return goal
+
+// Moves a period's start by `change` minutes. It stays at least START_STEP
+// after the period before and before the period after, and within the day.
+function changeStart(period: number, change: number):
+  var earliest = 0
+  if (period > 0) {
+    earliest = periodStart(period - 1) + START_STEP
+  }
+  var latest = DAY_MINUTES - START_STEP
+  if (period < 3) {
+    latest = periodStart(period + 1) - START_STEP
+  }
+  var start = clamp(periodStart(period) + change, earliest, latest)
+  switch (period) {
+    case 0:
+      wakeStart = start
+      break
+    case 1:
+      awayStart = start
+      break
+    case 2:
+      homeStart = start
+      break
+    case 3:
+      sleepStart = start
+      break
+  }
+
+// Moves a period's target by `change`, within the target's limits.
+function changeTarget(period: number, change: number):
+  var goal = clamp(periodTarget(period) + change, TARGET_MIN, TARGET_MAX)
+  switch (period) {
+    case 0:
+      wakeTarget = goal
+      break
+    case 1:
+      awayTarget = goal
+      break
+    case 2:
+      homeTarget = goal
+      break
+    case 3:
+      sleepTarget = goal
+      break
+  }

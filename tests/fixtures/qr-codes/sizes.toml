@@ -1,0 +1,197 @@
+[page]
+name = "sizes"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#808080"
+
+[[component]]
+name = "empty"
+type = "qr-code"
+x = 10
+y = 10
+w = 120
+h = 120
+dis = 4
+txt = ""
+bco = "#ffff00"
+
+[[component]]
+name = "tiny20"
+type = "qr-code"
+x = 140
+y = 10
+w = 20
+h = 20
+dis = 0
+bco = "#ffff00"
+
+[[component]]
+name = "tiny25"
+type = "qr-code"
+x = 170
+y = 10
+w = 25
+h = 25
+dis = 0
+bco = "#ffff00"
+
+[[component]]
+name = "tiny24"
+type = "qr-code"
+x = 205
+y = 10
+w = 24
+h = 24
+dis = 0
+bco = "#ffff00"
+
+[[component]]
+name = "wide"
+type = "qr-code"
+x = 240
+y = 10
+w = 200
+h = 120
+dis = 4
+bco = "#ffff00"
+sta = 1
+pic = "logo"
+
+[[component]]
+name = "tall"
+type = "qr-code"
+x = 450
+y = 10
+w = 120
+h = 200
+dis = 4
+bco = "#ffff00"
+
+[[component]]
+name = "odd"
+type = "qr-code"
+x = 580
+y = 10
+w = 120
+h = 120
+dis = 4
+sta = 1
+pic = "logo41"
+
+[[component]]
+name = "talllogo"
+type = "qr-code"
+x = 700
+y = 10
+w = 90
+h = 200
+dis = 4
+bco = "#ffff00"
+sta = 1
+pic = "logo"
+
+[[component]]
+name = "odd121"
+type = "qr-code"
+x = 10
+y = 260
+w = 121
+h = 121
+dis = 4
+sta = 1
+pic = "logo"
+
+[[component]]
+name = "c30"
+type = "qr-code"
+x = 150
+y = 260
+w = 30
+h = 30
+dis = 0
+
+[[component]]
+name = "c36"
+type = "qr-code"
+x = 190
+y = 260
+w = 36
+h = 36
+dis = 0
+
+[[component]]
+name = "c40"
+type = "qr-code"
+x = 235
+y = 260
+w = 40
+h = 40
+dis = 0
+
+[[component]]
+name = "c46"
+type = "qr-code"
+x = 285
+y = 260
+w = 46
+h = 46
+dis = 0
+
+[[component]]
+name = "c48"
+type = "qr-code"
+x = 340
+y = 260
+w = 48
+h = 48
+dis = 0
+
+[[component]]
+name = "c50"
+type = "qr-code"
+x = 400
+y = 260
+w = 50
+h = 50
+dis = 0
+
+[[component]]
+name = "s9again"
+type = "qr-code"
+x = 460
+y = 260
+w = 50
+h = 50
+dis = 2
+
+[[component]]
+name = "hello39"
+type = "qr-code"
+x = 520
+y = 260
+w = 39
+h = 39
+dis = 0
+txt = "HELLO"
+
+[[component]]
+name = "c62"
+type = "qr-code"
+x = 570
+y = 260
+w = 62
+h = 62
+dis = 0
+
+[[component]]
+name = "c75"
+type = "qr-code"
+x = 640
+y = 260
+w = 75
+h = 75
+dis = 0

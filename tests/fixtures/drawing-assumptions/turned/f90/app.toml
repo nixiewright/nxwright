@@ -1,0 +1,14 @@
+format = 1
+name = "f90"
+language = "nextion"
+screen = "NX8048P050"
+rotation = 90
+encoding = "iso-8859-1"
+pages = [
+    "page0",
+    "page1",
+]
+pictures = []
+fonts = [
+    "NotoSans24",
+]

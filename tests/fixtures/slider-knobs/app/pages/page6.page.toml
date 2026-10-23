@@ -1,0 +1,189 @@
+[page]
+name = "page6"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 65535
+
+[[component]]
+name = "vl241n24"
+type = "slider"
+x = 10
+y = 10
+w = 24
+h = 201
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 255
+hig = 255
+
+[[component]]
+name = "vl241n25"
+type = "slider"
+x = 44
+y = 10
+w = 25
+h = 201
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 255
+hig = 255
+
+[[component]]
+name = "vl241n26"
+type = "slider"
+x = 79
+y = 10
+w = 26
+h = 201
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 255
+hig = 255
+
+[[component]]
+name = "vl241n40"
+type = "slider"
+x = 115
+y = 10
+w = 40
+h = 201
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 255
+hig = 255
+
+[[component]]
+name = "vl243n40"
+type = "slider"
+x = 165
+y = 10
+w = 40
+h = 203
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 255
+hig = 255
+
+[[component]]
+name = "vl241n40v30"
+type = "slider"
+x = 215
+y = 10
+w = 40
+h = 201
+val = 30
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 255
+hig = 255
+
+[[component]]
+name = "vb41k20"
+type = "slider"
+x = 265
+y = 10
+w = 41
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 20
+hig = 20
+
+[[component]]
+name = "vb43k20"
+type = "slider"
+x = 316
+y = 10
+w = 43
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 20
+hig = 20
+
+[[component]]
+name = "vb41k21"
+type = "slider"
+x = 369
+y = 10
+w = 41
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 21
+hig = 21
+
+[[component]]
+name = "vw20h21"
+type = "slider"
+x = 420
+y = 10
+w = 30
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 21
+hig = 20
+
+[[component]]
+name = "vw21h20"
+type = "slider"
+x = 460
+y = 10
+w = 30
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 20
+hig = 21
+
+[[component]]
+name = "vw30h16"
+type = "slider"
+x = 500
+y = 10
+w = 30
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+wid = 16
+hig = 30

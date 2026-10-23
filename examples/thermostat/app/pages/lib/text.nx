@@ -1,0 +1,48 @@
+// Values as the pages show them.
+
+// A temperature in the unit the user chose, to a tenth of a degree:
+// 2150 gives "21.5°" in Celsius and "70.7°" in Fahrenheit.
+function temperatureText(hundredths: number) -> text:
+  return tenthsText(roundedTenths(inChosenUnit(hundredths))) + "°"
+
+// A temperature in whole degrees, in the unit the user chose: 2000 gives
+// "20°" in Celsius and "68°" in Fahrenheit. For temperatures above zero.
+function wholeDegreesText(hundredths: number) -> text:
+  return (inChosenUnit(hundredths) + 50) / 100 + "°"
+
+// Hundredths of a degree Celsius, in the unit the user chose.
+function inChosenUnit(hundredths: number) -> number:
+  var shown = hundredths
+  if (unit == UNIT_FAHRENHEIT) {
+    shown = hundredths * 9 / 5 + 3200
+  }
+  return shown
+
+// Hundredths rounded to the nearest tenth, halves away from zero.
+function roundedTenths(hundredths: number) -> number:
+  var tenths = (hundredths + 5) / 10
+  if (hundredths < 0) {
+    tenths = (hundredths - 5) / 10
+  }
+  return tenths
+
+// Tenths as a decimal number: -5 gives "-0.5".
+function tenthsText(tenths: number) -> text:
+  var size = tenths
+  var sign = ""
+  if (tenths < 0) {
+    size = -tenths
+    sign = "-"
+  }
+  return sign + size / 10 + "." + size % 10
+
+// A time of day, from minutes after midnight: 390 gives "06:30".
+function timeText(minutes: number) -> text:
+  return twoDigits(minutes / 60) + ":" + twoDigits(minutes % 60)
+
+function twoDigits(value: number) -> text:
+  var digits = "" + value
+  if (value < 10) {
+    digits = "0" + value
+  }
+  return digits

@@ -1,0 +1,9 @@
+on page1.loadend:
+  for(n.val=0;n.val<100;n.val++)
+  {
+    add gOdd.id,0,n.val
+    add gThird.id,0,n.val
+    add gFull0.id,0,n.val
+    add gFull1.id,0,n.val
+    add gFull2.id,0,n.val
+  }

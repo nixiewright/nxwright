@@ -1,0 +1,128 @@
+[page]
+name = "page8"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 65535
+
+[[component]]
+name = "vsq24"
+type = "slider"
+x = 10
+y = 10
+w = 24
+h = 201
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+psta = 2
+
+[[component]]
+name = "vsq25"
+type = "slider"
+x = 44
+y = 10
+w = 25
+h = 201
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+psta = 2
+
+[[component]]
+name = "vsq26"
+type = "slider"
+x = 79
+y = 10
+w = 26
+h = 201
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+psta = 2
+
+[[component]]
+name = "vsq40"
+type = "slider"
+x = 115
+y = 10
+w = 40
+h = 201
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+psta = 2
+
+[[component]]
+name = "vsqb41k20"
+type = "slider"
+x = 165
+y = 10
+w = 41
+h = 200
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+psta = 2
+wid = 20
+hig = 20
+
+[[component]]
+name = "vpic20"
+type = "slider"
+x = 216
+y = 10
+w = 30
+h = 201
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+psta = 1
+pic2 = 0
+
+[[component]]
+name = "vpic21"
+type = "slider"
+x = 256
+y = 10
+w = 30
+h = 201
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+psta = 1
+pic2 = 1
+
+[[component]]
+name = "vpic21g20"
+type = "slider"
+x = 296
+y = 10
+w = 30
+h = 201
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+mode = 1
+psta = 1
+pic2 = 1
+wid = 20
+hig = 20

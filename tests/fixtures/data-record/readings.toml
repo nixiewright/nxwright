@@ -1,0 +1,114 @@
+# What the Editor's simulator showed of the data records of this folder's
+# pages, in the font NotoSans20, a timer of each page writing their values
+# out. The .data files are data files it wrote to its SD card's folder:
+#   - three.data: "a^1^x", "b^2^y", and "c^3^z" inserted, in that order;
+#   - cleared.data: "one^1^first", "two^2^second", and "one^1^first"
+#     inserted, record 0 updated to "upd^9^changed", one record deleted
+#     from record 0, then cleared;
+#   - ring.data: "a^1^x" to "e^5^v" inserted into a file of `maxval` 3;
+#   - fields.data: "a^b^c" and "one^two" inserted, `dez` 2;
+#   - small.data and most1256.data: empty, of `lenth` 31, `dez` 2, and
+#     `maxval` 10, and of `maxval` 1256.
+# The pictures are its screen.
+
+# orders.page.toml: d0 (`order` 0) and d1 (`order` 1, `format`
+# "100^80^200"), each holding three.data's records. orders.png as they
+# showed; orders-chosen.png after a tap on d0's top row.
+[orders]
+chosen = { d0 = 2, d1 = -1 }
+chosen_text = "c^3^z"
+
+# looks.page.toml: da, db, and dc each holding eight records "r0^0^n0" to
+# "r7^7^n7", inserted as the page opened. looks-scrolled.png after code set
+# da's and db's `val_y` to 40; looks-across.png after code also set db's
+# `val_x` to 100.
+[looks]
+maxval_y = { da = 141, db = 214 }
+maxval_x = { db = 222 }
+
+# ring.page.toml: ring.png after code set da's `val` to 1. Then setting it
+# to 9, deleting from record 5, and updating record 9 changed nothing.
+[ring]
+qty = 3
+val = 1
+txt = "d^4^w"
+
+# calls.page.toml and calls.nx: d0's `qty`, `val`, and `txt` after each
+# button's tap, each a press and a release at its pixel, and the log of
+# d0's events ("dd" and "du" for Touch Press and Touch Release, then `val`).
+[[calls]]
+tap = [525, 42]       # ins one
+qty = 1
+val = -1
+txt = ""
+
+[[calls]]
+tap = [695, 42]       # ins two
+qty = 2
+val = -1
+txt = ""
+
+[[calls]]
+tap = [525, 42]       # ins one
+qty = 3
+val = -1
+txt = ""
+
+[[calls]]
+tap = [100, 100]      # d0's middle row
+qty = 3
+val = 1
+txt = "two^2^second"
+log = "dd-1 du1 "
+
+[[calls]]
+tap = [525, 152]      # val=1
+qty = 3
+val = 1
+txt = "two^2^second"
+
+[[calls]]
+tap = [695, 152]      # up("upd^9^changed", 0)
+qty = 3
+val = 1
+txt = "two^2^second"
+
+[[calls]]
+tap = [525, 97]       # delete(0, 1)
+qty = 2
+val = 1
+txt = "one^1^first"
+
+[[calls]]
+tap = [695, 97]       # clear()
+qty = 0
+val = -1
+txt = ""
+
+# touches.page.toml and touches.nx: da (`order` 0), db (`order` 1), and dc
+# (no titles), filled as the page opens: "a^1^x" to "c^3^z" in da and dc,
+# "r0^0^n0" to "r7^7^n7" in db. Each run starts the page afresh; each tap
+# is a press and a release at its pixel. The log holds each data record's
+# events: "ad" and "au" for da's Touch Press and Touch Release, "bd" and
+# "bu" for db's, "cd" and "cu" for dc's, each followed by its `val`. The
+# button "scroll" sets db's `val_y` to 40. touches.png after the last run.
+[[touches]]
+taps = [[100, 25], [100, 58], [100, 90], [100, 122], [100, 170], [100, 90]]
+log = "ad-1 au-1 ad-1 au2 ad2 au1 ad1 au0 ad0 au0 ad0 au1 "
+
+[[touches]]
+taps = [[65, 252], [400, 58]]     # scroll, then db's top record row
+log = "bd-1 bu1 "
+
+[[touches]]
+taps = [[650, 25], [650, 58]]
+log = "cd-1 cu2 cd2 cu1 "
+
+[[touches]]
+taps = [[100, 90], [100, 90], [650, 25]]
+log = "ad-1 au1 ad1 au1 cd-1 cu2 "
+
+# unopened.page.toml: d0, d1, and d2, each of one `path`, as their page
+# opened, in the folder's font NotoSans24, which nxwright draws from Noto
+# Sans as a new folder's. unopened.png: d0 opened the file, empty; d1 and d2
+# could not, as d0 held it, and showed "Cannot open file:" and the path.

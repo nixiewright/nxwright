@@ -1,0 +1,285 @@
+[page]
+name = "day"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = "day/normal"
+
+[[component]]
+name = "title"
+type = "text"
+x = 24
+y = 20
+w = 400
+h = 32
+sta = 0
+font = "SansBold24"
+picc = "day/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "A day on this schedule"
+txt_maxl = 30
+
+[[component]]
+name = "clock"
+type = "text"
+x = 640
+y = 20
+w = 136
+h = 32
+sta = 0
+font = "SansBold24"
+picc = "day/normal"
+pco = "#eff3f7"
+xcen = 2
+txt = "00:00"
+txt_maxl = 5
+
+[[component]]
+name = "navHome"
+type = "button"
+x = 0
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "day/normal"
+picc2 = "day/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Home"
+
+[[component]]
+name = "navSchedule"
+type = "button"
+x = 200
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "day/normal"
+picc2 = "day/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Schedule"
+
+[[component]]
+name = "navDay"
+type = "button"
+x = 400
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "day/normal"
+picc2 = "day/pressed"
+pco = "#ff8a42"
+pco2 = "#ff8a42"
+ycen = 2
+txt = "Day"
+
+[[component]]
+name = "navSettings"
+type = "button"
+x = 600
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "day/normal"
+picc2 = "day/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Settings"
+
+[[component]]
+name = "tick"
+type = "timer"
+tim = 1000
+
+[[component]]
+name = "targetLegend"
+type = "text"
+x = 70
+y = 89
+w = 70
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Target"
+
+[[component]]
+name = "roomLegend"
+type = "text"
+x = 180
+y = 89
+w = 70
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Room"
+
+[[component]]
+name = "stats"
+type = "text"
+x = 400
+y = 89
+w = 360
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#8c96a5"
+xcen = 2
+txt = "Low 17.0°    High 21.5°"
+txt_maxl = 40
+
+[[component]]
+name = "label10"
+type = "text"
+x = 24
+y = 313
+w = 48
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#63717b"
+xcen = 2
+txt = "10°"
+
+[[component]]
+name = "label15"
+type = "text"
+x = 24
+y = 263
+w = 48
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#63717b"
+xcen = 2
+txt = "15°"
+
+[[component]]
+name = "label20"
+type = "text"
+x = 24
+y = 213
+w = 48
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#63717b"
+xcen = 2
+txt = "20°"
+
+[[component]]
+name = "label25"
+type = "text"
+x = 24
+y = 163
+w = 48
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#63717b"
+xcen = 2
+txt = "25°"
+
+[[component]]
+name = "label30"
+type = "text"
+x = 24
+y = 113
+w = 48
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#63717b"
+xcen = 2
+txt = "30°"
+
+[[component]]
+name = "hour0"
+type = "text"
+x = 48
+y = 332
+w = 64
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#63717b"
+txt = "00:00"
+
+[[component]]
+name = "hour6"
+type = "text"
+x = 216
+y = 332
+w = 64
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#63717b"
+txt = "06:00"
+
+[[component]]
+name = "hour12"
+type = "text"
+x = 384
+y = 332
+w = 64
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#63717b"
+txt = "12:00"
+
+[[component]]
+name = "hour18"
+type = "text"
+x = 552
+y = 332
+w = 64
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#63717b"
+txt = "18:00"
+
+[[component]]
+name = "hour24"
+type = "text"
+x = 720
+y = 332
+w = 64
+h = 22
+sta = 0
+picc = "day/normal"
+pco = "#63717b"
+txt = "24:00"
+
+[[component]]
+name = "chart"
+type = "waveform"
+x = 80
+y = 124
+w = 672
+h = 201
+sta = 0
+dir = 1
+ch = 2
+picc = "day/normal"
+gdw = 0
+gdh = 0
+pco0 = 64584
+pco1 = "#4ab6ff"

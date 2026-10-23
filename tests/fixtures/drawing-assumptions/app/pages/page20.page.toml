@@ -1,0 +1,169 @@
+[page]
+name = "page20"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "vBase"
+x = 10
+y = 5
+type = "select"
+w = 180
+h = 140
+path = "one\r\ntwo\r\nthree"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+
+[[component]]
+name = "vDis0"
+x = 205
+y = 5
+type = "select"
+w = 180
+h = 140
+path = "one\r\ntwo\r\nthree"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+dis = 0
+
+[[component]]
+name = "vHHH"
+x = 400
+y = 5
+type = "select"
+w = 180
+h = 140
+path = "HHH\r\nHHH\r\nHHH"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+
+[[component]]
+name = "vhhh"
+x = 595
+y = 5
+type = "select"
+w = 180
+h = 140
+path = "hhh\r\nhhh\r\nhhh"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+
+[[component]]
+name = "vNarrow"
+x = 10
+y = 163
+type = "select"
+w = 120
+h = 140
+path = "one\r\ntwo\r\nthree"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+
+[[component]]
+name = "vH138"
+x = 205
+y = 163
+type = "select"
+w = 180
+h = 138
+path = "one\r\ntwo\r\nthree"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+
+[[component]]
+name = "vH142"
+x = 400
+y = 163
+type = "select"
+w = 180
+h = 142
+path = "one\r\ntwo\r\nthree"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+
+[[component]]
+name = "vVal1"
+x = 595
+y = 163
+type = "select"
+w = 180
+h = 140
+path = "one\r\ntwo\r\nthree"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+val = 1
+
+[[component]]
+name = "vVal2"
+x = 10
+y = 321
+type = "select"
+w = 180
+h = 140
+path = "one\r\ntwo\r\nthree"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488
+val = 2
+
+[[component]]
+name = "vPic"
+x = 205
+y = 321
+type = "select"
+w = 180
+h = 140
+path = "one\r\ntwo\r\nthree"
+sta = 2
+style = 1
+borderw = 6
+borderc = 63488
+pic = 1
+
+[[component]]
+name = "vNoBorder"
+x = 400
+y = 321
+type = "select"
+w = 180
+h = 140
+path = "one\r\ntwo\r\nthree"
+sta = 3
+style = 0
+borderw = 6
+borderc = 63488
+
+[[component]]
+name = "vH136"
+x = 595
+y = 321
+type = "select"
+w = 180
+h = 136
+path = "one\r\ntwo\r\nthree"
+sta = 3
+style = 1
+borderw = 6
+borderc = 63488

@@ -1,0 +1,105 @@
+[page]
+name = "page27"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+type = "data-record"
+x = 0
+w = 300
+h = 64
+format = "160^120^120"
+dez = 3
+dir = "alphabetical^bravo^charlie"
+style = 0
+mode = 1
+xcen = 1
+gdh = 1
+name = "g50"
+y = 10
+path = "sd0/nxprobe_agent-a_g10.data"
+
+[[component]]
+type = "data-record"
+x = 0
+w = 300
+h = 64
+format = "160^120^120"
+dez = 3
+dir = "alphabetical^bravo^charlie"
+style = 0
+mode = 1
+xcen = 1
+gdh = 1
+name = "g60"
+y = 85
+path = "sd0/nxprobe_agent-a_g11.data"
+
+[[component]]
+type = "data-record"
+x = 0
+w = 300
+h = 64
+format = "160^120^120"
+dez = 3
+dir = "alphabetical^bravo^charlie"
+style = 0
+mode = 1
+xcen = 1
+gdh = 1
+name = "g70"
+y = 160
+path = "sd0/nxprobe_agent-a_g12.data"
+
+[[component]]
+type = "data-record"
+x = 0
+w = 300
+h = 64
+format = "160^120^120"
+dez = 3
+dir = "alphabetical^bravo^charlie"
+style = 0
+mode = 1
+xcen = 1
+gdh = 1
+name = "g80"
+y = 235
+path = "sd0/nxprobe_agent-a_g13.data"
+
+[[component]]
+type = "data-record"
+x = 0
+w = 300
+h = 64
+format = "160^120^120"
+dez = 3
+dir = "alphabetical^bravo^charlie"
+style = 0
+mode = 1
+xcen = 1
+gdh = 1
+name = "g90"
+y = 310
+path = "sd0/nxprobe_agent-a_g14.data"
+
+[[component]]
+type = "data-record"
+x = 0
+w = 300
+h = 64
+format = "160^120^120"
+dez = 3
+dir = "alphabetical^bravo^charlie"
+style = 0
+mode = 1
+xcen = 1
+gdh = 1
+name = "g100"
+y = 385
+path = "sd0/nxprobe_agent-a_g15.data"

@@ -1,0 +1,9 @@
+on page9.loadend:
+  line 10,10,200,47,RED
+  line 10,60,47,200,BLUE
+  line 300,10,250,150,GREEN
+  line 400,150,330,20,YELLOW
+  line 420,10,421,200,BLACK
+  xstr 450,10,200,50,0,BLACK,1,0,0,0,"crop"
+  xstr 450,70,200,50,0,BLACK,1,1,1,2,"picture"
+  xstr 450,130,200,50,0,BLACK,BLUE,2,2,3,"none"

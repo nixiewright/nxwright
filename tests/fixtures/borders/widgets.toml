@@ -1,0 +1,124 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+bco = 33808
+
+[[component]]
+name = "n0"
+type = "number"
+x = 20
+y = 20
+w = 160
+h = 50
+font = "NotoSans20"
+val = 42
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "n1"
+type = "number"
+x = 200
+y = 20
+w = 160
+h = 50
+font = "NotoSans20"
+val = 42
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 2
+ycen = 2
+
+[[component]]
+name = "x0"
+type = "xfloat"
+x = 380
+y = 20
+w = 160
+h = 50
+font = "NotoSans20"
+val = 1234
+vvs1 = 2
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "x1"
+type = "xfloat"
+x = 560
+y = 20
+w = 160
+h = 50
+font = "NotoSans20"
+val = 1234
+vvs1 = 2
+style = 2
+xcen = 2
+ycen = 2
+
+[[component]]
+name = "bt0"
+type = "dual-state-button"
+x = 20
+y = 100
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "bt1"
+type = "dual-state-button"
+x = 200
+y = 100
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+val = 1
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 2
+ycen = 2
+
+[[component]]
+name = "bt2"
+type = "dual-state-button"
+x = 380
+y = 100
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "bt3"
+type = "dual-state-button"
+x = 560
+y = 100
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+val = 1
+xcen = 2
+ycen = 2

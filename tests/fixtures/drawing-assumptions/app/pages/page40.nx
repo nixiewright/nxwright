@@ -1,0 +1,2 @@
+on hS.up:
+  covx hS.val, tS.txt, 0, 0

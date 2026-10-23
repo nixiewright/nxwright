@@ -1,0 +1,10 @@
+on watch.timer:
+  dirShown.txt = plain.dir
+  txtShown.txt = plain.txt
+  covx plain.val,valShown.txt,0,0
+  covx plain.qty,qtyShown.txt,0,0
+  covx plain.val_y,valyShown.txt,0,0
+  covx plain.maxval_y,maxyShown.txt,0,0
+
+on next.up:
+  page browsers2

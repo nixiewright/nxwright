@@ -1,0 +1,25 @@
+# What the Editor's simulator showed of the sliding texts of two pages,
+# scrolled.page.toml and lines.page.toml, in the font NotoSans20: each one's
+# `maxval_y`, and its `val_y` in each picture kept, as a timer of its page
+# wrote them out every 50 ms. The pictures are the simulator's screen.
+#
+# scrolled-0.png is the page as it opened; scrolled-25.png and
+# scrolled-1000.png followed presses of the buttons that set every `val_y` to
+# 25, then to 1000. lines-2.png followed two presses of the button adding 1 to
+# the `val_y` of sa and sb; lines-1000.png followed 49 of them, then a press
+# of the button setting the `val_y` of s1 and s3 to 1000.
+
+[scrolled]
+maxval_y = { sa = 50, sb = 50, sc = 54, sd = 50, se = 0 }
+
+[scrolled.val_y]
+"scrolled-0.png" = { sa = 0, sb = 0, sc = 0, sd = 0, se = 0 }
+"scrolled-25.png" = { sa = 25, sb = 25, sc = 25, sd = 25, se = 20 }
+"scrolled-1000.png" = { sa = 82, sb = 82, sc = 86, sd = 82, se = 20 }
+
+[lines]
+maxval_y = { sa = 50, sb = 56, s1 = 0, s3 = 0 }
+
+[lines.val_y]
+"lines-2.png" = { sa = 2, sb = 2, s1 = 0, s3 = 0 }
+"lines-1000.png" = { sa = 49, sb = 49, s1 = 0, s3 = 32 }

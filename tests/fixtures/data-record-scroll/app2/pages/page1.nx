@@ -1,0 +1,9 @@
+on page1.load:
+  d78.val_x=51
+  d79.val_x=52
+  d80.val_x=53
+  d81.val_x=30
+  d82.val_x=40
+  d83.val_x=50
+  d84.val_x=60
+  d85.val_x=70

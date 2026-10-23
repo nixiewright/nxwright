@@ -1,0 +1,127 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+bco = 33808
+
+[[component]]
+name = "t0"
+type = "text"
+x = 20
+y = 20
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+style = 1
+borderw = 2
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "t1"
+type = "text"
+x = 200
+y = 20
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "t2"
+type = "text"
+x = 380
+y = 20
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 2
+ycen = 2
+
+[[component]]
+name = "t3"
+type = "text"
+x = 560
+y = 20
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+style = 2
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "b0"
+type = "button"
+x = 20
+y = 100
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "c0"
+type = "combo-box"
+x = 200
+y = 100
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 0
+ycen = 0
+up = 0
+
+[[component]]
+name = "c1"
+type = "combo-box"
+x = 380
+y = 100
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+style = 1
+borderw = 6
+borderc = 63488
+xcen = 2
+ycen = 2
+up = 0
+
+[[component]]
+name = "c2"
+type = "combo-box"
+x = 560
+y = 100
+w = 160
+h = 50
+font = "NotoSans20"
+txt = "Text"
+style = 2
+xcen = 0
+ycen = 0
+up = 0

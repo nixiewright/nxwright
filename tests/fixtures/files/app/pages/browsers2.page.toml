@@ -1,0 +1,83 @@
+[page]
+name = "browsers2"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#e0e0e0"
+
+[[component]]
+name = "picked"
+type = "file-browser"
+x = 8
+y = 6
+w = 190
+h = 200
+dir = "sd1/"
+val = 2
+pco = "#c00000"
+pco2 = "#ffffff"
+bco2 = "#008000"
+bco = "#ffffe0"
+
+[[component]]
+name = "custom"
+type = "file-browser"
+x = 206
+y = 6
+w = 190
+h = 200
+dir = "sd1/"
+vvs2 = "*.txt/2"
+
+[[component]]
+name = "barAlways"
+type = "file-browser"
+x = 404
+y = 6
+w = 190
+h = 200
+dir = "sd1/"
+left = 2
+
+[[component]]
+name = "barNever"
+type = "file-browser"
+x = 602
+y = 6
+w = 190
+h = 200
+dir = "sd1/"
+left = 0
+
+[[component]]
+name = "leftNames"
+type = "file-browser"
+x = 8
+y = 214
+w = 190
+h = 200
+dir = "sd1/"
+xcen = 0
+
+[[component]]
+name = "cfgOnly"
+type = "file-browser"
+x = 206
+y = 214
+w = 190
+h = 200
+dir = "sd1/"
+filter = "*.cfg"
+
+[[component]]
+name = "next"
+type = "button"
+x = 690
+y = 440
+w = 100
+h = 34
+txt = "next"
+txt_maxl = 10

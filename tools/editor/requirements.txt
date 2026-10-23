@@ -1,0 +1,10 @@
+# The Editor automation tool's environment (README.md), apart from nxwright's own:
+# its own packages, then those of nxwright's modules it imports, at the versions
+# pyproject.toml takes.
+pywinauto==0.6.9
+pywin32==312
+comtypes==1.4.17
+six==1.17.0
+pillow==13.0.0
+freetype-py==2.5.1
+tomli-w==1.2.0

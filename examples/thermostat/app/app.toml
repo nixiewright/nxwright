@@ -1,0 +1,37 @@
+format = 1
+language = "nxlang"
+screen = "NX8048P050"
+rotation = 0
+encoding = "iso-8859-1"
+pages = [
+    "home",
+    "schedule",
+    "day",
+    "settings",
+]
+pictures = [
+    "logo",
+    "home/normal",
+    "home/pressed",
+    "schedule/normal",
+    "schedule/pressed",
+    "day/normal",
+    "day/pressed",
+    "settings/normal",
+    "settings/pressed",
+    "state/heating",
+    "state/cooling",
+    "state/idle",
+    "state/off",
+    "marker/on",
+    "marker/off",
+    "knob",
+]
+fonts = [
+    "Sans16",
+    "Sans20",
+    "SansBold24",
+    "SansBold32",
+    "Sans56",
+    "Sans100",
+]

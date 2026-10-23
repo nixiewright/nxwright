@@ -1,0 +1,51 @@
+[page]
+name = "page40"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "bP"
+type = "button"
+x = 10
+y = 10
+w = 200
+h = 80
+txt = "P"
+
+[[component]]
+name = "tB"
+type = "text"
+x = 150
+y = 50
+w = 200
+h = 80
+txt = "TB"
+pco = 0
+txt_maxl = 20
+sta = 3
+
+[[component]]
+name = "hS"
+type = "slider"
+x = 10
+y = 250
+w = 400
+h = 40
+val = 10
+
+[[component]]
+name = "tS"
+type = "text"
+x = 300
+y = 220
+w = 200
+h = 80
+txt = "TS"
+pco = 0
+txt_maxl = 20
+sta = 3

@@ -1,0 +1,21 @@
+[page]
+name = "page13"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "tAph"
+type = "text"
+x = 10
+y = 10
+w = 200
+h = 50
+txt = "aph"
+sta = 1
+bco = 63488
+aph = 127

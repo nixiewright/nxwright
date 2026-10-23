@@ -1,0 +1,103 @@
+[page]
+name = "page3"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "stCrop"
+type = "sliding-text"
+x = 20
+y = 20
+w = 180
+h = 150
+sta = 0
+picc = 1
+txt = "line 0\u000d\u000aline 1\u000d\u000aline 2\u000d\u000aline 3\u000d\u000aline 4\u000d\u000aline 5\u000d\u000aline 6\u000d\u000aline 7\u000d\u000aline 8\u000d\u000aline 9\u000d\u000aline 10\u000d\u000aline 11"
+txt_maxl = 256
+style = 1
+borderw = 10
+borderc = 63488
+
+[[component]]
+name = "stColour"
+type = "sliding-text"
+x = 220
+y = 20
+w = 180
+h = 150
+sta = 1
+txt = "line 0\u000d\u000aline 1\u000d\u000aline 2\u000d\u000aline 3\u000d\u000aline 4\u000d\u000aline 5\u000d\u000aline 6\u000d\u000aline 7\u000d\u000aline 8\u000d\u000aline 9\u000d\u000aline 10\u000d\u000aline 11"
+txt_maxl = 256
+style = 1
+borderw = 10
+borderc = 63488
+
+[[component]]
+name = "slCrop"
+type = "select"
+x = 420
+y = 20
+w = 160
+h = 150
+sta = 0
+picc = 1
+style = 1
+borderw = 10
+borderc = 63488
+
+[[component]]
+name = "fbCrop"
+type = "file-browser"
+x = 600
+y = 20
+w = 180
+h = 200
+sta = 0
+picc = 1
+style = 1
+borderw = 10
+borderc = 63488
+
+[[component]]
+name = "drCrop"
+type = "data-record"
+x = 20
+y = 250
+w = 300
+h = 200
+sta = 0
+picc = 1
+style = 1
+borderw = 10
+borderc = 63488
+
+[[component]]
+name = "nCrop"
+type = "number"
+x = 420
+y = 250
+w = 120
+h = 40
+sta = 1
+val = 0
+
+[[component]]
+name = "nColour"
+type = "number"
+x = 420
+y = 310
+w = 120
+h = 40
+sta = 1
+val = 0
+
+[[component]]
+name = "n"
+type = "variable"
+sta = 0
+val = 0

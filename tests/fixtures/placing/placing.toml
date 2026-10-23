@@ -1,0 +1,249 @@
+[page]
+name = "placing"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#c0c0c0"
+
+[[component]]
+name = "left"
+type = "text"
+x = 10
+y = 10
+w = 180
+h = 40
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "Ajf"
+txt_maxl = 10
+xcen = 0
+
+[[component]]
+name = "centre"
+type = "text"
+x = 200
+y = 10
+w = 180
+h = 40
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "Ajf"
+txt_maxl = 10
+xcen = 1
+
+[[component]]
+name = "right"
+type = "text"
+x = 390
+y = 10
+w = 180
+h = 40
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "Ajf"
+txt_maxl = 10
+xcen = 2
+
+[[component]]
+name = "top"
+type = "text"
+x = 10
+y = 60
+w = 180
+h = 50
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "Ajf"
+txt_maxl = 10
+ycen = 0
+
+[[component]]
+name = "middle"
+type = "text"
+x = 200
+y = 60
+w = 180
+h = 50
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "Ajf"
+txt_maxl = 10
+ycen = 1
+
+[[component]]
+name = "bottom"
+type = "text"
+x = 390
+y = 60
+w = 180
+h = 50
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "Ajf"
+txt_maxl = 10
+ycen = 2
+
+[[component]]
+name = "spacing"
+type = "text"
+x = 10
+y = 120
+w = 180
+h = 40
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "Ajf"
+txt_maxl = 10
+spax = 4
+
+[[component]]
+name = "lines"
+type = "text"
+x = 200
+y = 120
+w = 180
+h = 70
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "Ab\r\nCd"
+txt_maxl = 10
+spay = 6
+
+[[component]]
+name = "wrapping"
+type = "text"
+x = 390
+y = 120
+w = 120
+h = 90
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "one two three four"
+txt_maxl = 18
+isbr = 1
+xcen = 0
+
+[[component]]
+name = "password"
+type = "text"
+x = 10
+y = 220
+w = 180
+h = 40
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "abc"
+txt_maxl = 10
+pw = 1
+
+[[component]]
+name = "tooWide"
+type = "text"
+x = 200
+y = 220
+w = 120
+h = 40
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "A very long line of text"
+txt_maxl = 24
+xcen = 0
+
+[[component]]
+name = "border"
+type = "text"
+x = 390
+y = 220
+w = 180
+h = 40
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "Ajf"
+txt_maxl = 10
+style = 1
+borderw = 3
+
+[[component]]
+name = "rightLines"
+type = "text"
+x = 580
+y = 10
+w = 200
+h = 70
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans20"
+txt = "Ab\r\nCdef"
+txt_maxl = 10
+xcen = 2
+
+[[component]]
+name = "overhangs"
+type = "text"
+x = 10
+y = 280
+w = 300
+h = 120
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans100"
+txt = "Jfj"
+txt_maxl = 10
+xcen = 1
+
+[[component]]
+name = "small"
+type = "text"
+x = 580
+y = 120
+w = 200
+h = 40
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "Sans16"
+txt = "Ajf 21.5°"
+txt_maxl = 10
+
+[[component]]
+name = "bold"
+type = "text"
+x = 580
+y = 180
+w = 200
+h = 40
+sta = 1
+bco = "#ffffff"
+pco = "#000000"
+font = "SansBold24"
+txt = "Ajf 21.5°"
+txt_maxl = 10

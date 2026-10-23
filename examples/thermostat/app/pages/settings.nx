@@ -1,0 +1,71 @@
+include "lib/frame.nx"
+
+// Before the page shows: the unit, the brightness, and the clock.
+on settings.load:
+  showClock()
+  showUnit()
+  brightness.val = dim
+  brightnessText.txt = dim + "%"
+  setTime.txt = timeText(minutesNow())
+
+// Each second, a simulated minute passes.
+on tick.timer:
+  passMinute()
+  showClock()
+  setTime.txt = timeText(minutesNow())
+
+on celsius.up:
+  unit = UNIT_CELSIUS
+  showUnit()
+
+on fahrenheit.up:
+  unit = UNIT_FAHRENHEIT
+  showUnit()
+
+// The screen dims as the slider is pressed and moved. A press away from the
+// knob moves it there, but runs only the press's event, not `slide`.
+on brightness.down:
+  showBrightness()
+
+on brightness.slide:
+  showBrightness()
+
+function showBrightness():
+  dim = brightness.val
+  brightnessText.txt = dim + "%"
+
+// An hour or a minute earlier or later. The clock wraps around midnight, and
+// its seconds start again from zero.
+on hourDown.up:
+  moveClock(-60)
+
+on hourUp.up:
+  moveClock(60)
+
+on minuteDown.up:
+  moveClock(-1)
+
+on minuteUp.up:
+  moveClock(1)
+
+function moveClock(change: number):
+  var minutes = (minutesNow() + change + DAY_MINUTES) % DAY_MINUTES
+  rtc3 = minutes / 60
+  rtc4 = minutes % 60
+  rtc5 = 0
+  showClock()
+  setTime.txt = timeText(minutes)
+
+// The selected unit shows its pressed look, in white.
+function showUnit():
+  if (unit == UNIT_CELSIUS) {
+    celsius.picc = @pic(settings/pressed)
+    celsius.pco = WHITE
+    fahrenheit.picc = @pic(settings/normal)
+    fahrenheit.pco = MUTED
+  } else {
+    celsius.picc = @pic(settings/normal)
+    celsius.pco = MUTED
+    fahrenheit.picc = @pic(settings/pressed)
+    fahrenheit.pco = WHITE
+  }

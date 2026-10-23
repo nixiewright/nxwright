@@ -1,0 +1,37 @@
+[page]
+name = "page42"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "tUnder"
+type = "text"
+x = 100
+y = 10
+w = 200
+h = 80
+txt = "UNDER"
+pco = 0
+txt_maxl = 20
+sta = 1
+bco = 63488
+
+[[component]]
+name = "tSl"
+type = "text"
+x = 400
+y = 30
+w = 200
+h = 80
+txt = "SL"
+pco = 0
+txt_maxl = 20
+sta = 1
+bco = 65504
+effect = 3
+time = 3000

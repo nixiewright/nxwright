@@ -1,0 +1,317 @@
+[page]
+name = "page1"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 65535
+
+[[component]]
+name = "h10"
+type = "slider"
+x = 10
+y = 10
+w = 240
+h = 10
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 10
+hig = 10
+
+[[component]]
+name = "h11"
+type = "slider"
+x = 10
+y = 28
+w = 240
+h = 11
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 11
+hig = 11
+
+[[component]]
+name = "h15"
+type = "slider"
+x = 10
+y = 47
+w = 240
+h = 15
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 15
+hig = 15
+
+[[component]]
+name = "h16"
+type = "slider"
+x = 10
+y = 70
+w = 240
+h = 16
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 16
+hig = 16
+
+[[component]]
+name = "h20"
+type = "slider"
+x = 10
+y = 94
+w = 240
+h = 20
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 20
+hig = 20
+
+[[component]]
+name = "h21"
+type = "slider"
+x = 10
+y = 122
+w = 240
+h = 21
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 21
+hig = 21
+
+[[component]]
+name = "h24"
+type = "slider"
+x = 10
+y = 151
+w = 240
+h = 24
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 24
+hig = 24
+
+[[component]]
+name = "h25"
+type = "slider"
+x = 10
+y = 183
+w = 240
+h = 25
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 25
+hig = 25
+
+[[component]]
+name = "h26"
+type = "slider"
+x = 10
+y = 216
+w = 240
+h = 26
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 26
+hig = 26
+
+[[component]]
+name = "h30"
+type = "slider"
+x = 10
+y = 250
+w = 240
+h = 30
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 30
+hig = 30
+
+[[component]]
+name = "h31"
+type = "slider"
+x = 10
+y = 288
+w = 240
+h = 31
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 31
+hig = 31
+
+[[component]]
+name = "h35"
+type = "slider"
+x = 10
+y = 327
+w = 240
+h = 35
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 35
+hig = 35
+
+[[component]]
+name = "h39"
+type = "slider"
+x = 10
+y = 370
+w = 240
+h = 39
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 39
+hig = 39
+
+[[component]]
+name = "h40"
+type = "slider"
+x = 10
+y = 417
+w = 240
+h = 40
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 40
+hig = 40
+
+[[component]]
+name = "h41"
+type = "slider"
+x = 270
+y = 10
+w = 240
+h = 41
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 41
+hig = 41
+
+[[component]]
+name = "h45"
+type = "slider"
+x = 270
+y = 59
+w = 240
+h = 45
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 45
+hig = 45
+
+[[component]]
+name = "h50"
+type = "slider"
+x = 270
+y = 112
+w = 240
+h = 50
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 50
+hig = 50
+
+[[component]]
+name = "h51"
+type = "slider"
+x = 270
+y = 170
+w = 240
+h = 51
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 51
+hig = 51
+
+[[component]]
+name = "h60"
+type = "slider"
+x = 270
+y = 229
+w = 240
+h = 60
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 60
+hig = 60
+
+[[component]]
+name = "h61"
+type = "slider"
+x = 270
+y = 297
+w = 240
+h = 61
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 61
+hig = 61
+
+[[component]]
+name = "h80"
+type = "slider"
+x = 270
+y = 366
+w = 240
+h = 80
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 80
+hig = 80
+
+[[component]]
+name = "h81"
+type = "slider"
+x = 530
+y = 10
+w = 240
+h = 81
+val = 50
+bco = 65535
+bco1 = 65535
+pco = 0
+wid = 81
+hig = 81

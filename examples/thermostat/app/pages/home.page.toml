@@ -1,0 +1,288 @@
+[page]
+name = "home"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = "home/normal"
+
+[[component]]
+name = "title"
+type = "text"
+x = 24
+y = 20
+w = 400
+h = 32
+sta = 0
+font = "SansBold24"
+picc = "home/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "Living room"
+txt_maxl = 20
+
+[[component]]
+name = "clock"
+type = "text"
+x = 640
+y = 20
+w = 136
+h = 32
+sta = 0
+font = "SansBold24"
+picc = "home/normal"
+pco = "#eff3f7"
+xcen = 2
+txt = "00:00"
+txt_maxl = 5
+
+[[component]]
+name = "navHome"
+type = "button"
+x = 0
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "home/normal"
+picc2 = "home/pressed"
+pco = "#ff8a42"
+pco2 = "#ff8a42"
+ycen = 2
+txt = "Home"
+
+[[component]]
+name = "navSchedule"
+type = "button"
+x = 200
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "home/normal"
+picc2 = "home/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Schedule"
+
+[[component]]
+name = "navDay"
+type = "button"
+x = 400
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "home/normal"
+picc2 = "home/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Day"
+
+[[component]]
+name = "navSettings"
+type = "button"
+x = 600
+y = 400
+w = 200
+h = 72
+sta = 0
+picc = "home/normal"
+picc2 = "home/pressed"
+pco = "#63717b"
+pco2 = "#eff3f7"
+ycen = 2
+txt = "Settings"
+
+[[component]]
+name = "tick"
+type = "timer"
+tim = 1000
+
+[[component]]
+name = "roomCaption"
+type = "text"
+x = 186
+y = 140
+w = 100
+h = 22
+sta = 0
+picc = "home/normal"
+pco = "#8c96a5"
+txt = "Indoor"
+
+[[component]]
+name = "roomText"
+type = "text"
+x = 126
+y = 174
+w = 220
+h = 100
+sta = 0
+font = "Sans100"
+picc = "home/normal"
+pco = "#eff3f7"
+txt = "20.5°"
+
+[[component]]
+name = "stateIcon"
+type = "picture"
+x = 180
+y = 336
+w = 28
+h = 28
+pic = "state/idle"
+
+[[component]]
+name = "stateText"
+type = "text"
+x = 216
+y = 334
+w = 140
+h = 32
+sta = 0
+font = "Sans20"
+picc = "home/normal"
+pco = "#39d7b5"
+xcen = 0
+txt = "At target"
+txt_maxl = 12
+
+[[component]]
+name = "targetCaption"
+type = "text"
+x = 496
+y = 88
+w = 200
+h = 22
+sta = 0
+picc = "home/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Target"
+
+[[component]]
+name = "lower"
+type = "button"
+x = 496
+y = 116
+w = 64
+h = 64
+sta = 0
+picc = "home/normal"
+picc2 = "home/pressed"
+txt = ""
+
+[[component]]
+name = "targetText"
+type = "text"
+x = 564
+y = 120
+w = 128
+h = 56
+sta = 0
+font = "Sans56"
+picc = "home/normal"
+pco = "#eff3f7"
+txt = "21.0°"
+
+[[component]]
+name = "raise"
+type = "button"
+x = 696
+y = 116
+w = 64
+h = 64
+sta = 0
+picc = "home/normal"
+picc2 = "home/pressed"
+txt = ""
+
+[[component]]
+name = "followCaption"
+type = "text"
+x = 496
+y = 203
+w = 200
+h = 30
+sta = 0
+font = "Sans20"
+picc = "home/normal"
+pco = "#eff3f7"
+xcen = 0
+txt = "Follow schedule"
+txt_maxl = 20
+
+[[component]]
+name = "follow"
+type = "button"
+x = 712
+y = 202
+w = 56
+h = 32
+sta = 0
+picc = "home/pressed"
+picc2 = "home/pressed"
+txt = ""
+
+[[component]]
+name = "modeCaption"
+type = "text"
+x = 496
+y = 276
+w = 200
+h = 22
+sta = 0
+picc = "home/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Mode"
+
+[[component]]
+name = "modeOff"
+type = "button"
+x = 492
+y = 308
+w = 88
+h = 60
+sta = 0
+font = "Sans20"
+picc = "home/normal"
+picc2 = "home/pressed"
+pco = "#8c96a5"
+pco2 = "#eff3f7"
+txt = "Off"
+
+[[component]]
+name = "modeHeat"
+type = "button"
+x = 584
+y = 308
+w = 88
+h = 60
+sta = 0
+font = "Sans20"
+picc = "home/pressed"
+picc2 = "home/pressed"
+pco = "#eff3f7"
+pco2 = "#eff3f7"
+txt = "Heat"
+
+[[component]]
+name = "modeCool"
+type = "button"
+x = 676
+y = 308
+w = 88
+h = 60
+sta = 0
+font = "Sans20"
+picc = "home/normal"
+picc2 = "home/pressed"
+pco = "#8c96a5"
+pco2 = "#eff3f7"
+txt = "Cool"

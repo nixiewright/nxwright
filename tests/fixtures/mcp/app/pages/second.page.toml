@@ -1,0 +1,17 @@
+[page]
+name = "second"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+
+[[component]]
+name = "t0"
+type = "text"
+x = 20
+y = 20
+w = 300
+h = 40
+txt = "Second"
+font = "NotoSans24"

@@ -1,0 +1,8 @@
+// Runs once at power-on: the variables every page shares, settings, then
+// the first page.
+int sys0=0,sys1=0,sys2=0
+baud=9600
+dim=100
+recmod=0
+printh 00 00 00 ff ff ff 88 ff ff ff
+page 0

@@ -1,0 +1,11 @@
+format = 1
+name = "data-record-scroll-1"
+language = "nextion"
+screen = "NX8048P050"
+rotation = 0
+encoding = "iso-8859-1"
+pages = ["page0", "page1", "page2", "page3", "page4", "page5"]
+pictures = []
+fonts = [
+    "NotoSans24",
+]

@@ -1,0 +1,67 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+
+[[component]]
+name = "t0"
+type = "text"
+x = 20
+y = 20
+w = 300
+h = 40
+font = "NotoSans20"
+xcen = 0
+txt_maxl = 40
+txt = "АБ"
+
+[[component]]
+name = "t1"
+type = "text"
+x = 20
+y = 70
+w = 300
+h = 40
+font = "NotoSans20"
+xcen = 0
+txt_maxl = 40
+txt = "АαБ"
+
+[[component]]
+name = "t2"
+type = "text"
+x = 20
+y = 120
+w = 300
+h = 40
+font = "NotoSans20"
+xcen = 0
+txt_maxl = 40
+txt = "А😀Б"
+
+[[component]]
+name = "t3"
+type = "text"
+x = 20
+y = 170
+w = 300
+h = 40
+font = "NotoSans20"
+xcen = 0
+txt_maxl = 40
+txt = "АααБ"
+
+[[component]]
+name = "t4"
+type = "text"
+x = 20
+y = 220
+w = 300
+h = 40
+font = "NotoSans20"
+xcen = 0
+txt_maxl = 40
+txt = "АéБ"

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- nxwright's logo: the letters nx on a screen, set below and right of its centre. -->
+  <rect x="10" y="22" width="108" height="84" rx="16" fill="#1f2a37" stroke="#3e4c5e" stroke-width="2"/>
+  <rect x="20" y="32" width="88" height="64" rx="8" fill="#2563eb"/>
+  <g transform="translate(70 69) scale(0.82) translate(-64 -65)" fill="none" stroke="#ffffff"
+     stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M40 78 V52 M40 63 A11 11 0 0 1 62 63 V78"/>
+    <path d="M70 52 L88 78 M88 52 L70 78"/>
+  </g>
+</svg>

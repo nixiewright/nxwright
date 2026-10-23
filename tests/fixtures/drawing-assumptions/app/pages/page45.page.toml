@@ -1,0 +1,57 @@
+[page]
+name = "page45"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "fbH"
+type = "file-browser"
+x = 10
+y = 10
+w = 300
+h = 120
+dir = "sd0/nxprobe_agent-a_thumb/"
+pic1 = 42
+pic2 = 43
+sta = 1
+bco = 65535
+left = 1
+
+[[component]]
+name = "tF"
+type = "text"
+x = 250
+y = 80
+w = 150
+h = 80
+txt = "TF"
+pco = 0
+txt_maxl = 20
+sta = 3
+
+[[component]]
+name = "drH"
+type = "data-record"
+x = 430
+y = 10
+w = 300
+h = 90
+path = "sd0/nxprobe_agent-a_dthumb.data"
+left = 1
+
+[[component]]
+name = "tD"
+type = "text"
+x = 650
+y = 60
+w = 140
+h = 80
+txt = "TD"
+pco = 0
+txt_maxl = 20
+sta = 3

@@ -1,0 +1,273 @@
+[page]
+name = "page17"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "s120"
+type = "select"
+x = 10
+y = 5
+w = 120
+h = 120
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s121"
+type = "select"
+x = 140
+y = 5
+w = 120
+h = 121
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s122"
+type = "select"
+x = 270
+y = 5
+w = 120
+h = 122
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s123"
+type = "select"
+x = 400
+y = 5
+w = 120
+h = 123
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s124"
+type = "select"
+x = 530
+y = 5
+w = 120
+h = 124
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s125"
+type = "select"
+x = 660
+y = 5
+w = 120
+h = 125
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s126"
+type = "select"
+x = 10
+y = 160
+w = 120
+h = 126
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s127"
+type = "select"
+x = 140
+y = 160
+w = 120
+h = 127
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s128"
+type = "select"
+x = 270
+y = 160
+w = 120
+h = 128
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s129"
+type = "select"
+x = 400
+y = 160
+w = 120
+h = 129
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s130"
+type = "select"
+x = 530
+y = 160
+w = 120
+h = 130
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s131"
+type = "select"
+x = 660
+y = 160
+w = 120
+h = 131
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s132"
+type = "select"
+x = 10
+y = 315
+w = 120
+h = 132
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s133"
+type = "select"
+x = 140
+y = 315
+w = 120
+h = 133
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s134"
+type = "select"
+x = 270
+y = 315
+w = 120
+h = 134
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s135"
+type = "select"
+x = 400
+y = 315
+w = 120
+h = 135
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s136"
+type = "select"
+x = 530
+y = 315
+w = 120
+h = 136
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s137"
+type = "select"
+x = 660
+y = 315
+w = 120
+h = 137
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s138"
+type = "select"
+x = 10
+y = 470
+w = 120
+h = 138
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s139"
+type = "select"
+x = 140
+y = 470
+w = 120
+h = 139
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s140"
+type = "select"
+x = 270
+y = 470
+w = 120
+h = 140
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s141"
+type = "select"
+x = 400
+y = 470
+w = 120
+h = 141
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s142"
+type = "select"
+x = 530
+y = 470
+w = 120
+h = 142
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3
+
+[[component]]
+name = "s143"
+type = "select"
+x = 660
+y = 470
+w = 120
+h = 143
+path = "HHH\r\nHHH\r\nHHH"
+dis = 0
+sta = 3

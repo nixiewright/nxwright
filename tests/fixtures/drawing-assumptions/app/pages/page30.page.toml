@@ -1,0 +1,22 @@
+[page]
+name = "page30"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "tNew"
+type = "text"
+x = 10
+y = 10
+w = 300
+h = 60
+txt = "page30"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40

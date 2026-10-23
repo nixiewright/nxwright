@@ -1,0 +1,99 @@
+include "lib/frame.nx"
+
+// Before the page shows: the four periods, and the selected one.
+on schedule.load:
+  showClock()
+  showPeriods()
+  showSelected()
+
+// Each second, a simulated minute passes.
+on tick.timer:
+  passMinute()
+  showClock()
+
+// Touching a period selects it.
+on wakeRow.up:
+  selectPeriod(0)
+
+on awayRow.up:
+  selectPeriod(1)
+
+on homeRow.up:
+  selectPeriod(2)
+
+on sleepRow.up:
+  selectPeriod(3)
+
+// The selected period's start, a quarter hour earlier or later.
+on earlier.up:
+  changeStart(selectedPeriod, -START_STEP)
+  showChange()
+
+on later.up:
+  changeStart(selectedPeriod, START_STEP)
+  showChange()
+
+// The selected period's target, half a degree cooler or warmer.
+on cooler.up:
+  changeTarget(selectedPeriod, -TARGET_STEP)
+  showChange()
+
+on warmer.up:
+  changeTarget(selectedPeriod, TARGET_STEP)
+  showChange()
+
+function selectPeriod(period: number):
+  selectedPeriod = period
+  showSelected()
+
+function showChange():
+  showPeriods()
+  startText.txt = timeText(periodStart(selectedPeriod))
+  targetText.txt = temperatureText(periodTarget(selectedPeriod))
+
+// Each period's row: its start and its target.
+function showPeriods():
+  wakeTime.txt = timeText(wakeStart)
+  wakeTemp.txt = temperatureText(wakeTarget)
+  awayTime.txt = timeText(awayStart)
+  awayTemp.txt = temperatureText(awayTarget)
+  homeTime.txt = timeText(homeStart)
+  homeTemp.txt = temperatureText(homeTarget)
+  sleepTime.txt = timeText(sleepStart)
+  sleepTemp.txt = temperatureText(sleepTarget)
+
+// The selected period's row is marked and its name white; the panel on the
+// right shows it.
+function showSelected():
+  wakeMarker.pic = @pic(marker/off)
+  wakeName.pco = MUTED
+  awayMarker.pic = @pic(marker/off)
+  awayName.pco = MUTED
+  homeMarker.pic = @pic(marker/off)
+  homeName.pco = MUTED
+  sleepMarker.pic = @pic(marker/off)
+  sleepName.pco = MUTED
+  switch (selectedPeriod) {
+    case 0:
+      wakeMarker.pic = @pic(marker/on)
+      wakeName.pco = WHITE
+      selectedName.txt = "Wake"
+      break
+    case 1:
+      awayMarker.pic = @pic(marker/on)
+      awayName.pco = WHITE
+      selectedName.txt = "Away"
+      break
+    case 2:
+      homeMarker.pic = @pic(marker/on)
+      homeName.pco = WHITE
+      selectedName.txt = "Home"
+      break
+    case 3:
+      sleepMarker.pic = @pic(marker/on)
+      sleepName.pco = WHITE
+      selectedName.txt = "Sleep"
+      break
+  }
+  startText.txt = timeText(periodStart(selectedPeriod))
+  targetText.txt = temperatureText(periodTarget(selectedPeriod))

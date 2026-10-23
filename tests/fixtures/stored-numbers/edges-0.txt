@@ -1,0 +1,1 @@
+c3.ch walk33..63=-99999 c5.ch walk33..63=-99999 c8.ch walk33..63=-99999 c9.vvs0 walk129..199=-99999 c9.vvs1 walk129..199=-99999 c9.vvs2 walk129..199=-99999 c12.lenth walk11..15=15 c17.dis walk33..63=50 c18.ch walk33..63=-99999 c20.ch walk33..63=-99999 c27.vvs0 walk11..15=-99999 

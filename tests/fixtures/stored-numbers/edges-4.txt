@@ -1,0 +1,1 @@
+c3.val 3:0=0 c3.val 3:1=1 c3.val 3:2=2 c3.val 3:3=2 c3.val 3:4=2 c3.val 3:5=2 c3.val 3:6=2 c3.val 3:7=2 c3.val 3:8=2 c3.val 3:9=2 c3.val 3:10=2 c3.val 8:0=0 c3.val 8:1=1 c3.val 8:2=2 c3.val 8:3=3 c3.val 8:4=4 c3.val 8:5=5 c3.val 8:6=6 c3.val 8:7=7 c3.val 8:8=7 c3.val 8:9=7 c3.val 8:10=7 c11.drag 1=0 c11.aph 50=127 c11.effect 3=0 c22.x move0=7000 c22.x move300=7000 

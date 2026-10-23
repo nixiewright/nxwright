@@ -1,0 +1,174 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+
+[[component]]
+name = "lr"
+type = "scrolling-text"
+x = 20
+y = 10
+w = 200
+h = 30
+font = "NotoSans20"
+dir = "\u0000"
+txt = "Left to right"
+txt_maxl = 20
+tim = 1000
+dis = 20
+bco = 65504
+
+[[component]]
+name = "lrs"
+type = "scrolling-text"
+x = 20
+y = 50
+w = 200
+h = 30
+font = "NotoSans20"
+dir = "\u0000"
+txt = "LR"
+txt_maxl = 20
+tim = 1000
+dis = 20
+bco = 65504
+
+[[component]]
+name = "rl"
+type = "scrolling-text"
+x = 300
+y = 10
+w = 200
+h = 30
+font = "NotoSans20"
+dir = "\u0001"
+txt = "Right to left"
+txt_maxl = 20
+tim = 1000
+dis = 20
+bco = 65504
+
+[[component]]
+name = "rls"
+type = "scrolling-text"
+x = 300
+y = 50
+w = 200
+h = 30
+font = "NotoSans20"
+dir = "\u0001"
+txt = "RL"
+txt_maxl = 20
+tim = 1000
+dis = 20
+bco = 65504
+
+[[component]]
+name = "dn"
+type = "scrolling-text"
+x = 20
+y = 100
+w = 100
+h = 100
+font = "NotoSans20"
+dir = "\u0002"
+txt = "Down"
+txt_maxl = 20
+tim = 1000
+dis = 20
+bco = 65504
+
+[[component]]
+name = "up"
+type = "scrolling-text"
+x = 300
+y = 100
+w = 100
+h = 100
+font = "NotoSans20"
+dir = "\u0003"
+txt = "Up"
+txt_maxl = 20
+tim = 1000
+dis = 20
+bco = 65504
+
+[[component]]
+name = "vlr"
+type = "text"
+x = 560
+y = 10
+w = 200
+h = 35
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "vlrs"
+type = "text"
+x = 560
+y = 50
+w = 200
+h = 35
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "vrl"
+type = "text"
+x = 560
+y = 90
+w = 200
+h = 35
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "vrls"
+type = "text"
+x = 560
+y = 130
+w = 200
+h = 35
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "vdn"
+type = "text"
+x = 560
+y = 170
+w = 200
+h = 35
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "vup"
+type = "text"
+x = 560
+y = 210
+w = 200
+h = 35
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "tm0"
+type = "timer"
+tim = 50

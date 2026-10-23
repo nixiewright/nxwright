@@ -1,0 +1,250 @@
+[page]
+name = "sliders"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#e0e0e0"
+
+[[component]]
+name = "val0"
+type = "slider"
+x = 20
+y = 20
+w = 240
+h = 25
+sta = 1
+psta = 0
+val = 0
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+
+[[component]]
+name = "val50"
+type = "slider"
+x = 280
+y = 20
+w = 240
+h = 25
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+
+[[component]]
+name = "val100"
+type = "slider"
+x = 540
+y = 20
+w = 240
+h = 25
+sta = 1
+psta = 0
+val = 100
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+
+[[component]]
+name = "dis0"
+type = "slider"
+x = 20
+y = 80
+w = 240
+h = 25
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+dis = 0
+
+[[component]]
+name = "dis25"
+type = "slider"
+x = 280
+y = 80
+w = 240
+h = 25
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+dis = 25
+
+[[component]]
+name = "dis50"
+type = "slider"
+x = 540
+y = 80
+w = 240
+h = 25
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+dis = 50
+
+[[component]]
+name = "ch5"
+type = "slider"
+x = 20
+y = 140
+w = 240
+h = 25
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+ch = 5
+
+[[component]]
+name = "ch10"
+type = "slider"
+x = 280
+y = 140
+w = 240
+h = 25
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+ch = 10
+
+[[component]]
+name = "ch15"
+type = "slider"
+x = 540
+y = 140
+w = 240
+h = 25
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+ch = 15
+
+[[component]]
+name = "knob10x25"
+type = "slider"
+x = 20
+y = 200
+w = 240
+h = 25
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+wid = 10
+hig = 25
+
+[[component]]
+name = "knob40x40"
+type = "slider"
+x = 280
+y = 200
+w = 240
+h = 40
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+wid = 40
+hig = 40
+
+[[component]]
+name = "knob20x20"
+type = "slider"
+x = 540
+y = 200
+w = 240
+h = 25
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+wid = 20
+hig = 20
+dis = 0
+
+[[component]]
+name = "upright"
+type = "slider"
+x = 20
+y = 270
+w = 25
+h = 200
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+mode = 1
+
+[[component]]
+name = "upright0"
+type = "slider"
+x = 80
+y = 270
+w = 25
+h = 200
+sta = 1
+psta = 0
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+mode = 1
+dis = 0
+
+[[component]]
+name = "asSeen"
+type = "slider"
+x = 280
+y = 300
+w = 241
+h = 25
+sta = 1
+psta = 0
+val = 100
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"
+minval = 25
+
+[[component]]
+name = "square"
+type = "slider"
+x = 540
+y = 300
+w = 240
+h = 25
+sta = 1
+psta = 2
+val = 50
+bco = "#4060ff"
+bco1 = "#ff4000"
+pco = "#208020"

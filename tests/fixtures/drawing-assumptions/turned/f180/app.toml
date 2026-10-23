@@ -1,0 +1,13 @@
+format = 1
+name = "f180"
+language = "nextion"
+screen = "NX8048P050"
+rotation = 180
+encoding = "iso-8859-1"
+pages = [
+    "page0",
+]
+pictures = []
+fonts = [
+    "NotoSans24",
+]

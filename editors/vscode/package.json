@@ -1,0 +1,1350 @@
+{
+  "name": "nxwright-language",
+  "displayName": "nxwright",
+  "description": "Design, write, simulate, and test Nextion screen apps in VS Code.",
+  "version": "0.2.0",
+  "publisher": "nxwright",
+  "icon": "images/icon.png",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nixiewright/nxwright",
+    "directory": "editors/vscode"
+  },
+  "homepage": "https://github.com/nixiewright/nxwright",
+  "bugs": {
+    "url": "https://github.com/nixiewright/nxwright/issues"
+  },
+  "private": true,
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/app.toml"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "nxwright",
+        "aliases": [
+          "nxwright"
+        ],
+        "extensions": [
+          ".nx"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "nxwright",
+        "scopeName": "source.nxwright",
+        "path": "./syntaxes/nxwright.tmLanguage.json"
+      }
+    ],
+    "configuration": [
+      {
+        "title": "General",
+        "properties": {
+          "nxwright.command": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "markdownDescription": "The command that runs nxwright: the program, then its first arguments. When it is empty, the default, the extension runs the `nxwright` command that `pip install` gives, if it is on PATH; else `python -P -m nxwright` with the first Python that runs it: the interpreter chosen in VS Code, when the Python extension is installed, then `python3`, `python`, and on Windows `py -3`. From a copy of nxwright's repository, use for example `[\"python\", \"${workspaceFolder}/nxwright/run.py\"]`; `${workspaceFolder}` stands for the workspace's first folder."
+          }
+        }
+      },
+      {
+        "title": "Page preview",
+        "properties": {
+          "nxwright.previewGrid": {
+            "type": "integer",
+            "default": 1,
+            "minimum": 1,
+            "markdownDescription": "The grid, in pixels, that a component's edges snap to when dragged in the page preview. 1 for none."
+          }
+        }
+      },
+      {
+        "title": "Simulator",
+        "properties": {
+          "nxwright.simulator.serialPort": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "The serial port a simulation's serial line is connected to, such as `COM4`, when its launch configuration gives no `serialPort`. Empty for none."
+          },
+          "nxwright.simulator.serialBaud": {
+            "type": "integer",
+            "default": 9600,
+            "enum": [
+              2400,
+              4800,
+              9600,
+              19200,
+              31250,
+              38400,
+              57600,
+              115200,
+              230400,
+              250000,
+              256000,
+              512000,
+              921600
+            ],
+            "markdownDescription": "That port's rate, in bits per second."
+          },
+          "nxwright.simulator.sdCard0": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "A folder of the computer that stands for the screen's first SD card, `sd0/`, by its full path, when a simulation's launch configuration gives no `sdCard0`. `${workspaceFolder}` stands for the workspace's folder. Empty for none: the card is kept in memory."
+          },
+          "nxwright.simulator.sdCard1": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "The same, for the second SD card, `sd1/`, and `sdCard1`."
+          },
+          "nxwright.simulator.pinyinTable": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "The screen's pinyin table, for Chinese input, when a simulation's launch configuration gives no `pinyinTable`: the Nextion Editor's `input.bin`, or a TFT file, by its full path. `${workspaceFolder}` stands for the workspace's folder. Empty to use the installed Nextion Editor's, if one is found. Without a table, Chinese input shows no candidates."
+          },
+          "nxwright.simulator.logReceived": {
+            "type": "string",
+            "enum": [
+              "text",
+              "hex",
+              "both"
+            ],
+            "enumDescriptions": [
+              "As text, read in the project's encoding; a byte that is no character shows as \\xNN.",
+              "In hexadecimal, each byte as two digits.",
+              "As text, then in hexadecimal."
+            ],
+            "default": "text",
+            "markdownDescription": "How the simulator's log, in the Debug Console, shows what the screen receives on its serial line, when a simulation's launch configuration gives no `logReceived`."
+          },
+          "nxwright.simulator.logSent": {
+            "type": "string",
+            "enum": [
+              "text",
+              "hex",
+              "both"
+            ],
+            "enumDescriptions": [
+              "As text, read in the project's encoding; a byte that is no character shows as \\xNN.",
+              "In hexadecimal, each byte as two digits.",
+              "As text, then in hexadecimal."
+            ],
+            "default": "hex",
+            "markdownDescription": "How the simulator's log shows what the screen sends on its serial line, when a simulation's launch configuration gives no `logSent`. As text, the FF FF FF that ends a reply is left out."
+          }
+        }
+      },
+      {
+        "title": "Agents",
+        "properties": {
+          "nxwright.agents.allowControl": {
+            "type": "boolean",
+            "default": false,
+            "scope": "application",
+            "markdownDescription": "Lets `nxwright mcp`, through which an AI agent drives your app, start and drive this window's simulator. Only a program that can read a file of your own account can connect. Only your user settings can turn it on, never a workspace's."
+          },
+          "nxwright.agents.startWithoutSerialPort": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "markdownDescription": "A simulation an agent starts has no serial port, whatever the Simulator settings say. Turned off, it takes the Simulator settings' port, and you are asked first if `#nxwright.agents.askBeforeSerialActions#` is on."
+          },
+          "nxwright.agents.askBeforeSerialActions": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "markdownDescription": "Asks you before an agent acts on a simulation whose serial port is connected, since what the app sends then reaches the device on that port. Your answer holds until the simulation ends."
+          }
+        }
+      },
+      {
+        "title": "Tests",
+        "properties": {
+          "nxwright.testFolders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "markdownDescription": "The folders of tests that Test Explorer lists, relative to the workspace's first folder. When empty, each folder named `tests` beside a source folder."
+          }
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "[nxwright]": {
+        "files.encoding": "utf8",
+        "files.autoGuessEncoding": false
+      }
+    },
+    "commands": [
+      {
+        "command": "nxwright.build",
+        "title": "Build the project file",
+        "category": "nxwright",
+        "icon": {
+          "light": "media/icons/build-light.svg",
+          "dark": "media/icons/build-dark.svg"
+        }
+      },
+      {
+        "command": "nxwright.changeScreen",
+        "title": "Change the screen model",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.changeRotation",
+        "title": "Change the rotation",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.changeEncoding",
+        "title": "Change the character encoding",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.extract",
+        "title": "Extract the project file into the source folder",
+        "category": "nxwright",
+        "icon": {
+          "light": "media/icons/extract-light.svg",
+          "dark": "media/icons/extract-dark.svg"
+        }
+      },
+      {
+        "command": "nxwright.chooseProjectFile",
+        "title": "Choose the project HMI file for the source folder",
+        "category": "nxwright",
+        "icon": {
+          "light": "media/icons/projectFile-light.svg",
+          "dark": "media/icons/projectFile-dark.svg"
+        }
+      },
+      {
+        "command": "nxwright.upgrade",
+        "title": "Upgrade the source folder to the current format",
+        "category": "nxwright",
+        "icon": "$(arrow-circle-up)"
+      },
+      {
+        "command": "nxwright.switchToNxlang",
+        "title": "Switch the source folder to the nxwright language",
+        "category": "nxwright",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "nxwright.newSourceFolder",
+        "title": "Create a new nxwright project",
+        "category": "nxwright",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "nxwright.importProject",
+        "title": "Import a Nextion Editor project",
+        "category": "nxwright",
+        "icon": {
+          "light": "media/icons/importProject-light.svg",
+          "dark": "media/icons/importProject-dark.svg"
+        }
+      },
+      {
+        "command": "nxwright.chooseProject",
+        "title": "Choose the project",
+        "category": "nxwright",
+        "icon": "$(folder-library)"
+      },
+      {
+        "command": "nxwright.fonts",
+        "title": "Fonts",
+        "category": "nxwright",
+        "icon": "$(symbol-text)"
+      },
+      {
+        "command": "nxwright.addFont",
+        "title": "Add a font",
+        "category": "nxwright",
+        "icon": "$(add)"
+      },
+      {
+        "command": "nxwright.addPictures",
+        "title": "Add pictures",
+        "category": "nxwright",
+        "icon": "$(add)"
+      },
+      {
+        "command": "nxwright.addKeyboard",
+        "title": "Add a keyboard page",
+        "category": "nxwright",
+        "icon": "$(record-keys)"
+      },
+      {
+        "command": "nxwright.addPage",
+        "title": "New page",
+        "category": "nxwright",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "nxwright.addAnimation",
+        "title": "Add an animation",
+        "category": "nxwright",
+        "icon": "$(add)"
+      },
+      {
+        "command": "nxwright.addVideo",
+        "title": "Add a video",
+        "category": "nxwright",
+        "icon": "$(add)"
+      },
+      {
+        "command": "nxwright.addSound",
+        "title": "Add a sound",
+        "category": "nxwright",
+        "icon": "$(add)"
+      },
+      {
+        "command": "nxwright.writeCardPictures",
+        "title": "Write pictures for the SD card",
+        "category": "nxwright",
+        "icon": {
+          "light": "media/icons/sdCard-light.svg",
+          "dark": "media/icons/sdCard-dark.svg"
+        }
+      },
+      {
+        "command": "nxwright.showEditorCode",
+        "title": "Show this file in strict Nextion syntax",
+        "category": "nxwright",
+        "icon": "$(code)"
+      },
+      {
+        "command": "nxwright.debugTest",
+        "title": "Debug a test and its screen code",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.showPreview",
+        "title": "Show the page preview",
+        "category": "nxwright",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "nxwright.showPageText",
+        "title": "Open the page file as text",
+        "category": "nxwright",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "nxwright.addComponent",
+        "title": "Add a component",
+        "category": "nxwright",
+        "icon": "$(add)"
+      },
+      {
+        "command": "nxwright.addComponentHere",
+        "title": "Add a component here",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.cutComponent",
+        "title": "Cut",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.copyComponent",
+        "title": "Copy",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.pasteComponents",
+        "title": "Paste",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.pasteHere",
+        "title": "Paste Here",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.pasteInPlace",
+        "title": "Paste in place",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.pasteWithoutCode",
+        "title": "Paste without code",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.pasteSpecial",
+        "title": "Paste Special...",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.duplicateComponent",
+        "title": "Duplicate",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.deleteComponent",
+        "title": "Delete",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.clearEvents",
+        "title": "Clear events",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.goToEvent",
+        "title": "Go to Event...",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.editAttributes",
+        "title": "Edit Attributes",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.goToDefinition",
+        "title": "Go to Definition",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.alignLeft",
+        "title": "Left edges",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.alignRight",
+        "title": "Right edges",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.alignTop",
+        "title": "Top edges",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.alignBottom",
+        "title": "Bottom edges",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.alignCentresAcross",
+        "title": "Centres, left to right",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.alignCentresDown",
+        "title": "Centres, top to bottom",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.sameWidth",
+        "title": "Width",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.sameHeight",
+        "title": "Height",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.sameSize",
+        "title": "Width and height",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.spaceAcross",
+        "title": "Across",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.spaceDown",
+        "title": "Down",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.bringToFront",
+        "title": "Bring to front",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.bringForward",
+        "title": "Bring forward",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.sendBackward",
+        "title": "Send backward",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.sendToBack",
+        "title": "Send to back",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.lockComponents",
+        "title": "Lock",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.unlockComponents",
+        "title": "Unlock",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.groupComponents",
+        "title": "Group",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.ungroupComponents",
+        "title": "Ungroup",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.simulate",
+        "title": "Simulate the app",
+        "category": "nxwright",
+        "icon": "$(play)"
+      },
+      {
+        "command": "nxwright.simulatePage",
+        "title": "Simulate the app from the page shown",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.simulateThisPage",
+        "title": "Simulate this page",
+        "category": "nxwright",
+        "icon": "$(play)"
+      },
+      {
+        "command": "nxwright.showSimulator",
+        "title": "Show the Simulator",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.stopSimulation",
+        "title": "Stop the simulation",
+        "category": "nxwright",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "nxwright.addLaunchConfiguration",
+        "title": "Add a launch configuration",
+        "category": "nxwright",
+        "icon": {
+          "light": "media/icons/launchConfiguration-light.svg",
+          "dark": "media/icons/launchConfiguration-dark.svg"
+        }
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nxwright",
+          "title": "nxwright",
+          "icon": "media/nxwright-project-icon.svg"
+        },
+        {
+          "id": "nxwrightPage",
+          "title": "nxwright page",
+          "icon": "media/nxwright-page-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "nxwright": [
+        {
+          "type": "webview",
+          "id": "nxwright.project",
+          "name": "Project",
+          "initialSize": 1
+        },
+        {
+          "id": "nxwright.media",
+          "name": "Media",
+          "initialSize": 2
+        },
+        {
+          "type": "webview",
+          "id": "nxwright.simulator",
+          "name": "Simulator",
+          "initialSize": 2
+        }
+      ],
+      "nxwrightPage": [
+        {
+          "id": "nxwright.pages",
+          "name": "Pages"
+        },
+        {
+          "id": "nxwright.components",
+          "name": "Components"
+        },
+        {
+          "type": "webview",
+          "id": "nxwright.properties",
+          "name": "Attributes"
+        }
+      ]
+    },
+    "customEditors": [
+      {
+        "viewType": "nxwright.pagePreview",
+        "displayName": "nxwright page preview",
+        "selector": [
+          {
+            "filenamePattern": "**/pages/*.page.toml"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "nxwright.fontViewer",
+        "displayName": "nxwright font",
+        "selector": [
+          {
+            "filenamePattern": "*.zi"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "nxwright.animationViewer",
+        "displayName": "nxwright animation",
+        "selector": [
+          {
+            "filenamePattern": "*.gmov"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "nxwright.videoViewer",
+        "displayName": "nxwright video",
+        "selector": [
+          {
+            "filenamePattern": "*.video"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "nxwright.soundViewer",
+        "displayName": "nxwright sound",
+        "selector": [
+          {
+            "filenamePattern": "**/sounds/*.wav"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "nxwright",
+        "required": [
+          "subcommand"
+        ],
+        "properties": {
+          "subcommand": {
+            "type": "string",
+            "description": "The nxwright subcommand the task runs."
+          }
+        }
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "nxwright",
+        "owner": "nxwright",
+        "source": "nxwright",
+        "severity": "error",
+        "fileLocation": [
+          "relative",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(?:nxwright \\w+: )?(.+?\\.(?:nx|toml)) line (\\d+): (?:(error|warning): )?(.*)$",
+          "file": 1,
+          "line": 2,
+          "severity": 3,
+          "message": 4
+        }
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "nxwright"
+      },
+      {
+        "language": "python"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "nxwright",
+        "label": "nxwright test",
+        "languages": [
+          "nxwright"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "properties": {
+              "testFolder": {
+                "type": "string",
+                "description": "To debug a test: the folder of tests, as nxwright test takes it."
+              },
+              "test": {
+                "type": "string",
+                "description": "To debug a test: its id, such as test_home.TargetTest.test_raise."
+              },
+              "sourceFolder": {
+                "type": "string",
+                "description": "To simulate an app: its source folder."
+              },
+              "page": {
+                "type": "string",
+                "description": "Optional: a page to start the simulation on, rather than running program.nx."
+              },
+              "values": {
+                "type": "object",
+                "description": "Optional, if starting on a page: the values to start with, by component and attribute.",
+                "examples": [{"t0.txt": "Hello", "n0.val": 5}]
+              },
+              "eeprom": {
+                "type": "string",
+                "description": "Optional: the file that keeps the EEPROM, as the Nextion Editor keeps its eeprom.bin: the simulation starts from it, and each write the app makes reaches it. Made when missing. Without it, the EEPROM starts empty and lasts for the simulation alone."
+              },
+              "serialPort": {
+                "type": "object",
+                "description": "Optional: the serial port the screen's serial line is connected to.",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "The port's name, such as COM4."
+                  },
+                  "baud": {
+                    "type": "integer",
+                    "description": "Its rate, in bits per second. 9600, the screen's rate at power-on, when not given.",
+                    "default": 9600
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "gpioInputs": {
+                "type": "object",
+                "description": "Optional: the level each GPIO input starts at, 0 or 1, by pin. Without it, every input reads 1, as a pull-up input that nothing drives does. The Simulator section changes the levels while the app runs.",
+                "propertyNames": {
+                  "enum": ["pio0", "pio1", "pio2", "pio3", "pio4", "pio5", "pio6", "pio7"]
+                },
+                "additionalProperties": {
+                  "enum": [0, 1]
+                },
+                "examples": [{"pio2": 0}]
+              },
+              "sdCard0": {
+                "type": "string",
+                "description": "Optional: the first virtual SD card (sd0/), a folder by its full path. Without it, the card is kept in memory."
+              },
+              "sdCard1": {
+                "type": "string",
+                "description": "Optional: the second virtual SD card (sd1/), a folder by its full path. Without it, the card is kept in memory."
+              },
+              "pinyinTable": {
+                "type": "string",
+                "description": "Optional: the screen's pinyin table, for Chinese input: the Nextion Editor's input.bin, or a TFT file, by its full path. Without it, the installed Nextion Editor's, if one is found."
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Optional: stop the debugger at the first line that runs (defaults to true for tests, false otherwise)."
+              },
+              "logReceived": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "hex",
+                  "both"
+                ],
+                "enumDescriptions": [
+                  "As text, read in the project's encoding; a byte that is no character shows as \\xNN.",
+                  "In hexadecimal, each byte as two digits.",
+                  "As text, then in hexadecimal."
+                ],
+                "default": "text",
+                "description": "Optional: serial input debug logging style (overrides nxwright.simulator.logReceived)."
+              },
+              "logSent": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "hex",
+                  "both"
+                ],
+                "enumDescriptions": [
+                  "As text, read in the project's encoding; a byte that is no character shows as \\xNN.",
+                  "In hexadecimal, each byte as two digits.",
+                  "As text, then in hexadecimal."
+                ],
+                "default": "hex",
+                "description": "Optional: serial output debug logging style (overrides nxwright.simulator.logSent)."
+              }
+            }
+          }
+        },
+        "configurationSnippets": [
+          {
+            "label": "nxwright: Simulate the app",
+            "description": "Runs a source folder's app in the simulator.",
+            "body": {
+              "type": "nxwright",
+              "request": "launch",
+              "name": "Simulate the app",
+              "sourceFolder": "^\"\\${workspaceFolder}/app\""
+            }
+          }
+        ]
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "nxwright.debugTest",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.showPageText",
+          "when": "activeCustomEditorId == nxwright.pagePreview"
+        },
+        {
+          "command": "nxwright.addComponentHere",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.deleteComponent",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.cutComponent",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.copyComponent",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.pasteComponents",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.pasteHere",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.pasteInPlace",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.pasteWithoutCode",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.pasteSpecial",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.clearEvents",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.goToEvent",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.editAttributes",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.goToDefinition",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.duplicateComponent",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.alignLeft",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.alignRight",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.alignTop",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.alignBottom",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.alignCentresAcross",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.alignCentresDown",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.sameWidth",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.sameHeight",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.sameSize",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.spaceAcross",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.spaceDown",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.bringToFront",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.bringForward",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.sendBackward",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.sendToBack",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.lockComponents",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.unlockComponents",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.groupComponents",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.ungroupComponents",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.stopSimulation",
+          "when": "nxwright.simulating"
+        },
+        {
+          "command": "nxwright.simulateThisPage",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.showSimulator",
+          "when": "nxwright.simulating"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "nxwright.showPreview",
+          "when": "resourcePath =~ /[\\\\/]pages[\\\\/][^\\\\/]+\\.nx$/",
+          "group": "navigation"
+        },
+        {
+          "command": "nxwright.showEditorCode",
+          "when": "resourceExtname == .nx",
+          "group": "navigation"
+        },
+        {
+          "command": "nxwright.simulateThisPage",
+          "when": "resourceScheme == file && resourcePath =~ /[\\\\/]pages[\\\\/][^\\\\/]+\\.page\\.toml$/ && !nxwright.simulating",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "nxwright.addComponent",
+          "when": "view == nxwright.components",
+          "group": "navigation"
+        },
+        {
+          "command": "nxwright.extract",
+          "when": "view == nxwright.project && nxwright.hasProject",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nxwright.chooseProjectFile",
+          "when": "view == nxwright.project && nxwright.hasProject",
+          "group": "navigation@2"
+        },
+        {
+          "command": "nxwright.upgrade",
+          "when": "view == nxwright.project && nxwright.hasProject && nxwright.projectOutdated",
+          "group": "navigation@3"
+        },
+        {
+          "command": "nxwright.switchToNxlang",
+          "when": "view == nxwright.project && nxwright.hasProject && nxwright.projectLanguage == nextion",
+          "group": "navigation@4"
+        },
+        {
+          "command": "nxwright.chooseProject",
+          "when": "view == nxwright.project",
+          "group": "navigation@5"
+        },
+        {
+          "command": "nxwright.newSourceFolder",
+          "when": "view == nxwright.project && nxwright.hasProject",
+          "group": "1_start@1"
+        },
+        {
+          "command": "nxwright.importProject",
+          "when": "view == nxwright.project && nxwright.hasProject",
+          "group": "1_start@2"
+        },
+        {
+          "command": "nxwright.addPage",
+          "when": "view == nxwright.pages && nxwright.hasProject",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nxwright.addKeyboard",
+          "when": "view == nxwright.pages && nxwright.hasProject",
+          "group": "navigation@2"
+        },
+        {
+          "command": "nxwright.simulate",
+          "when": "view == nxwright.simulator && nxwright.hasProject && !nxwright.simulating",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nxwright.stopSimulation",
+          "when": "view == nxwright.simulator && nxwright.simulating",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nxwright.addLaunchConfiguration",
+          "when": "view == nxwright.simulator && nxwright.hasProject",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "nxwright.goToEvent",
+          "when": "view == nxwright.components && viewItem == component",
+          "group": "0_open@1"
+        },
+        {
+          "command": "nxwright.editAttributes",
+          "when": "view == nxwright.components && viewItem == component",
+          "group": "0_open@2"
+        },
+        {
+          "command": "nxwright.goToDefinition",
+          "when": "view == nxwright.components && viewItem == component || view == nxwright.components && viewItem == page",
+          "group": "0_open@3"
+        },
+        {
+          "command": "nxwright.cutComponent",
+          "when": "view == nxwright.components && viewItem == component",
+          "group": "1_clipboard@1"
+        },
+        {
+          "command": "nxwright.copyComponent",
+          "when": "view == nxwright.components && viewItem == component",
+          "group": "1_clipboard@2"
+        },
+        {
+          "command": "nxwright.pasteComponents",
+          "when": "view == nxwright.components",
+          "group": "1_clipboard@3"
+        },
+        {
+          "command": "nxwright.pasteSpecial",
+          "when": "view == nxwright.components",
+          "group": "1_clipboard@4"
+        },
+        {
+          "command": "nxwright.duplicateComponent",
+          "when": "view == nxwright.components && viewItem == component",
+          "group": "1_clipboard@5"
+        },
+        {
+          "command": "nxwright.deleteComponent",
+          "when": "view == nxwright.components && viewItem == component",
+          "group": "2_delete@1"
+        },
+        {
+          "command": "nxwright.clearEvents",
+          "when": "view == nxwright.components && viewItem == component",
+          "group": "2_delete@2"
+        },
+        {
+          "command": "nxwright.fonts",
+          "when": "view == nxwright.media && viewItem == mediaGroup.fonts",
+          "group": "inline@1"
+        },
+        {
+          "command": "nxwright.addFont",
+          "when": "view == nxwright.media && viewItem == mediaGroup.fonts",
+          "group": "inline@2"
+        },
+        {
+          "command": "nxwright.addPictures",
+          "when": "view == nxwright.media && viewItem == mediaGroup.pictures",
+          "group": "inline@1"
+        },
+        {
+          "command": "nxwright.writeCardPictures",
+          "when": "view == nxwright.media && viewItem == mediaGroup.pictures",
+          "group": "inline@2"
+        },
+        {
+          "command": "nxwright.addAnimation",
+          "when": "view == nxwright.media && viewItem == mediaGroup.animations",
+          "group": "inline@1"
+        },
+        {
+          "command": "nxwright.addVideo",
+          "when": "view == nxwright.media && viewItem == mediaGroup.videos",
+          "group": "inline@1"
+        },
+        {
+          "command": "nxwright.addSound",
+          "when": "view == nxwright.media && viewItem == mediaGroup.sounds",
+          "group": "inline@1"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "nxwright.goToEvent",
+          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "group": "0_open@1"
+        },
+        {
+          "command": "nxwright.editAttributes",
+          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "group": "0_open@2"
+        },
+        {
+          "command": "nxwright.goToDefinition",
+          "when": "webviewId == 'nxwright.pagePreview' && component || webviewId == 'nxwright.pagePreview' && webviewSection == 'page'",
+          "group": "0_open@3"
+        },
+        {
+          "command": "nxwright.addComponentHere",
+          "when": "webviewId == 'nxwright.pagePreview' && webviewSection == 'page'",
+          "group": "1_add"
+        },
+        {
+          "command": "nxwright.cutComponent",
+          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "group": "2_clipboard@1"
+        },
+        {
+          "command": "nxwright.copyComponent",
+          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "group": "2_clipboard@2"
+        },
+        {
+          "command": "nxwright.pasteComponents",
+          "when": "webviewId == 'nxwright.pagePreview'",
+          "group": "2_clipboard@3"
+        },
+        {
+          "command": "nxwright.pasteHere",
+          "when": "webviewId == 'nxwright.pagePreview' && webviewSection == 'page'",
+          "group": "2_clipboard@4"
+        },
+        {
+          "command": "nxwright.pasteSpecial",
+          "when": "webviewId == 'nxwright.pagePreview'",
+          "group": "2_clipboard@5"
+        },
+        {
+          "command": "nxwright.duplicateComponent",
+          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "group": "2_clipboard@6"
+        },
+        {
+          "command": "nxwright.deleteComponent",
+          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "group": "3_delete@1"
+        },
+        {
+          "command": "nxwright.clearEvents",
+          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "group": "3_delete@2"
+        },
+        {
+          "submenu": "nxwright.align",
+          "when": "webviewId == 'nxwright.pagePreview' && several",
+          "group": "4_arrange@1"
+        },
+        {
+          "submenu": "nxwright.makeSameSize",
+          "when": "webviewId == 'nxwright.pagePreview' && several",
+          "group": "4_arrange@2"
+        },
+        {
+          "submenu": "nxwright.spaceEvenly",
+          "when": "webviewId == 'nxwright.pagePreview' && spaceable",
+          "group": "4_arrange@3"
+        },
+        {
+          "command": "nxwright.bringToFront",
+          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "group": "5_order@1"
+        },
+        {
+          "command": "nxwright.bringForward",
+          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "group": "5_order@2"
+        },
+        {
+          "command": "nxwright.sendBackward",
+          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "group": "5_order@3"
+        },
+        {
+          "command": "nxwright.sendToBack",
+          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "group": "5_order@4"
+        },
+        {
+          "command": "nxwright.lockComponents",
+          "when": "webviewId == 'nxwright.pagePreview' && unlocked",
+          "group": "6_lock@1"
+        },
+        {
+          "command": "nxwright.unlockComponents",
+          "when": "webviewId == 'nxwright.pagePreview' && locked",
+          "group": "6_lock@2"
+        },
+        {
+          "command": "nxwright.groupComponents",
+          "when": "webviewId == 'nxwright.pagePreview' && several",
+          "group": "7_group@1"
+        },
+        {
+          "command": "nxwright.ungroupComponents",
+          "when": "webviewId == 'nxwright.pagePreview' && grouped",
+          "group": "7_group@2"
+        }
+      ],
+      "nxwright.align": [
+        {
+          "command": "nxwright.alignLeft",
+          "group": "1_align@0"
+        },
+        {
+          "command": "nxwright.alignRight",
+          "group": "1_align@1"
+        },
+        {
+          "command": "nxwright.alignTop",
+          "group": "1_align@2"
+        },
+        {
+          "command": "nxwright.alignBottom",
+          "group": "1_align@3"
+        },
+        {
+          "command": "nxwright.alignCentresAcross",
+          "group": "2_align@4"
+        },
+        {
+          "command": "nxwright.alignCentresDown",
+          "group": "2_align@5"
+        }
+      ],
+      "nxwright.makeSameSize": [
+        {
+          "command": "nxwright.sameWidth"
+        },
+        {
+          "command": "nxwright.sameHeight"
+        },
+        {
+          "command": "nxwright.sameSize"
+        }
+      ],
+      "nxwright.spaceEvenly": [
+        {
+          "command": "nxwright.spaceAcross"
+        },
+        {
+          "command": "nxwright.spaceDown"
+        }
+      ]
+    },
+    "submenus": [
+      {
+        "id": "nxwright.align",
+        "label": "Align"
+      },
+      {
+        "id": "nxwright.makeSameSize",
+        "label": "Make the same size"
+      },
+      {
+        "id": "nxwright.spaceEvenly",
+        "label": "Space evenly"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "icons": "node scripts/write-icons.mjs",
+    "pretest": "tsc -p ./",
+    "test": "node --test \"test/*.test.mjs\"",
+    "test:host": "tsc -p ./ && node test/host/run.mjs"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1",
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "~1.82.0",
+    "@vscode/test-electron": "^3.1.0",
+    "jsdom": "^30.1.3",
+    "typescript": "^5.4.0"
+  }
+}

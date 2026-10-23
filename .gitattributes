@@ -1,0 +1,4 @@
+# Every text file is checked out with LF line endings, on every system, as
+# the tests compare written files byte for byte. Without this line, Git on
+# Windows checks them out with CRLF by default.
+* text=auto eol=lf

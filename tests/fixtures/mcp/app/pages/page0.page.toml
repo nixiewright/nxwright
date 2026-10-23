@@ -1,0 +1,41 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+
+[[component]]
+name = "t0"
+type = "text"
+x = 20
+y = 20
+w = 300
+h = 40
+txt = "Home"
+font = "NotoSans24"
+
+[[component]]
+name = "n0"
+type = "number"
+x = 20
+y = 80
+w = 120
+h = 40
+font = "NotoSans24"
+
+[[component]]
+name = "b0"
+type = "button"
+x = 20
+y = 400
+w = 160
+h = 60
+txt = "Next"
+font = "NotoSans24"
+
+[[component]]
+name = "tm0"
+type = "timer"
+tim = 100

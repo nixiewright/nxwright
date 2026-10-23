@@ -1,0 +1,48 @@
+[page]
+name = "page36"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "tA"
+type = "text"
+x = 10
+y = 10
+w = 200
+h = 80
+txt = "A"
+pco = 0
+txt_maxl = 20
+sta = 1
+bco = 65535
+
+[[component]]
+name = "tB"
+type = "text"
+x = 150
+y = 50
+w = 200
+h = 80
+txt = "B"
+pco = 0
+txt_maxl = 20
+sta = 1
+bco = 31
+
+[[component]]
+name = "tC"
+type = "text"
+x = 300
+y = 90
+w = 200
+h = 80
+txt = "C"
+pco = 0
+txt_maxl = 20
+sta = 1
+bco = 65504

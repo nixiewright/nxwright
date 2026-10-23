@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <defs>
+    <mask id="room">
+      <rect width="24" height="24" fill="white" stroke="none"/>
+      <rect x="0" y="17.75" width="10.25" height="6.25" fill="black" stroke="none"/>
+    </mask>
+  </defs>
+  <g mask="url(#room)">
+    <path d="M2.75 6.25v12.5a1 1 0 0 0 1 1h16.5a1 1 0 0 0 1-1v-10a1 1 0 0 0-1-1h-8l-2-2.5h-6.5a1 1 0 0 0-1 1z"/>
+    <rect x="7.25" y="10.75" width="9.5" height="6" rx="0.75"/>
+    <path d="M9.25 13h3"/>
+  </g>
+  <path stroke-width="1.25" d="M1.25 19.25V23M1.25 20.75a1.5 1.5 0 0 1 3 0V23M5.75 19.25l3 3.75M8.75 19.25l-3 3.75"/>
+</svg>

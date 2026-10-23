@@ -1,0 +1,62 @@
+[page]
+name = "page16"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "fbSmallFolder"
+type = "file-browser"
+x = 10
+y = 10
+w = 380
+h = 200
+dir = "sd0/nxprobe_agent-a_fb/"
+pic1 = 42
+pic2 = 43
+sta = 1
+bco = 65535
+
+[[component]]
+name = "fbSmallFile"
+type = "file-browser"
+x = 410
+y = 10
+w = 380
+h = 200
+dir = "sd0/nxprobe_agent-a_fb/"
+pic1 = 43
+pic2 = 42
+sta = 1
+bco = 65535
+
+[[component]]
+name = "fbOwnIcon"
+type = "file-browser"
+x = 10
+y = 230
+w = 380
+h = 200
+dir = "sd0/nxprobe_agent-a_fb/"
+pic1 = 42
+pic2 = 42
+vvs2 = "*.txt/43"
+sta = 1
+bco = 65535
+
+[[component]]
+name = "fbNoFileIcon"
+type = "file-browser"
+x = 410
+y = 230
+w = 380
+h = 200
+dir = "sd0/nxprobe_agent-a_fb/"
+pic1 = 42
+pic2 = 65535
+sta = 1
+bco = 65535

@@ -1,0 +1,149 @@
+[page]
+name = "codes"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+
+[[component]]
+name = "p1"
+type = "qr-code"
+x = 10
+y = 10
+w = 120
+h = 120
+dis = 4
+txt = "123abc"
+
+[[component]]
+name = "p2"
+type = "qr-code"
+x = 140
+y = 10
+w = 120
+h = 120
+dis = 4
+txt = "abcDEFGHIJKLMNOPQRSTUVWXYZxyz"
+
+[[component]]
+name = "p3"
+type = "qr-code"
+x = 270
+y = 10
+w = 120
+h = 120
+dis = 4
+txt = "go to WWW.EXAMPLE.COM/PATH now"
+
+[[component]]
+name = "p4"
+type = "qr-code"
+x = 400
+y = 10
+w = 120
+h = 120
+dis = 4
+txt = "44e5d8e023 8C/6"
+
+[[component]]
+name = "p5"
+type = "qr-code"
+x = 530
+y = 10
+w = 120
+h = 120
+dis = 4
+txt = "z318026d/824YYYYx-9Ydd"
+
+[[component]]
+name = "p6"
+type = "qr-code"
+x = 660
+y = 10
+w = 120
+h = 120
+dis = 4
+txt = "be2Fa33b72B0f3y2FbE8f3381D9f"
+
+[[component]]
+name = "p7"
+type = "qr-code"
+x = 10
+y = 150
+w = 120
+h = 120
+dis = 4
+txt = "ca-85y4dC2224-98"
+
+[[component]]
+name = "p8"
+type = "qr-code"
+x = 140
+y = 150
+w = 120
+h = 120
+dis = 4
+txt = "ey9fxfyzc8cz7z 2yYa31503Cfzd"
+
+[[component]]
+name = "p9"
+type = "qr-code"
+x = 270
+y = 150
+w = 120
+h = 120
+dis = 4
+txt = "bycab514d1-x:x10 103Y1B"
+
+[[component]]
+name = "p10"
+type = "qr-code"
+x = 400
+y = 150
+w = 120
+h = 120
+dis = 4
+txt = "ABCD1234efgh5678IJKL"
+
+[[component]]
+name = "long"
+type = "qr-code"
+x = 530
+y = 150
+w = 260
+h = 260
+dis = 2
+txt = "The quick brown fox jumps over the lazy dog 0123456789. The quick brown fox jumps over the lazy dog 0123456789. The quick brown fox jumps over the lazy dog 0123456789. The quick brown fox jumps over the lazy dog 0123456789. The quick brown fox jumps over the lazy dog 0123456789. The quick brown fox "
+txt_maxl = 300
+
+[[component]]
+name = "empty"
+type = "qr-code"
+x = 10
+y = 290
+w = 120
+h = 120
+dis = 4
+txt = ""
+
+[[component]]
+name = "tiny"
+type = "qr-code"
+x = 140
+y = 290
+w = 20
+h = 20
+dis = 0
+txt = "https://nextion.itead.cc"
+
+[[component]]
+name = "tl"
+type = "qr-code"
+x = 270
+y = 290
+w = 120
+h = 120
+dis = 4
+txt = "short"
+txt_maxl = 10

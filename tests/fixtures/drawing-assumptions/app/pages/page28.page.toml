@@ -1,0 +1,209 @@
+[page]
+name = "page28"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "tMid"
+type = "text"
+x = 10
+y = 10
+w = 220
+h = 110
+txt = "W\r\nWWWWW\r\nWW"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+xcen = 1
+ycen = 1
+
+[[component]]
+name = "tRight"
+type = "text"
+x = 250
+y = 10
+w = 220
+h = 110
+txt = "W\r\nWWWWW\r\nWW"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+xcen = 2
+ycen = 1
+
+[[component]]
+name = "tWrap60"
+type = "text"
+x = 10
+y = 140
+w = 60
+h = 110
+txt = "aaaa bbbb cccc dd"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+isbr = 1
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "tWrap70"
+type = "text"
+x = 110
+y = 140
+w = 70
+h = 110
+txt = "aaaa bbbb cccc dd"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+isbr = 1
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "tWrap80"
+type = "text"
+x = 210
+y = 140
+w = 80
+h = 110
+txt = "aaaa bbbb cccc dd"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+isbr = 1
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "tWrap90"
+type = "text"
+x = 310
+y = 140
+w = 90
+h = 110
+txt = "aaaa bbbb cccc dd"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+isbr = 1
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "tWrap100"
+type = "text"
+x = 410
+y = 140
+w = 100
+h = 110
+txt = "aaaa bbbb cccc dd"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+isbr = 1
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "tBorder00"
+type = "text"
+x = 10
+y = 280
+w = 150
+h = 80
+txt = "Text"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+style = 1
+borderw = 8
+borderc = 31
+xcen = 0
+ycen = 0
+
+[[component]]
+name = "tBorder20"
+type = "text"
+x = 170
+y = 280
+w = 150
+h = 80
+txt = "Text"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+style = 1
+borderw = 8
+borderc = 31
+xcen = 2
+ycen = 0
+
+[[component]]
+name = "tBorder02"
+type = "text"
+x = 330
+y = 280
+w = 150
+h = 80
+txt = "Text"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+style = 1
+borderw = 8
+borderc = 31
+xcen = 0
+ycen = 2
+
+[[component]]
+name = "tBorder22"
+type = "text"
+x = 490
+y = 280
+w = 150
+h = 80
+txt = "Text"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+style = 1
+borderw = 8
+borderc = 31
+xcen = 2
+ycen = 2
+
+[[component]]
+name = "tBorder11"
+type = "text"
+x = 650
+y = 280
+w = 150
+h = 80
+txt = "Text"
+sta = 1
+bco = 65535
+pco = 0
+txt_maxl = 40
+style = 1
+borderw = 8
+borderc = 31
+xcen = 1
+ycen = 1

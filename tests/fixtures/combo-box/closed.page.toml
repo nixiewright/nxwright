@@ -1,0 +1,153 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+bco = 33808
+
+[[component]]
+name = "c1"
+type = "combo-box"
+x = 10
+y = 10
+w = 140
+h = 42
+font = "NotoSans20"
+
+[[component]]
+name = "c2"
+type = "combo-box"
+x = 160
+y = 10
+dis = 0
+w = 140
+h = 42
+font = "NotoSans20"
+
+[[component]]
+name = "c3"
+type = "combo-box"
+x = 310
+y = 10
+dis = 100
+w = 140
+h = 42
+font = "NotoSans20"
+
+[[component]]
+name = "c4"
+type = "combo-box"
+x = 460
+y = 10
+up = 0
+w = 140
+h = 42
+font = "NotoSans20"
+
+[[component]]
+name = "c5"
+type = "combo-box"
+x = 610
+y = 10
+style = 1
+borderw = 3
+borderc = 63488
+w = 140
+h = 42
+font = "NotoSans20"
+
+[[component]]
+name = "c6"
+type = "combo-box"
+x = 10
+y = 80
+xcen = 0
+pco = 31
+bco = 65504
+pco3 = 63488
+w = 140
+h = 42
+font = "NotoSans20"
+
+[[component]]
+name = "c7"
+type = "combo-box"
+x = 160
+y = 80
+w = 140
+h = 70
+ycen = 0
+dis = 10
+font = "NotoSans20"
+
+[[component]]
+name = "c8"
+type = "combo-box"
+x = 310
+y = 80
+dir = "\u0000"
+w = 140
+h = 42
+font = "NotoSans20"
+
+[[component]]
+name = "c9"
+type = "combo-box"
+x = 460
+y = 80
+dir = "\u0002"
+w = 140
+h = 42
+font = "NotoSans20"
+
+[[component]]
+name = "c10"
+type = "combo-box"
+x = 610
+y = 80
+dir = "\u0003"
+w = 140
+h = 42
+font = "NotoSans20"
+
+[[component]]
+name = "c11"
+type = "combo-box"
+x = 10
+y = 170
+w = 60
+h = 30
+font = "NotoSans20"
+
+[[component]]
+name = "c12"
+type = "combo-box"
+x = 160
+y = 170
+w = 200
+h = 80
+dis = 40
+xcen = 2
+font = "NotoSans20"
+
+[[component]]
+name = "c13"
+type = "combo-box"
+x = 400
+y = 170
+style = 2
+w = 140
+h = 42
+font = "NotoSans20"
+
+[[component]]
+name = "c14"
+type = "combo-box"
+x = 560
+y = 170
+style = 3
+w = 140
+h = 42
+font = "NotoSans20"

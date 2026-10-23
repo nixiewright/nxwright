@@ -1,0 +1,499 @@
+[page]
+name = "widgets"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#808080"
+
+[[component]]
+name = "n1"
+type = "number"
+x = 8
+y = 8
+w = 90
+h = 34
+val = 12345
+
+[[component]]
+name = "n2"
+type = "number"
+x = 106
+y = 8
+w = 90
+h = 34
+val = -42
+
+[[component]]
+name = "n3"
+type = "number"
+x = 204
+y = 8
+w = 90
+h = 34
+val = 1234567
+format = 1
+
+[[component]]
+name = "n4"
+type = "number"
+x = 302
+y = 8
+w = 90
+h = 34
+val = 255
+format = 2
+
+[[component]]
+name = "n5"
+type = "number"
+x = 400
+y = 8
+w = 90
+h = 34
+val = 42
+lenth = 5
+
+[[component]]
+name = "n6"
+type = "number"
+x = 498
+y = 8
+w = 90
+h = 34
+val = 1234567
+lenth = 3
+
+[[component]]
+name = "n7"
+type = "number"
+x = 596
+y = 8
+w = 90
+h = 34
+val = -1234567
+format = 1
+
+[[component]]
+name = "n8"
+type = "number"
+x = 694
+y = 8
+w = 100
+h = 34
+val = -1
+format = 2
+
+[[component]]
+name = "f1"
+type = "xfloat"
+x = 8
+y = 50
+w = 90
+h = 34
+val = 12345
+vvs0 = 2
+vvs1 = 2
+
+[[component]]
+name = "f2"
+type = "xfloat"
+x = 106
+y = 50
+w = 90
+h = 34
+val = 12345
+vvs0 = 0
+vvs1 = 2
+
+[[component]]
+name = "f3"
+type = "xfloat"
+x = 204
+y = 50
+w = 90
+h = 34
+val = 5
+vvs0 = 3
+vvs1 = 3
+
+[[component]]
+name = "f4"
+type = "xfloat"
+x = 302
+y = 50
+w = 90
+h = 34
+val = -12345
+vvs0 = 2
+vvs1 = 2
+
+[[component]]
+name = "f5"
+type = "xfloat"
+x = 400
+y = 50
+w = 90
+h = 34
+val = 12345
+vvs0 = 2
+vvs1 = 0
+
+[[component]]
+name = "f6"
+type = "xfloat"
+x = 498
+y = 50
+w = 90
+h = 34
+val = 12345
+vvs0 = 0
+vvs1 = 0
+
+[[component]]
+name = "f7"
+type = "xfloat"
+x = 596
+y = 50
+w = 90
+h = 34
+val = 1234567
+vvs0 = 3
+vvs1 = 1
+
+[[component]]
+name = "f8"
+type = "xfloat"
+x = 694
+y = 50
+w = 90
+h = 34
+val = -5
+vvs0 = 1
+vvs1 = 2
+
+[[component]]
+name = "c1"
+type = "checkbox"
+x = 8
+y = 96
+w = 40
+h = 40
+val = 1
+
+[[component]]
+name = "c2"
+type = "checkbox"
+x = 56
+y = 96
+w = 40
+h = 40
+val = 0
+
+[[component]]
+name = "c3"
+type = "checkbox"
+x = 104
+y = 96
+w = 40
+h = 40
+val = 1
+style = 0
+
+[[component]]
+name = "c4"
+type = "checkbox"
+x = 152
+y = 96
+w = 40
+h = 40
+val = 1
+style = 1
+borderw = 4
+borderc = "#ff0000"
+
+[[component]]
+name = "c5"
+type = "checkbox"
+x = 200
+y = 96
+w = 40
+h = 40
+val = 1
+style = 3
+
+[[component]]
+name = "c6"
+type = "checkbox"
+x = 248
+y = 96
+w = 80
+h = 40
+val = 1
+
+[[component]]
+name = "c7"
+type = "checkbox"
+x = 336
+y = 96
+w = 20
+h = 20
+val = 1
+
+[[component]]
+name = "c8"
+type = "checkbox"
+x = 364
+y = 96
+w = 40
+h = 40
+val = 1
+pco = "#0000ff"
+bco = "#ffff00"
+
+[[component]]
+name = "c9"
+type = "checkbox"
+x = 412
+y = 96
+w = 40
+h = 40
+val = 0
+style = 1
+borderw = 4
+borderc = "#ff0000"
+
+[[component]]
+name = "c10"
+type = "checkbox"
+x = 460
+y = 96
+w = 100
+h = 100
+val = 1
+
+[[component]]
+name = "r1"
+type = "radio"
+x = 8
+y = 206
+w = 40
+h = 40
+val = 1
+
+[[component]]
+name = "r2"
+type = "radio"
+x = 56
+y = 206
+w = 40
+h = 40
+val = 0
+
+[[component]]
+name = "r3"
+type = "radio"
+x = 104
+y = 206
+w = 20
+h = 20
+val = 1
+
+[[component]]
+name = "r4"
+type = "radio"
+x = 132
+y = 206
+w = 80
+h = 40
+val = 1
+
+[[component]]
+name = "r5"
+type = "radio"
+x = 220
+y = 206
+w = 40
+h = 40
+val = 1
+pco = "#ff0000"
+bco = "#ffff00"
+
+[[component]]
+name = "r6"
+type = "radio"
+x = 268
+y = 206
+w = 100
+h = 100
+val = 1
+
+[[component]]
+name = "r7"
+type = "radio"
+x = 376
+y = 206
+w = 100
+h = 100
+val = 0
+
+[[component]]
+name = "d1"
+type = "dual-state-button"
+x = 8
+y = 316
+w = 90
+h = 44
+val = 0
+
+[[component]]
+name = "d2"
+type = "dual-state-button"
+x = 106
+y = 316
+w = 90
+h = 44
+val = 1
+
+[[component]]
+name = "d3"
+type = "dual-state-button"
+x = 204
+y = 316
+w = 90
+h = 44
+val = 0
+style = 1
+
+[[component]]
+name = "d4"
+type = "dual-state-button"
+x = 302
+y = 316
+w = 90
+h = 44
+val = 1
+style = 1
+
+[[component]]
+name = "d5"
+type = "dual-state-button"
+x = 400
+y = 316
+w = 90
+h = 44
+val = 1
+style = 0
+
+[[component]]
+name = "d6"
+type = "dual-state-button"
+x = 498
+y = 316
+w = 90
+h = 44
+val = 0
+style = 2
+
+[[component]]
+name = "d7"
+type = "dual-state-button"
+x = 596
+y = 316
+w = 90
+h = 44
+val = 1
+style = 3
+
+[[component]]
+name = "d8"
+type = "dual-state-button"
+x = 694
+y = 316
+w = 90
+h = 44
+val = 1
+style = 4
+
+[[component]]
+name = "s1"
+type = "switch"
+x = 8
+y = 372
+w = 80
+h = 30
+val = 0
+
+[[component]]
+name = "s2"
+type = "switch"
+x = 96
+y = 372
+w = 80
+h = 30
+val = 1
+
+[[component]]
+name = "s3"
+type = "switch"
+x = 184
+y = 372
+w = 80
+h = 30
+val = 1
+dis = 0
+
+[[component]]
+name = "s4"
+type = "switch"
+x = 272
+y = 372
+w = 80
+h = 30
+val = 1
+dis = 50
+
+[[component]]
+name = "s5"
+type = "switch"
+x = 360
+y = 372
+w = 30
+h = 80
+val = 0
+dez = 1
+
+[[component]]
+name = "s6"
+type = "switch"
+x = 398
+y = 372
+w = 30
+h = 80
+val = 1
+dez = 1
+
+[[component]]
+name = "s7"
+type = "switch"
+x = 436
+y = 372
+w = 140
+h = 44
+val = 1
+
+[[component]]
+name = "s8"
+type = "switch"
+x = 584
+y = 372
+w = 140
+h = 44
+val = 0
+
+[[component]]
+name = "va"
+type = "variable"
+val = -5

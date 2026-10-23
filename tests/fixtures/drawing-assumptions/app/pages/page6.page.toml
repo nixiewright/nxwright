@@ -1,0 +1,98 @@
+[page]
+name = "page6"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "gs0"
+type = "gauge"
+x = 20
+y = 20
+w = 140
+h = 140
+sta = 0
+picc = 1
+pic = 1
+bco = 65535
+val = 45
+pco = 63488
+pco2 = 31
+hig = 16
+
+[[component]]
+name = "gs1"
+type = "gauge"
+x = 170
+y = 20
+w = 140
+h = 140
+sta = 1
+picc = 1
+pic = 1
+bco = 65535
+val = 45
+pco = 63488
+pco2 = 31
+hig = 16
+
+[[component]]
+name = "gs2"
+type = "gauge"
+x = 320
+y = 20
+w = 140
+h = 140
+sta = 2
+picc = 1
+pic = 1
+bco = 65535
+val = 45
+pco = 63488
+pco2 = 31
+hig = 16
+
+[[component]]
+name = "gs3"
+type = "gauge"
+x = 470
+y = 20
+w = 140
+h = 140
+sta = 3
+picc = 1
+pic = 1
+bco = 65535
+val = 45
+pco = 63488
+pco2 = 31
+hig = 16
+
+[[component]]
+name = "wave"
+type = "waveform"
+x = 480
+y = 180
+w = 300
+h = 140
+sta = 1
+bco = 0
+gdw = 0
+gdh = 0
+dis = 100
+ch = 2
+dir = "\u0000"
+pco0 = 2016
+pco1 = 63519
+pco2 = 65504
+pco3 = 2047
+
+[[component]]
+name = "n"
+type = "variable"
+sta = 0
+val = 0

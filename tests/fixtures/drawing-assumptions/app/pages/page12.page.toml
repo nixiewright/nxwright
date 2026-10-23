@@ -1,0 +1,141 @@
+[page]
+name = "page12"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "ql140"
+type = "qr-code"
+x = 10
+y = 10
+w = 150
+h = 150
+sta = 1
+pic = 10
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "ql141"
+type = "qr-code"
+x = 165
+y = 10
+w = 150
+h = 150
+sta = 1
+pic = 11
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "qt140"
+type = "qr-code"
+x = 320
+y = 10
+w = 150
+h = 150
+sta = 1
+pic = 12
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "qt141"
+type = "qr-code"
+x = 475
+y = 10
+w = 150
+h = 150
+sta = 1
+pic = 13
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "ql100"
+type = "qr-code"
+x = 630
+y = 10
+w = 150
+h = 150
+sta = 1
+pic = 4
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "ql110"
+type = "qr-code"
+x = 10
+y = 170
+w = 150
+h = 150
+sta = 1
+pic = 14
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "ql120"
+type = "qr-code"
+x = 165
+y = 170
+w = 150
+h = 150
+sta = 1
+pic = 15
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "ql130"
+type = "qr-code"
+x = 320
+y = 170
+w = 150
+h = 150
+sta = 1
+pic = 16
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "qa100x56"
+type = "qr-code"
+x = 475
+y = 170
+w = 150
+h = 150
+sta = 1
+pic = 17
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "qa70x80"
+type = "qr-code"
+x = 630
+y = 170
+w = 150
+h = 150
+sta = 1
+pic = 18
+txt = "hello"
+dis = 4
+
+[[component]]
+name = "qa100x50"
+type = "qr-code"
+x = 10
+y = 330
+w = 150
+h = 150
+sta = 1
+pic = 19
+txt = "hello"
+dis = 4

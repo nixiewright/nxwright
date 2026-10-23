@@ -1,0 +1,169 @@
+[page]
+name = "page1"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = 65535
+
+[[component]]
+name = "d39"
+type = "data-record"
+x = 0
+y = 4
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "first record^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d39.data"
+
+[[component]]
+name = "d40"
+type = "data-record"
+x = 0
+y = 40
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "first record^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d40.data"
+
+[[component]]
+name = "d41"
+type = "data-record"
+x = 0
+y = 76
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "first record^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d41.data"
+
+[[component]]
+name = "d42"
+type = "data-record"
+x = 0
+y = 112
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "alphabetical^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d42.data"
+
+[[component]]
+name = "d43"
+type = "data-record"
+x = 0
+y = 148
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "alphabetical^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d43.data"
+
+[[component]]
+name = "d44"
+type = "data-record"
+x = 0
+y = 184
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "alphabetical^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d44.data"
+
+[[component]]
+name = "d45"
+type = "data-record"
+x = 0
+y = 220
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "alphabetical^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d45.data"
+
+[[component]]
+name = "d46"
+type = "data-record"
+x = 0
+y = 256
+w = 200
+h = 34
+format = "160^400"
+dez = 2
+dir = "alphabetical^z"
+mode = 1
+xcen = 1
+gdh = 1
+gdc = 63488
+bco = 65535
+bco1 = 65535
+pco1 = 0
+pco = 0
+path = "sd0/nxprobe_agent-c_d46.data"

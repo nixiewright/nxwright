@@ -1,0 +1,70 @@
+include "lib/frame.nx"
+
+// The chart's scale: 0 at 10 degrees, a pixel per tenth
+// of a degree, 200 at 30 degrees. Each quarter hour is 7 pixels wide.
+const CHART_BOTTOM = 1000
+const CHART_TOP = 200
+const QUARTER_PIXELS = 7
+// The room is simulated in steps of 5 minutes, three to a quarter hour.
+const STEP_MINUTES = 5
+
+// Before the page shows: the scale's labels, in the chosen unit.
+on day.load:
+  showClock()
+  label10.txt = wholeDegreesText(1000)
+  label15.txt = wholeDegreesText(1500)
+  label20.txt = wholeDegreesText(2000)
+  label25.txt = wholeDegreesText(2500)
+  label30.txt = wholeDegreesText(3000)
+
+// Once the page shows: the chart, which a waveform can only draw then.
+on day.loadend:
+  drawDay()
+
+// Each second, a simulated minute passes.
+on tick.timer:
+  passMinute()
+  showClock()
+
+// A day under the schedule, from midnight, in the current mode: the target
+// the schedule sets (channel 0) and the room it gives (channel 1). The room
+// starts the day at the Sleep target, with nothing running. The chart's new
+// points enter at its right (its `dir` is 1), so midnight's, added first,
+// ends at the left.
+function drawDay():
+  var current = sleepTarget
+  var state = RUN_IDLE
+  var lowest = current
+  var highest = current
+  var minute = 0
+  var goal = 0
+  var step = 0
+  var goalY = 0
+  var roomY = 0
+  var pixel = 0
+  cle chart.id,255
+  while (minute < DAY_MINUTES) {
+    goal = scheduledTarget(minute)
+    for (step = 0; step < 15 / STEP_MINUTES; step++) {
+      state = nextRunning(current, goal, mode, state)
+      current = roomAfter(current, mode, state, STEP_MINUTES)
+    }
+    if (current < lowest) {
+      lowest = current
+    }
+    if (current > highest) {
+      highest = current
+    }
+    goalY = chartY(goal)
+    roomY = chartY(current)
+    for (pixel = 0; pixel < QUARTER_PIXELS; pixel++) {
+      add chart.id,0,goalY
+      add chart.id,1,roomY
+    }
+    minute += 15
+  }
+  stats.txt = "Low " + temperatureText(lowest) + "    High " + temperatureText(highest)
+
+// A temperature's height on the chart, kept on the chart.
+function chartY(hundredths: number) -> number:
+  return clamp((hundredths - CHART_BOTTOM) / 10, 0, CHART_TOP)

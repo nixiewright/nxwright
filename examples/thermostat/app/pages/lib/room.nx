@@ -1,0 +1,50 @@
+// The simulated room and the system that heats or cools it.
+include "schedule.nx"
+
+// One simulated minute: the target follows the schedule when asked to, the
+// system decides whether to run, and the room changes.
+function passMinute():
+  if (following == 1) {
+    target = scheduledTarget(minutesNow())
+  }
+  running = nextRunning(room, target, mode, running)
+  room = roomAfter(room, mode, running, 1)
+
+// What the system does next. Heating starts once the room is DEADBAND below
+// the target and runs until it reaches it; cooling is the mirror image. The
+// gap keeps the system from starting and stopping every minute.
+function nextRunning(current: number, goal: number, chosenMode: number, previous: number) -> number:
+  var next = RUN_IDLE
+  switch (chosenMode) {
+    case MODE_HEAT:
+      if (current <= goal - DEADBAND || previous == RUN_HEATING && current < goal) {
+        next = RUN_HEATING
+      }
+      break
+    case MODE_COOL:
+      if (current >= goal + DEADBAND || previous == RUN_COOLING && current > goal) {
+        next = RUN_COOLING
+      }
+      break
+  }
+  return next
+
+// The room after `minutes`: heat leaks towards the outdoors, and the system
+// adds or removes its share. Cooling is chosen on a hot day, so its outdoors
+// is hot; the other modes have a cold one.
+function roomAfter(current: number, chosenMode: number, state: number, minutes: number) -> number:
+  var outdoor = OUTDOOR_COLD
+  if (chosenMode == MODE_COOL) {
+    outdoor = OUTDOOR_HOT
+  }
+  var next = current + (outdoor - current) * minutes / LEAK_MINUTES
+  if (state == RUN_HEATING) {
+    next += HEAT_RATE * minutes
+  } else if (state == RUN_COOLING) {
+    next -= COOL_RATE * minutes
+  }
+  return next
+
+// The time now, in minutes after midnight, from the screen's clock.
+function minutesNow() -> number:
+  return rtc3 * 60 + rtc4

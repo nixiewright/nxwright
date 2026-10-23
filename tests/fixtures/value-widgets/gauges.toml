@@ -1,0 +1,182 @@
+[page]
+name = "gauges"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 1
+bco = "#808080"
+
+[[component]]
+name = "g1"
+type = "gauge"
+x = 5
+y = 5
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+
+[[component]]
+name = "g2"
+type = "gauge"
+x = 163
+y = 5
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 45
+
+[[component]]
+name = "g3"
+type = "gauge"
+x = 321
+y = 5
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 90
+
+[[component]]
+name = "g4"
+type = "gauge"
+x = 479
+y = 5
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 180
+
+[[component]]
+name = "g5"
+type = "gauge"
+x = 637
+y = 5
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 270
+
+[[component]]
+name = "g6"
+type = "gauge"
+x = 5
+y = 163
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 30
+up = 40
+
+[[component]]
+name = "g7"
+type = "gauge"
+x = 163
+y = 163
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 30
+down = 0
+
+[[component]]
+name = "g8"
+type = "gauge"
+x = 321
+y = 163
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 30
+hig = 0
+
+[[component]]
+name = "g9"
+type = "gauge"
+x = 479
+y = 163
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 30
+vvs0 = 8
+vvs1 = 2
+
+[[component]]
+name = "g10"
+type = "gauge"
+x = 637
+y = 163
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 30
+left = 20
+
+[[component]]
+name = "g11"
+type = "gauge"
+x = 5
+y = 321
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 30
+format = 90
+
+[[component]]
+name = "g12"
+type = "gauge"
+x = 163
+y = 321
+sta = 3
+bco = "#ffffff"
+w = 150
+h = 150
+val = 30
+
+[[component]]
+name = "g13"
+type = "gauge"
+x = 321
+y = 321
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 30
+hig = 60
+pco2 = "#0000ff"
+
+[[component]]
+name = "g14"
+type = "gauge"
+x = 479
+y = 321
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 150
+val = 360
+
+[[component]]
+name = "g15"
+type = "gauge"
+x = 637
+y = 321
+sta = 1
+bco = "#ffffff"
+w = 150
+h = 100
+val = 30

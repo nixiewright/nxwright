@@ -1,0 +1,14 @@
+format = 1
+name = "mcp test"
+language = "nextion"
+screen = "NX8048P050"
+rotation = 0
+encoding = "iso-8859-1"
+pages = [
+    "page0",
+    "second",
+]
+pictures = []
+fonts = [
+    "NotoSans24",
+]

@@ -1,0 +1,21 @@
+dump format        3
+file               objects.HMI
+size               7399713 bytes
+directory entries  12
+live blocks        7
+stale entries      5
+pages              1
+images             2
+fonts              0
+animations         0
+videos             0
+sounds             0
+
+manifest
+  header_size      96
+  table_offset     96
+  unknown_header   0144210302034f00a7ba27da0000000000000000020000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000
+  resources        3
+    i    0.i
+    i    1.i
+    pa   0.pa

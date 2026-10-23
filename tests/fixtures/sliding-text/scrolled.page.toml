@@ -1,0 +1,221 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+
+[[component]]
+name = "sa"
+type = "sliding-text"
+font = "NotoSans20"
+x = 10
+y = 10
+w = 180
+h = 150
+left = 2
+bco = 65535
+
+[[component]]
+name = "samaxvaly"
+type = "text"
+x = 10
+y = 165
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "savaly"
+type = "text"
+x = 10
+y = 195
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "sb"
+type = "sliding-text"
+font = "NotoSans20"
+x = 210
+y = 10
+w = 180
+h = 150
+left = 1
+bco = 65504
+
+[[component]]
+name = "sbmaxvaly"
+type = "text"
+x = 210
+y = 165
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "sbvaly"
+type = "text"
+x = 210
+y = 195
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "sc"
+type = "sliding-text"
+font = "NotoSans20"
+x = 410
+y = 10
+w = 180
+h = 150
+left = 2
+bco = 65504
+style = 1
+borderw = 2
+
+[[component]]
+name = "scmaxvaly"
+type = "text"
+x = 410
+y = 165
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "scvaly"
+type = "text"
+x = 410
+y = 195
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "sd"
+type = "sliding-text"
+font = "NotoSans20"
+x = 610
+y = 10
+w = 180
+h = 150
+left = 2
+bco = 65504
+ch = 0
+
+[[component]]
+name = "sdmaxvaly"
+type = "text"
+x = 610
+y = 165
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "sdvaly"
+type = "text"
+x = 610
+y = 195
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "se"
+type = "sliding-text"
+font = "NotoSans20"
+x = 10
+y = 240
+w = 380
+h = 100
+left = 2
+bco = 65504
+txt = "The quick brown fox jumps over the lazy dog, again and again and again."
+
+[[component]]
+name = "semaxvaly"
+type = "text"
+x = 410
+y = 240
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "sevaly"
+type = "text"
+x = 410
+y = 270
+w = 170
+h = 28
+font = "NotoSans20"
+txt = ""
+txt_maxl = 12
+xcen = 0
+
+[[component]]
+name = "b10"
+type = "button"
+x = 10
+y = 410
+w = 140
+h = 60
+font = "NotoSans20"
+txt = "val_y 10"
+
+[[component]]
+name = "b25"
+type = "button"
+x = 160
+y = 410
+w = 140
+h = 60
+font = "NotoSans20"
+txt = "val_y 25"
+
+[[component]]
+name = "b1000"
+type = "button"
+x = 310
+y = 410
+w = 140
+h = 60
+font = "NotoSans20"
+txt = "val_y 1000"
+
+[[component]]
+name = "tm0"
+type = "timer"
+tim = 50

@@ -1,0 +1,111 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+bco = 33808
+
+[[component]]
+name = "ua"
+type = "button"
+x = 300
+y = 180
+w = 140
+h = 40
+txt = "ua"
+font = "NotoSans20"
+
+[[component]]
+name = "cb"
+type = "combo-box"
+x = 300
+y = 20
+w = 140
+h = 42
+font = "NotoSans20"
+
+[[component]]
+name = "ub"
+type = "button"
+x = 300
+y = 230
+w = 140
+h = 40
+txt = "ub"
+font = "NotoSans20"
+
+[[component]]
+name = "code"
+type = "button"
+x = 600
+y = 20
+w = 150
+h = 50
+txt = "val=5"
+font = "NotoSans20"
+
+[[component]]
+name = "tval"
+type = "text"
+x = 20
+y = 20
+w = 150
+h = 30
+txt = ""
+txt_maxl = 40
+xcen = 0
+font = "NotoSans20"
+
+[[component]]
+name = "tdown"
+type = "text"
+x = 20
+y = 60
+w = 150
+h = 30
+txt = ""
+txt_maxl = 40
+xcen = 0
+font = "NotoSans20"
+
+[[component]]
+name = "ttxt"
+type = "text"
+x = 20
+y = 100
+w = 150
+h = 30
+txt = ""
+txt_maxl = 40
+xcen = 0
+font = "NotoSans20"
+
+[[component]]
+name = "log"
+type = "text"
+x = 20
+y = 400
+w = 760
+h = 40
+txt = ""
+txt_maxl = 200
+xcen = 0
+font = "NotoSans20"
+
+[[component]]
+name = "tm0"
+type = "timer"
+tim = 50
+
+[[component]]
+name = "tmp"
+type = "text"
+x = 600
+y = 300
+w = 100
+h = 30
+txt = ""
+txt_maxl = 10
+font = "NotoSans20"

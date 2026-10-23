@@ -1,0 +1,59 @@
+[page]
+name = "page31"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = 0
+
+[[component]]
+name = "tUnder"
+type = "text"
+x = 10
+y = 10
+w = 200
+h = 80
+txt = "under"
+pco = 0
+txt_maxl = 20
+sta = 1
+bco = 65535
+
+[[component]]
+name = "tOver"
+type = "text"
+x = 110
+y = 50
+w = 200
+h = 80
+txt = "over"
+pco = 0
+txt_maxl = 20
+sta = 3
+
+[[component]]
+name = "tMove"
+type = "text"
+x = 400
+y = 10
+w = 150
+h = 60
+txt = "move"
+pco = 0
+txt_maxl = 20
+sta = 1
+bco = 65535
+
+[[component]]
+name = "tAlone"
+type = "text"
+x = 400
+y = 200
+w = 200
+h = 80
+txt = "alone"
+pco = 0
+txt_maxl = 20
+sta = 3
