@@ -269,12 +269,19 @@ def crash_dialog_shown(pid: int, seconds: float) -> bool:
     shown window of its, with Continue and Quit buttons. The buttons' texts
     are read through WM_GETTEXT, which takes milliseconds, where reading them
     through UI Automation took a second or two. .NET writes them with their
-    & marks, "&Continue", which are left out. Raises NotAnswered for a button
-    that does not answer within `seconds`."""
+    & marks, "&Continue", which are left out.
+
+    The dialog runs a message loop of its own, so its buttons answer. A
+    window whose buttons do not answer within `seconds`, as when the Editor
+    is busy, is not the dialog, and the others are looked at."""
     for window in shown_windows(pid):
-        if {"Continue", "Quit"} <= {control_text(child, seconds).replace("&", "")
-                                    for child in _inner_windows(window)
-                                    if _BUTTON in class_name(child).upper()}:
+        buttons = [child for child in _inner_windows(window)
+                   if _BUTTON in class_name(child).upper()]
+        try:
+            texts = {control_text(button, seconds).replace("&", "") for button in buttons}
+        except NotAnswered:
+            continue
+        if {"Continue", "Quit"} <= texts:
             return True
     return False
 

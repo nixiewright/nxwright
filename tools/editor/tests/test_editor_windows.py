@@ -10,9 +10,11 @@ from pathlib import Path
 import unittest
 from unittest import mock
 
-from tools.editor.editor_windows import (DIALOG_CLASS, PROGRESS_FORM, CompileWatch, class_name,
-                                         compile_ended, compiled_file_size, control_text,
-                                         crash_dialog_shown, empty_control, explorer_windows_on,
+from tools.editor import editor_windows
+from tools.editor.editor_windows import (DIALOG_CLASS, PROGRESS_FORM, CompileWatch, NotAnswered,
+                                         class_name, compile_ended, compiled_file_size,
+                                         control_text, crash_dialog_shown, empty_control,
+                                         explorer_windows_on,
                                          inner_window, is_locked_listing, is_save_question,
                                          is_work_copy, listed_page, on_a_screen,
                                          rich_edit_texts, shown_project, shown_windows,
@@ -262,6 +264,25 @@ class CrashDialogTest(WindowsTestCase):
         self.create("STATIC", "Continue", _WS_CHILD, labels)
         self.create("STATIC", "Quit", _WS_CHILD, labels)
         self.assertFalse(crash_dialog_shown(os.getpid(), 5))
+
+    def test_a_window_that_does_not_answer_is_not_it(self):
+        # The dialog runs a message loop of its own, so its buttons answer.
+        # Here the Editor is busy, as just after it wrote a TFT file.
+        busy = self.create("STATIC", "busy", _WS_POPUP | _WS_VISIBLE)
+        busy_buttons = {self.create("BUTTON", "&Continue", _WS_CHILD, busy),
+                        self.create("BUTTON", "&Quit", _WS_CHILD, busy)}
+        answer = editor_windows.control_text
+
+        def control_text(control, seconds):
+            if control in busy_buttons:
+                raise NotAnswered("a control did not answer within %d s" % seconds)
+            return answer(control, seconds)
+        with mock.patch.object(editor_windows, "control_text", control_text):
+            self.assertFalse(crash_dialog_shown(os.getpid(), 5))
+            dialog = self.create("STATIC", "Microsoft .NET Framework", _WS_POPUP | _WS_VISIBLE)
+            self.create("BUTTON", "&Continue", _WS_CHILD, dialog)
+            self.create("BUTTON", "&Quit", _WS_CHILD, dialog)
+            self.assertTrue(crash_dialog_shown(os.getpid(), 5))
 
 
 class RichEditTextTest(WindowsTestCase):

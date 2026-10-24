@@ -114,6 +114,10 @@ _ATTRIBUTE_PANEL = ("dockSite2", "bar4", "panelDockContainer6", "objatt2")
 _PAGE_PANEL = ("dockSite2", "bar8", "panelDockContainer2", "pageadmin1")
 # How long a wait pauses between two looks, in seconds.
 _LOOK_PAUSE = 0.1
+# How long the crash check waits for a button to answer, in seconds. The
+# crash dialog's buttons answer at once, so a busy Editor costs this at most
+# for each of its windows that does not answer, on each look that checks.
+_CRASH_CHECK_WAIT = 1
 # The most private memory the dedicated Editor may hold as `open` starts, in
 # bytes. The Editor is a 32-bit program, and keeps the memory each project
 # takes until it ends: one ran out of memory at 1369 MB. A project of 144
@@ -145,6 +149,11 @@ _TFT_MENU_ITEM = "TFT file output"
 _TFT_FOLDER_BOX = "1001"
 _TFT_OUTPUT_BUTTON = "buttonX2"
 _TFT_FILE_NAME = "label1"
+# How long the TFT output window may take to show once its menu item is
+# pressed, in seconds, before the press is taken for lost; and how many times
+# the item is pressed in all (_open_tft_output).
+_PRESS_SHOWS = 5
+_TFT_PRESSES = 3
 # How long the Editor may take to open an Explorer window on the folder once
 # it has written the TFT file, in seconds. It took about 2 s.
 _EXPLORER_WAIT = 10
@@ -428,16 +437,15 @@ class DedicatedEditor:
         the main window is enabled, the dialog cannot show, and is not
         looked for. Windows' own window for a program that has stopped
         working, which a crash outside .NET's handling shows, does not
-        disable the main window, and is not looked for either."""
+        disable the main window, and is not looked for either. The dialog
+        runs a message loop of its own, so a window whose buttons do not
+        answer within _CRASH_CHECK_WAIT, as when the Editor is busy, is not
+        it, and is passed over."""
         if self.main_handle is None:
             self.main_window()
         if win32gui.IsWindowEnabled(self.main_handle):
             return
-        try:
-            shown = crash_dialog_shown(self.recorded.pid, DIALOG_WAIT)
-        except NotAnswered as error:
-            raise EditorError("the Editor did not answer a window message: %s" % error) from None
-        if shown:
+        if crash_dialog_shown(self.recorded.pid, _CRASH_CHECK_WAIT):
             raise EditorError("the Editor shows its unhandled exception dialog; it is "
                               "left open, for whoever reads this to see")
 
@@ -1525,12 +1533,50 @@ def write_tft(editor: DedicatedEditor, folder: Path) -> tuple:
 def _open_tft_output(editor: DedicatedEditor, main):
     """Shows the window of File > TFT file output, and returns it. The File
     menu lists its items only once open, so it is opened first. Its item is
-    pressed in the background, as the window it shows is modal."""
+    pressed in the background, as the window it shows is modal.
+
+    Just after `open`, while the Editor is still busy with the project, a
+    press of the item can be lost: the menu closes, and no window shows. So
+    when none shows within _PRESS_SHOWS while the main window stays enabled,
+    as no window of the Editor's is up, File and its item are pressed again,
+    _TFT_PRESSES times in all."""
     file_menu = _required(_only_match(editor.control(_MENU_BAR), "children", name="File",
                                       control_type="MenuItem"),
                           title="File", control_type="MenuItem")
     shown_before = set(shown_windows(editor.recorded.pid))
-    file_menu.invoke()
+
+    def form():
+        new = [handle for handle in shown_windows(editor.recorded.pid)
+               if handle not in shown_before]
+        return next(windows_matching(new, _wrapped, lambda window:
+                                     window.element_info.automation_id == TFT_OUTPUT_FORM),
+                    None)
+    for _ in range(_TFT_PRESSES):
+        pressing_failed = _press_tft_item(file_menu)
+        try:
+            return _wait_for(form, _PRESS_SHOWS, "the TFT output window")
+        except EditorError:
+            if not win32gui.IsWindowEnabled(editor.main_handle):
+                break       # a window of the Editor's is up: the press took
+    else:
+        raise EditorError("pressed File > %s %d times, and its window did not show%s"
+                          % (_TFT_MENU_ITEM, _TFT_PRESSES, "; pressing it failed: %r"
+                             % pressing_failed[0] if pressing_failed else ""))
+    try:
+        return _wait_for(form, DIALOG_WAIT, "the TFT output window")
+    except EditorError as error:
+        if pressing_failed:
+            raise EditorError("%s; pressing %s failed: %r"
+                              % (error, _TFT_MENU_ITEM, pressing_failed[0])) from None
+        raise
+
+
+def _press_tft_item(file_menu) -> list:
+    """Opens the File menu, unless it is open, and presses its TFT file
+    output item in the background. Returns the list where the press puts
+    what went wrong (_press_in_background)."""
+    if not file_menu.children():
+        file_menu.invoke()
     try:
         item = _wait_for(lambda: next((child for child in file_menu.children()
                                        if child.element_info.name == _TFT_MENU_ITEM), None),
@@ -1539,21 +1585,7 @@ def _open_tft_output(editor: DedicatedEditor, main):
         # Pressed again, the menu closes.
         file_menu.invoke()
         raise
-    pressing_failed = _press_in_background(item)
-
-    def form():
-        new = [handle for handle in shown_windows(editor.recorded.pid)
-               if handle not in shown_before]
-        return next(windows_matching(new, _wrapped, lambda window:
-                                     window.element_info.automation_id == TFT_OUTPUT_FORM),
-                    None)
-    try:
-        return _wait_for(form, DIALOG_WAIT, "the TFT output window")
-    except EditorError as error:
-        if pressing_failed:
-            raise EditorError("%s; pressing %s failed: %r"
-                              % (error, _TFT_MENU_ITEM, pressing_failed[0])) from None
-        raise
+    return _press_in_background(item)
 
 
 def _modified(file: Path):
