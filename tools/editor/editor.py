@@ -50,7 +50,7 @@ from pywinauto.application import ProcessNotFoundError  # noqa: E402
 from pywinauto.controls.uiawrapper import UIAWrapper  # noqa: E402
 from pywinauto.findwindows import ElementAmbiguousError, ElementNotFoundError  # noqa: E402
 from pywinauto.timings import TimeoutError as WaitTimeout  # noqa: E402
-from pywinauto.uia_defines import NoPatternInterfaceError  # noqa: E402
+from pywinauto.uia_defines import IUIA, NoPatternInterfaceError  # noqa: E402
 from pywinauto.uia_element_info import UIAElementInfo  # noqa: E402
 import pywintypes  # noqa: E402
 from _ctypes import COMError  # noqa: E402
@@ -73,9 +73,9 @@ from tools.editor.dedicated import (HOLD_MINUTES, MOST_HOLD_MINUTES, Busy,  # no
 from tools.editor.editor_windows import (DIALOG_CLASS, MESSAGE_FORM,  # noqa: E402
                                          PROGRESS_FORM, TFT_OUTPUT_FORM, CompileWatch,
                                          NotAnswered, class_name, compiled_file_size,
-                                         control_text, empty_control, explorer_windows_on,
-                                         is_locked_listing,
-                                         is_save_question, is_work_copy, listed_page, open_button,
+                                         control_text, crash_dialog_shown, empty_control,
+                                         explorer_windows_on, inner_window, is_locked_listing,
+                                         is_save_question, is_work_copy, listed_page,
                                          rich_edit_texts, shown_project, shown_windows,
                                          sole_window_with_id, where_raised, window_with_id,
                                          windows_matching, windows_over_simulator)
@@ -97,9 +97,23 @@ HELD = 3
 OPENING_WAIT = 60
 # How long a compile may take, in seconds. One of 250 pages took 4 s.
 COMPILING_WAIT = 120
-# The automation ID of the Output panel's rich edit control, where a compile
-# writes what it counted and what it refused.
-_OUTPUT_PANEL = "textbianyi"
+# Where the controls the tool finds lie: the automation IDs of the controls
+# from the main window down to each, one level at a time (_found). UI
+# Automation finds a control among another's children in about 0.1 s, where
+# a search of all the main window's descendants took 1.5 s. The main
+# toolbar's ID, gongju0, is the Event panel's toolbar's too, so only its path
+# tells the two apart, and it is never searched for by its ID alone.
+_TOOLBAR = ("dockSite7", "gongju0")
+# The menu bar. Its File menu lists its items only once it is open.
+_MENU_BAR = ("dockSite7", "bar5")
+# The Output panel's rich edit control, where a compile writes what it
+# counted and what it refused.
+_OUTPUT_PANEL = ("dockSite4", "bar3", "panelDockContainer7", "textbianyi")
+# The Attribute panel, and the Page panel.
+_ATTRIBUTE_PANEL = ("dockSite2", "bar4", "panelDockContainer6", "objatt2")
+_PAGE_PANEL = ("dockSite2", "bar8", "panelDockContainer2", "pageadmin1")
+# How long a wait pauses between two looks, in seconds.
+_LOOK_PAUSE = 0.1
 # The most private memory the dedicated Editor may hold as `open` starts, in
 # bytes. The Editor is a 32-bit program, and keeps the memory each project
 # takes until it ends: one ran out of memory at 1369 MB. A project of 144
@@ -120,13 +134,10 @@ _UNINSTALL_KEYS = (r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Unins
                    r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall")
 # A window's picture drawn as the screen shows it, DirectComposition included.
 _PW_RENDERFULLCONTENT = 2
-# The automation ID of a Windows file dialog's file name box.
-_FILE_NAME_BOX = "1148"
-# The automation ID of a Windows dialog's Cancel button.
-_CANCEL_BUTTON = "2"
-# The main window's menu bar, and its File menu's item that writes the
-# project's TFT file. The menu lists its items only once it is open.
-_MENU_BAR = "bar5"
+# The control IDs of a Windows file dialog's file name box, its Open button,
+# and its Cancel button (editor_windows.inner_window).
+_FILE_NAME_BOX, _OPEN_BUTTON, _CANCEL_BUTTON = 1148, 1, 2
+# The File menu's item that writes the project's TFT file.
 _TFT_MENU_ITEM = "TFT file output"
 # In the window that item shows (editor_windows.TFT_OUTPUT_FORM): the box of
 # the folder to write in, the Output button, and the label giving the file's
@@ -360,14 +371,8 @@ class DedicatedEditor:
         self.main_handle = None
         self._main_window = None
         self._component_list = None
-
-    def main_spec(self):
-        """The main window, as pywinauto finds it: the start of every path.
-        It is found by its handle, once main_window has found it: a second
-        window of its ID may show for a moment, which would make a search by
-        the ID find two."""
-        self.main_window()
-        return self.app.window(handle=self.main_handle)
+        # The controls found along their paths, by path (control).
+        self._controls = {}
 
     def main_window(self):
         """The main window's wrapper, once it alone shows its ID
@@ -384,12 +389,21 @@ class DedicatedEditor:
             self._main_window = self.app.window(handle=self.main_handle).wrapper_object()
         return self._main_window
 
+    def control(self, path: tuple, anywhere: bool = True):
+        """The control at the end of `path`, from the main window (_found).
+        It is found once per command, as the Editor keeps its panels and
+        toolbars for as long as it runs."""
+        if path not in self._controls:
+            self._controls[path] = _found(self.main_window(), path, anywhere)
+        return self._controls[path]
+
     def component_list(self):
         """The Attribute panel's component list. It is found once per
-        command: each search through the main window takes over a second."""
+        command."""
         if self._component_list is None:
-            self._component_list = self.main_spec().child_window(auto_id="objatt2").child_window(
-                auto_id="comboBox1").wrapper_object()
+            self._component_list = _required(_only_match(
+                self.control(_ATTRIBUTE_PANEL), "descendants", automation_id="comboBox1"),
+                auto_id="comboBox1")
         return self._component_list
 
     def stop_if_blocked(self, when: str):
@@ -407,21 +421,25 @@ class DedicatedEditor:
         raise EditorError("a window of the Editor's blocks its main window %s" % when)
 
     def stop_on_crash(self):
-        """Raises EditorError when the Editor shows its unhandled exception
-        dialog, a window with Continue and Quit buttons, which the user
-        should see and answer."""
-        main = self.main_window()
-        for window in [main, *main.children(), *self._top_windows()]:
-            names = {child.element_info.name for child in window.children()
-                     if child.element_info.control_type == "Button"}
-            if {"Continue", "Quit"} <= names:
-                raise EditorError("the Editor shows its unhandled exception dialog; it is "
-                                  "left open, for whoever reads this to see")
-
-    def _top_windows(self):
-        return [window for window in Desktop(backend="uia").windows()
-                if window.element_info.process_id == self.recorded.pid
-                and window.element_info.automation_id != _MAIN_ID]
+        """Raises EditorError when the Editor shows .NET's unhandled
+        exception dialog, a window with Continue and Quit buttons, which the
+        user should see and answer (editor_windows.crash_dialog_shown).
+        .NET shows that dialog modal, so it disables the main window: while
+        the main window is enabled, the dialog cannot show, and is not
+        looked for. Windows' own window for a program that has stopped
+        working, which a crash outside .NET's handling shows, does not
+        disable the main window, and is not looked for either."""
+        if self.main_handle is None:
+            self.main_window()
+        if win32gui.IsWindowEnabled(self.main_handle):
+            return
+        try:
+            shown = crash_dialog_shown(self.recorded.pid, DIALOG_WAIT)
+        except NotAnswered as error:
+            raise EditorError("the Editor did not answer a window message: %s" % error) from None
+        if shown:
+            raise EditorError("the Editor shows its unhandled exception dialog; it is "
+                              "left open, for whoever reads this to see")
 
 
 def close_if_full(folder: Path):
@@ -583,11 +601,8 @@ def open_project(editor: DedicatedEditor, folder: Path, project: Path) -> Path:
     pressing_failed = _press_in_background(_toolbar_button(editor, "Open"))
     dialog = _wait_for_file_dialog(main, unsaved, pressing_failed)
     try:
-        _control(dialog, "Edit", _FILE_NAME_BOX).set_edit_text(str(copy))
-        button = open_button(dialog)
-        if button is None:
-            raise ElementNotFoundError({"control_type": "SplitButton or Button", "auto_id": "1"})
-        button.invoke()
+        _file_dialog_control(dialog, "Edit", _FILE_NAME_BOX).set_edit_text(str(copy))
+        _file_dialog_control(dialog, "Button", _OPEN_BUTTON).invoke()
     except Exception:
         # Left up, the dialog this command showed would stop every later one.
         try:
@@ -628,7 +643,7 @@ def _wait_for_file_dialog(main, unsaved: bool, pressing_failed: list):
             else:
                 raise EditorError("the Editor asks %r: %s; it is left unanswered"
                                   % (form.element_info.name, _words_of(form)))
-        time.sleep(0.25)
+        time.sleep(_LOOK_PAUSE)
     raise EditorError("waited %d s for the file dialog%s" % (
         DIALOG_WAIT, "; pressing Open failed: %r" % pressing_failed[0]
         if pressing_failed else ""))
@@ -652,11 +667,16 @@ def _toolbar_button(editor: DedicatedEditor, name: str):
     toolbar's, and the component list's drop-down, which crashes the Editor
     when no project is open. And once one is, the Event panel holds a
     toolbar with the main toolbar's ID too, gongju0."""
-    button = editor.main_spec().child_window(auto_id="dockSite7").child_window(
-        auto_id="gongju0").child_window(title=name, control_type="Button")
-    if not button.exists(timeout=DIALOG_WAIT):
-        raise EditorError("the toolbar's %s button was not found" % name)
-    return button.wrapper_object()
+    def button():
+        try:
+            toolbar = editor.control(_TOOLBAR, anywhere=False)
+        except ElementNotFoundError:
+            return None         # not shown yet, as just after the Editor starts
+        return _only_match(toolbar, "children", name=name, control_type="Button")
+    try:
+        return _wait_for(button, DIALOG_WAIT, "the toolbar's %s button" % name)
+    except EditorError:
+        raise EditorError("the toolbar's %s button was not found" % name) from None
 
 
 def _press_in_background(button) -> list:
@@ -708,9 +728,11 @@ def _opened(editor: DedicatedEditor, copy: Path) -> bool:
     for form in forms:
         raise EditorError("the Editor asks %r: %s; it is left unanswered"
                           % (form.element_info.name, _words_of(form)))
-    # The file dialog may still be closing: it asks nothing, and is skipped
-    # when it is torn down as it is read.
-    for dialog in windows_matching(dialogs, matches=lambda dialog: not _is_file_dialog(dialog)):
+    # The file dialog may still be closing: it asks nothing. Windows hides a
+    # dialog before it destroys its controls, so one without a file name box
+    # that no longer shows is a file dialog torn down as it was read.
+    for dialog in windows_matching(dialogs, matches=lambda dialog: not _is_file_dialog(dialog)
+                                   and _shown(dialog.handle)):
         words = _words_of(dialog)
         buttons = {button.element_info.name: button for button in dialog.children()
                    if button.element_info.control_type == "Button"}
@@ -761,12 +783,22 @@ def _wrapped(handle) -> UIAWrapper:
 
 def _cancel_file_dialog(dialog):
     """Closes a file dialog, `dialog`, as its Cancel button does."""
-    _control(dialog, "Button", _CANCEL_BUTTON).invoke()
+    _file_dialog_control(dialog, "Button", _CANCEL_BUTTON).invoke()
 
 
 def _is_file_dialog(dialog) -> bool:
     """Whether `dialog` is a file dialog: it holds a file name box."""
-    return _descendant(dialog, "Edit", _FILE_NAME_BOX) is not None
+    return inner_window(dialog.handle, "Edit", _FILE_NAME_BOX) is not None
+
+
+def _file_dialog_control(dialog, window_class: str, control_id: int):
+    """The control of the file dialog `dialog` of this window class and
+    control ID (editor_windows.inner_window). Raises ElementNotFoundError,
+    naming them, when it has none."""
+    handle = inner_window(dialog.handle, window_class, control_id)
+    if handle is None:
+        raise ElementNotFoundError({"class_name": window_class, "control_id": control_id})
+    return _wrapped(handle)
 
 
 def _descendant(window, control_type: str, automation_id: str):
@@ -782,6 +814,61 @@ def _control(window, control_type: str, automation_id: str):
     control = _descendant(window, control_type, automation_id)
     if control is None:
         raise ElementNotFoundError({"control_type": control_type, "auto_id": automation_id})
+    return control
+
+
+def _only_match(parent, scope: str, **properties):
+    """Returns the one control of `parent`, a wrapper, among its "children"
+    or its "descendants" (`scope`), whose UI Automation properties are those
+    given: automation_id, name, or control_type, such as "Button". UI
+    Automation searches inside Windows, in one call, where pywinauto's
+    child_window walks the controls from here, one call each, and took 3.4 s
+    to find a toolbar button. Returns None when none matches. Raises
+    ElementAmbiguousError when several do, as pywinauto does."""
+    iuia = IUIA()
+    ids = {"automation_id": iuia.UIA_dll.UIA_AutomationIdPropertyId,
+           "name": iuia.UIA_dll.UIA_NamePropertyId,
+           "control_type": iuia.UIA_dll.UIA_ControlTypePropertyId}
+    conditions = [iuia.iuia.CreatePropertyCondition(
+        ids[key], iuia.known_control_types[value] if key == "control_type" else value)
+        for key, value in properties.items()]
+    condition = conditions[0]
+    for other in conditions[1:]:
+        condition = iuia.iuia.CreateAndCondition(condition, other)
+    found = parent.element_info.element.FindAll(iuia.tree_scope[scope], condition)
+    if found.Length > 1:
+        raise ElementAmbiguousError("%d controls match %r" % (found.Length, properties))
+    return UIAWrapper(UIAElementInfo(found.GetElement(0))) if found.Length else None
+
+
+def _found(window, path: tuple, anywhere: bool = True):
+    """Returns the control at the end of `path`, the automation IDs of the
+    controls from `window`, a wrapper, down to it: each step the one child of
+    the control before with its ID (_only_match). The Editor's panels can be
+    docked elsewhere, as every Nextion Editor of the Windows user shares its
+    layout. So when a step finds no such child, and `anywhere` is true, the
+    control is searched for by its own ID among all of `window`'s
+    descendants, which is slower. Raises ElementNotFoundError when there is
+    none, and ElementAmbiguousError when several match."""
+    control = window
+    for automation_id in path:
+        control = _only_match(control, "children", automation_id=automation_id)
+        if control is None:
+            break
+    else:
+        return control
+    if not anywhere:
+        raise ElementNotFoundError({"auto_id": automation_id})
+    return _required(_only_match(window, "descendants", automation_id=path[-1]),
+                     auto_id=path[-1])
+
+
+def _required(control, **criteria):
+    """Returns `control`, which a search found, or raises
+    ElementNotFoundError, naming the `criteria` it was searched by, when it
+    found none."""
+    if control is None:
+        raise ElementNotFoundError(criteria)
     return control
 
 
@@ -809,7 +896,7 @@ def _wait_for(found, seconds: float, what: str, stop=None):
         result = found()
         if result:
             return result
-        time.sleep(0.25)
+        time.sleep(_LOOK_PAUSE)
     raise EditorError("waited %d s for %s" % (seconds, what))
 
 
@@ -917,10 +1004,12 @@ def _page_places(editor: DedicatedEditor) -> list:
     """Where to click each page's row in the Page panel's list: (the list's
     window, x, y) for each page, in order, or None for a row past those in
     sight."""
-    panel = editor.main_spec().child_window(auto_id="pageadmin1")
-    page_list = panel.child_window(auto_id="colListBox1").wrapper_object()
+    panel = editor.control(_PAGE_PANEL)
+    page_list = _required(_only_match(panel, "descendants", automation_id="colListBox1"),
+                          auto_id="colListBox1")
     # The panel's bar ends with the number of pages.
-    bar = panel.child_window(auto_id="bar1").wrapper_object().children()
+    bar = _required(_only_match(panel, "descendants", automation_id="bar1"),
+                    auto_id="bar1").children()
     counted = bar[-1].element_info.name if bar else ""
     if not counted.isdigit():
         raise EditorError("the Page panel's bar shows %r where its page count was" % counted)
@@ -1147,9 +1236,11 @@ def _grid(editor: DedicatedEditor):
     """The attribute grid, its hint box, and the indexes of its attribute
     rows among its children: those named "Row 0", "Row 1", and so on. Some
     components' grids also have a header row, which is not one."""
-    panel = editor.main_spec().child_window(auto_id="objatt2")
-    grid = panel.child_window(auto_id="dataGridView1").wrapper_object()
-    hint_box = panel.child_window(auto_id="textBox1").wrapper_object()
+    panel = editor.control(_ATTRIBUTE_PANEL)
+    grid = _required(_only_match(panel, "descendants", automation_id="dataGridView1"),
+                     auto_id="dataGridView1")
+    hint_box = _required(_only_match(panel, "descendants", automation_id="textBox1"),
+                         auto_id="textBox1")
     numbers = [index for index, child in enumerate(grid.children())
                if re.fullmatch(r"Row \d+", child.element_info.name or "")]
     return grid, hint_box, numbers
@@ -1342,7 +1433,7 @@ def compile_shown(editor: DedicatedEditor) -> str:
     _stop_on_dialog(main, "before pressing Compile")
     if "(" not in main.window_text():
         raise EditorError("no project is open; open one first")
-    output = editor.main_spec().child_window(auto_id=_OUTPUT_PANEL).wrapper_object().handle
+    output = editor.control(_OUTPUT_PANEL).handle
     try:
         empty_control(output, DIALOG_WAIT)
         pressing_failed = _press_in_background(_toolbar_button(editor, "Compile"))
@@ -1393,7 +1484,7 @@ def write_tft(editor: DedicatedEditor, folder: Path) -> tuple:
         raise EditorError("no project is open; open one first")
     folder = folder.resolve()
     folder.mkdir(parents=True, exist_ok=True)
-    output = editor.main_spec().child_window(auto_id=_OUTPUT_PANEL).wrapper_object().handle
+    output = editor.control(_OUTPUT_PANEL).handle
     explorers_before = set(_explorer_windows())
     try:
         empty_control(output, DIALOG_WAIT)
@@ -1435,8 +1526,9 @@ def _open_tft_output(editor: DedicatedEditor, main):
     """Shows the window of File > TFT file output, and returns it. The File
     menu lists its items only once open, so it is opened first. Its item is
     pressed in the background, as the window it shows is modal."""
-    bar = editor.main_spec().child_window(auto_id=_MENU_BAR, control_type="MenuBar")
-    file_menu = bar.child_window(title="File", control_type="MenuItem").wrapper_object()
+    file_menu = _required(_only_match(editor.control(_MENU_BAR), "children", name="File",
+                                      control_type="MenuItem"),
+                          title="File", control_type="MenuItem")
     shown_before = set(shown_windows(editor.recorded.pid))
     file_menu.invoke()
     try:
@@ -1535,7 +1627,7 @@ def _close_explorer_on(folder: Path, before: set) -> bool:
                 except pywintypes.com_error:
                     pass        # closed already
             return True
-        time.sleep(0.25)
+        time.sleep(_LOOK_PAUSE)
     return False
 
 

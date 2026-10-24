@@ -12,9 +12,9 @@ from unittest import mock
 
 from tools.editor.editor_windows import (DIALOG_CLASS, PROGRESS_FORM, CompileWatch, class_name,
                                          compile_ended, compiled_file_size, control_text,
-                                         empty_control, explorer_windows_on,
-                                         is_locked_listing, is_save_question, is_work_copy,
-                                         listed_page, on_a_screen, open_button,
+                                         crash_dialog_shown, empty_control, explorer_windows_on,
+                                         inner_window, is_locked_listing, is_save_question,
+                                         is_work_copy, listed_page, on_a_screen,
                                          rich_edit_texts, shown_project, shown_windows,
                                          sole_window_with_id, where_raised, window_with_id,
                                          windows_matching, windows_over_simulator)
@@ -118,11 +118,12 @@ class WindowsTestCase(unittest.TestCase):
         user32.DestroyWindow.argtypes = [wintypes.HWND]
         self._destroy = user32.DestroyWindow
 
-    def create(self, kind: str, text: str, style: int = 0, parent=None):
-        """Returns a new window, `parent` its parent or its owner. A shown one
-        is placed off the screen, so that no one sees it."""
+    def create(self, kind: str, text: str, style: int = 0, parent=None, control_id=None):
+        """Returns a new window, `parent` its parent or its owner, and
+        `control_id` its control ID when it is a child. A shown one is placed
+        off the screen, so that no one sees it."""
         window = self._create(0, kind, text, style, -20000, -20000, 200, 100,
-                              parent, None, None, None)
+                              parent, control_id, None, None)
         self.addCleanup(self._destroy, window)
         return window
 
@@ -238,6 +239,29 @@ class WindowsOverSimulatorTest(WindowsTestCase):
         simulator = self.create("STATIC", "simulator", _WS_POPUP | _WS_VISIBLE)
         self.create("STATIC", "parked", _WS_POPUP | _WS_VISIBLE)
         self.assertEqual(self.over(simulator, set()), [])
+
+
+class CrashDialogTest(WindowsTestCase):
+    """The Editor's unhandled exception dialog: a shown window of its process
+    with Continue and Quit buttons, whose texts .NET writes with their &
+    marks. Here, this process stands in for the Editor."""
+
+    def test_a_window_with_continue_and_quit(self):
+        dialog = self.create("STATIC", "Microsoft .NET Framework", _WS_POPUP | _WS_VISIBLE)
+        self.create("BUTTON", "&Continue", _WS_CHILD, dialog)
+        self.create("BUTTON", "&Quit", _WS_CHILD, dialog)
+        self.assertTrue(crash_dialog_shown(os.getpid(), 5))
+
+    def test_none_without_both_buttons_shown(self):
+        one_button = self.create("STATIC", "one button", _WS_POPUP | _WS_VISIBLE)
+        self.create("BUTTON", "&Continue", _WS_CHILD, one_button)
+        hidden = self.create("STATIC", "hidden", _WS_POPUP)
+        self.create("BUTTON", "Continue", _WS_CHILD, hidden)
+        self.create("BUTTON", "Quit", _WS_CHILD, hidden)
+        labels = self.create("STATIC", "labels, not buttons", _WS_POPUP | _WS_VISIBLE)
+        self.create("STATIC", "Continue", _WS_CHILD, labels)
+        self.create("STATIC", "Quit", _WS_CHILD, labels)
+        self.assertFalse(crash_dialog_shown(os.getpid(), 5))
 
 
 class RichEditTextTest(WindowsTestCase):
@@ -432,37 +456,26 @@ class SaveQuestionTest(unittest.TestCase):
         self.assertFalse(is_locked_listing([], ""))
 
 
-class Control:
-    """A control of a window, as `open_button` reads it."""
+class InnerWindowTest(WindowsTestCase):
+    """A control inside a window, found by its window class and its control
+    ID, as a Windows file dialog's are: its file name box is an Edit inside
+    a combo box, its Open button a Button of its own."""
 
-    def __init__(self, control_type: str, automation_id: str):
-        self.control_type = control_type
-        self.element_info = Info(automation_id)
+    def setUp(self):
+        super().setUp()
+        self.dialog = self.create("STATIC", "file dialog", _WS_POPUP)
 
+    def test_at_any_depth(self):
+        combo = self.create("STATIC", "combo box", _WS_CHILD, self.dialog, 1148)
+        box = self.create("EDIT", "", _WS_CHILD, combo, 1148)
+        button = self.create("BUTTON", "Open", _WS_CHILD, self.dialog, 1)
+        self.assertEqual(inner_window(self.dialog, "Edit", 1148), box)
+        self.assertEqual(inner_window(self.dialog, "Button", 1), button)
 
-class Dialog:
-    """A file dialog's controls, which `descendants` gives by their type."""
-
-    def __init__(self, *controls):
-        self.controls = controls
-
-    def descendants(self, control_type: str):
-        return [control for control in self.controls if control.control_type == control_type]
-
-
-class OpenButtonTest(unittest.TestCase):
-    """The Open button of a Windows file dialog, which Windows shows as a
-    split button or as a plain one, of automation ID 1 either way. A file
-    the dialog lists has the ID 1 too, as a list item."""
-
-    def test_either_kind_of_button_and_never_a_listed_file(self):
-        listed = Control("ListItem", "1")
-        for kind in ("SplitButton", "Button"):
-            with self.subTest(kind=kind):
-                button = Control(kind, "1")
-                dialog = Dialog(listed, Control("Button", "2"), button)
-                self.assertIs(open_button(dialog), button)
-        self.assertIsNone(open_button(Dialog(listed, Control("Button", "2"))))
+    def test_none_of_another_class_or_id(self):
+        self.create("STATIC", "label", _WS_CHILD, self.dialog, 1)
+        self.create("BUTTON", "Cancel", _WS_CHILD, self.dialog, 2)
+        self.assertIsNone(inner_window(self.dialog, "Button", 1))
 
 
 if __name__ == "__main__":

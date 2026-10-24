@@ -1,5 +1,6 @@
 """Listing the dedicated Editor's windows, finding one by its automation
-ID, finding one shown over its simulator, telling its question to save,
+ID, finding one shown over its simulator, telling its crash dialog and its
+question to save, finding a file dialog's controls,
 reading its component list and its Output panel, a TFT file's size among
 it, finding the Explorer windows it opens on a TFT file's folder, and saying
 where reading one failed, apart from pywinauto, so that their tests need
@@ -37,6 +38,9 @@ from _ctypes import COMError
 MESSAGE_FORM = "MessageForm"
 # What the class name of a rich edit control holds, a Windows Forms one's too.
 _RICH_EDIT = "RichEdit"
+# What the class name of a button holds, in capitals: "Button" for Windows'
+# own, "WindowsForms10.BUTTON.app..." for a Windows Forms one.
+_BUTTON = "BUTTON"
 _WM_SETTEXT, _WM_GETTEXT, _WM_GETTEXTLENGTH = 0x000C, 0x000D, 0x000E
 _user32 = ctypes.WinDLL("user32")
 _SMTO_ABORTIFHUNG = 0x0002
@@ -57,6 +61,7 @@ _user32.MonitorFromRect.restype = wintypes.HMONITOR
 _MONITOR_DEFAULTTONULL = 0
 _user32.GetWindow.argtypes = [wintypes.HWND, wintypes.UINT]
 _user32.GetWindow.restype = wintypes.HWND
+_user32.GetDlgCtrlID.argtypes = [wintypes.HWND]
 _GW_OWNER = 4
 # Windows' class of dialogs, the file dialog's among them.
 DIALOG_CLASS = "#32770"
@@ -255,15 +260,23 @@ def rich_edit_texts(handle, seconds: float) -> list:
     across processes. The Editor's messages say what they ask in one.
     Raises NotAnswered for a control that does not answer within `seconds`,
     so that an Editor that has stopped answering does not hold the caller."""
-    controls = []
+    return [control_text(control, seconds) for control in _inner_windows(handle)
+            if _RICH_EDIT in class_name(control)]
 
-    @_ENUM_WINDOWS
-    def collect(child, _):
-        if _RICH_EDIT in class_name(child):
-            controls.append(child)
-        return True
-    _user32.EnumChildWindows(handle, collect, 0)
-    return [control_text(control, seconds) for control in controls]
+
+def crash_dialog_shown(pid: int, seconds: float) -> bool:
+    """Whether the process `pid` shows .NET's unhandled exception dialog: a
+    shown window of its, with Continue and Quit buttons. The buttons' texts
+    are read through WM_GETTEXT, which takes milliseconds, where reading them
+    through UI Automation took a second or two. .NET writes them with their
+    & marks, "&Continue", which are left out. Raises NotAnswered for a button
+    that does not answer within `seconds`."""
+    for window in shown_windows(pid):
+        if {"Continue", "Quit"} <= {control_text(child, seconds).replace("&", "")
+                                    for child in _inner_windows(window)
+                                    if _BUTTON in class_name(child).upper()}:
+            return True
+    return False
 
 
 def control_text(control, seconds: float) -> str:
@@ -375,14 +388,27 @@ def is_locked_listing(items: list, value: str) -> bool:
     return listed_page(items) is not None and value == ""
 
 
-def open_button(dialog):
-    """Returns the Open button of a Windows file dialog, `dialog`, or None
-    when it has none. The button has the automation ID 1, and Windows shows
-    it as a split button or as a plain one. A file the dialog lists has the
-    ID 1 too, as a list item, which neither kind matches."""
-    for kind in ("SplitButton", "Button"):
-        found = next((control for control in dialog.descendants(control_type=kind)
-                      if control.element_info.automation_id == "1"), None)
-        if found is not None:
-            return found
-    return None
+def inner_window(window, window_class: str, control_id: int):
+    """The first window inside the window `window`, at any depth, of the
+    class `window_class` and the control ID `control_id`, or None.
+
+    A Windows file dialog's controls are windows of their own. Its file name
+    box is the Edit 1148, and its Open and Cancel buttons are the Buttons 1
+    and 2. Windows lists them at once. UI Automation took 0.4 s or more to
+    search the dialog, as it also reads the files the dialog lists."""
+    return next((child for child in _inner_windows(window)
+                 if _user32.GetDlgCtrlID(child) == control_id
+                 and class_name(child) == window_class), None)
+
+
+def _inner_windows(window) -> list:
+    """The windows inside the window `window`, at any depth, in the order
+    Windows lists them."""
+    found = []
+
+    @_ENUM_WINDOWS
+    def collect(child, _):
+        found.append(child)
+        return True
+    _user32.EnumChildWindows(window, collect, 0)
+    return found
