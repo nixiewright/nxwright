@@ -2795,6 +2795,84 @@ class GpioTest(SimulationTestCase):
             Simulation(self.root, inputs={"pio8": 0})
 
 
+class SeveralGpioInputsTest(SimulationTestCase):
+    """Several GPIO inputs set in one step, as buttons pressed together:
+    every level changes before any bound pin's event runs, and the events
+    run in pin order."""
+    language = "nextion"
+
+    def bound(self, code: str, *bindings: str) -> Simulation:
+        """A simulation of page0, whose buttons b0 and b1 have `code`, with
+        the pins bound by `bindings`, such as "cfgpio 2,1,b0"."""
+        self.program("int n=0,m=0\npage page0\n")
+        self.page("page0", [placed("b0", "button", 0, 0), placed("b1", "button", 0, 100)],
+                  code)
+        self.page("second", [placed("b0", "button", 0, 0)])
+        simulation = Simulation(self.root)
+        for line in bindings:
+            simulation.serial_input(line)
+        return simulation
+
+    def test_each_event_reads_the_other_pins_new_level(self):
+        simulation = self.bound("on b0.down:\n  n=pio3\n\non b1.down:\n  m=pio2\n",
+                                "cfgpio 2,1,b0", "cfgpio 3,1,b1")
+        simulation.set_inputs({2: 0, 3: 0})
+        self.assertEqual((simulation.globals["n"], simulation.globals["m"]), (0, 0))
+        self.assertEqual([pin["level"] for pin in simulation.pins()], [1, 1, 0, 0, 1, 1, 1, 1])
+
+    def test_the_events_run_in_pin_order(self):
+        simulation = self.bound("on b0.down:\n  n=n*10+1\n\non b1.down:\n  n=n*10+2\n",
+                                "cfgpio 5,1,b0", "cfgpio 2,1,b1")
+        simulation.set_inputs({5: 0, 2: 0})
+        self.assertEqual(simulation.globals["n"], 21)
+        # Rising, each runs its Release event, which these buttons lack.
+        simulation.set_inputs({5: 1, 2: 1})
+        self.assertEqual(simulation.globals["n"], 21)
+
+    def test_an_event_changing_the_page_ends_a_later_pins_binding(self):
+        simulation = self.bound("on b0.down:\n  n=n+1\n\non b1.down:\n  page second\n",
+                                "cfgpio 5,1,b0", "cfgpio 2,1,b1")
+        simulation.set_inputs({2: 0, 5: 0})
+        self.assertEqual((simulation.page, simulation.globals["n"]), ("second", 0))
+
+    def test_an_event_binding_a_later_pin_again_runs_nothing_for_it(self):
+        # Even bound to the same component: a binding made after a change
+        # of level sees no edge.
+        for again in ("cfgpio 5,1,b0", "cfgpio 5,1,b1"):
+            with self.subTest(again=again):
+                simulation = self.bound("on b0.down:\n  n=n+1\n\non b1.down:\n  m=m+1\n  %s\n"
+                                        % again, "cfgpio 5,1,b0", "cfgpio 2,1,b1")
+                simulation.set_inputs({2: 0, 5: 0})
+                self.assertEqual((simulation.globals["m"], simulation.globals["n"]), (1, 0))
+
+    def test_an_error_in_an_event_leaves_no_later_event_waiting(self):
+        # b1's event divides by sys0, which is 0, so pin 5's event never runs
+        # in that step. It does not run in the next step either, whose own
+        # pin, 6, is bound to nothing.
+        simulation = self.bound("on b0.down:\n  n=n+1\n\non b1.down:\n  m=1/sys0\n",
+                                "cfgpio 5,1,b0", "cfgpio 2,1,b1")
+        with self.assertRaises(ZeroDivisionError):
+            simulation.set_inputs({2: 0, 5: 0})
+        simulation.set_inputs({6: 0})
+        self.assertEqual(simulation.globals["n"], 0)
+
+    def test_one_wrong_entry_changes_no_level(self):
+        simulation = self.bound("")
+        for levels, said in (({2: 0, 3: 2}, "0 or 1"), ({2: 0, 8: 0}, "from 0 to 7"),
+                             ({}, "at least one")):
+            with self.subTest(levels=levels):
+                with self.assertRaisesRegex(NxwrightError, said):
+                    simulation.set_inputs(levels)
+                self.assertEqual([pin["level"] for pin in simulation.pins()], [1] * 8)
+
+    def test_a_basic_screen_takes_no_level(self):
+        self.bound("")
+        self.write("app.toml", edited_app(self.text("app.toml"),
+                                          lambda app: app.update(screen="NX4832T035")))
+        with self.assertRaisesRegex(NxwrightError, "no GPIO"):
+            Simulation(self.root).set_inputs({0: 0})
+
+
 class TimeTest(SimulationTestCase):
 
     def setUp(self):

@@ -52,6 +52,7 @@ const HELLO_WAIT = 10000;
 const ACTIONS: Record<string, string> = {
   press: "nxwright/press", move: "nxwright/move", release: "nxwright/release",
   serial: "nxwright/serial", startAgain: "nxwright/startAgain", gpioInput: "nxwright/gpioInput",
+  gpioInputs: "nxwright/gpioInputs",
 };
 const LOOKS: Record<string, string> = {
   screen: "nxwright/screen", components: "nxwright/components", values: "nxwright/values",
@@ -372,6 +373,8 @@ function actionArguments(method: string, params: Record<string, unknown>): Recor
       return { text: params.text };
     case "gpioInput":
       return { pin: params.pin, level: params.level };
+    case "gpioInputs":
+      return { levels: params.levels };
     default:
       return {};
   }

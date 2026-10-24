@@ -127,6 +127,16 @@ test("after hello, requests go to the host and its answers come back", async () 
                                 ["stop", { session: "s" }]]);
 });
 
+test("the GPIO methods go to the host, one pin or several", async () => {
+  const host = standInHost();
+  await talk(new Conversation(TOKEN, host),
+             { id: 1, method: "hello", params: { token: TOKEN } },
+             { id: 2, method: "gpioInput", params: { session: "s", pin: 2, level: 0 } },
+             { id: 3, method: "gpioInputs", params: { session: "s", levels: { pio2: 1 } } });
+  assert.deepEqual(host.calls, [["gpioInput", { session: "s", pin: 2, level: 0 }],
+                                ["gpioInputs", { session: "s", levels: { pio2: 1 } }]]);
+});
+
 test("an agent may act on a simulation whose serial line reaches a device", () => {
   // Without a port connected, or with the question turned off, it may.
   assert.equal(serialRule({ connected: false, ask: true, answer: undefined }), "act");

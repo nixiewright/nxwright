@@ -21,6 +21,7 @@ from nxwright import NxwrightError, installed_version
 from nxwright.mcp_server.headless import HeadlessSimulation
 from nxwright.mcp_server.simulations import DrivenSimulation
 from nxwright.mcp_server.vscode import VsCodeSimulation, VsCodeWindows, channel_folder
+from nxwright.testing.gpio_pins import levels_by_name
 
 # What an agent reads of the server as it connects.
 _INSTRUCTIONS = (
@@ -233,6 +234,17 @@ def mcp_server(pictures_folder: Path) -> McpServer:
         """Sets the level that the world outside the screen gives a GPIO input, as a
         button or a switch wired to it would."""
         simulations.get(simulation).set_input(pin, level)
+        return "Set."
+
+    @server.tool
+    @_refusals
+    def set_inputs(simulation: SimulationId,
+                   levels: Annotated[dict[str, int], "Each pin's level, 0 or 1, by the name "
+                                                     "code gives the pin, such as "
+                                                     '{"pio2": 0, "pio5": 0}.']) -> str:
+        """Sets the levels that the world outside the screen gives several GPIO inputs at
+        the same moment, as buttons pressed together would."""
+        simulations.get(simulation).set_inputs(levels_by_name(levels))
         return "Set."
 
     @server.tool

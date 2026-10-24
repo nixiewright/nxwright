@@ -189,8 +189,8 @@ from nxwright.testing.editor_machine import (EEPROM_SIZE, PINYIN_COMMANDS, RECOR
                                              CompileRefusal, EditorMachine, RefusedCode,
                                              UnknownComponentId, own_page_prefix)
 from nxwright.testing.folder_resources import FolderResources
-from nxwright.testing.gpio_pins import (PIN_NAMES, UNDRIVEN, GpioPins, checked_level, pin_number,
-                                        starting_levels)
+from nxwright.testing.gpio_pins import (PIN_NAMES, UNDRIVEN, GpioPins, checked_levels,
+                                        levels_by_name, pin_number)
 from nxwright.testing.list_working import (COMBO_BOX_CHOICES, FILE_BROWSER_LISTINGS, UNSETTLED,
                                            ListWorking)
 from nxwright.testing.media_players import MediaPlayer
@@ -476,7 +476,7 @@ class Simulation:
                 raise NxwrightError("%s starts at %r in the inputs, and at %r in the values: "
                                     "give it one starting level" % (name, levels[name], given))
             levels[name] = given
-        self._pins = GpioPins(starting_levels(levels))
+        self._pins = GpioPins(levels_by_name(levels))
         self._levels_given = bool(levels)
         # The serial line's bytes not yet used (serial_line.py), which each
         # start empties (_begin).
@@ -1937,20 +1937,31 @@ class Simulation:
 
     def set_input(self, pin: int, level: int):
         """Sets the level something outside the screen gives the GPIO pin
-        `pin`, 0 to 7, as a button or a switch wired to it would. An input
-        reads it. A bound pin's falling level runs its component's Press
-        event, and its rising level its Release event, as `click` runs them
-        (gpio_pins.py). Raises NxwrightError for a pin outside 0 to 7, a
-        level other than 0 or 1, or a screen without GPIO."""
+        `pin`, 0 to 7, as a button or a switch wired to it would
+        (set_inputs)."""
+        self.set_inputs({pin: level})
+
+    def set_inputs(self, levels: dict):
+        """Sets the levels something outside the screen gives the GPIO pins
+        of `levels`, {pin: level}, at the same moment, as buttons pressed
+        together would. Inputs read them. Every level changes first, so that
+        code reads them all. Then each bound pin whose level changed runs its
+        component's event, in pin order: Press when it fell, and Release when
+        it rose, as `click` runs them. A pin whose binding an earlier event
+        ended or replaced runs nothing (gpio_pins.py). Raises NxwrightError,
+        changing no level, for no levels, a pin outside 0 to 7, a level other
+        than 0 or 1, or a screen without GPIO."""
         if not self._has_gpio():
             raise NxwrightError(_NO_GPIO)
-        level = checked_level(pin, level)
-        edge = self._pins.set_level(pin, level)
-        if self._pins.is_input(pin):
-            self.globals[PIN_NAMES[pin]] = level
-        if edge is not None and self.page is not None:
-            component, event = edge
-            self._run(self.page, ["click %s,%d" % (component, event == "down")], [None])
+        levels = checked_levels(levels)
+        changed = self._pins.set_levels(levels)
+        self.globals.update((PIN_NAMES[pin], level) for pin, level in levels.items()
+                            if self._pins.is_input(pin))
+        for pin in changed:
+            edge = self._pins.take_edge(pin)
+            if edge is not None and self.page is not None:
+                component, event = edge
+                self._run(self.page, ["click %s,%d" % (component, event == "down")], [None])
 
     def pins(self):
         """Returns each GPIO pin as {"mode", "component", "level"}, by pin

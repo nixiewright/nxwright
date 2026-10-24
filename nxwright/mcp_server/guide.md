@@ -53,7 +53,7 @@ A session usually goes:
 
 1. `start_simulation` with the source folder. It returns the simulation's id, which the other tools take, and the page shown.
 2. `screen`, to see what the screen shows.
-3. `tap` a component by its name, `send` an instruction as if it came on the serial line, or `set_input` the level of a GPIO input.
+3. `tap` a component by its name, `send` an instruction as if it came on the serial line, or `set_input` the level of a GPIO input. For pins that change together, such as two buttons pressed at once, use `set_inputs`.
 4. `wait`, to let the app's timers run.
 5. `screen`, `values`, or `log`, to check what happened.
 6. `stop_simulation`.

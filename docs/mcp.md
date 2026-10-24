@@ -58,6 +58,7 @@ b0  button  20,400  160x60  "Next"
 | `log` | Lists what the screen received and sent on its serial line. |
 | `values` | Reads values, such as `t0.txt` or `sys0`, or every attribute of a component, such as `t0`. |
 | `set_input` | Sets a GPIO input's level. |
+| `set_inputs` | Sets several GPIO inputs' levels at the same moment. The bound pins' events run once every level has changed, in pin order: nxwright's choice, not checked on a screen. |
 | `start_again` | Starts the app again, as a screen switched off and on. |
 | `stop_simulation` | Ends a simulation. |
 

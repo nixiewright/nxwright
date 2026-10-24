@@ -50,14 +50,22 @@ def checked_level(pin: int, level) -> int:
     return level
 
 
-def starting_levels(levels) -> dict:
-    """Returns {pin: level} of `levels`, the inputs' starting levels by name,
-    such as {"pio2": 0}. Raises NxwrightError for anything else."""
+def levels_by_name(levels) -> dict:
+    """Returns {pin: level} of `levels`, inputs' levels by name, such as
+    {"pio2": 0}. Raises NxwrightError for anything else."""
     if not isinstance(levels, dict):
-        raise NxwrightError("the inputs' starting levels are given by name, as "
-                            '{"pio2": 0}, not %r' % (levels,))
+        raise NxwrightError('GPIO levels are given by name, as {"pio2": 0}, not %r' % (levels,))
     return {pin_number(name): checked_level(pin_number(name), level)
             for name, level in levels.items()}
+
+
+def checked_levels(levels: dict) -> dict:
+    """Returns `levels`, {pin: level}, the levels given to several pins at
+    once. Raises NxwrightError when it gives none, or for any pin or level
+    checked_level refuses."""
+    if not levels:
+        raise NxwrightError("give at least one GPIO pin's level")
+    return {pin: checked_level(pin, level) for pin, level in levels.items()}
 
 
 def _whole(number) -> bool:
@@ -79,6 +87,9 @@ class GpioPins:
         The levels stay."""
         self.modes = [PULL_UP] * PINS
         self.components = [None] * PINS
+        # The edges of the last step's bound pins, not yet taken (take_edge),
+        # by pin. Ending or replacing a pin's binding drops its edge.
+        self._edges = {}
 
     def configure(self, pin: int, mode: int, component: str) -> bool:
         """Runs `cfgpio pin,mode,component`, and returns whether it changed a
@@ -89,26 +100,38 @@ class GpioPins:
             return False
         self.modes[pin] = mode
         self.components[pin] = component if mode == BOUND else None
+        self._edges.pop(pin, None)
         return True
 
     def is_input(self, pin: int) -> bool:
         """Returns whether `pin` is an input, which reads its level."""
         return self.modes[pin] in (PULL_UP, BOUND)
 
-    def set_level(self, pin: int, level: int):
-        """Sets the level outside the screen gives `pin`. Returns (component,
-        event) when a bound pin's level changes: "down" when it falls, and
-        "up" when it rises. Returns None otherwise."""
-        before, self.levels[pin] = self.levels[pin], level
-        component = self.components[pin]
-        if component is None or level == before:
-            return None
-        return component, "down" if level < before else "up"
+    def set_levels(self, levels: dict) -> list:
+        """Sets the levels outside the screen gives the pins of `levels`,
+        {pin: level}, all at the same moment. Returns the bound pins whose
+        level changed, in pin order. Each has an edge, which take_edge gives.
+        An edge an earlier step left untaken, as when an error stopped its
+        events, is dropped."""
+        self._edges = {}
+        for pin, level in levels.items():
+            before, self.levels[pin] = self.levels[pin], level
+            if self.components[pin] is not None and level != before:
+                self._edges[pin] = (self.components[pin], "down" if level < before else "up")
+        return sorted(self._edges)
+
+    def take_edge(self, pin: int):
+        """Returns (component, event) for the bound pin `pin` whose level
+        changed: "down" when it fell, and "up" when it rose. Returns None when
+        its binding has ended or been replaced since, even by the same
+        component: a binding made after a change of level sees no edge."""
+        return self._edges.pop(pin, None)
 
     def unbind(self):
         """Ends every binding, as a page change does: the vendor has `cfgpio`
         given again after each refresh of the page. The modes stay."""
         self.components = [None] * PINS
+        self._edges = {}
 
     def view(self) -> list:
         """Returns each pin as {"mode", "component", "level"}, by pin number."""

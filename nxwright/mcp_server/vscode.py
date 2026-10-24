@@ -34,6 +34,7 @@ import time
 
 from nxwright import NxwrightError
 from nxwright.mcp_server.simulations import DrivenSimulation
+from nxwright.testing.gpio_pins import PIN_NAMES
 
 # The version of the channel's messages this server speaks, as hello gives it.
 _MESSAGES_VERSION = 1
@@ -353,6 +354,10 @@ class VsCodeSimulation(DrivenSimulation):
 
     def set_input(self, pin: int, level: int):
         self._call("gpioInput", pin=pin, level=level)
+
+    def set_inputs(self, levels: dict):
+        # The channel takes the pins by name, as JSON's keys are texts.
+        self._call("gpioInputs", levels={PIN_NAMES[pin]: level for pin, level in levels.items()})
 
     def start_again(self):
         self._call("startAgain")

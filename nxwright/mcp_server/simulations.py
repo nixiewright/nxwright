@@ -51,6 +51,12 @@ class DrivenSimulation(ABC):
         """Sets the level, 0 or 1, of the GPIO input `pin`, 0 to 7."""
 
     @abstractmethod
+    def set_inputs(self, levels: dict):
+        """Sets the levels of several GPIO inputs at the same moment,
+        `levels` as {pin: level}: every level changes before any bound pin's
+        event runs (Simulation.set_inputs)."""
+
+    @abstractmethod
     def start_again(self):
         """Starts the app again, as a screen switched off and on."""
 

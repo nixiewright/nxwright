@@ -282,6 +282,7 @@ class VsCodeSimulationTest(VsCodeTestCase):
         self.agent.text("tap", simulation=self.simulation, component="b0")
         self.agent.text("send", simulation=self.simulation, instruction="page 1")
         self.agent.text("set_input", simulation=self.simulation, pin=2, level=1)
+        self.agent.text("set_inputs", simulation=self.simulation, levels={"pio5": 0, "pio2": 0})
         self.agent.text("start_again", simulation=self.simulation)
         session = {"session": "session-1"}
         self.assertEqual(self.sent(), [
@@ -290,6 +291,7 @@ class VsCodeSimulationTest(VsCodeTestCase):
             # A send answers with what the screen sent since, from the log.
             ("serial", dict(session, text="page 1")), ("log", dict(session, after=0)),
             ("gpioInput", dict(session, pin=2, level=1)),
+            ("gpioInputs", dict(session, levels={"pio2": 0, "pio5": 0})),
             ("startAgain", session)])
 
     def test_a_wait_lets_time_pass_on_the_clock_alone(self):

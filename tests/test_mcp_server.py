@@ -86,7 +86,8 @@ class McpServerTest(unittest.TestCase):
         tools = {tool["name"]: tool for tool in listed["result"]["tools"]}
         self.assertEqual(sorted(tools), [
             "about", "components", "list_simulations", "log", "move", "press", "release",
-            "screen", "send", "set_input", "start_again", "start_simulation", "stop_simulation",
+            "screen", "send", "set_input", "set_inputs", "start_again", "start_simulation",
+            "stop_simulation",
             "tap", "values", "wait"])
         # A tap goes to a component or to a point: neither is required.
         self.assertEqual(tools["tap"]["inputSchema"]["required"], ["simulation"])
@@ -176,6 +177,13 @@ class McpServerTest(unittest.TestCase):
         everything = self.agent.data("values", simulation=self.simulation)
         self.assertEqual((everything["t0.txt"], everything["sys0"]), ("Home", 0))
 
+    def test_several_gpio_inputs_in_one_step(self):
+        self.assertEqual(self.agent.text("set_inputs", simulation=self.simulation,
+                                         levels={"pio2": 0, "pio5": 0}), "Set.")
+        self.assertEqual(self.agent.data("values", simulation=self.simulation,
+                                         names=["pio2", "pio5", "pio6"]),
+                         {"pio2": 0, "pio5": 0, "pio6": 1})
+
     def test_a_start_again(self):
         self.agent.text("tap", simulation=self.simulation, component="b0")
         self.agent.text("start_again", simulation=self.simulation)
@@ -213,6 +221,7 @@ class McpServerTest(unittest.TestCase):
         self.assertEqual(self.agent.text("wait", simulation=self.simulation,
                                          milliseconds=60000), "Waited 60000 ms.")
         self.assertIn("pin", self.refused("set_input", pin=9, level=0))
+        self.assertIn("pio0 to pio7", self.refused("set_inputs", levels={"pi02": 0}))
         self.assertIn("t9.txt", self.refused("values", names=["t9.txt"]))
         self.assertTrue(self.agent.refusal("start_simulation",
                                            source_folder=str(APP.parent / "missing")))

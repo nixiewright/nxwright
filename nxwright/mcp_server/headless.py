@@ -79,6 +79,9 @@ class HeadlessSimulation(DrivenSimulation):
         checked_level(pin, level)
         _running_app(lambda: self._simulation.set_input(pin, level))
 
+    def set_inputs(self, levels: dict):
+        _running_app(lambda: self._simulation.set_inputs(levels))
+
     def start_again(self):
         _running_app(self._simulation.start_again)
 

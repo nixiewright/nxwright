@@ -38,11 +38,12 @@ TFT file holding it; without one, the installed Nextion Editor's
 starting levels (testing/gpio_pins.py). Custom requests carry
 what happens to the screen: "nxwright/press" at (x, y), "nxwright/move" to
 (x, y) while pressed, "nxwright/release", "nxwright/serial" with an
-instruction's text, "nxwright/startAgain", and "nxwright/gpioInput",
-setting a GPIO pin's level, {"pin": 2, "level": 0}; and the serial port's
-settings: "nxwright/serialPorts" answers with the computer's ports, the
-rates, and the port's state, and "nxwright/serialPort" connects the port
-`name` at `baud`, or disconnects it when `name` is empty.
+instruction's text, "nxwright/startAgain", "nxwright/gpioInput",
+setting a GPIO pin's level, {"pin": 2, "level": 0}, and "nxwright/gpioInputs",
+setting several at the same moment, {"levels": {"pio2": 0, "pio5": 0}}; and
+the serial port's settings: "nxwright/serialPorts" answers with the
+computer's ports, the rates, and the port's state, and "nxwright/serialPort"
+connects the port `name` at `baud`, or disconnects it when `name` is empty.
 
 An agent drives a simulation through the extension, with the same requests
 for what happens to the screen and three more arguments. Given `handled`,
@@ -92,7 +93,7 @@ from nxwright.debug_adapter.replay import Timeline, path_key
 from nxwright.debug_adapter.serial_port import RATES, SerialLink, port_names
 from nxwright.drawing.screen_pictures import ScreenPictures
 from nxwright.testing import looks
-from nxwright.testing.gpio_pins import checked_level, starting_levels
+from nxwright.testing.gpio_pins import checked_level, checked_levels, levels_by_name
 from nxwright.testing.looks import value_group
 from nxwright.testing.pinyin_table import installed_pinyin_table, read_pinyin_table
 from nxwright.testing.sd_cards import card_folder
@@ -160,6 +161,7 @@ class DebugAdapter:
                           "nxwright/serial": self._serial,
                           "nxwright/startAgain": self._start_again,
                           "nxwright/gpioInput": self._gpio_input,
+                          "nxwright/gpioInputs": self._gpio_inputs,
                           "nxwright/serialPorts": self._serial_ports,
                           "nxwright/serialPort": self._serial_port,
                           "nxwright/components": self._components,
@@ -259,7 +261,7 @@ class DebugAdapter:
         pinyin_table = self._pinyin_table(arguments.get("pinyinTable"))
         inputs = arguments.get("gpioInputs")
         if inputs is not None:
-            starting_levels(inputs)
+            levels_by_name(inputs)
         # Last of the checks, as a missing file is made here.
         eeprom, eeprom_file = b"", None
         if arguments.get("eeprom"):
@@ -590,6 +592,13 @@ class DebugAdapter:
         pin, level = arguments.get("pin"), arguments.get("level")
         checked_level(pin, level)
         return self._action(arguments, lambda simulation: simulation.set_input(pin, level))
+
+    def _gpio_inputs(self, arguments: dict):
+        """Sets the levels outside the screen gives several GPIO pins at the
+        same moment, `levels` by name, {"pio2": 0, "pio5": 0}, as one action,
+        so that nothing runs between them (Simulation.set_inputs)."""
+        levels = checked_levels(levels_by_name(arguments.get("levels")))
+        return self._action(arguments, lambda simulation: simulation.set_inputs(levels))
 
     def _action(self, arguments: dict, work, kind: str = None, touch=None):
         """Has the simulation's thread do `work(simulation)` in turn, a move

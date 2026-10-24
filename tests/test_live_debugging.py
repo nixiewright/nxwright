@@ -271,6 +271,24 @@ class LiveDebuggingTest(LiveTestCase):
                 self.assertFalse(reply["success"])
                 self.assertIn(said, reply["message"])
 
+    def test_several_gpio_levels_set_in_one_action(self):
+        self.launch()
+        self.wait_for("nxwright/gpio")
+        self.assertTrue(self.request("nxwright/gpioInputs",
+                                     levels={"pio2": 0, "pio5": 0})["success"])
+        # One action, so the pins' event comes once, with both levels.
+        pins = self.wait_for("nxwright/gpio", 2)["pins"]
+        self.assertEqual([pin["level"] for pin in pins], [1, 1, 0, 1, 1, 0, 1, 1])
+
+    def test_several_gpio_levels_are_checked_before_any_is_queued(self):
+        self.launch()
+        for levels, said in (({"pio2": 0, "pio5": 2}, "0 or 1"), ({"pi02": 0}, "pio0 to pio7"),
+                             ({}, "at least one"), ([0, 1], "by name")):
+            with self.subTest(levels=levels):
+                reply = self.request("nxwright/gpioInputs", levels=levels)
+                self.assertFalse(reply["success"])
+                self.assertIn(said, reply["message"])
+
     def test_an_unknown_gpio_input_stops_the_launch(self):
         self.request("initialize")
         reply = self.request("launch", sourceFolder=str(self.root), gpioInputs={"pi02": 0})
