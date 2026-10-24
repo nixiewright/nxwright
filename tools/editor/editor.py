@@ -9,6 +9,7 @@ and a command that stops, say which.
     python tools/editor/editor.py attributes <page> <component>
     python tools/editor/editor.py simulate <file.png> [--send <instruction>] [--touch <steps>]
     python tools/editor/editor.py compile
+    python tools/editor/editor.py tft <folder>
     python tools/editor/editor.py catalog <file.json> [--variant <name>] [--known <file.json>]
     python tools/editor/editor.py status
     python tools/editor/editor.py hold <name> [--minutes <n>]
@@ -53,6 +54,7 @@ from pywinauto.uia_defines import NoPatternInterfaceError  # noqa: E402
 from pywinauto.uia_element_info import UIAElementInfo  # noqa: E402
 import pywintypes  # noqa: E402
 from _ctypes import COMError  # noqa: E402
+import win32com.client  # noqa: E402
 import win32con  # noqa: E402
 import win32gui  # noqa: E402
 import win32ui  # noqa: E402
@@ -69,8 +71,9 @@ from tools.editor.dedicated import (HOLD_MINUTES, MOST_HOLD_MINUTES, Busy,  # no
                                     starting_placement, still_running, take_hold,
                                     write_placement, write_recorded, write_shown)
 from tools.editor.editor_windows import (DIALOG_CLASS, MESSAGE_FORM,  # noqa: E402
-                                         PROGRESS_FORM, CompileWatch, NotAnswered,
-                                         class_name, control_text, empty_control,
+                                         PROGRESS_FORM, TFT_OUTPUT_FORM, CompileWatch,
+                                         NotAnswered, class_name, compiled_file_size,
+                                         control_text, empty_control, explorer_windows_on,
                                          is_locked_listing,
                                          is_save_question, is_work_copy, listed_page, open_button,
                                          rich_edit_texts, shown_project, shown_windows,
@@ -121,6 +124,19 @@ _PW_RENDERFULLCONTENT = 2
 _FILE_NAME_BOX = "1148"
 # The automation ID of a Windows dialog's Cancel button.
 _CANCEL_BUTTON = "2"
+# The main window's menu bar, and its File menu's item that writes the
+# project's TFT file. The menu lists its items only once it is open.
+_MENU_BAR = "bar5"
+_TFT_MENU_ITEM = "TFT file output"
+# In the window that item shows (editor_windows.TFT_OUTPUT_FORM): the box of
+# the folder to write in, the Output button, and the label giving the file's
+# name, the project's own, ending in .tft.
+_TFT_FOLDER_BOX = "1001"
+_TFT_OUTPUT_BUTTON = "buttonX2"
+_TFT_FILE_NAME = "label1"
+# How long the Editor may take to open an Explorer window on the folder once
+# it has written the TFT file, in seconds. It took about 2 s.
+_EXPLORER_WAIT = 10
 
 
 class EditorError(Exception):
@@ -170,6 +186,11 @@ def main(arguments=None) -> int:
     commands.add_parser("compile", parents=[holding],
                         help="compile the project shown, and print the Editor's Output panel, "
                         "after a line naming the project")
+    writing = commands.add_parser("tft", parents=[holding],
+                                  help="compile the project shown, and write its TFT file in a "
+                                  "folder, through File > TFT file output; print the file's path, "
+                                  "then the Editor's Output panel")
+    writing.add_argument("folder", type=Path)
     listing = commands.add_parser("catalog", parents=[holding],
                                   help="every attribute of every component of the "
                                   "project shown, with values, hints, and whether code can "
@@ -313,6 +334,12 @@ def _run_command(options, editor: "DedicatedEditor", folder: Path):
         project = shown_project(editor.main_window().window_text())
         output = compile_shown(editor)
         print("Compiled %s" % project)
+        print(output.replace("\r\n", "\n").rstrip("\n"))
+    elif options.command == "tft":
+        # Page names may be in any language, which Windows' console may not encode.
+        sys.stdout.reconfigure(encoding="utf-8")
+        file, output = write_tft(editor, options.folder)
+        print("Wrote %s" % file)
         print(output.replace("\r\n", "\n").rstrip("\n"))
     elif options.command == "simulate":
         for picture in simulate(editor, folder, options.file, options.send,
@@ -1319,25 +1346,197 @@ def compile_shown(editor: DedicatedEditor) -> str:
     try:
         empty_control(output, DIALOG_WAIT)
         pressing_failed = _press_in_background(_toolbar_button(editor, "Compile"))
-        watch = CompileWatch()
+        return _compile_output(editor, main, output, "Compile", pressing_failed)
+    except NotAnswered as error:
+        raise EditorError("the Editor did not answer a window message: %s" % error) from None
 
-        def ended():
-            if not win32gui.IsWindowEnabled(editor.main_handle):
-                editor.stop_on_crash()
-                _stop_on_dialog(main, "while compiling")
-            text = control_text(output, DIALOG_WAIT)
-            progress_shown = any(win32gui.GetWindowText(handle) == PROGRESS_FORM
-                                 for handle in shown_windows(editor.recorded.pid))
-            return text if watch.look(text, progress_shown, time.monotonic()) else None
+
+def _compile_output(editor: DedicatedEditor, main, output: int, pressed: str,
+                    pressing_failed: list) -> str:
+    """Waits for the compile that pressing the button `pressed` started to
+    end, and returns the Output panel's text, `output` being the panel's
+    handle (editor_windows.CompileWatch). The Editor's crash dialog, or a
+    question it asks meanwhile, stops the wait. `pressing_failed` holds what
+    went wrong pressing the button, which a wait that runs out then says."""
+    watch = CompileWatch()
+
+    def ended():
+        if not win32gui.IsWindowEnabled(editor.main_handle):
+            editor.stop_on_crash()
+            _stop_on_dialog(main, "while compiling")
+        text = control_text(output, DIALOG_WAIT)
+        progress_shown = any(win32gui.GetWindowText(handle) == PROGRESS_FORM
+                             for handle in shown_windows(editor.recorded.pid))
+        return text if watch.look(text, progress_shown, time.monotonic()) else None
+    try:
+        return _wait_for(ended, COMPILING_WAIT, "the compile to end")
+    except EditorError as error:
+        if pressing_failed:
+            raise EditorError("%s; pressing %s failed: %r"
+                              % (error, pressed, pressing_failed[0])) from None
+        raise
+
+
+def write_tft(editor: DedicatedEditor, folder: Path) -> tuple:
+    """Compiles the project shown and writes its TFT file in `folder`, made
+    if missing, through File > TFT file output. Returns (the file's path, the
+    Output panel's text). The Editor names the file after the project. It
+    compiles first, as the toolbar's Compile does, and replaces an existing
+    file without asking. Once it has written the file, it opens an Explorer
+    window on the folder, which is closed (_close_explorer_on). Raises
+    EditorError when the compile fails, quoting the Output panel, or when no
+    file of the size the panel gives shows."""
+    editor.stop_on_crash()
+    main = editor.main_window()
+    _stop_on_dialog(main, "before writing the TFT file")
+    if "(" not in main.window_text():
+        raise EditorError("no project is open; open one first")
+    folder = folder.resolve()
+    folder.mkdir(parents=True, exist_ok=True)
+    output = editor.main_spec().child_window(auto_id=_OUTPUT_PANEL).wrapper_object().handle
+    explorers_before = set(_explorer_windows())
+    try:
+        empty_control(output, DIALOG_WAIT)
+        form = _open_tft_output(editor, main)
         try:
-            return _wait_for(ended, COMPILING_WAIT, "the compile to end")
-        except EditorError as error:
-            if pressing_failed:
-                raise EditorError("%s; pressing Compile failed: %r"
-                                  % (error, pressing_failed[0])) from None
+            file = folder / _control(form, "Text", _TFT_FILE_NAME).element_info.name
+            written_before = _modified(file)
+            box = _control(form, "Edit", _TFT_FOLDER_BOX)
+            box.set_edit_text(str(folder))
+            if box.get_value() != str(folder):
+                raise EditorError("the TFT output window's folder box shows %r, not %s"
+                                  % (box.get_value(), folder))
+            pressing_failed = _press_in_background(_control(form, "Button",
+                                                            _TFT_OUTPUT_BUTTON))
+            text = _compile_output(editor, main, output, "Output", pressing_failed)
+            size = compiled_file_size(text)
+            if size is None:
+                raise EditorError("the compile did not succeed, so no TFT file was written. "
+                                  "The Output panel says:\n%s"
+                                  % text.replace("\r\n", "\n").rstrip("\n"))
+            _wait_for(lambda: _written_anew(file, written_before, size), DIALOG_WAIT,
+                      "%s, of %d bytes, to be written" % (file, size))
+            _wait_for(lambda: not _shown(form.handle), DIALOG_WAIT,
+                      "the TFT output window to close")
+        except Exception:
+            # The window stays when the compile fails. Left up, it would stop
+            # every later command, as it disables the main window.
+            _close_window(form.handle)
             raise
     except NotAnswered as error:
         raise EditorError("the Editor did not answer a window message: %s" % error) from None
+    if not _close_explorer_on(folder, explorers_before):
+        print("The Explorer window the Nextion Editor opens on %s did not show within %d s: "
+              "close it if it shows" % (folder, _EXPLORER_WAIT), file=sys.stderr)
+    return file, text
+
+
+def _open_tft_output(editor: DedicatedEditor, main):
+    """Shows the window of File > TFT file output, and returns it. The File
+    menu lists its items only once open, so it is opened first. Its item is
+    pressed in the background, as the window it shows is modal."""
+    bar = editor.main_spec().child_window(auto_id=_MENU_BAR, control_type="MenuBar")
+    file_menu = bar.child_window(title="File", control_type="MenuItem").wrapper_object()
+    shown_before = set(shown_windows(editor.recorded.pid))
+    file_menu.invoke()
+    try:
+        item = _wait_for(lambda: next((child for child in file_menu.children()
+                                       if child.element_info.name == _TFT_MENU_ITEM), None),
+                         DIALOG_WAIT, "the File menu's %s" % _TFT_MENU_ITEM)
+    except Exception:
+        # Pressed again, the menu closes.
+        file_menu.invoke()
+        raise
+    pressing_failed = _press_in_background(item)
+
+    def form():
+        new = [handle for handle in shown_windows(editor.recorded.pid)
+               if handle not in shown_before]
+        return next(windows_matching(new, _wrapped, lambda window:
+                                     window.element_info.automation_id == TFT_OUTPUT_FORM),
+                    None)
+    try:
+        return _wait_for(form, DIALOG_WAIT, "the TFT output window")
+    except EditorError as error:
+        if pressing_failed:
+            raise EditorError("%s; pressing %s failed: %r"
+                              % (error, _TFT_MENU_ITEM, pressing_failed[0])) from None
+        raise
+
+
+def _modified(file: Path):
+    """The time `file` was last written, in nanoseconds, or None when it is
+    missing."""
+    try:
+        return file.stat().st_mtime_ns
+    except FileNotFoundError:
+        return None
+
+
+def _written_anew(file: Path, written_before, size: int) -> bool:
+    """Whether `file` was written since `written_before`, its time then
+    (_modified), and has `size` bytes. A file missing for a moment, as while
+    it is replaced, is not written yet."""
+    try:
+        state = file.stat()
+    except FileNotFoundError:
+        return False
+    return state.st_mtime_ns != written_before and state.st_size == size
+
+
+def _shown(handle: int) -> bool:
+    """Whether the window `handle` still exists, and shows."""
+    return bool(win32gui.IsWindow(handle) and win32gui.IsWindowVisible(handle))
+
+
+def _close_window(handle: int):
+    """Asks the window `handle` to close, if it still shows."""
+    if _shown(handle):
+        win32gui.PostMessage(handle, win32con.WM_CLOSE, 0, 0)
+
+
+def _explorer_windows() -> dict:
+    """The Explorer windows open, {window handle: Shell.Application's window},
+    through Shell.Application's list of them."""
+    found = {}
+    try:
+        listed = win32com.client.Dispatch("Shell.Application").Windows()
+    except pywintypes.com_error as error:
+        raise EditorError("Windows' list of Explorer windows could not be read: %s"
+                          % error) from None
+    for window in listed:
+        try:
+            found[int(window.HWND)] = window
+        except pywintypes.com_error:
+            continue        # closing as it is read
+    return found
+
+
+def _close_explorer_on(folder: Path, before: set) -> bool:
+    """Closes the Explorer window the Editor opens on `folder` once it has
+    written a TFT file there: one on that folder that was not open `before`
+    (editor_windows.explorer_windows_on). It waits up to _EXPLORER_WAIT for
+    it, and closes no other window. Returns whether it closed one."""
+    deadline = time.monotonic() + _EXPLORER_WAIT
+    while time.monotonic() < deadline:
+        watchdog.progress()
+        windows = _explorer_windows()
+        locations = {}
+        for handle, window in windows.items():
+            try:
+                locations[handle] = window.LocationURL
+            except pywintypes.com_error:
+                continue
+        opened = explorer_windows_on(before, locations, folder)
+        if opened:
+            for handle in opened:
+                try:
+                    windows[handle].Quit()
+                except pywintypes.com_error:
+                    pass        # closed already
+            return True
+        time.sleep(0.25)
+    return False
 
 
 def _shown_screen_size(folder: Path, main) -> tuple:

@@ -11,7 +11,8 @@ import unittest
 from unittest import mock
 
 from tools.editor.editor_windows import (DIALOG_CLASS, PROGRESS_FORM, CompileWatch, class_name,
-                                         compile_ended, control_text, empty_control,
+                                         compile_ended, compiled_file_size, control_text,
+                                         empty_control, explorer_windows_on,
                                          is_locked_listing, is_save_question, is_work_copy,
                                          listed_page, on_a_screen, open_button,
                                          rich_edit_texts, shown_project, shown_windows,
@@ -284,6 +285,40 @@ class CompileEndedTest(unittest.TestCase):
     def test_not_yet(self):
         self.assertFalse(compile_ended(""))
         self.assertFalse(compile_ended("Available Memory:3584\r\nGlobal Memory:16\r\n"))
+
+
+class CompiledFileSizeTest(unittest.TestCase):
+    """The TFT file's size, which the Output panel's last line gives once a
+    compile has succeeded, as the Editor 3.1.73 wrote it while writing the
+    demo's TFT file."""
+
+    def test_the_size_of_a_compile_that_succeeded(self):
+        self.assertEqual(compiled_file_size(
+            "Page:settings Memory Occupied:968+5236=6204\r\nFile Check Finish\r\n"
+            "Compile Successful! 0 Errors, 11 Warnings,File Size:1,637,140\r\n"), 1637140)
+
+    def test_none_otherwise(self):
+        self.assertIsNone(compiled_file_size(""))
+        self.assertIsNone(compiled_file_size("Error:p09.c0.staOut of range\r\n"
+                                             "Error:Compile failed! 1 Errors, 0 Warnings,"))
+        # The size of an earlier line counts for nothing.
+        self.assertIsNone(compiled_file_size("Compile Successful! 0 Errors, 0 Warnings,"
+                                             "File Size:368,840\r\nError:Compile failed!"))
+
+
+class ExplorerWindowsOnTest(unittest.TestCase):
+    """The Explorer windows the Editor opened on its TFT file's folder: those
+    on that folder that were not open before, by their file URLs."""
+
+    def test_those_opened_on_the_folder(self):
+        folder = Path(r"C:\Users\dev\tft out")
+        now = {1: "file:///C:/Users/dev/tft%20out", 2: "file:///c:/users/DEV/TFT%20OUT",
+               3: "file:///C:/Users/dev", 4: ""}
+        # 1 was open before. 2 shows the folder, in other letter cases.
+        self.assertEqual(explorer_windows_on({1}, now, folder), [2])
+
+    def test_none_when_none_opened(self):
+        self.assertEqual(explorer_windows_on(set(), {}, Path(r"C:\out")), [])
 
 
 class CompileWatchTest(unittest.TestCase):

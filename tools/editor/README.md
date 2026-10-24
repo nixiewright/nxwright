@@ -1,6 +1,6 @@
 # Driving the Nextion Editor
 
-An optional tool for contributors who have the Nextion Editor: a script that drives the Nextion Editor, to see what it does without doing it by hand. It opens projects, takes screenshots of the Nextion Editor's windows, and reports what the Nextion Editor shows. nxwright itself neither needs nor runs it, and its tests do not touch it.
+An optional tool for contributors who have the Nextion Editor: a script that drives the Nextion Editor, to see what it does without doing it by hand. It opens projects, compiles them and writes their TFT files, takes screenshots of the Nextion Editor's windows, and reports what the Nextion Editor shows. nxwright itself neither needs nor runs it, and its tests do not touch it.
 
 It needs Windows, and the Nextion Editor 3.1.73.
 
@@ -81,6 +81,7 @@ python tools/editor/editor.py simulate schedule.png --send "page schedule"
 python tools/editor/editor.py simulate after.png --touch "press 200,150; release"
 python tools/editor/editor.py catalog tools/editor/build/catalog.json
 python tools/editor/editor.py compile
+python tools/editor/editor.py tft tools/editor/build/tft
 python tools/editor/editor.py status
 python tools/editor/editor.py close-simulator
 python tools/editor/editor.py close-file-dialog
@@ -154,6 +155,14 @@ Compiles the project shown, by the toolbar's Compile button. It prints a line gi
 
 - The panel is emptied first, so that it shows only this compile's text.
 - A compile that fails still ends the command well: its Output says why.
+
+### `tft <folder>`
+
+Compiles the project shown, and writes its TFT file in the folder, named after the project, over any file of that name. It prints the file's path, then the Nextion Editor's Output panel.
+
+- If the compile fails, the command stops without writing the file.
+- The command closes the Explorer window the Nextion Editor opens on the folder.
+- Your own Nextion Editor shares the dedicated Editor's settings, so it will offer this folder next time.
 
 ### `status`
 

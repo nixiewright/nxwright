@@ -1,8 +1,9 @@
 """Listing the dedicated Editor's windows, finding one by its automation
 ID, finding one shown over its simulator, telling its question to save,
-reading its component list and its Output panel, and saying where reading
-one failed, apart from pywinauto, so that their tests need neither it nor
-the Editor (tests/test_editor_windows.py).
+reading its component list and its Output panel, a TFT file's size among
+it, finding the Explorer windows it opens on a TFT file's folder, and saying
+where reading one failed, apart from pywinauto, so that their tests need
+neither it nor the Editor (tests/test_editor_windows.py).
 
 As Open is pressed over changes not saved, the Editor asks whether to save
 them before its file dialog shows. The question is a window of its own,
@@ -27,6 +28,8 @@ import os
 from pathlib import Path
 import re
 import traceback
+import urllib.parse
+import urllib.request
 
 from _ctypes import COMError
 
@@ -81,6 +84,11 @@ _EDITOR_STOPPED = ("Error:Destination array was not long enough",
 # Successful! 0 Errors, 0 Warnings,File Size:790,508", or "Error:Compile
 # failed! 1 Errors, 0 Warnings,".
 _COMPILE_ENDED = re.compile(r"(Compile Successful!|Error:Compile failed!)")
+# The end of that last line once a compile has succeeded: the TFT file's size.
+_FILE_SIZE = re.compile(r"Compile Successful!.*File Size:([\d,]+)\s*$")
+# The automation ID of the window File > TFT file output shows. Its title is
+# "About", in the Editor 3.1.73.
+TFT_OUTPUT_FORM = "output"
 
 
 def window_with_id(windows: list, automation_id: str, info_of):
@@ -288,6 +296,33 @@ def compile_ended(output: str) -> bool:
     ended: its last line says it succeeded, or failed."""
     lines = output.strip().splitlines()
     return bool(lines) and _COMPILE_ENDED.match(lines[-1]) is not None
+
+
+def compiled_file_size(output: str):
+    """Returns the size in bytes of the TFT file that the Output panel's text,
+    `output`, gives on its last line once a compile has succeeded, or None:
+    "Compile Successful! 0 Errors, 11 Warnings,File Size:1,637,140" gives
+    1637140."""
+    lines = output.strip().splitlines()
+    found = _FILE_SIZE.match(lines[-1]) if lines else None
+    return None if found is None else int(found[1].replace(",", ""))
+
+
+def explorer_windows_on(before: set, now: dict, folder: Path) -> list:
+    """Returns the Explorer windows of `now`, {window: the file URL of what it
+    shows}, that show `folder` and are not among `before`: those the Editor
+    opened on the folder it wrote a TFT file in. A window showing no file
+    URL, as a search does, is left out."""
+    wanted = os.path.normcase(os.path.normpath(folder))
+    opened = []
+    for window, url in now.items():
+        parsed = urllib.parse.urlparse(url)
+        if window in before or parsed.scheme != "file":
+            continue
+        shown = urllib.request.url2pathname(parsed.path)
+        if os.path.normcase(os.path.normpath(shown)) == wanted:
+            opened.append(window)
+    return opened
 
 
 class CompileWatch:
