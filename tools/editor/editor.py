@@ -76,7 +76,8 @@ from tools.editor.editor_windows import (DIALOG_CLASS, MESSAGE_FORM,  # noqa: E4
                                          control_text, crash_dialog_shown, empty_control,
                                          explorer_windows_on, inner_window, is_locked_listing,
                                          is_save_question, is_work_copy, listed_page,
-                                         rich_edit_texts, shown_project, shown_windows,
+                                         rich_edit_texts, shown_project, shows_project,
+                                         shown_windows,
                                          sole_window_with_id, where_raised, window_with_id,
                                          windows_matching, windows_over_simulator)
 from tools.editor import watchdog  # noqa: E402
@@ -731,7 +732,7 @@ def _opened(editor: DedicatedEditor, copy: Path) -> bool:
     main = editor.main_window()
     dialogs = _dialogs(main)
     forms = _message_forms(main)
-    if not dialogs and not forms and str(copy) in main.window_text():
+    if not dialogs and not forms and shows_project(main.window_text(), copy):
         return True
     for form in forms:
         raise EditorError("the Editor asks %r: %s; it is left unanswered"
@@ -1669,7 +1670,7 @@ def _shown_screen_size(folder: Path, main) -> tuple:
     is not the one recorded, or its size could not be read."""
     shown = read_shown(folder)
     # The title names the project shown, as _opened reads it.
-    if shown is None or shown.project not in main.window_text():
+    if shown is None or not shows_project(main.window_text(), shown.project):
         raise EditorError("--touch needs the screen's size of the project shown, which the "
                           "tool reads as its open command opens a project: open it again "
                           "with the open command")

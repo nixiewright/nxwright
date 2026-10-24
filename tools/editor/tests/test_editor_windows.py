@@ -18,7 +18,8 @@ from tools.editor.editor_windows import (DIALOG_CLASS, PROGRESS_FORM, CompileWat
                                          inner_window, is_locked_listing, is_save_question,
                                          is_work_copy, listed_page, on_a_screen,
                                          rich_edit_texts, shown_project, shown_windows,
-                                         sole_window_with_id, where_raised, window_with_id,
+                                         shows_project, sole_window_with_id, where_raised,
+                                         window_with_id,
                                          windows_matching, windows_over_simulator)
 
 # The COMError a window being made or torn down gave when its automation ID
@@ -441,6 +442,16 @@ class SaveQuestionTest(unittest.TestCase):
         self.assertEqual(shown_project(r"Nextion Editor(C:\work\demo (2).HMI)"),
                          r"C:\work\demo (2).HMI")
         self.assertIsNone(shown_project("Nextion Editor"))
+
+    def test_the_title_shows_a_project_in_any_case(self):
+        # Windows kept an older copy's name, k.HMI, for a copy written as K.HMI.
+        title = r"Nextion Editor(%s)" % (self.WORK / "k.HMI")
+        self.assertTrue(shows_project(title, self.WORK / "K.HMI"))
+        self.assertTrue(shows_project(title, str(self.WORK / "k.HMI")))
+        for title, project in ((title, self.WORK / "kk.HMI"), (title, self.WORK / "k"),
+                               ("Nextion Editor", self.WORK / "k.HMI")):
+            with self.subTest(title=title, project=project):
+                self.assertFalse(shows_project(title, project))
 
     def test_a_copy_in_the_tools_work_folder_is_its_own(self):
         self.assertTrue(is_work_copy(str(self.WORK / "demo (2).HMI"), self.WORK))

@@ -240,6 +240,15 @@ def shown_project(title: str):
     return match[1] if match else None
 
 
+def shows_project(title: str, project) -> bool:
+    """Whether the main window's `title` shows the project file `project`.
+    Windows' paths ignore letter case: a copy written as K.HMI over an older
+    k.HMI keeps the older name, which the title then gives."""
+    shown = shown_project(title)
+    return shown is not None and (os.path.normcase(os.path.abspath(shown))
+                                  == os.path.normcase(os.path.abspath(str(project))))
+
+
 def is_work_copy(shown, work: Path) -> bool:
     """Whether `shown`, a project file's path or None, is one of the copies
     the tool opens, in its folder `work`: answering No to the question to
