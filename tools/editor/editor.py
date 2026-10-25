@@ -615,16 +615,23 @@ def open_project(editor: DedicatedEditor, folder: Path, project: Path) -> Path:
     try:
         _file_dialog_control(dialog, "Edit", _FILE_NAME_BOX).set_edit_text(str(copy))
         _file_dialog_control(dialog, "Button", _OPEN_BUTTON).invoke()
+        _wait_for(lambda: _opened(editor, copy), OPENING_WAIT, "the project to open")
     except Exception:
-        # Left up, the dialog this command showed would stop every later one.
-        try:
-            _cancel_file_dialog(dialog)
-        except (ElementNotFoundError, COMError):
-            pass    # already closing: the error that stopped the open is the one to say
+        _cancel_left_dialog(dialog)
         raise
-    _wait_for(lambda: _opened(editor, copy), OPENING_WAIT, "the project to open")
     write_shown(folder, Shown(str(copy), screen))
     return copy
+
+
+def _cancel_left_dialog(dialog):
+    """Cancels the file dialog `dialog`, which this command showed, if it is
+    still up, as when the project did not open in time: left up, it would
+    stop every later command. A dialog already closing is let be: the error
+    that stopped the open is the one to say."""
+    try:
+        _cancel_file_dialog(dialog)
+    except (ElementNotFoundError, COMError):
+        pass
 
 
 def _wait_for_file_dialog(main, unsaved: bool, pressing_failed: list):
