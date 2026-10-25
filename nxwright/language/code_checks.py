@@ -259,7 +259,7 @@ def _check_value_and_head(code: str, number: int):
         # The Editor refused a text holding a semicolon in any part of a
         # for's head, and compiled one in a while's or an if's condition.
         if head and head[1] == "for" and any(";" in text for text in STRING.findall(code)):
-            raise NxwrightError("%s: the Nextion Editor refuses a text that holds a semicolon "
+            raise NxwrightError("%s: the Nextion Editor refuses a text that contains a semicolon "
                                 "in a for's head (\"SYNTAX ERROR:for\")" % code, line=number)
         return
     assignment = ASSIGNMENT.match(code)
@@ -328,9 +328,8 @@ def _check_macro_references(code: str, objects: ObjectNames, number: int):
     command = _NAME_IN_COMMAND.match(code)
     if command and _is_component_name(command[2], objects):
         raise NxwrightError("%s %s: in a macro, a command takes a component's number, or a "
-                            "variable holding it, not its name, which the Nextion Editor "
-                            "refuses there"
-                            % (command[1], command[2]), line=number)
+                            "variable that contains it. The Nextion Editor refuses its name "
+                            "there" % (command[1], command[2]), line=number)
     for part in STRING.split(code)[::2]:
         for first, second, third in _DOTTED.findall(part):
             if first not in objects.pages:
@@ -366,9 +365,9 @@ def _check_program_names(code: str, pages: dict, number: int):
         named = page in pages or any(known is not None and page in known
                                      for known in pages.values())
     if named:
-        raise NxwrightError("%s: program.s belongs to no page, so %s takes a component's "
-                            "number there, or a variable holding it, not a page's or a "
-                            "component's name, which the Nextion Editor refuses (\"Invalid "
+        raise NxwrightError("%s: program.nx belongs to no page, so %s takes a component's "
+                            "number, or a variable that contains it. The Nextion Editor "
+                            "refuses a page's or a component's name there (\"Invalid "
                             "Component ID\")" % (code, command[1]), line=number)
 
 
@@ -462,9 +461,10 @@ def _check_xstr_text(code: str, number: int):
         return
     arguments = command_arguments(code[len("xstr"):].strip())
     if len(arguments) == COMMAND_PARAMETERS["xstr"] and not is_one_operand(arguments[-1]):
-        raise NxwrightError("%s: the Nextion Editor takes one operand as the text of xstr, a "
-                            "text, a txt, a number, or a variable, not texts joined or "
-                            "arithmetic (\"%s\")" % (code, INVALID_VARIABLES), line=number)
+        raise NxwrightError("%s: the text of xstr must be one operand: a text, a txt, a "
+                            "number, or a variable. The Nextion Editor refuses texts "
+                            "joined or arithmetic there (\"%s\")" % (code, INVALID_VARIABLES),
+                            line=number)
 
 
 def _check_first_word(code: str, number: int):

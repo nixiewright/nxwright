@@ -107,7 +107,7 @@ The build stops at the first line that uses something that does not exist:
 - `t0.txt` must be a component of the page.
 - `settings.t0.txt` must be a page and one of its components.
 - `vis t0,1`, `tsw`, `ref`, and `click` must give a component of the page.
-  - `program.nx` belongs to no page, so there they take a component's number, as in `vis 1,0`, or a variable that contains it, as in `vis sys0,0`. A page's or a component's name there is refused, with its page's name or not, as in `vis t0,0` or `vis page0.t0,0` ("Invalid Component ID").
+  - In `program.nx`, which belongs to no page, they take a component's number, as in `vis 1,0`, or a variable that contains it, as in `vis sys0,0`. A page's or a component's name is refused there, with or without a page's name, as in `vis t0,0` or `vis page0.t0,0` ("Invalid Component ID").
 - A name alone in a value or a condition, as `abc` in `n0.val=abc+1`, must be an `int` of `program.nx`, a system variable, or a colour in capitals, as `RED`. A component's or a page's name alone is refused.
 - Another page's components need their page's name, whatever their scope.
 
@@ -142,7 +142,7 @@ In strict Nextion syntax, the build refuses a line the Nextion Editor cannot rea
 - A value that is not operands joined by operators, such as `n0.val=2+`, `n0.val=+2`, or `n0.val=(1+2)` ("Invalid Variables"). After an operator, a minus can start a number, as in `n0.val=2*-16`, but not a name: `n0.val=2*-n1.val` is refused.
 - An assignment with no value: `n0.val=` ("Invalid command").
 - An `if`, `else if`, `while`, or `for` whose condition does not end with `)`.
-- A `for` whose head holds a text with a semicolon, in any of its parts, such as `for(n0.val=0;t0.txt!="a;b";n0.val++)` ("SYNTAX ERROR:for"). A `while` or an `if` takes such a text. nxlang writes such a `for` as its start and a `while` loop instead ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
+- A `for` whose head contains a text with a semicolon, in any of its parts, such as `for(n0.val=0;t0.txt!="a;b";n0.val++)` ("SYNTAX ERROR:for"). A `while` or an `if` takes such a text. nxlang writes such a `for` as its start and a `while` loop instead ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 
 ### Data record calls
 
@@ -169,7 +169,7 @@ The first argument of `get`, `print`, `prints`, and `covx` is one text or one nu
 - Arithmetic is fine in `prints`' length, in `covx`'s length and form, and in `newfile`'s size.
 - In nxlang, such a first argument is computed first instead ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 
-The text of `xstr`, its last argument, is one operand too: a text, a `txt`, a number, or a variable. The build refuses texts joined or arithmetic there, such as `xstr 0,0,100,30,0,RED,WHITE,0,0,1,"a"+"b"` ("Invalid Variables"). In nxlang, such a text is computed first instead, as a first argument is, but in `program.nx`, which has no temporaries.
+The text of `xstr`, its last argument, is one operand too: a text, a `txt`, a number, or a variable. The build refuses texts joined or arithmetic there, such as `xstr 0,0,100,30,0,RED,WHITE,0,0,1,"a"+"b"` ("Invalid Variables"). In nxlang, such a text is computed first instead, as a first argument is, except in `program.nx`, which has no temporaries.
 
 ### Texts and numbers
 
@@ -190,7 +190,7 @@ nxlang refuses a text put into a number itself, and converts a number put into a
 - A text that ends in an escaped backslash, inside a condition: `if(t0.txt=="a\\")` ("SYNTAX ERROR").
   - A condition is the head of an `if`, an `else if`, or a `while`, and the middle part of a `for`'s head. Such a text compiles elsewhere, as in `t0.txt="\\"`, or in a `for`'s first or last part.
 
-This applies in nxlang too, but for a text that ends in an escaped backslash: nxlang puts such a text into a temporary first ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)). `program.nx` has no temporaries, so it still refuses one in a condition.
+This applies in nxlang too, except for a text that ends in an escaped backslash, which nxlang puts into a temporary first ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)). `program.nx` has no temporaries, so there the build still refuses such a text in a condition.
 
 ### Attributes a component lacks
 

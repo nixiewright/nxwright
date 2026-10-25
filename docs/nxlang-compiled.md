@@ -78,7 +78,7 @@ The Nextion Editor accepts less than nxlang:
 - A text assignment that uses its own target anywhere but first, such as `t0.txt = "-" + t0.txt`, is built in a temporary first. On the screen, such a line would keep the old text and append the other pieces.
 - A condition's operands are computed into temporaries just before it. A `while` loop computes them again at the end of each pass. A `for` loop whose header needs temporaries becomes a `while` loop.
 - The Nextion Editor refuses a text that ends in an escaped backslash in a condition, though it takes one in an assignment. So such a text is put into a text temporary first: `if (t0.txt == "a\\")` becomes `__s0.txt="a\\"`, then `if(t0.txt==__s0.txt)`. A `switch` case of such a text is compared the same way.
-- The Nextion Editor refuses a text holding a semicolon anywhere in a `for`'s header, though it takes one in a `while`'s condition. So such a `for` loop becomes a `while` loop too.
+- The Nextion Editor refuses a text containing a semicolon anywhere in a `for`'s header, though it takes one in a `while`'s condition. So such a `for` loop becomes a `while` loop too.
 - A condition mixing `&&` and `||` computes each inner part into a temporary set to 0 or 1.
 - `!` is removed by reversing comparisons: `!(a == b)` becomes `a != b`.
 - When the right side of `&&` or `||` needs computing first, the whole condition goes into a temporary set to 0 or 1. Nested `if` blocks reach each part only when needed.
