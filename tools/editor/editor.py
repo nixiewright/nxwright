@@ -151,9 +151,12 @@ _TFT_FOLDER_BOX = "1001"
 _TFT_OUTPUT_BUTTON = "buttonX2"
 _TFT_FILE_NAME = "label1"
 # How long the TFT output window may take to show once its menu item is
-# pressed, in seconds, before the press is taken for lost; and how many times
-# the item is pressed in all (_open_tft_output).
+# pressed, in seconds, before the press is taken for lost; how long the File
+# menu may take to list that item once pressed, before that press is taken
+# for lost; and how many times File and the item are pressed in all
+# (_open_tft_output).
 _PRESS_SHOWS = 5
+_MENU_SHOWS = 5
 _TFT_PRESSES = 3
 # How long the Editor may take to open an Explorer window on the folder once
 # it has written the TFT file, in seconds. It took about 2 s.
@@ -1536,9 +1539,11 @@ def _open_tft_output(editor: DedicatedEditor, main):
     pressed in the background, as the window it shows is modal.
 
     Just after `open`, while the Editor is still busy with the project, a
-    press of the item can be lost: the menu closes, and no window shows. So
-    when none shows within _PRESS_SHOWS while the main window stays enabled,
-    as no window of the Editor's is up, File and its item are pressed again,
+    press can be lost. A lost press of the item closes the menu, and no
+    window shows; a lost press of File opens no menu, and no item shows. So
+    when no item shows within _MENU_SHOWS (_press_tft_item), or no window
+    within _PRESS_SHOWS while the main window stays enabled, as no window
+    of the Editor's is up, File and its item are pressed again,
     _TFT_PRESSES times in all."""
     file_menu = _required(_only_match(editor.control(_MENU_BAR), "children", name="File",
                                       control_type="MenuItem"),
@@ -1553,12 +1558,17 @@ def _open_tft_output(editor: DedicatedEditor, main):
                     None)
     for _ in range(_TFT_PRESSES):
         pressing_failed = _press_tft_item(file_menu)
+        if pressing_failed is None:
+            continue        # the press of File was lost
         try:
             return _wait_for(form, _PRESS_SHOWS, "the TFT output window")
         except EditorError:
             if not win32gui.IsWindowEnabled(editor.main_handle):
                 break       # a window of the Editor's is up: the press took
     else:
+        if pressing_failed is None:
+            raise EditorError("pressed File %d times, and its menu did not list %s"
+                              % (_TFT_PRESSES, _TFT_MENU_ITEM))
         raise EditorError("pressed File > %s %d times, and its window did not show%s"
                           % (_TFT_MENU_ITEM, _TFT_PRESSES, "; pressing it failed: %r"
                              % pressing_failed[0] if pressing_failed else ""))
@@ -1571,16 +1581,25 @@ def _open_tft_output(editor: DedicatedEditor, main):
         raise
 
 
-def _press_tft_item(file_menu) -> list:
+def _press_tft_item(file_menu):
     """Opens the File menu, unless it is open, and presses its TFT file
     output item in the background. Returns the list where the press puts
-    what went wrong (_press_in_background)."""
+    what went wrong (_press_in_background), or None when the menu lists no
+    such item within _MENU_SHOWS: the press that opens it was lost, and
+    the menu is left closed for the next press. A press only late, whose
+    menu opens after that wait, may make the next press close it again;
+    the press after that opens it, within _open_tft_output's presses."""
     if not file_menu.children():
         file_menu.invoke()
     try:
         item = _wait_for(lambda: next((child for child in file_menu.children()
                                        if child.element_info.name == _TFT_MENU_ITEM), None),
-                         DIALOG_WAIT, "the File menu's %s" % _TFT_MENU_ITEM)
+                         _MENU_SHOWS, "the File menu's %s" % _TFT_MENU_ITEM)
+    except EditorError:
+        # Open, though without the item: pressed again, it closes.
+        if file_menu.children():
+            file_menu.invoke()
+        return None
     except Exception:
         # Pressed again, the menu closes.
         file_menu.invoke()
