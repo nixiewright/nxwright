@@ -77,6 +77,8 @@ The Nextion Editor accepts less than nxlang:
 - An expression the Nextion Editor would compute differently is split. A part is computed first into a hidden variable, a **temporary**. `x.val = a.val - b.val * c.val` becomes `__g0_0=b.val*c.val`, then `x.val=a.val-__g0_0`. An expression that already computes correctly from left to right is written unchanged.
 - A text assignment that uses its own target anywhere but first, such as `t0.txt = "-" + t0.txt`, is built in a temporary first. On the screen, such a line would keep the old text and append the other pieces.
 - A condition's operands are computed into temporaries just before it. A `while` loop computes them again at the end of each pass. A `for` loop whose header needs temporaries becomes a `while` loop.
+- The Nextion Editor refuses a text that ends in an escaped backslash in a condition, though it takes one in an assignment. So such a text is put into a text temporary first: `if (t0.txt == "a\\")` becomes `__s0.txt="a\\"`, then `if(t0.txt==__s0.txt)`. A `switch` case of such a text is compared the same way.
+- The Nextion Editor refuses a text holding a semicolon anywhere in a `for`'s header, though it takes one in a `while`'s condition. So such a `for` loop becomes a `while` loop too.
 - A condition mixing `&&` and `||` computes each inner part into a temporary set to 0 or 1.
 - `!` is removed by reversing comparisons: `!(a == b)` becomes `a != b`.
 - When the right side of `&&` or `||` needs computing first, the whole condition goes into a temporary set to 0 or 1. Nested `if` blocks reach each part only when needed.
@@ -87,6 +89,7 @@ The Nextion Editor accepts less than nxlang:
 - A tab after an `int` line's `int` is written as one space. The Nextion Editor reads a tab there as part of the name, and refuses the declaration.
 - The Nextion Editor takes each argument of a data record's call, such as `d0.insert("Total: " + t0.txt)`, only as one text or one number. So an argument of more than one operand is computed into a temporary first. A number given for a text becomes its digits. A text given for a number is refused.
 - The Nextion Editor takes the first argument of `get`, `print`, `prints`, and `covx` only as one text or one number. So a first argument of more than one operand is computed into a temporary first: `print x.val + 1` becomes `__g0_0=x.val+1`, then `print __g0_0`. Their other numbers, `prints`' length and `covx`'s length and form, are written as arithmetic, which the Nextion Editor takes there.
+- The same is true of the text of `xstr`, its last argument: a text of more than one operand is computed into a temporary first. Its other arguments are written as they are.
 - An escape the screen does not read, a variable's `val` while it stores a text or its `txt` while it stores a number, and a command given another number of arguments than it takes are written as they are. The build then refuses them ([build-rules.md](build-rules.md)).
 
 ## The hidden variables and components

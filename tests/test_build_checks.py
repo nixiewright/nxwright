@@ -599,12 +599,13 @@ class CommandArgumentTest(_CodeOnFirstTestCase):
         self.write_code(head + "t0.txt", head + '"a+b"')
         export_dump(self.source, self.folder / "built")
 
-    def test_nxlang_refuses_texts_joined_as_xstr_s_text_too(self):
+    def test_nxlang_computes_xstr_s_text_first(self):
         switch_to_nxlang(self.source)
         self.write_code('xstr 0,0,100,30,0,RED,WHITE,0,0,1,"a"+"b"')
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: .*\(\"Invalid "
-                                                   r"Variables\"\)"):
-            export_dump(self.source, self.folder / "refused")
+        export_dump(self.source, self.folder / "built")
+        page = next((self.folder / "built" / "pages").glob("*-first.txt"))
+        self.assertRegex(page.read_text(encoding="utf-8"),
+                         r'\| (__s\w+\.txt)="a"\+"b"\n\s*\| xstr 0,0,100,30,0,RED,WHITE,0,0,1,\1\n')
 
     def test_nxlang_computes_it_first(self):
         switch_to_nxlang(self.source)
@@ -734,6 +735,20 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
                         'rdfile "sd0/a.txt",0,1,0', 'twfile "sd0/a.txt",5', "rest", "touch_j",
                         "code_c")
         export_dump(self.source, self.folder / "built")
+
+    def test_nxlang_writes_such_texts_another_way(self):
+        # A condition's text that ends in an escaped backslash goes into a
+        # text temporary first, and a for whose head holds a text with a
+        # semicolon becomes its start and a while.
+        switch_to_nxlang(self.source)
+        self.write_code(r'if (t0.txt == "a\\") {', "  n0.val = 1", "}",
+                        'for (n0.val = 0; t0.txt != "a;b"; n0.val++) {', '  t0.txt = "a;b"', "}")
+        export_dump(self.source, self.folder / "built")
+        page = next((self.folder / "built" / "pages").glob("*-first.txt")).read_text(
+            encoding="utf-8")
+        self.assertRegex(page, r'\| (__s\w+\.txt)="a\\\\"\n\s*\| if\(t0\.txt==\1\)\n')
+        self.assertIn('| while(t0.txt!="a;b")', page)
+        self.assertNotIn("| for(", page)
 
     def test_a_text_holding_a_semicolon_outside_a_for_s_head(self):
         # The Nextion Editor compiled each: the text in a while's and an

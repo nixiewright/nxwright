@@ -101,7 +101,8 @@ import re
 
 from nxwright import NxwrightError
 from nxwright.language.code_checks import (DATA_RECORD_ARGUMENTS, DATA_RECORD_CALL,
-                                           ONE_OPERAND_FIRST, method_count_refusal)
+                                           ONE_OPERAND_FIRST, ends_in_escaped_backslash,
+                                           is_one_operand, method_count_refusal)
 from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, command_word, declared_int_names,
                                           goto_label, minus_is_sign, outside_strings, split_line)
 from nxwright.language.code_preprocessor import with_own_attributes
@@ -625,12 +626,53 @@ def _count_calls(expression) -> int:
 
 def _plain(expression) -> bool:
     """True for an operand a condition can hold as it is: nothing to compute first."""
-    if isinstance(expression, (Literal, Local)):
+    if isinstance(expression, Literal):
+        return not _refused_in_condition(expression)
+    if isinstance(expression, Local):
         return True
     if isinstance(expression, Reference):
         return all(index is None or (_is_atomic(index) and _plain(index))
                    for _, index in expression.parts)
     return False
+
+
+def _refused_in_condition(literal: Literal) -> bool:
+    """True for a text the Editor refuses in a condition, though it takes it
+    in an assignment: one that ends in an escaped backslash, as `"a\\\\"`
+    (code_checks.ends_in_escaped_backslash). Such a text goes into a text
+    temporary first."""
+    return literal.text.startswith('"') and ends_in_escaped_backslash(literal.text)
+
+
+def _last_argument_start(code: str):
+    """Returns where the last argument of the command `code` starts: right
+    after its last comma outside its texts, parentheses, and brackets, as a
+    call's arguments hold commas of their own. None when it has none."""
+    depth, start, quoted, escaped = 0, None, False, False
+    for place, character in enumerate(code):
+        if quoted:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                quoted = False
+        elif character == '"':
+            quoted = True
+        elif character in "([":
+            depth += 1
+        elif character in ")]":
+            depth -= 1
+        elif character == "," and depth == 0:
+            start = place + 1
+    return start
+
+
+def _holds_semicolon_text(lines: list) -> bool:
+    """True when a line of `lines` holds a quoted text with a semicolon. The
+    Editor refused such a text in any part of a for's head, and compiled it
+    in a while's condition and in a statement of its own."""
+    return any(";" in text for line in lines for text in STRING_LITERAL.findall(line))
 
 
 def _needs_computing(condition) -> bool:
@@ -707,8 +749,13 @@ class _Emitter:
     def atom(self, expression, in_condition: bool = False) -> str:
         """Returns the Editor text of a literal, local, or reference. In a
         condition, which holds no arithmetic, an index with arithmetic is
-        computed into a temporary first."""
+        computed into a temporary first, and so is a text the Editor
+        refuses there (_refused_in_condition)."""
         if isinstance(expression, Literal):
+            if in_condition and _refused_in_condition(expression):
+                target = self.temporary(TEXT)
+                self.emit(target + "=" + expression.text)
+                return target
             return expression.text
         if isinstance(expression, Local):
             return expression.variable
@@ -1959,13 +2006,15 @@ class _EventCompiler:
                                    number, test, flag)
         if step_tokens:
             self.statement_lines(step_tokens, number, step)
-        if len(init.lines) <= 1 and not test.lines and len(step.lines) <= 1 and not flag:
+        if (len(init.lines) <= 1 and not test.lines and len(step.lines) <= 1 and not flag
+                and not _holds_semicolon_text(init.lines + [condition] + step.lines)):
             self.put(number, "%sfor(%s;%s;%s)%s%s" % (indent, "".join(init.lines)[len(indent):],
                                                       condition, "".join(step.lines), brace, comment))
             return _Block("for")
-        # Not expressible in one for line: the start, then a while loop that
-        # runs the step and recomputes its condition's parts at the end of each
-        # pass. After a break, the step does not run, as in C.
+        # Not expressible in one for line, as when a part needs temporaries
+        # or holds a text the Editor refuses there: the start, then a while
+        # loop that runs the step and recomputes its condition's parts at the
+        # end of each pass. After a break, the step does not run, as in C.
         if flag:
             self.put(number, indent + flag + "=0")
         for line in init.lines + test.lines:
@@ -2023,7 +2072,8 @@ class _EventCompiler:
             # default runs when no case can match: known before the first case.
             self.put(number, indent + no_match + "=1")
             for case_value in values:
-                self.put(number, indent + "if(%s==%s)" % (value, case_value))
+                self.put(number, indent + "if(%s)" % self.case_test(number, indent, value,
+                                                                     case_value))
                 self.put(number, indent + "{")
                 self.put(number, indent + "  " + no_match + "=0")
                 self.put(number, indent + "}")
@@ -2043,6 +2093,16 @@ class _EventCompiler:
             raise NxwrightError("the case's value is not of the switch's kind", line=number)
         return value.text
 
+    def case_test(self, number: int, indent: str, value: str, case_value: str) -> str:
+        """Returns the test of a case, `value==case_value`. A case's text
+        the Editor refuses in a condition (_refused_in_condition) is put
+        into a text temporary first, on a line of its own."""
+        if not _refused_in_condition(Literal(case_value, TEXT)):
+            return "%s==%s" % (value, case_value)
+        target = self.emitter(indent, number).temporary(TEXT)
+        self.put(number, indent + target + "=" + case_value)
+        return "%s==%s" % (value, target)
+
     def case_label(self, number: int, indent: str, label: str, comment: str):
         """Compiles a case or default label: closes the case before it, and
         opens the `if` that runs its code once a case has matched."""
@@ -2055,7 +2115,7 @@ class _EventCompiler:
         if _DEFAULT_LABEL.fullmatch(label):
             test = no_match + "==1"
         else:
-            test = "%s==%s" % (value, self.case_value(label, number, kind))
+            test = self.case_test(number, indent, value, self.case_value(label, number, kind))
         self.put(number, indent + "if(%s)%s" % (test, comment))
         self.put(number, indent + "{")
         self.put(number, indent + "  " + matched + "=1")
@@ -2140,6 +2200,29 @@ class _EventCompiler:
                     for place, argument in enumerate(arguments)]
         emitter.emit("%s %s" % (word, ",".join(operands)))
         self.put_lines(number, emitter.lines, comment)
+
+    def xstr_text_computed(self, number: int, indent: str, code: str, comment: str) -> bool:
+        """Compiles an xstr whose text, its last argument, is more than one
+        operand, which the Editor refuses there: computes the text into a
+        temporary first, as command_with_operands computes a first
+        argument, and writes the other arguments as substitute_command
+        writes them. Returns False, writing nothing, when the text is one
+        operand as the build's check reads it (code_checks.is_one_operand):
+        the line is then written as any other command, as before."""
+        start = _last_argument_start(code)
+        if start is None or is_one_operand(code[start:]):
+            return False
+        text = code[start:]
+        try:
+            expression = Parser(tokenize(text, number), number, self.scope).whole_expression()
+        except NotParsed as error:
+            raise NxwrightError(error.reason, line=error.line) from None
+        emitter = self.emitter(indent, number)
+        operand = emitter.value(expression)
+        spaces = text[:len(text) - len(text.lstrip())]
+        emitter.emit(self.substitute_command(code[:start], number) + spaces + operand)
+        self.put_lines(number, emitter.lines, comment)
+        return True
 
     def arguments(self, text: str, number: int) -> list:
         """Returns the expressions of `text`, a call's or a command's
@@ -2260,6 +2343,8 @@ class _EventCompiler:
         command = command_word(code)
         if command in ONE_OPERAND_FIRST:
             self.command_with_operands(number, indent, command, code[len(command):], comment)
+            return
+        if command == "xstr" and self.xstr_text_computed(number, indent, code, comment):
             return
         emitter = self.emitter(indent, number)
         try:

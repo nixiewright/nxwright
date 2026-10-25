@@ -438,10 +438,17 @@ def _check_first_argument(code: str, number: int):
     if word not in ONE_OPERAND_FIRST:
         return
     first = ARGUMENT.match(code[len(word):].strip())
-    if first is not None and not _ONE_OPERAND.fullmatch(first[0]):
+    if first is not None and not is_one_operand(first[0]):
         raise NxwrightError("%s: the Nextion Editor takes one text or number as the first "
                             "argument of %s, not arithmetic or texts joined" % (code, word),
                             line=number)
+
+
+def is_one_operand(text: str) -> bool:
+    """Whether `text` is one operand alone: a text, a number, or a name,
+    which may be dotted, as the Editor takes where it refuses arithmetic
+    and texts joined (_ONE_OPERAND)."""
+    return _ONE_OPERAND.fullmatch(text.strip()) is not None
 
 
 def _check_xstr_text(code: str, number: int):
@@ -454,8 +461,7 @@ def _check_xstr_text(code: str, number: int):
     if command_word(code) != "xstr":
         return
     arguments = command_arguments(code[len("xstr"):].strip())
-    if len(arguments) == COMMAND_PARAMETERS["xstr"] \
-            and not _ONE_OPERAND.fullmatch(arguments[-1].strip()):
+    if len(arguments) == COMMAND_PARAMETERS["xstr"] and not is_one_operand(arguments[-1]):
         raise NxwrightError("%s: the Nextion Editor takes one operand as the text of xstr, a "
                             "text, a txt, a number, or a variable, not texts joined or "
                             "arithmetic (\"%s\")" % (code, INVALID_VARIABLES), line=number)
@@ -560,13 +566,19 @@ def _check_condition_texts(code: str, number: int):
     for text in STRING.finditer(code):
         semicolons += code.count(";", after, text.start())
         after = text.end()
-        escapes = list(re.finditer(r"\\(.)", text[0][1:-1]))
-        ends_in_backslash = (escapes and escapes[-1][1] == "\\"
-                             and escapes[-1].end() == len(text[0]) - 2)
-        if ends_in_backslash and (not in_for or semicolons == 1):
+        if ends_in_escaped_backslash(text[0]) and (not in_for or semicolons == 1):
             raise NxwrightError("%s: the Nextion Editor refuses a text that ends in an escaped "
                                 "backslash in a condition (\"SYNTAX ERROR\")" % code,
                                 line=number)
+
+
+def ends_in_escaped_backslash(text: str) -> bool:
+    """Whether the quoted text `text`, its quotes included, ends in an
+    escaped backslash: its last escape, read in pairs from the left, is
+    `\\\\` right before its closing quote, as in `"a\\\\"`. The Editor refused
+    such a text in a condition (_check_condition_texts)."""
+    escapes = list(re.finditer(r"\\(.)", text[1:-1]))
+    return bool(escapes) and escapes[-1][1] == "\\" and escapes[-1].end() == len(text) - 2
 
 
 def _value_kind(operand: str, variables) -> str:

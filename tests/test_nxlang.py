@@ -16,8 +16,8 @@ from nxwright.language.resource_names import ResourceNames
 from nxwright.language.editor_code import (editor_equivalent, global_declarations,
                                            keep_editor_meaning, without_global_declarations,
                                            write_expression)
-from nxwright.language.nxlang import (Binary, Literal, Macro, ProgramNames, compile_page,
-                                      compile_program, read_program_names)
+from nxwright.language.nxlang import (Binary, Literal, Macro, ProgramNames, _last_argument_start,
+                                      compile_page, compile_program, read_program_names)
 from nxwright.source import source_folder
 from nxwright.source.folder_check import check_folder
 from nxwright.source.source_folder import export_dump, folder_reader, import_dump, switch_to_nxlang
@@ -371,6 +371,96 @@ class ConditionTest(unittest.TestCase):
 
     def test_text_comparison(self):
         self.assertEqual(run('if (t1.txt == "a" + "b") {\n  r.val = 1\n}')["r.val"], 1)
+
+
+class RefusedFormTest(unittest.TestCase):
+    """Forms the Nextion Editor refuses as it compiles, which nxlang writes
+    another way: a condition's text that ends in an escaped backslash, put
+    into a text temporary first; xstr's text of more than one operand,
+    computed first; and a for whose head holds a text with a semicolon,
+    written as its start and a while."""
+
+    def test_a_text_ending_in_an_escaped_backslash_in_an_if(self):
+        code = "\n".join([r'if (t0.txt == "a\\") {', "  r.val = 1", "}"])
+        self.assertEqual(compile_lines(code),
+                         [r'__s0.txt="a\\"', "if(t0.txt==__s0.txt)", "{", "  r.val=1", "}"])
+        self.assertEqual(run(code, {"t0.txt": "a\\"})["r.val"], 1)
+        self.assertEqual(run(code)["r.val"], 0)
+
+    def test_a_text_ending_in_an_escaped_backslash_in_other_conditions(self):
+        # An else if, a while, a for's condition, a second part of &&, and
+        # ?:, each with the text first or second.
+        cases = [
+            (["if (a.val == 1) {", "  r.val = 1", r'} else if ("\\" == t0.txt) {',
+              "  r.val = 2", "}"], {"t0.txt": "\\"}, 2),
+            ([r'while (t0.txt != "\\") {', r'  t0.txt = "\\"', "  r.val++", "}"], {}, 1),
+            ([r'for (x.val = 0; t0.txt != "\\"; x.val++) {', r'  t0.txt = "\\"', "}",
+              "r.val = x.val"], {}, 1),
+            ([r'if (a.val == 7 && t0.txt == "\\") {', "  r.val = 1", "}"], {"t0.txt": "\\"}, 1),
+            ([r'r.val = t0.txt == "\\" ? 1 : 2'], {}, 2),
+        ]
+        for lines, values, expected in cases:
+            code = "\n".join(lines)
+            with self.subTest(code=lines[0]):
+                self.assertEqual(run(code, values)["r.val"], expected)
+                self.assertFalse(any(r'"\\")' in line or r'"\\"&&' in line
+                                     for line in compile_lines(code)))
+
+    def test_a_case_ending_in_an_escaped_backslash(self):
+        for default in ("", "  default:\n    r.val = 3\n"):
+            code = ("switch (t0.txt) {\n  case \"a\":\n    r.val = 1\n    break\n"
+                    "  case \"a\\\\\":\n    r.val = 2\n    break\n" + default + "}")
+            page = FUNCTIONS + "on p.down:\n" + block(code) + "\n"
+            with self.subTest(default=bool(default)):
+                self.assertEqual(run_page(page, {"t0.txt": "a\\"}).values["r.val"], 2)
+                self.assertEqual(run_page(page, {"t0.txt": "a"}).values["r.val"], 1)
+                self.assertEqual(run_page(page, {"t0.txt": "b"}).values["r.val"],
+                                 3 if default else 0)
+
+    def test_xstr_s_text_computed_first(self):
+        # The build drops the spaces after the commas, as the Editor does.
+        head, written = "xstr 0, 0, 100, 30, 0, RED, WHITE, 0, 0, 1, ", "xstr 0,0,100,30,0,RED,WHITE,0,0,1,"
+        self.assertEqual(compile_lines(head + '"a" + t0.txt'),
+                         ['__s0.txt="a"+t0.txt', written + "__s0.txt"])
+        self.assertEqual(compile_lines(head + "x.val * 2"), ["__g0_0=x.val*2", written + "__g0_0"])
+        # A call's commas, and a text's, stay inside the last argument.
+        for line in ("xstr 0,1,add(a.val, 2) * 2", 'xstr 0,1,"a, b"+t0.txt', "xstr 0,1,b[1, 2]"):
+            with self.subTest(line=line):
+                self.assertEqual(_last_argument_start(line), len("xstr 0,1,"))
+        # One operand, as the build's check reads it, as written: a text
+        # holding a comma, and a negative name, among them.
+        for text in ("t0.txt", '"a, b"', "x.val", "-5", "-x.val", "RED", "b[1].val"):
+            with self.subTest(text=text):
+                self.assertEqual(compile_lines(head + text), [written + text])
+
+    def test_a_for_whose_head_holds_a_text_with_a_semicolon(self):
+        # Its start, then a while, which runs its step at the end of each
+        # pass, after a continue too.
+        code = "\n".join(['for (t0.txt = "a;b"; x.val < 3; x.val++) {', "  r.val++", "}"])
+        self.assertEqual(compile_lines(code), ['t0.txt="a;b"', "while(x.val<3)", "{",
+                                               "  r.val++", "  x.val++", "}"])
+        for lines in (['for (x.val = 0; t0.txt != "a;b"; x.val++) {',
+                       "  if (x.val == 2) {", '    t0.txt = "a;b"', "  }", "}"],
+                      ["for (x.val = 0; x.val < 3; t0.txt = \"a;b\") {", "  r.val++",
+                       "  x.val++", "  continue", "}"]):
+            code = "\n".join(lines)
+            with self.subTest(code=lines[0]):
+                values = run(code)
+                self.assertEqual((values["x.val"], values["r.val"]),
+                                 (3, 3) if "continue" in code else (3, 0))
+                self.assertFalse(any(line.startswith("for(") for line in compile_lines(code)))
+
+    def test_program_nx_has_no_temporaries(self):
+        # A text temporary needs a page: program.nx keeps refusing the first
+        # two forms, and writes the third as a while.
+        for line in (r'if ("a\\" == "b") {', 'xstr 0, 0, 10, 10, 0, RED, WHITE, 0, 0, 1, "a" + "b"'):
+            lines = [(1, "int g=0"), (2, line)] + ([(3, "}")] if line.endswith("{") else [])
+            with self.subTest(line=line), self.assertRaisesRegex(NxwrightError,
+                                                                 r"program\.nx cannot have"):
+                compile_program(lines, read_program_names(lines))
+        lines = [(1, "int g=0"), (2, 'for (g = 0; "a;b" != "c"; g++) {'), (3, "}")]
+        self.assertEqual(preprocess(compile_program(lines, read_program_names(lines)), NO_NAMES),
+                         ["int g=0", "g=0", 'while("a;b"!="c")', "{", "  g++", "}"])
 
 
 class ConstantAndLocalTest(unittest.TestCase):
