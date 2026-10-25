@@ -76,8 +76,8 @@ from tools.editor.editor_windows import (DIALOG_CLASS, MESSAGE_FORM,  # noqa: E4
                                          control_text, crash_dialog_shown, empty_control,
                                          explorer_windows_on, inner_window, is_locked_listing,
                                          is_save_question, is_work_copy, listed_page,
-                                         rich_edit_texts, shown_project, shows_project,
-                                         shown_windows,
+                                         owned_windows, rich_edit_texts, shown_project,
+                                         shows_project, shown_windows,
                                          sole_window_with_id, where_raised, window_with_id,
                                          windows_matching, windows_over_simulator)
 from tools.editor import watchdog  # noqa: E402
@@ -777,9 +777,8 @@ def _message_forms(main) -> list:
     question to save (editor_windows.py): shown windows the main window
     owns, of their automation ID. The others it owns, its docking frames,
     are left out. One being made or torn down is skipped
-    (editor_windows.windows_matching)."""
-    owned = [handle for handle in shown_windows(main.element_info.process_id)
-             if win32gui.GetWindow(handle, win32con.GW_OWNER) == main.handle]
+    (editor_windows.owned_windows and windows_matching)."""
+    owned = owned_windows(main.element_info.process_id, main.handle)
     return list(windows_matching(owned, _wrapped,
                                  lambda form: form.element_info.automation_id == MESSAGE_FORM))
 

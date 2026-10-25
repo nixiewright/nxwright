@@ -510,5 +510,18 @@ class InnerWindowTest(WindowsTestCase):
         self.assertIsNone(inner_window(self.dialog, "Button", 1))
 
 
+class OwnedWindowsTest(unittest.TestCase):
+
+    def test_a_window_that_closes_as_they_are_listed_is_left_out(self):
+        # Window 2 closes once listed: Windows then gives it no owner, as
+        # GetWindow does for a handle of no window, and it is left out.
+        owners = {1: 100, 2: None, 3: 200, 4: 100}
+        user32 = mock.Mock()
+        user32.GetWindow.side_effect = lambda window, _: owners[window]
+        with mock.patch.object(editor_windows, "shown_windows", return_value=[1, 2, 3, 4]), \
+                mock.patch.object(editor_windows, "_user32", user32):
+            self.assertEqual(editor_windows.owned_windows(7, 100), [1, 4])
+
+
 if __name__ == "__main__":
     unittest.main()

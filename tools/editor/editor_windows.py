@@ -155,6 +155,15 @@ def shown_windows(pid: int) -> list:
     return shown
 
 
+def owned_windows(pid: int, owner: int) -> list:
+    """Returns the handles of the shown top-level windows of the process
+    `pid` that the window `owner` owns, front first (shown_windows). A
+    window that closes once listed has no owner any more, as Windows gives
+    none for a handle of no window, so it is left out."""
+    return [window for window in shown_windows(pid)
+            if _user32.GetWindow(window, _GW_OWNER) == owner]
+
+
 def where_raised(error: BaseException) -> str:
     """Returns where in this tool's own code `error` was raised, as
     "function (file.py:line)", its innermost frame there, or "" when it
