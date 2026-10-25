@@ -18,7 +18,7 @@ Bug reports, fixes, and documentation are welcome. For a larger change, open an 
 - The tests compare written project files byte for byte. A change to what nxwright writes is a change of behaviour: say so in the pull request.
 - `README.md`'s nxlang examples come from `nxwright/language/nxlang_samples.py`, which also feeds the Switch to nxlang panel. After changing the samples, run `python -m tools.readme` to rewrite the README. `tests/test_readme.py` fails until you do.
 - nxwright contains none of the vendor's files or texts. Before you attempt to work out how the Nextion Editor behaves, read the rules in [INDEPENDENCE.md](INDEPENDENCE.md#for-contributors).
-- `tools/editor/` contains an optional tool that drives the Nextion Editor, for contributors who have it: see its [README](tools/editor/README.md). Its tests need neither the Nextion Editor nor the tool's packages, and run on Windows with `python -m unittest discover -s tools/editor/tests -t .`.
+- `tools/editor/` contains an optional tool that drives the Nextion Editor, for contributors who have it: see its [README](tools/editor/README.md). Its tests need neither the Nextion Editor nor a window, and run on Windows with `python -m unittest discover -s tools/editor/tests -t .`. Most need only nxwright's own packages. The tests of its open and tft commands also need the tool's, from `tools/editor/requirements.txt`.
 - Comments and documentation follow [docs/STYLE.md](docs/STYLE.md).
 
 ## Where things are

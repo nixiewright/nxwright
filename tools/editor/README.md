@@ -219,7 +219,7 @@ It builds probe projects with nxwright, compiles each in the dedicated Editor, a
 
 ## Its tests
 
-The tests of its records, its lock, its catalog's logic, its memory probe's, and how it finds a window of the Nextion Editor need neither the Nextion Editor nor pywinauto. They run with nxwright's own Python, on Windows:
+The tests of its records, its lock, its catalog's logic, its memory probe's, and how it finds a window of the Nextion Editor need neither the Nextion Editor nor pywinauto. They run with nxwright's own Python, on Windows. The tests of its open and tft commands import the tool itself, against stand-ins for the Nextion Editor's windows, so they need the tool's packages too, from `requirements.txt`:
 
 ```
 python -m unittest discover -s tools/editor/tests -t .
