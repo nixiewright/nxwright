@@ -142,6 +142,7 @@ In strict Nextion syntax, the build refuses a line the Nextion Editor cannot rea
 - A value that is not operands joined by operators, such as `n0.val=2+`, `n0.val=+2`, or `n0.val=(1+2)` ("Invalid Variables"). After an operator, a minus can start a number, as in `n0.val=2*-16`, but not a name: `n0.val=2*-n1.val` is refused.
 - An assignment with no value: `n0.val=` ("Invalid command").
 - An `if`, `else if`, `while`, or `for` whose condition does not end with `)`.
+- A `for` whose head holds a text with a semicolon, in any of its parts, such as `for(n0.val=0;t0.txt!="a;b";n0.val++)` ("SYNTAX ERROR:for"). A `while` or an `if` takes such a text. nxlang writes such a `for` as it is, so this applies in nxlang too.
 
 ### Data record calls
 

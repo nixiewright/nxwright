@@ -241,10 +241,11 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
 
 def _check_value_and_head(code: str, number: int):
     """Raises NxwrightError for an assignment whose value does not read as
-    operands joined by operators (code_lines.chain_parts), and for an if, an
-    else if, a while, or a for whose head does not end with ")". The test
-    runner reads a value the same way. A label, and a value still holding
-    the form '&name&', are left to their own checks: check_labels, and
+    operands joined by operators (code_lines.chain_parts), for an if, an
+    else if, a while, or a for whose head does not end with ")", and for a
+    for whose head holds a text with a semicolon. The test runner reads a
+    value the same way. A label, and a value still holding the form
+    '&name&', are left to their own checks: check_labels, and
     check_without_owner where no event's object replaced the form."""
     if _LABEL_LIKE.fullmatch(code):
         return
@@ -255,6 +256,11 @@ def _check_value_and_head(code: str, number: int):
                 else 'SYNTAX ERROR:must end with ")"'
             raise NxwrightError("%s: the Nextion Editor wants the head to end with \")\" (\"%s\")"
                                 % (code, words), line=number)
+        # The Editor refused a text holding a semicolon in any part of a
+        # for's head, and compiled one in a while's or an if's condition.
+        if head and head[1] == "for" and any(";" in text for text in STRING.findall(code)):
+            raise NxwrightError("%s: the Nextion Editor refuses a text that holds a semicolon "
+                                "in a for's head (\"SYNTAX ERROR:for\")" % code, line=number)
         return
     assignment = ASSIGNMENT.match(code)
     if assignment is None or holds_own_attribute(assignment[3]):

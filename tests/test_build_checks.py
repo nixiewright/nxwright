@@ -735,6 +735,13 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
                         "code_c")
         export_dump(self.source, self.folder / "built")
 
+    def test_a_text_holding_a_semicolon_outside_a_for_s_head(self):
+        # The Nextion Editor compiled each: the text in a while's and an
+        # if's condition, and outside a head.
+        self.write_code('while(t0.txt!="a;b")', "{", "}", 'if(t0.txt=="a;b")', "{", "}",
+                        't0.txt="a;b"')
+        export_dump(self.source, self.folder / "built")
+
     def test_a_value_or_a_head_the_editor_refuses(self):
         # As the Nextion Editor's compile refused each, in its words.
         cases = [("n0.val==2", "Invalid Variables"), ("n0.val=2+", "Invalid Variables"),
@@ -744,7 +751,11 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
                  ("n0.val=", "Invalid command"),
                  ("if(n0.val==1", 'SYNTAX ERROR:must end with ")"'),
                  ("while(n0.val<3", 'SYNTAX ERROR:must end with ")"'),
-                 ("for(n0.val=0;n0.val<3;n0.val++", "SYNTAX ERROR:for")]
+                 ("for(n0.val=0;n0.val<3;n0.val++", "SYNTAX ERROR:for"),
+                 # A text holding a semicolon, in each part of a for's head.
+                 ('for(n0.val=0;t0.txt!="a;b";n0.val++)', "SYNTAX ERROR:for"),
+                 ('for(t0.txt="a;b";n0.val<1;n0.val++)', "SYNTAX ERROR:for"),
+                 ('for(n0.val=0;n0.val<1;t0.txt="a;b")', "SYNTAX ERROR:for")]
         for number, (line, words) in enumerate(cases):
             with self.subTest(line=line):
                 block = [line, "{", "}"] if "(" in line and not line.startswith("n0") else [line]
