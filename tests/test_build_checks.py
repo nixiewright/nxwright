@@ -584,6 +584,28 @@ class CommandArgumentTest(_CodeOnFirstTestCase):
                         % (re.escape(line), line.split()[0])):
                     export_dump(self.source, self.folder / ("refused%d" % number))
 
+    def test_texts_joined_as_xstr_s_text_are_refused(self):
+        # The Editor's compile refused each ("Invalid Variables"), and
+        # compiled a txt or a text alone there.
+        head = "xstr 0,0,100,30,0,RED,WHITE,0,0,1,"
+        for number, text in enumerate(('"a"+"b"', 't0.txt+"b"', '"a"+t0.txt+"c"', "sys0+1",
+                                       "n0.val*2")):
+            with self.subTest(text=text):
+                self.write_code(head + text)
+                with self.assertRaisesRegex(
+                        NxwrightError, r"first\.nx line 2: %s: .*\(\"Invalid Variables\"\)"
+                        % re.escape(head + text)):
+                    export_dump(self.source, self.folder / ("refused%d" % number))
+        self.write_code(head + "t0.txt", head + '"a+b"')
+        export_dump(self.source, self.folder / "built")
+
+    def test_nxlang_refuses_texts_joined_as_xstr_s_text_too(self):
+        switch_to_nxlang(self.source)
+        self.write_code('xstr 0,0,100,30,0,RED,WHITE,0,0,1,"a"+"b"')
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: .*\(\"Invalid "
+                                                   r"Variables\"\)"):
+            export_dump(self.source, self.folder / "refused")
+
     def test_nxlang_computes_it_first(self):
         switch_to_nxlang(self.source)
         self.write_code("get n0.val+1")

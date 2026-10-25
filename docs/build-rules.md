@@ -168,6 +168,8 @@ The first argument of `get`, `print`, `prints`, and `covx` is one text or one nu
 - Arithmetic is fine in `prints`' length, in `covx`'s length and form, and in `newfile`'s size.
 - In nxlang, such a first argument is computed first instead ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 
+The text of `xstr`, its last argument, is one operand too: a text, a `txt`, a number, or a variable. The build refuses texts joined or arithmetic there, such as `xstr 0,0,100,30,0,RED,WHITE,0,0,1,"a"+"b"` ("Invalid Variables"), in nxlang too.
+
 ### Texts and numbers
 
 - A text given to a number, or a number to a text: `n0.val=t0.txt`, `t0.txt=5` ("Assignment operation failed").

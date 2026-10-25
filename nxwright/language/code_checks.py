@@ -223,6 +223,7 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
     _check_first_word(code, number)
     _check_parameter_count(code, number)
     _check_first_argument(code, number)
+    _check_xstr_text(code, number)
     if variables is not None:
         _check_program_variables(code, variables, number)
         _check_names_alone(code, objects, variables, number)
@@ -435,6 +436,23 @@ def _check_first_argument(code: str, number: int):
         raise NxwrightError("%s: the Nextion Editor takes one text or number as the first "
                             "argument of %s, not arithmetic or texts joined" % (code, word),
                             line=number)
+
+
+def _check_xstr_text(code: str, number: int):
+    """Raises NxwrightError for an xstr whose text, its last argument, is
+    more than one operand, as texts joined or arithmetic. The Editor
+    refused `"a"+"b"`, `t0.txt+"b"`, `"a"+t0.txt+"c"`, `sys0+1`, and
+    `n0.val*2` there as it compiled ("Invalid Variables"), and compiled one
+    operand alone, as a text, a txt, a number, or a variable. An xstr of
+    another number of arguments is refused by _check_parameter_count."""
+    if command_word(code) != "xstr":
+        return
+    arguments = command_arguments(code[len("xstr"):].strip())
+    if len(arguments) == COMMAND_PARAMETERS["xstr"] \
+            and not _ONE_OPERAND.fullmatch(arguments[-1].strip()):
+        raise NxwrightError("%s: the Nextion Editor takes one operand as the text of xstr, a "
+                            "text, a txt, a number, or a variable, not texts joined or "
+                            "arithmetic (\"%s\")" % (code, INVALID_VARIABLES), line=number)
 
 
 def _check_first_word(code: str, number: int):
