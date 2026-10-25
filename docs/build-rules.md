@@ -183,6 +183,8 @@ nxlang refuses a text put into a number itself, and converts a number put into a
 - An escape in a quoted text other than `\r`, `\"`, and `\\`, such as `\n` or `\t` ("Improper use of escape characters").
   - Escapes are read in pairs from the left, so `"a\\nb"` contains none.
   - A comment is not compiled, so its escapes do not count.
+- A text that ends in an escaped backslash, inside a condition: `if(t0.txt=="a\\")` ("SYNTAX ERROR").
+  - A condition is the head of an `if`, an `else if`, or a `while`, and the middle part of a `for`'s head. Such a text compiles elsewhere, as in `t0.txt="\\"`, or in a `for`'s first or last part.
 
 This applies in nxlang too.
 

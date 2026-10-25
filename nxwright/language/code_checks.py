@@ -226,6 +226,7 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
     if macros is not None:
         _check_call(code, macros, number)
     _check_escapes(code, number)
+    _check_condition_texts(code, number)
     # A name a component's type lacks, or one its values leave out, first,
     # as the Editor names it.
     if objects is not None:
@@ -489,6 +490,30 @@ def _check_escapes(code: str, number: int):
                                     "Nextion Editor refuses to compile it (\"Improper use of "
                                     "escape characters\")"
                                     % (code, escape[1]), line=number)
+
+
+def _check_condition_texts(code: str, number: int):
+    """Raises NxwrightError for a quoted text that ends in an escaped
+    backslash, as in `"a\\\\"`, inside a condition: the head of an if, an
+    else if, or a while, or the middle part of a for's head. The Editor
+    refused each as it compiled ("SYNTAX ERROR"). It compiled the same text
+    in a for's first and last parts, and outside a head."""
+    head, otherwise = _BLOCK_HEAD.match(code), ELSE.match(code)
+    if not (head or (otherwise and otherwise[2])):
+        return
+    in_for = head is not None and head[1] == "for"
+    # A for's parts are apart at the semicolons outside its texts.
+    semicolons, after = 0, 0
+    for text in STRING.finditer(code):
+        semicolons += code.count(";", after, text.start())
+        after = text.end()
+        escapes = list(re.finditer(r"\\(.)", text[0][1:-1]))
+        ends_in_backslash = (escapes and escapes[-1][1] == "\\"
+                             and escapes[-1].end() == len(text[0]) - 2)
+        if ends_in_backslash and (not in_for or semicolons == 1):
+            raise NxwrightError("%s: the Nextion Editor refuses a text that ends in an escaped "
+                                "backslash in a condition (\"SYNTAX ERROR\")" % code,
+                                line=number)
 
 
 def _value_kind(operand: str, variables) -> str:

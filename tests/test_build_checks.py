@@ -789,6 +789,32 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
                                                    r"escape characters"):
             export_dump(self.source, self.folder / "refused")
 
+    def test_a_text_ending_in_an_escaped_backslash_in_a_condition(self):
+        # Each the Editor's compile refused ("SYNTAX ERROR"): in the head of
+        # an if, an else if, or a while, and in a for's condition, the text
+        # first or second, two escaped backslashes, and one before `&&`.
+        body = ["{", "n0.val=1", "}"]
+        cases = [[r'if(t0.txt=="\\")'] + body, [r'if(t0.txt=="a\\")'] + body,
+                 [r'while(t0.txt!="\\")'] + body, [r'if("\\"==t0.txt)'] + body,
+                 [r'if(t0.txt=="\\\\")'] + body, [r'if(t0.txt=="\\"&&n0.val==1)'] + body,
+                 [r'for(n0.val=0;t0.txt!="\\";n0.val++)'] + body,
+                 ["if(n0.val==1)"] + body + [r'else if(t0.txt=="\\")'] + body]
+        for number, lines in enumerate(cases):
+            refused = next(line for line in lines if "\\" in line)
+            with self.subTest(line=refused):
+                self.write_code(*lines)
+                with self.assertRaisesRegex(
+                        NxwrightError, r"first\.nx line %d: .*\(\"SYNTAX ERROR\"\)"
+                        % (lines.index(refused) + 2)):
+                    export_dump(self.source, self.folder / ("refused%d" % number))
+        # Each it compiled: the text in a for's first and last parts, other
+        # escapes ending a condition's text, and the text outside a condition.
+        self.write_code(r'for(t0.txt="\\";n0.val<1;n0.val++)', *body,
+                        r'for(n0.val=0;n0.val<1;t0.txt="\\")', *body,
+                        r'if(t0.txt=="a\\b")', *body, r'while(t0.txt!="\"")', *body,
+                        r'if("a\"b"!=t0.txt)', *body, r't0.txt="\\"')
+        export_dump(self.source, self.folder / "built")
+
     def test_the_lines_the_editor_compiles(self):
         # A text loses characters by `-`; an array's attribute is of no known
         # kind; a condition compares texts; escapes are read in pairs from
