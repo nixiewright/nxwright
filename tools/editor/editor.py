@@ -612,9 +612,22 @@ def open_project(editor: DedicatedEditor, folder: Path, project: Path) -> Path:
     screen = _screen_size(copy)
     pressing_failed = _press_in_background(_toolbar_button(editor, "Open"))
     dialog = _wait_for_file_dialog(main, unsaved, pressing_failed)
+
+    def press_open():
+        # A press the busy Editor answered with an error may still have
+        # taken: once the dialog has closed, Open is not pressed again.
+        if not _is_file_dialog(dialog):
+            return
+        try:
+            _file_dialog_control(dialog, "Button", _OPEN_BUTTON).invoke()
+        except ElementNotFoundError:
+            if _is_file_dialog(dialog):
+                raise       # still up, without its Open button
+            # Closed since: the press before took.
     try:
-        _file_dialog_control(dialog, "Edit", _FILE_NAME_BOX).set_edit_text(str(copy))
-        _file_dialog_control(dialog, "Button", _OPEN_BUTTON).invoke()
+        _retried_while_busy(lambda: _file_dialog_control(dialog, "Edit", _FILE_NAME_BOX)
+                            .set_edit_text(str(copy)))
+        _retried_while_busy(press_open)
         _wait_for(lambda: _opened(editor, copy), OPENING_WAIT, "the project to open")
     except Exception:
         _cancel_left_dialog(dialog)
@@ -900,6 +913,29 @@ def _words_of(dialog) -> str:
     except NotAnswered as error:
         raise EditorError("the Editor did not answer a window message: %s" % error) from None
     return " ".join(text for text in texts if text)
+
+
+# The COMErrors UI Automation gave as a busy Editor answered the tool's
+# calls in open and tft, just after a tft: an invalid operation, and a
+# time-out (0x80131509 and 0x80131505). Each stopped a command once in a
+# long run of probes, and a rerun went through (_retried_while_busy).
+_BUSY_ERRORS = frozenset({-2146233079, -2146233083})
+
+
+def _retried_while_busy(action):
+    """Returns action(), calling it again while it raises one of the busy
+    Editor's COMErrors (_BUSY_ERRORS), for up to DIALOG_WAIT. Another error,
+    or a busy one past the wait, is raised. `action` must be safe to call
+    again after such an error."""
+    deadline = time.monotonic() + DIALOG_WAIT
+    while True:
+        watchdog.progress()
+        try:
+            return action()
+        except COMError as error:
+            if error.hresult not in _BUSY_ERRORS or time.monotonic() >= deadline:
+                raise
+        time.sleep(_LOOK_PAUSE)
 
 
 def _wait_for(found, seconds: float, what: str, stop=None):
@@ -1552,8 +1588,8 @@ def _open_tft_output(editor: DedicatedEditor, main):
     within _PRESS_SHOWS while the main window stays enabled, as no window
     of the Editor's is up, File and its item are pressed again,
     _TFT_PRESSES times in all."""
-    file_menu = _required(_only_match(editor.control(_MENU_BAR), "children", name="File",
-                                      control_type="MenuItem"),
+    file_menu = _required(_retried_while_busy(lambda: _only_match(
+        editor.control(_MENU_BAR), "children", name="File", control_type="MenuItem")),
                           title="File", control_type="MenuItem")
     shown_before = set(shown_windows(editor.recorded.pid))
 

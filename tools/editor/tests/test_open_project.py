@@ -1,6 +1,7 @@
 """Opening a project through the file dialog, as the tool's open command
 does (tools/editor/editor.py), against stand-ins for the Editor's windows.
 It needs neither the Editor nor a window, only the tool's packages."""
+from _ctypes import COMError
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -8,6 +9,46 @@ import unittest
 from unittest import mock
 
 from tools.editor import editor
+
+# The COMErrors UI Automation gave as a busy Editor answered the tool's
+# calls in open and tft: an invalid operation, and a time-out.
+_INVALID_OPERATION = COMError(-2146233079, None, (None, None, None, 0, None))
+_TIME_OUT = COMError(-2146233083, None, (None, None, None, 0, None))
+
+
+class Flaky:
+    """An action that raises `errors` in turn, then returns "done"."""
+
+    def __init__(self, *errors):
+        self.errors, self.calls = list(errors), 0
+
+    def __call__(self):
+        self.calls += 1
+        if self.errors:
+            raise self.errors.pop(0)
+        return "done"
+
+
+class RetriedWhileBusyTest(unittest.TestCase):
+
+    def test_a_busy_editor_s_errors_are_retried(self):
+        action = Flaky(_INVALID_OPERATION, _TIME_OUT)
+        with mock.patch.object(editor, "_LOOK_PAUSE", 0):
+            self.assertEqual(editor._retried_while_busy(action), "done")
+        self.assertEqual(action.calls, 3)
+
+    def test_another_error_is_raised_at_once(self):
+        other = COMError(-2147467259, None, (None, None, None, 0, None))
+        action = Flaky(other)
+        with self.assertRaises(COMError):
+            editor._retried_while_busy(action)
+        self.assertEqual(action.calls, 1)
+
+    def test_a_busy_error_past_the_wait_is_raised(self):
+        action = Flaky(*[_TIME_OUT] * 1000)
+        with mock.patch.object(editor, "_LOOK_PAUSE", 0.01), \
+                mock.patch.object(editor, "DIALOG_WAIT", 0.05), self.assertRaises(COMError):
+            editor._retried_while_busy(action)
 
 
 class OpenProjectTest(unittest.TestCase):
@@ -34,11 +75,65 @@ class OpenProjectTest(unittest.TestCase):
                     mock.patch.object(editor, "_press_in_background", return_value=[]), \
                     mock.patch.object(editor, "_wait_for_file_dialog", return_value=dialog), \
                     mock.patch.object(editor, "_file_dialog_control", return_value=control), \
+                    mock.patch.object(editor, "_is_file_dialog", return_value=True), \
                     mock.patch.object(editor, "_wait_for", side_effect=wait_for), \
                     mock.patch.object(editor, "_cancel_file_dialog") as cancel:
                 with self.assertRaisesRegex(editor.EditorError, "the project to open"):
                     editor.open_project(dedicated, Path(folder), project)
         cancel.assert_called_once_with(dialog)
+
+    def open_with(self, set_edit_text, invoke, still_up):
+        """Runs open_project with the file dialog's name box and Open button
+        acting as `set_edit_text` and `invoke`, the dialog up while
+        `still_up()` holds, and the project opening at once. Returns the
+        stand-in for cancelling the dialog."""
+        main = SimpleNamespace(window_text=lambda: "Nextion Editor")
+        dedicated = SimpleNamespace(stop_on_crash=lambda: None, main_window=lambda: main)
+        control = SimpleNamespace(set_edit_text=set_edit_text, invoke=invoke)
+        with tempfile.TemporaryDirectory() as folder:
+            project = Path(folder) / "probe.HMI"
+            project.write_bytes(b"")
+            with mock.patch.object(editor, "_stop_on_dialog"), \
+                    mock.patch.object(editor, "_toolbar_button",
+                                      return_value=SimpleNamespace(is_enabled=lambda: False)), \
+                    mock.patch.object(editor, "_fresh_copy", return_value=project), \
+                    mock.patch.object(editor, "_screen_size", return_value=(320, 480)), \
+                    mock.patch.object(editor, "_press_in_background", return_value=[]), \
+                    mock.patch.object(editor, "_wait_for_file_dialog", return_value=object()), \
+                    mock.patch.object(editor, "_file_dialog_control", return_value=control), \
+                    mock.patch.object(editor, "_is_file_dialog", side_effect=lambda _: still_up()), \
+                    mock.patch.object(editor, "_wait_for", return_value=True), \
+                    mock.patch.object(editor, "write_shown"), \
+                    mock.patch.object(editor, "_LOOK_PAUSE", 0), \
+                    mock.patch.object(editor, "_cancel_file_dialog") as cancel:
+                self.assertEqual(editor.open_project(dedicated, Path(folder), project), project)
+        return cancel
+
+    def test_a_busy_editor_s_error_typing_the_name_is_retried(self):
+        typing = Flaky(_INVALID_OPERATION)
+        presses = Flaky()
+        cancel = self.open_with(lambda text: typing(), presses, lambda: presses.calls == 0)
+        self.assertEqual((typing.calls, presses.calls), (2, 1))
+        cancel.assert_not_called()
+
+    def test_a_press_of_open_that_took_is_not_pressed_again(self):
+        # The press raises the busy Editor's error, but takes: the dialog
+        # closes, and Open is not pressed again.
+        presses = Flaky(_TIME_OUT)
+        self.open_with(lambda text: None, presses, lambda: presses.calls == 0)
+        self.assertEqual(presses.calls, 1)
+
+    def test_a_dialog_closing_as_open_is_found_took_the_press(self):
+        # The dialog closes between the look and the press, as an earlier
+        # press took: its button is not found, and that is no error.
+        presses = Flaky(editor.ElementNotFoundError())
+        self.open_with(lambda text: None, presses, lambda: presses.calls == 0)
+        self.assertEqual(presses.calls, 1)
+
+    def test_a_press_of_open_that_did_not_take_is_pressed_again(self):
+        presses = Flaky(_INVALID_OPERATION)
+        self.open_with(lambda text: None, presses, lambda: presses.errors != [] or presses.calls < 2)
+        self.assertEqual(presses.calls, 2)
 
 
 if __name__ == "__main__":
