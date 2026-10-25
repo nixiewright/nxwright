@@ -979,7 +979,8 @@ class FolderSource:
         """Returns program.s built from program.nx, without the declarations
         of the globals the pages use. Raises NxwrightError naming program.nx."""
         return _program_from_source(self.program, self.names, self.declared, self.encoding,
-                                    self.program_variables, self.macros, self.screen)
+                                    self.program_variables, self.macros, self.screen,
+                                    self.page_objects)
 
     def build_macros(self):
         """Returns the macros' block built from macros.nx (macros_source.py),
@@ -1325,18 +1326,21 @@ def read_bytes(path: Path) -> bytes:
 
 def _program_from_source(text: str, names: ResourceNames, program: ProgramNames = None,
                          encoding: str = DEFAULT_ENCODING, variables: frozenset = None,
-                         macros: frozenset = None, screen: ScreenModel = None) -> bytes:
+                         macros: frozenset = None, screen: ScreenModel = None,
+                         pages: dict = None) -> bytes:
     """Returns program.s for the text of program.nx: Editor syntax, CRLF line
     endings. With `program` (what program.nx declares), the text is in nxlang
     and is compiled first. With `variables`, its int variables, its names of
-    sys0 to sys2 are checked, with `macros`, its calls, and with `screen`,
-    what its series lacks (preprocess)."""
+    sys0 to sys2 are checked, with `macros`, its calls, with `screen`, what
+    its series lacks, and with `pages`, each page's objects by page name,
+    the commands that name a page or a component (preprocess)."""
     ends_with_newline = text.endswith("\n")
     try:
         lines = numbered_lines(text)
         if program is not None:
             lines = compile_program(lines, program)
-        lines = preprocess(lines, names, variables=variables, macros=macros, screen=screen)
+        lines = preprocess(lines, names, variables=variables, macros=macros, screen=screen,
+                           program_pages=pages)
     except NxwrightError as error:
         if error.file is not None:
             raise   # a refusal at a line of macros.nx, which program.nx calls

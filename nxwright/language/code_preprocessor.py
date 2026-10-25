@@ -68,7 +68,8 @@ class Owner:
 
 def preprocess(lines: list, names: ResourceNames = None, objects: ObjectNames = None,
                variables: frozenset = None, macros: frozenset = None,
-               screen: ScreenModel = None, owner: Owner = None) -> list:
+               screen: ScreenModel = None, owner: Owner = None,
+               program_pages: dict = None) -> list:
     """Returns `lines`, a list of (line number, text), as lines of text in
     Editor syntax.
     `names` resolves "@pic(...)" and the other resources' names; without it
@@ -83,18 +84,21 @@ def preprocess(lines: list, names: ResourceNames = None, objects: ObjectNames = 
     checked as the Editor reads it (with_own_attributes). Without one, the
     form '&name&' is refused outside a quoted text, which the Editor refuses
     in program.s and in macros.
+    With `program_pages`, the lines are program.nx's, and it holds each
+    page's objects, by page name: a command may not name a page or a
+    component (code_checks.check_line).
 
     Raises NxwrightError naming the line number of anything it cannot turn
     into Editor syntax.
     """
     return [text for _, text in preprocess_with_places(lines, names, objects, variables, macros,
-                                                       screen, owner)]
+                                                       screen, owner, program_pages)]
 
 
 def preprocess_with_places(lines: list, names: ResourceNames = None,
                            objects: ObjectNames = None, variables: frozenset = None,
                            macros: frozenset = None, screen: ScreenModel = None,
-                           owner: Owner = None) -> list:
+                           owner: Owner = None, program_pages: dict = None) -> list:
     """Returns what preprocess does, each line as (line number, text): the
     number of the line it comes from. An "else" joined to the "}" before it
     keeps the "}"'s line."""
@@ -115,7 +119,7 @@ def preprocess_with_places(lines: list, names: ResourceNames = None,
         else:
             read = with_own_attributes(forms, owner)
         try:
-            check_line(read, objects, variables, macros, screen, number)
+            check_line(read, objects, variables, macros, screen, number, program_pages)
         except NxwrightError as error:
             if read == code:
                 raise

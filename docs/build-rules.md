@@ -107,6 +107,7 @@ The build stops at the first line that uses something that does not exist:
 - `t0.txt` must be a component of the page.
 - `settings.t0.txt` must be a page and one of its components.
 - `vis t0,1`, `tsw`, `ref`, and `click` must give a component of the page.
+  - `program.nx` belongs to no page, so there they take a component's number, as in `vis 1,0`, or a variable that contains it, as in `vis sys0,0`. A page's or a component's name there is refused, with its page's name or not, as in `vis t0,0` or `vis page0.t0,0` ("Invalid Component ID").
 - A name alone in a value or a condition, as `abc` in `n0.val=abc+1`, must be an `int` of `program.nx`, a system variable, or a colour in capitals, as `RED`. A component's or a page's name alone is refused.
 - Another page's components need their page's name, whatever their scope.
 

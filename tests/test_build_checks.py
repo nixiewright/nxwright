@@ -1074,6 +1074,26 @@ class EditorCommandTest(_CodeOnFirstTestCase):
                            encoding="utf-8", newline="\n")
         export_dump(self.source, self.folder / "built")
 
+    def test_a_page_or_component_named_in_program_nx(self):
+        # program.s belongs to no page. The Editor refused a page's or a
+        # component's name given to vis, tsw, ref, or click there, with its
+        # page's name or not ("Invalid Component ID"). It compiled a
+        # component's number, and a variable holding one.
+        program = self.source / "program.nx"
+        text = program.read_text(encoding="utf-8")
+        written = text + ("" if text.endswith("\n") else "\n")
+        line_number = len(written.split("\n"))
+        for number, line in enumerate(("vis first,0", "ref first", "vis t0,0", "tsw t0,1",
+                                       "click t0,1", "vis first.t0,0")):
+            with self.subTest(line=line):
+                program.write_text(written + line + "\n", encoding="utf-8", newline="\n")
+                with self.assertRaisesRegex(
+                        NxwrightError, r"program\.nx line %d: %s: .*\(\"Invalid Component "
+                        r"ID\"\)" % (line_number, line)):
+                    export_dump(self.source, self.folder / ("refused%d" % number))
+        program.write_text(written + "vis 1,0\nvis sys0,0\n", encoding="utf-8", newline="\n")
+        export_dump(self.source, self.folder / "built")
+
     def test_program_nx_macros_and_nxlang(self):
         program = self.source / "program.nx"
         text = program.read_text(encoding="utf-8")

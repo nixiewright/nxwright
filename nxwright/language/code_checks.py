@@ -184,10 +184,11 @@ class ObjectNames:
 
 
 def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: frozenset,
-                screen: ScreenModel, number: int):
+                screen: ScreenModel, number: int, program_pages: dict = None):
     """Raises NxwrightError for a line's code part, its resources' names
     resolved, that the Editor refuses as it compiles, as
-    code_preprocessor.preprocess says."""
+    code_preprocessor.preprocess says. `program_pages`, for a line of
+    program.nx, holds each page's objects, by page name."""
     if _TAB_AFTER_INT.match(code):
         raise NxwrightError("a tab after int: the Nextion Editor takes int and a space only, and "
                             "refuses this declaration (\"Invalid Variables\")", line=number,
@@ -210,6 +211,8 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
         _check_data_record_call(code, objects, number)
         _check_file_stream_call(code, objects, number)
         _check_assigned_attribute(code, objects, number)
+    if program_pages is not None:
+        _check_program_names(code, program_pages, number)
     # Before the number of arguments, as the Editor named the series
     # first for `beep 100,2` on a screen whose series lacks beep.
     if screen is not None:
@@ -334,6 +337,32 @@ def _check_macro_references(code: str, objects: ObjectNames, number: int):
             if reachable is not None and second not in reachable:
                 raise NxwrightError("%s.%s: a macro cannot reach a component of local scope"
                                     % (first, second), line=number)
+
+
+def _check_program_names(code: str, pages: dict, number: int):
+    """Raises NxwrightError when a line of program.nx gives a command that
+    names a component, as vis, tsw, ref, and click do, the name of a page,
+    or of a component, alone or with its page's name. `pages` holds each
+    page's objects, by page name, as ObjectNames.pages does. program.s
+    belongs to no page: the Editor refused `vis page0,0`, `ref page1`,
+    `vis t0,0`, `tsw t0,1`, `click t0,1`, and `vis page0.t0,0` there,
+    saying "Invalid Component ID", and compiled `vis 1,0` and
+    `vis sys0,0`."""
+    command = _NAME_IN_COMMAND.match(code)
+    if command is None:
+        return
+    page, dot, component = command[2].partition(".")
+    if dot:
+        known = pages.get(page)
+        named = "." not in component and known is not None and component in known
+    else:
+        named = page in pages or any(known is not None and page in known
+                                     for known in pages.values())
+    if named:
+        raise NxwrightError("%s: program.s belongs to no page, so %s takes a component's "
+                            "number there, or a variable holding it, not a page's or a "
+                            "component's name, which the Nextion Editor refuses (\"Invalid "
+                            "Component ID\")" % (code, command[1]), line=number)
 
 
 def _is_component_name(name: str, objects: ObjectNames) -> bool:
