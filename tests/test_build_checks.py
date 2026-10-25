@@ -699,17 +699,18 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
                                        'rdfile "sd0/a.txt",0,1,0,1', "twfile",
                                        'twfile "sd0/a.txt"', 'twfile "sd0/a.txt",5,6',
                                        "crcrest", "crcrest 1", "crcputs t0.txt,0,1",
-                                       "crcputu 0")):
+                                       "crcputu 0", "rest 1", "touch_j 1", "code_c 1")):
             with self.subTest(line=line):
                 self.write_code(line)
                 with self.assertRaisesRegex(
                         NxwrightError, r"first\.nx line 2: %s: .*\(\"Invalid number of "
                         r"arguments\"\)" % re.escape(line)):
                     export_dump(self.source, self.folder / ("refused%d" % number))
-        # Its own number, a quoted comma within one, and a command the table
-        # lacks, which takes any number.
+        # Its own number, a quoted comma within one, a command the table
+        # lacks, which takes any number, and commands that take none.
         self.write_code("cls 1", 'print "a,b"', "crcputh 0A 0B", "crcrest 1,0xffff",
-                        'rdfile "sd0/a.txt",0,1,0', 'twfile "sd0/a.txt",5')
+                        'rdfile "sd0/a.txt",0,1,0', 'twfile "sd0/a.txt",5', "rest", "touch_j",
+                        "code_c")
         export_dump(self.source, self.folder / "built")
 
     def test_a_value_or_a_head_the_editor_refuses(self):

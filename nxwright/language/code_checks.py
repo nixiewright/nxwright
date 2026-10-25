@@ -124,6 +124,8 @@ COMMAND_PARAMETERS = {
     "findfile": 2, "finddir": 2, "rdfile": 4, "twfile": 2,
     # The Editor compiled each with two, and refused none, one, and three.
     "crcrest": 2, "crcputs": 2, "crcputu": 2,
+    # The Editor compiled each alone, and refused each given one argument.
+    "rest": 0, "touch_j": 0, "code_c": 0,
 }
 # One operand alone: a string, a number, or a name, which may be dotted.
 _ONE_OPERAND = re.compile(r'"(?:\\.|[^"\\])*"|-?\w+(?:\[[^\]]*\])?(?:\.\w+(?:\[[^\]]*\])?)*')
