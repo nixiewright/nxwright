@@ -34,7 +34,7 @@ Each dedicated Editor's records live in `%LOCALAPPDATA%\nxwright\editor-<name>\`
 - `editor.json` records its process;
 - `lock` lets one command at a time drive it, and `holder.json` records which command has the lock;
 - `hold.json` records a hold across commands;
-- `work\` contains the copies of the projects it opened;
+- `work\` contains the copy of the project it shows, as `open` deletes the copies before it;
 - `shown.json` records the copy opened last, with its screen's size;
 - `placement.json` records where its window was, so that a fresh Nextion Editor opens there, rather than filling the screen.
 
@@ -97,6 +97,7 @@ A command waits for the lock while another command holds it, then gives up, repo
 Copies the project into the work folder, and opens the copy through the Nextion Editor's Open button.
 
 - It records the copy, and its screen's size, which `simulate --touch` needs.
+- Once the copy is open, it deletes the other `.HMI` files in the work folder, the copies of the projects opened before. It leaves a copy the Nextion Editor still holds, and anything else in the folder.
 - When the project shown has changes not saved, the Nextion Editor first asks whether to save them. The tool answers No when that project is one of its own copies in the work folder, as it never saves. Otherwise it stops before pressing Open, so that no one else's changes are dropped. Any other question stops it, unanswered.
 - When the dedicated Editor uses more than 1.1 GB, `open` restarts it first, since the Nextion Editor runs out of memory near 1.4 GB. It does not restart one with a window over its main window, or with changes not saved.
 

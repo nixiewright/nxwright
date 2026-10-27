@@ -2,6 +2,8 @@
 does (tools/editor/editor.py), against stand-ins for the Editor's windows.
 It needs neither the Editor nor a window, only the tool's packages."""
 from _ctypes import COMError
+import _winapi
+import os
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -77,10 +79,13 @@ class OpenProjectTest(unittest.TestCase):
                     mock.patch.object(editor, "_file_dialog_control", return_value=control), \
                     mock.patch.object(editor, "_is_file_dialog", return_value=True), \
                     mock.patch.object(editor, "_wait_for", side_effect=wait_for), \
+                    mock.patch.object(editor, "_drop_other_copies") as drop, \
                     mock.patch.object(editor, "_cancel_file_dialog") as cancel:
                 with self.assertRaisesRegex(editor.EditorError, "the project to open"):
                     editor.open_project(dedicated, Path(folder), project)
         cancel.assert_called_once_with(dialog)
+        # The copies before it stay, as the Editor may still show one.
+        drop.assert_not_called()
 
     def open_with(self, set_edit_text, invoke, still_up):
         """Runs open_project with the file dialog's name box and Open button
@@ -105,8 +110,10 @@ class OpenProjectTest(unittest.TestCase):
                     mock.patch.object(editor, "_wait_for", return_value=True), \
                     mock.patch.object(editor, "write_shown"), \
                     mock.patch.object(editor, "_LOOK_PAUSE", 0), \
+                    mock.patch.object(editor, "_drop_other_copies") as drop, \
                     mock.patch.object(editor, "_cancel_file_dialog") as cancel:
                 self.assertEqual(editor.open_project(dedicated, Path(folder), project), project)
+        drop.assert_called_once_with(Path(folder), project)
         return cancel
 
     def test_a_busy_editor_s_error_typing_the_name_is_retried(self):
@@ -134,6 +141,64 @@ class OpenProjectTest(unittest.TestCase):
         presses = Flaky(_INVALID_OPERATION)
         self.open_with(lambda text: None, presses, lambda: presses.errors != [] or presses.calls < 2)
         self.assertEqual(presses.calls, 2)
+
+
+class WorkFolderTest(unittest.TestCase):
+    """The copies an open leaves in the work folder, each test in a folder
+    of its own that stands in for a dedicated Editor's."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.folder = Path(self.temporary.name)
+        self.work = self.folder / "work"
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def files(self, *names: str) -> list:
+        for name in names:
+            (self.folder / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.folder / name).write_bytes(b"HMI")
+        return [self.folder / name for name in names]
+
+    def test_the_other_copies_go(self):
+        old, older, shown = self.files("work/demo.HMI", "work/other.hmi", "work/demo (2).HMI")
+        editor._drop_other_copies(self.folder, shown)
+        self.assertEqual([path.exists() for path in (old, older, shown)], [False, False, True])
+
+    def test_only_its_copies_go(self):
+        # Another kind of file, a folder in the work folder, and a project
+        # beside it stay.
+        kept = self.files("work/notes.txt", "work/sub/inner.HMI", "beside.HMI")
+        shown, = self.files("work/demo.HMI")
+        editor._drop_other_copies(self.folder, shown)
+        self.assertTrue(all(path.exists() for path in kept))
+
+    def test_a_copy_still_held_is_left(self):
+        held, shown = self.files("work/held.HMI", "work/demo.HMI")
+        unlink = Path.unlink
+
+        def refused(path, *arguments, **keywords):
+            if path.resolve() == held.resolve():
+                raise PermissionError("held by the Editor")
+            return unlink(path, *arguments, **keywords)
+        with mock.patch.object(Path, "unlink", refused):
+            editor._drop_other_copies(self.folder, shown)
+        self.assertTrue(held.exists())
+
+    def test_a_work_folder_that_leads_elsewhere_is_left(self):
+        # A junction in its place, to a folder of this test's. Unlinking the
+        # junction removes the link alone.
+        copy, = self.files("elsewhere/demo.HMI")
+        _winapi.CreateJunction(str(copy.parent), str(self.work))
+        try:
+            editor._drop_other_copies(self.folder, copy.parent / "other.HMI")
+            self.assertTrue(copy.exists())
+        finally:
+            os.unlink(self.work)
+
+    def test_no_work_folder(self):
+        editor._drop_other_copies(self.folder, self.work / "demo.HMI")
 
 
 if __name__ == "__main__":

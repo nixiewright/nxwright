@@ -633,7 +633,41 @@ def open_project(editor: DedicatedEditor, folder: Path, project: Path) -> Path:
         _cancel_left_dialog(dialog)
         raise
     write_shown(folder, Shown(str(copy), screen))
+    _drop_other_copies(folder, copy)
     return copy
+
+
+def _drop_other_copies(folder: Path, keep: Path):
+    """Deletes the copies of projects that earlier opens left in the work
+    folder of the dedicated Editor whose records are in `folder`, but
+    `keep`, the copy it now shows. Otherwise the folder would keep a copy of
+    every project ever opened, about 7 MB each. A copy is a file directly in
+    the work folder whose name ends in .HMI, in any letter case. Nothing
+    else there is touched: no folder, no link, and no file of another kind.
+    It touches nothing at all when `folder` is not an absolute path, or when
+    its work folder leads elsewhere, as a junction would. A copy the Editor
+    still holds is left for a later open."""
+    if not folder.is_absolute():
+        return
+    work = folder / "work"
+    try:
+        if work.is_symlink() or not work.is_dir():
+            return
+        root = work.resolve()
+        if root != folder.resolve() / "work":
+            return
+        kept = os.path.normcase(keep.resolve())
+        for entry in root.iterdir():
+            if (entry.suffix.lower() != ".hmi" or entry.is_symlink() or not entry.is_file()
+                    or entry.resolve().parent != root
+                    or os.path.normcase(entry.resolve()) == kept):
+                continue
+            try:
+                entry.unlink()
+            except OSError:
+                continue        # still held by the Editor, or gone since
+    except OSError:
+        return
 
 
 def _cancel_left_dialog(dialog):

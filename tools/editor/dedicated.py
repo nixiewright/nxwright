@@ -15,7 +15,8 @@ for the shared Editor:
     give, and until when anyone else's are refused. Each command is a
     process of its own, so the lock cannot span a probe of several; a hold
     ends by its holder's release or its time.
-  - work\\, the copies of the projects the Editor opens.
+  - work\\, the copy of the project the Editor shows. Each open deletes the
+    copies before it, but one the Editor still holds.
   - shown.json, the copy the tool last opened, with its screen's size. The
     Editor keeps the project it shows locked, even against reading, so the
     size is read from the copy before the Editor opens it.
