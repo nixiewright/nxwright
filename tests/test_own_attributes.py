@@ -1,5 +1,5 @@
 """The form '&name&', naming an attribute of the object whose event holds the
-line, as the Editor 3.1.73 compiled and ran it: the build checks a line using
+line, as the Editor 1.68.2 compiled and ran it: the build checks a line using
 it as the Editor reads it, tests and the simulator run it so, and code that
 belongs to no event refuses it."""
 import unittest

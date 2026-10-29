@@ -23,7 +23,7 @@ _SHORTEST_PAGE_FILE = 22
 @contextmanager
 def held_by_the_nextion_editor(project: Path):
     """Raises NxwrightError, with advice, for a refusal of the project file
-    `project` itself ("Permission denied"): the Nextion Editor 3.1.73 kept a
+    `project` itself ("Permission denied"): the Nextion Editor 1.68.2 kept a
     project it had open from being read or written. A read-only file is
     refused alike, so the advice says "if". A refusal of another file keeps
     its own words."""

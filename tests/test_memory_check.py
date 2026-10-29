@@ -1,6 +1,6 @@
 """Tests of the build's check of each page's memory, as the Editor's compile
 counts it (nxwright/project/page_memory.py, on the table the probe measured
-on the Editor 3.1.73): the build refuses a page the compile would refuse,
+on the Editor 1.68.2): the build refuses a page the compile would refuse,
 `nxwright check` reports it at the page file, and `nxwright build` prints
 each page's memory."""
 import contextlib

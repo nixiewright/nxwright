@@ -280,7 +280,7 @@ def render(nx_file: NxFile, blocks: dict) -> str:
 def blank_lines_dropped(where: str, count: int) -> str:
     """Returns the warning that extracting dropped `count` blank lines, of
     only spaces and tabs or of nothing, from the code that `where` names. The
-    Nextion Editor 3.1.73 compiled such lines to nothing."""
+    Nextion Editor 1.68.2 compiled such lines to nothing."""
     lines, them = ("line", "it") if count == 1 else ("lines", "them")
     return "%s: %d blank %s dropped; the Nextion Editor compiles %s to nothing" % (
         where, count, lines, them)

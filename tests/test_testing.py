@@ -751,7 +751,7 @@ class RecordedCommandTest(unittest.TestCase):
         self.assertEqual(values["other commands"], [("lcd_dev", "fffb 0002 0000 0020")])
 
     def test_the_editors_undocumented_commands_are_recorded(self):
-        # Each compiled in the Editor 3.1.73, which documents none of them.
+        # Each compiled in the Editor 1.68.2, which documents none of them.
         values = EditorMachine({}).run(["zstr 1,2,3,4,5", "showqq", "sets 1,2"])
         self.assertEqual(values["other commands"], [("zstr", "1", "2", "3", "4", "5"),
                                                     ("showqq",), ("sets", "1", "2")])

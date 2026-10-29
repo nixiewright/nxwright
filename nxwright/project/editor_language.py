@@ -36,7 +36,7 @@ EDITOR_SYSTEM_VARIABLES = frozenset(
 # `if`, `while`, and `for`), and those it does not document. The community's
 # "Full Instruction Set" (UNUF/nxt-doc) lists the rest, such as `beep`, and
 # `lcd_dev`, a fix of the touch's offsets that a user's program.s held. Each
-# compiled in the Editor 3.1.73, but the eight of NO_NUMERIC_FORM, which no
+# compiled in the Editor 1.68.2, but the eight of NO_NUMERIC_FORM, which no
 # number of numeric arguments made compile. The Editor knows those, and
 # judges their forms itself; written alone, it refused each.
 NO_NUMERIC_FORM = frozenset(["i", "cfguart", "cuts", "gets", "meup", "xnum", "beepset",
@@ -69,7 +69,7 @@ NO_COMMAND_WHEN_ALONE = frozenset({"add"})
 # wherever the code is. A word not listed compiled on that series, or was
 # not tried. One model of each series was probed, and two of the
 # Enhanced, which agreed, so the Editor is taken to decide by series.
-# (Worked out from the Editor 3.1.73.)
+# (Worked out from the Editor 1.68.2.)
 #
 # The commands only the Intelligent and the Edge series took: the SD
 # card's, and others.
@@ -106,14 +106,14 @@ EDITOR_COLOURS = {"BLACK": 0, "BLUE": 31, "BROWN": 48192, "GREEN": 2016, "YELLOW
 # and its colours. Opening the project, it says "Illegal name" for each, and
 # renames it. The names are matched exactly, case included: `dim` is
 # refused, but `DIM` and `dim1` are not. Names nxwright makes up skip them,
-# and the build refuses them. (Worked out from the Editor 3.1.73, for an
+# and the build refuses them. (Worked out from the Editor 1.68.2, for an
 # Intelligent screen and a basic one alike.)
 NAMES_THE_EDITOR_REFUSES = EDITOR_SYSTEM_VARIABLES | frozenset(EDITOR_COLOURS)
 # The int variables the Editor's new project declares in its program.s, and
 # that declaration. The vendor's instruction set lists them among the system
 # variables, but the Editor refuses code naming one that program.s does not
 # declare, saying "Invalid Variables" as it compiles. (Worked out from the
-# Editor 3.1.73.)
+# Editor 1.68.2.)
 EDITOR_PROGRAM_VARIABLES = ("sys0", "sys1", "sys2")
 EDITOR_PROGRAM_DECLARATION = "int sys0=0,sys1=0,sys2=0"
 # The build's refusal of code naming one of them undeclared, given its name.

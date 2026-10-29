@@ -29,7 +29,7 @@ screen copy, described in screen_copy.py):
   length at +16, and from +24 to its end the suffix the file had when it was
   added, lower-cased: "png", "jpg", "jpeg". The Editor keeps the file as it
   is given, a PNG, a JPEG, a BMP, or a GIF, whatever its suffix says of it
-  (seen in Editor 3.1.73, tests/test_picture_files.py).
+  (seen in Editor 1.68.2, tests/test_picture_files.py).
 """
 from dataclasses import dataclass
 import struct

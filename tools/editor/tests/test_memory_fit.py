@@ -1,5 +1,5 @@
 """Tests of the memory probe's reasoning (memory_fit.py), on what the Editor
-3.1.73's compile showed. They need neither the Editor nor pywinauto."""
+1.68.2's compile showed. They need neither the Editor nor pywinauto."""
 import unittest
 
 from nxwright.project.memory_table import Part, SeriesCosts, Steps, TypeCosts, read_memory_table
@@ -124,9 +124,9 @@ class TableTextTest(unittest.TestCase):
             "sliding-text": TypeCosts(120, (Part("txt_maxl", 1, 1, 1, 4),
                                             Part("path_m", 1, 1, 1, 4, fallback="txt_maxl")))},
             frozenset({"switch"}), {"gauge": {"sta": (3,)}, "text": {"aph": (128,)}})
-        text = table_text("3.1.73", {"NX4832T035": 3584}, {"T": series})
+        text = table_text("1.68.2", {"NX4832T035": 3584}, {"T": series})
         table = read_memory_table(text, "test")
-        self.assertEqual((table.editor, table.memory, table.series), ("3.1.73",
+        self.assertEqual((table.editor, table.memory, table.series), ("1.68.2",
                                                                       {"NX4832T035": 3584},
                                                                       {"T": series}))
         # tomli-w writes the data; the opening comment is the probe's own.

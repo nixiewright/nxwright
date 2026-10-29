@@ -1,7 +1,7 @@
 """Animations, videos, and sounds: in source folders, dumps, and project files.
 
 The fixtures (tests/fixtures/media/) come from a project the Editor saved
-(installer 3.1.73), after its Gmov, Video, and Audio panels added two of
+(Editor 1.68.2), after its Gmov, Video, and Audio panels added two of
 each to a project nxwright built with a picture and a font:
   - blink.gmov, GmovMaker's file of three frames 80 by 60, and
     blink.screen.gmov, the form the Editor made of it;

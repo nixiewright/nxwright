@@ -72,7 +72,7 @@ class ComponentsTestCase(ServerTestCase):
 class AddTest(ComponentsTestCase):
 
     def test_a_gauge_as_the_editor_adds_one_on_its_series(self):
-        # The Editor 3.1.73 added a gauge with sta 1, a colour, on the basic,
+        # The Editor 1.68.2 added a gauge with sta 1, a colour, on the basic,
         # Enhanced, and Discovery series, whose compile refuses nxwright's
         # default, 3; on an Intelligent screen it keeps it.
         self.add("gauge")

@@ -81,7 +81,7 @@ from tools.editor.memory_type_rounds import (first_cases, measure_types,  # noqa
                                              objects_part)
 
 EDITOR = Path(__file__).resolve().parent / "editor.py"
-EDITOR_VERSION = "3.1.73"
+EDITOR_VERSION = "1.68.2"
 # The holder whose hold keeps the dedicated Editor this run's, and for how
 # long each of its commands renews it, in minutes: the longest a hold lasts.
 HOLDER = "memory-probe-%d" % os.getpid()

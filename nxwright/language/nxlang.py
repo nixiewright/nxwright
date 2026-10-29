@@ -123,7 +123,7 @@ NUMBER, TEXT = "number", "text"
 _TEXTS_BY_NAME = STRING_ATTRIBUTES | {"dir", "vvs2"}
 # The start of every name nxlang generates, which the project's own names
 # may not have. The Editor took it for globals, number and text variables,
-# and hotspots (probed with the Editor 3.1.73). Every generated name's shape
+# and hotspots (probed with the Editor 1.68.2). Every generated name's shape
 # below is built from it, and the rest of nxwright reads them through these.
 GENERATED_PREFIX = "__"
 # A program.s global, `__g<page>_<n>`: GLOBAL_NAME % (page, n).

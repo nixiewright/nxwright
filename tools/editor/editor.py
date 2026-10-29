@@ -1025,7 +1025,7 @@ def _picture(handle: int):
 
 # The Page panel's list, at 96 DPI: each page a row this high, the first's
 # centre this far below the list's top, clicked this far from its left (seen
-# on the Editor 3.1.73). The list shows UI Automation no items, so a page is
+# on the Editor 1.68.2). The list shows UI Automation no items, so a page is
 # picked by a click at its row.
 _PAGE_ROW = 20
 _PAGE_FIRST = 10

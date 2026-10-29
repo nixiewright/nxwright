@@ -2,7 +2,7 @@
 
 The Editor tool is an optional script that drives the Nextion Editor for you, so that you can see what the Nextion Editor does without clicking through it by hand. The tool opens projects, compiles them, writes their TFT files, takes screenshots of the Nextion Editor's windows, and reports what the Nextion Editor shows. The tool is for contributors who have the Nextion Editor: nxwright itself never runs the tool, and neither do nxwright's tests.
 
-You need Windows and the Nextion Editor 3.1.73.
+You need Windows and the Nextion Editor 1.68.2.
 
 ## Its rules
 

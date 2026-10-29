@@ -47,7 +47,7 @@ TREATMENTS = (SHOWN, VALUE_ONLY, HIDDEN, NEVER_SHOWN)
 _FIXED_ON_EVERY_TYPE = ("id", "type", "objname")
 # A placed component's right and bottom edges, which page files leave out as
 # x + w and y + h tell them. Code reads them, and the Editor refused to
-# compile an assignment to either (worked out from the Editor 3.1.73).
+# compile an assignment to either (worked out from the Editor 1.68.2).
 _FIXED_WHERE_PLACED = ("endx", "endy")
 
 
@@ -114,7 +114,7 @@ def described_by_type(type_name: str, attribute: str) -> bool:
 
 def type_has(type_name: str, name: str) -> bool:
     """Whether code may give `name` after a component of the type `type_name`
-    ("text"), as the Editor 3.1.73 compiled it: an attribute of the type, as
+    ("text"), as the Editor 1.68.2 compiled it: an attribute of the type, as
     nxwright's component defaults list them, methods included; `id`, `type`,
     or `objname`; or `endx` or `endy`, on a type with a place on the screen.
     Every other name the Editor knows it refused, on every type and every

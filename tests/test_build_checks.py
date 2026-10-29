@@ -239,7 +239,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         export_dump(self.source, self.folder / "again")
 
     def test_digits_a_waveforms_way_and_aph_past_what_the_editor_takes(self):
-        # The Nextion Editor 3.1.73 refused each of these, "Out of range": an
+        # The Nextion Editor 1.68.2 refused each of these, "Out of range": an
         # xfloat's vvs1 past 8 and vvs0 past 10, a waveform's dir past 2, and
         # an aph past 127, on a text, a button, a number, and a picture alike.
         # It took each at the bound.
@@ -335,7 +335,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
 class PageCapTest(SourceFolderTestCase):
     """The Editor's compile refuses a page holding more components of some
     kinds than it takes on a page, as "Waveform components exceed maximum in
-    page:5" (Editor 3.1.73, on every series that takes the kinds). The build
+    page:5" (Editor 1.68.2, on every series that takes the kinds). The build
     refuses it too, naming the first component past the cap."""
 
     def setUp(self):
@@ -519,7 +519,7 @@ class DataRecordCallTest(_CodeOnFirstTestCase):
 
 class FileStreamCallTest(_CodeOnFirstTestCase):
     """A file stream's calls, refused given another number of arguments than
-    each method takes. The Nextion Editor 3.1.73 refused them as it compiled
+    each method takes. The Nextion Editor 1.68.2 refused them as it compiled
     ("Invalid number of arguments"). Page first holds fs0, a file stream."""
 
     def setUp(self):
@@ -641,7 +641,7 @@ class FullyListedComponentTest(_CodeOnFirstTestCase):
 
 
 class CompileRefusalTest(_CodeOnFirstTestCase):
-    """Lines the Editor 3.1.73's compile refused, each alone in an event,
+    """Lines the Editor 1.68.2's compile refused, each alone in an event,
     with its words; and lines like them it compiled. Besides t0, n0, and d0,
     page first holds va0, a variable of a text (`sta` 1), va1, one of a
     number, st0, a scrolling text, vd0 and au0, a video and a sound playing
@@ -878,7 +878,7 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
 
 class LackedAttributeTest(_CodeOnFirstTestCase):
     """An attribute a component lacks under its page file's choices, which the
-    Editor 3.1.73's compile refused even read ("Invalid Variables"), each
+    Editor 1.68.2's compile refused even read ("Invalid Variables"), each
     value of each choice tried apart on every series; and the same names under
     a value that keeps them, which it compiled. Besides t0, a text of `sta` 1,
     a colour, n0, and d0, page first holds texts of `sta` 3, nothing behind
@@ -932,7 +932,7 @@ class LackedAttributeTest(_CodeOnFirstTestCase):
 
 
 class TypeNameTest(_CodeOnFirstTestCase):
-    """Names code gives after a component, as the Editor 3.1.73 compiled them,
+    """Names code gives after a component, as the Editor 1.68.2 compiled them,
     every name it knows read on every type, on each series. A type has the
     attributes its defaults list, methods included, `id`, `type`, and
     `objname`, and `endx` and `endy` when it has a place; the Editor refused
@@ -1014,7 +1014,7 @@ class TypeNameTest(_CodeOnFirstTestCase):
 
 class EditorCommandTest(_CodeOnFirstTestCase):
     """A line whose first word is no command of the Editor's, which the
-    Editor 3.1.73 refused as it compiled; and the lines it compiled. The small
+    Editor 1.68.2 refused as it compiled; and the lines it compiled. The small
     project's screen is of the Intelligent series, which lacks two of the
     Editor's commands, fstr and piccolor."""
 
@@ -1366,7 +1366,7 @@ class ReadOnlyAttributeTest(SourceFolderTestCase):
 
 
 class ScreenEdgeTest(SourceFolderTestCase):
-    """A component reaching past the screen, which the Editor 3.1.73's compile
+    """A component reaching past the screen, which the Editor 1.68.2's compile
     refused on the Basic, Enhanced, and Discovery series, "Position Invalid":
     past its right or bottom edge, at the screen's rotation, or starting past
     it. One ending at an edge compiled, and the Intelligent and Edge series
@@ -1424,7 +1424,7 @@ class ScreenEdgeTest(SourceFolderTestCase):
 
 class SeriesTest(SourceFolderTestCase):
     """Lines using a command or a system variable the folder's screen series
-    lacks, which the Editor 3.1.73 refused as it compiled. setUp adds the down
+    lacks, which the Editor 1.68.2 refused as it compiled. setUp adds the down
     event to page first, and a text t0 on it. The small project's screen, an
     NX1060P101, is of the Intelligent series."""
 
@@ -1476,7 +1476,7 @@ class SeriesTest(SourceFolderTestCase):
                        + "".join("%s = %d\n" % item for item in values.items()))
 
     def test_attributes_a_series_lacks(self):
-        # As the Editor 3.1.73 compiled them: the Basic, Enhanced, and
+        # As the Editor 1.68.2 compiled them: the Basic, Enhanced, and
         # Discovery series refused code naming these, even read ("Invalid
         # Variables"), and the Edge and Intelligent took it.
         self.add("s0", "waveform")
@@ -1508,7 +1508,7 @@ class SeriesTest(SourceFolderTestCase):
             export_dump(self.source, self.folder / "refused")
 
     def test_a_type_the_series_refuses(self):
-        # As the Editor 3.1.73 refused an animation on the Discovery series:
+        # As the Editor 1.68.2 refused an animation on the Discovery series:
         # "Unsupported component was found for this series device".
         self.add("gm0", "gmov")
         self.use_screen("NX4832F035")
@@ -1536,7 +1536,7 @@ class SeriesTest(SourceFolderTestCase):
         export_dump(self.source, self.folder / "global")
 
     def test_choices_the_editor_refused_beside_the_table(self):
-        # As the Editor 3.1.73 refused them, "Out of range": a sta of 3 on the
+        # As the Editor 1.68.2 refused them, "Out of range": a sta of 3 on the
         # Basic, Enhanced, and Discovery series, on a text, a button, and
         # others, and a slider's psta of 2. The Edge and the Intelligent took
         # them.
@@ -1557,7 +1557,7 @@ class SeriesTest(SourceFolderTestCase):
                 page_file.write_bytes(page)
 
     def test_assignments_the_series_refuses(self):
-        # As the Editor 3.1.73 refused them on the Basic, Enhanced, and
+        # As the Editor 1.68.2 refused them on the Basic, Enhanced, and
         # Discovery series, on every type that has them and the page:
         # "Assignment operation failed"; and x and y, on a text and a slider.
         # The Edge and the Intelligent took them.
@@ -1579,7 +1579,7 @@ class SeriesTest(SourceFolderTestCase):
         export_dump(self.source, self.folder / "taken")
 
     def test_assignments_the_series_refuses_on_some_types(self):
-        # As the Editor 3.1.73 refused them on the Basic, Enhanced, and
+        # As the Editor 1.68.2 refused them on the Basic, Enhanced, and
         # Discovery series ("Assignment operation failed"), and took them on
         # the Edge and Intelligent. first and time were refused on every type,
         # each with an effect, and on the Basic's page. A button's, a

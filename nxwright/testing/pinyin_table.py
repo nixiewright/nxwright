@@ -18,7 +18,7 @@ four 2-byte values, low byte first:
     to the next row's place, or to the table's end.
 The key is the stamp CRC of the syllable's bytes, each byte fed as a word
 (stamp.word_crc from stamp.CRC_START). The rows go by increasing key. Worked
-out from the Nextion Editor 3.1.73's input.bin.
+out from the Nextion Editor 1.68.2's input.bin.
 
 In a TFT file, the firmware part starts at the section size, which bytes
 0x34 to 0x37 of the file give. It starts with a table of rows of three

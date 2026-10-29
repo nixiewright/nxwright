@@ -344,7 +344,7 @@ Extracting a project, then building it, gives back the same project: the same pa
 
 - A new source folder gets a copy of nxwright's own, `nxwright/project/component_defaults.toml`. Every extract writes it again.
 - The build reads the folder's copy.
-- nxwright's own copy comes from a sample project made with the Nextion Editor 3.1.73: one page with one newly added component of each type. `nxwright defaults` writes a defaults file from such a sample ([commands.md](commands.md#defaults)).
+- nxwright's own copy comes from a sample project made with the Nextion Editor 1.68.2: one page with one newly added component of each type. `nxwright defaults` writes a defaults file from such a sample ([commands.md](commands.md#defaults)).
 - nxwright's tests keep that sample's page, and check that every type on it goes through extract and build unchanged (`tests/fixtures/every-component`).
 
 ## The picture cache

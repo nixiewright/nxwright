@@ -13,7 +13,7 @@ messages are. UI Automation lists only its title, "Confirm", and its
 buttons, Yes, No, and Cancel. What it asks is in a rich edit control,
 whose text Windows' WM_GETTEXT gives (rich_edit_texts). The main window's
 toolbar's Save button is enabled while there are changes not saved.
-(Worked out from the Editor 3.1.73.)
+(Worked out from the Editor 1.68.2.)
 
 The Attribute panel's component list lists the page shown and its
 components: "home(Page)", "t0(Text)". On a page not locked, one of them is
@@ -22,7 +22,7 @@ the last one picked. Showing the list's drop-down and hiding it unpicked
 keeps that one. A page locked in the Editor cannot be shown. A click on its
 row in the Page panel shows a padlock in its place. The list then lists the
 page's components, as for any page, but picks none of them. (Worked out from
-the Editor 3.1.73.)"""
+the Editor 1.68.2.)"""
 import ctypes
 from ctypes import wintypes
 import os
@@ -78,7 +78,7 @@ _TOOLTIP_OR_SHADOW = ("tooltips_class32", "SysShadow")
 # instruction box opens it as one types. It is kept shown off the screen, and
 # moves on it while open, with a tip, a window it owns.
 _WORD_LIST = "ListMessage"
-# The errors on which the Editor 3.1.73's compile stopped, writing no last
+# The errors on which the Editor 1.68.2's compile stopped, writing no last
 # line: one of its own, after refusing a QR code's temporary need, or a
 # command or a system variable the screen's series lacks; and its refusal
 # of a video made for another rotation than the project's.
@@ -92,7 +92,7 @@ _COMPILE_ENDED = re.compile(r"(Compile Successful!|Error:Compile failed!)")
 # The end of that last line once a compile has succeeded: the TFT file's size.
 _FILE_SIZE = re.compile(r"Compile Successful!.*File Size:([\d,]+)\s*$")
 # The automation ID of the window File > TFT file output shows. Its title is
-# "About", in the Editor 3.1.73.
+# "About", in the Editor 1.68.2.
 TFT_OUTPUT_FORM = "output"
 
 

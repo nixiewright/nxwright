@@ -14,7 +14,7 @@ from nxwright.project.screen_models import MODELS, model_named
 from nxwright.project.component_defaults import nxwright_defaults
 
 TABLE = """
-editor = "3.1.73"
+editor = "1.68.2"
 
 [memory]
 NX4832T035 = 3584
@@ -127,7 +127,7 @@ def built(kind: str, name: str, **values) -> PageObject:
 
 
 class ShippedTableTest(unittest.TestCase):
-    """The table nxwright ships holds what the Editor 3.1.73's compile
+    """The table nxwright ships holds what the Editor 1.68.2's compile
     showed."""
 
     def own(self, series: str, *components) -> int:
@@ -349,13 +349,13 @@ class ReadMemoryTableTest(unittest.TestCase):
 
     def test_a_table(self):
         table = read_memory_table(TABLE, "test")
-        self.assertEqual((table.editor, table.memory), ("3.1.73", {"NX4832T035": 3584}))
+        self.assertEqual((table.editor, table.memory), ("1.68.2", {"NX4832T035": 3584}))
         self.assertEqual(table.series["T"].refused, frozenset({"switch"}))
         self.assertEqual(table.series["T"].refused_values, {"gauge": {"sta": (3,)}})
 
     def test_not_a_table(self):
         with self.assertRaisesRegex(NxwrightError, "test is not a memory table"):
-            read_memory_table('editor = "3.1.73"\n', "test")
+            read_memory_table('editor = "1.68.2"\n', "test")
 
 
 if __name__ == "__main__":

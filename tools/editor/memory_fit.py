@@ -4,7 +4,7 @@ counted and refused, fitting a rule to an attribute's costs, and writing the
 table nxwright reads (nxwright/project/memory_table.py, which says what a
 rule is).
 
-A compile's Output panel, as the Editor 3.1.73 writes it:
+A compile's Output panel, as the Editor 1.68.2 writes it:
     Available Memory:3584
     Global Memory:16
     Total size of font:8,029

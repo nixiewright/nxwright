@@ -1,7 +1,7 @@
 """Changing a source folder's screen model, rotation, and encoding,
 `app.toml`'s `screen`, `rotation`, and `encoding`, and the files that depend
 on them, as the Nextion Editor's Device window changes a project's. The
-Editor 3.1.73 gave each page the new screen's size, at its rotation, and
+Editor 1.68.2 gave each page the new screen's size, at its rotation, and
 kept every component's place and size, and every picture, animation, and
 video. For a new rotation, it turned each font. For a new encoding, it kept
 each text's bytes and each font (docs/commands.md, device).

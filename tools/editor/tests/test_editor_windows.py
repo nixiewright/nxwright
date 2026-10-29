@@ -318,7 +318,7 @@ class RichEditTextTest(WindowsTestCase):
 
 class CompileEndedTest(unittest.TestCase):
     """The Output panel's last line says whether a compile has ended, as the
-    Editor 3.1.73 wrote it."""
+    Editor 1.68.2 wrote it."""
 
     def test_succeeded_or_failed(self):
         self.assertTrue(compile_ended("Available Memory:3584\r\nGlobal Memory:16\r\n"
@@ -335,7 +335,7 @@ class CompileEndedTest(unittest.TestCase):
 
 class CompiledFileSizeTest(unittest.TestCase):
     """The TFT file's size, which the Output panel's last line gives once a
-    compile has succeeded, as the Editor 3.1.73 wrote it while writing the
+    compile has succeeded, as the Editor 1.68.2 wrote it while writing the
     demo's TFT file."""
 
     def test_the_size_of_a_compile_that_succeeded(self):
@@ -369,7 +369,7 @@ class ExplorerWindowsOnTest(unittest.TestCase):
 
 class CompileWatchTest(unittest.TestCase):
     """A compile that stops on an error of the Editor's own writes no last
-    line, as the Editor 3.1.73 did after refusing a QR code's need, or a
+    line, as the Editor 1.68.2 did after refusing a QR code's need, or a
     command: "Error:Destination array was not long enough. ...". Its end
     shows as its progress window goes, or as that error shows, the text then
     staying as it is."""

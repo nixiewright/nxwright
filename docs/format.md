@@ -1,6 +1,6 @@
 # The Nextion Editor's project file
 
-What is known about the project file (`.HMI`) of the Nextion Editor, the vendor's Windows program for designing Nextion screens. The vendor does not document it. The facts here were checked against Nextion Editor 3.1.73.
+What is known about the project file (`.HMI`) of the Nextion Editor, the vendor's Windows program for designing Nextion screens. The vendor does not document it. The facts here were checked against Nextion Editor 1.68.2.
 
 The byte-by-byte layouts live in the modules that read and write each part, so that the code and its description cannot drift apart. This page explains how the parts fit together.
 

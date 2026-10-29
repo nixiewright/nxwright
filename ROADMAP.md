@@ -29,6 +29,6 @@ A command could draw the PNG files from SVG files kept in the source folder, as 
 
 ## Newer versions of the Nextion Editor
 
-nxwright is tested with projects of Nextion Editor 3.1.73. A newer Nextion Editor may add component types and attributes that nxwright does not know. Today, the build refuses them, because nearly every unknown name is a typo. `nxwright extract` also refuses a project whose components have attributes it does not know. So a project cannot use a new type or attribute until nxwright is updated to know it, which could hold the project back.
+nxwright is tested with projects of Nextion Editor 1.68.2. A newer Nextion Editor may add component types and attributes that nxwright does not know. Today, the build refuses them, because nearly every unknown name is a typo. `nxwright extract` also refuses a project whose components have attributes it does not know. So a project cannot use a new type or attribute until nxwright is updated to know it, which could hold the project back.
 
 A build option, off by default, could be a way out until then. With it, the build would write the unknown types and attributes into the project file anyway. The page file would give such an attribute's value as bytes, since nxwright knows neither its size nor whether it is text or a number. `nxwright extract` would bring such attributes back in the same form. Once nxwright knows the new type or attribute, the project would go back to the normal build.

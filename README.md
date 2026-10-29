@@ -398,7 +398,7 @@ See [editors/vscode/README.md](https://github.com/nixiewright/nxwright/blob/main
 
 ## Getting started
 
-To install nxwright, follow [Quick install](#tldr-quick-install). Then `nxwright --help` lists its commands. nxwright is tested with projects of Nextion Editor 3.1.73.
+To install nxwright, follow [Quick install](#tldr-quick-install). Then `nxwright --help` lists its commands. nxwright is tested with projects of Nextion Editor 1.68.2.
 
 **Start a new project:**
 

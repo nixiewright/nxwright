@@ -13,7 +13,7 @@ from nxwright.project.page_text import page_from_text
 from nxwright.project.screen_models import model_named
 from nxwright.source.project_files import build, extract
 
-# The dump of a project made with Editor 3.1.73: one page holding one newly
+# The dump of a project made with Editor 1.68.2: one page holding one newly
 # added component of each type, as the Editor created them. nxwright's
 # component defaults come from it. Its two pictures are the thermostat demo's
 # logo, in place of the ones the project was made with.

@@ -21,7 +21,7 @@ from nxwright.project.screen_models import ScreenModel
 # Discovery series refused a `sta` of 3, nothing, so the page shows
 # through, on each of their types with that choice. They refused a slider's
 # `psta` of 2, a square knob, the only type with that choice. (Worked out
-# from the Editor 3.1.73.)
+# from the Editor 1.68.2.)
 CHOICES_REFUSED_BY_SERIES = {series: {"sta": (3,), "psta": (2,)} for series in ("T", "K", "F")}
 
 

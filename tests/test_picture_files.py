@@ -3,7 +3,7 @@ given, a PNG, a JPEG, a BMP, or a GIF, whatever its suffix says of it, and
 its record names the suffix the file had, lower-cased; the picture's screen
 copy is made from the file's pixels.
 
-Two probes (Editor 3.1.73) added pictures through the Editor's Picture panel
+Two probes (Editor 1.68.2) added pictures through the Editor's Picture panel
 to new projects:
   - tests/fixtures/pictures/jpeg/: three JPEG pictures of 160 by 96 added
     to an NX8048K050 project, whose screen copies are raw, and to an

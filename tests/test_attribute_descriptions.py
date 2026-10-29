@@ -86,7 +86,7 @@ class AttributeDescriptionsTest(unittest.TestCase):
                                    ("file-stream", "close"), ("file-stream", "find")})
 
     def test_a_types_names(self):
-        # As the Editor 3.1.73 compiled them: a type's attributes, id,
+        # As the Editor 1.68.2 compiled them: a type's attributes, id,
         # type, and objname, and endx and endy where it has a place; none
         # other, and names differ by their letters' case.
         for type_name, name in (("number", "val"), ("number", "id"), ("timer", "type"),

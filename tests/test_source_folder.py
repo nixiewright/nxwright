@@ -367,7 +367,7 @@ class BuildTest(SourceFolderTestCase):
         self.assertEqual(output.read_bytes(), b"keep")
 
     def test_a_project_file_the_nextion_editor_holds(self):
-        # The Nextion Editor 3.1.73 kept a project it had open from being
+        # The Nextion Editor 1.68.2 kept a project it had open from being
         # read or written ("Permission denied"). Stand-ins refuse the
         # build's read of the project file, then its replace, as the
         # Editor would; the file is left as it was.

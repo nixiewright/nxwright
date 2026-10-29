@@ -34,7 +34,7 @@ LEAST_SIDE = 2
 # Toolbox added a gauge with `sta` 1, a colour, where their compile refuses
 # the Intelligent's 3. Only the gauge was added: it is the one type whose
 # default the memory table shows these series refusing. (Worked out from
-# the Editor 3.1.73.)
+# the Editor 1.68.2.)
 SERIES_NEW_COMPONENT_VALUES = {series: {"gauge": {"sta": 1}} for series in ("T", "K", "F")}
 
 
@@ -51,7 +51,7 @@ class PageCap:
 
 # The Editor's caps on a page's components. Past one, its compile fails,
 # saying "Waveform components exceed maximum in page:5", for one. Worked out
-# from the Editor 3.1.73: the caps were the same on every series that takes
+# from the Editor 1.68.2: the caps were the same on every series that takes
 # their kinds, and only the P and E series take animations and videos.
 # Videos, sounds, animations, and file browsers are not counted among the
 # timer events: 11 timers beside 2 of each compiled. Every other kind
@@ -72,7 +72,7 @@ _NOT_BOUNDS = {(TYPES_BY_NAME["sliding-text"], "path_m")}
 # The compile took a data record's `format` or `dir` 1 byte shorter than its
 # room, and the screen showed all of it. It refused 1 byte more ("The length
 # exceeds the maximum value"). Code storing a longer one still keeps only
-# its first bytes. (Editor 3.1.73.)
+# its first bytes. (Editor 1.68.2.)
 _BOUNDS_COMPILED_TO_THEIR_ROOM = {(TYPES_BY_NAME["data-record"], "format_m"),
                                   (TYPES_BY_NAME["data-record"], "dir_m")}
 # The attributes a component has only under some values of one of its
@@ -82,7 +82,7 @@ _BOUNDS_COMPILED_TO_THEIR_ROOM = {(TYPES_BY_NAME["data-record"], "format_m"),
 # or read ("Invalid Variables"), and its simulator answered 0x1A to a typed
 # line naming one, as to a name the page lacks. Each value of each choice
 # of every type was compiled apart, the others at their defaults, on every
-# series; the rules were the same on all. (Worked out from the Editor 3.1.73.)
+# series; the rules were the same on all. (Worked out from the Editor 1.68.2.)
 #
 # A component appears as its page opens by its `effect`, after the others
 # of a lower `first`, over `time`: every effect but 0, at once, has them.
@@ -150,7 +150,7 @@ EVERY_TYPE = None
 # Editor's compile refused code naming them, even read ("Invalid
 # Variables"), on the Basic, Enhanced, and Discovery series, and took it on
 # the Edge and Intelligent; `objname` on every object, the page too, which
-# no page file holds. (Worked out from the Editor 3.1.73.)
+# no page file holds. (Worked out from the Editor 1.68.2.)
 SERIES_LACKED_ATTRIBUTES = {
     **{series: {EVERY_TYPE: frozenset(["movex", "movey", "lockobj", "groupid0", "groupid1",
                                        "sendkey", "objname"]),
@@ -201,7 +201,7 @@ def lacked_attributes(type_name: str, value_of, screen: ScreenModel = None) -> d
 # read 0, which the text refused (0x1C), as a text refuses any number
 # (testing/editor_machine.py, _ATTRIBUTE_KINDS). The screen still draws
 # with the page file's values.
-# (Worked out from the Editor 3.1.73.)
+# (Worked out from the Editor 1.68.2.)
 _UNHELD_ON_THE_EDGE_AND_INTELLIGENT = {
     EVERY_TYPE: frozenset(["movex", "movey", "lockobj", "groupid0", "groupid1", "sendkey",
                            "molloc", "molloc_s", "objname"]),
@@ -293,7 +293,7 @@ def check_page_limits(page: PageBlock, where: str):
 # screen, at its rotation: past its right or bottom edge, or starting past
 # it ("Page:page0 Fail:t0 Position Invalid."). One ending at an edge it
 # compiled. The Intelligent and Edge series took any. (Worked out from the
-# Editor 3.1.73, on texts, hotspots, and scrolling texts. In a later probe,
+# Editor 1.68.2, on texts, hotspots, and scrolling texts. In a later probe,
 # every type with a place that each series takes was refused past the right
 # edge, and a text one pixel past the right or the bottom edge, where one
 # ending at both edges compiled.) A negative x or y, and a side under 2, the
@@ -334,7 +334,7 @@ def check_component_places(page: PageBlock, screen: ScreenModel, page_size: tupl
 #
 # The Basic, Enhanced, and Discovery series refused aph, drag, and effect,
 # on each of their types that has them, the page among them (worked out
-# from the Editor 3.1.73). They refused x and y on each of the 15 types
+# from the Editor 1.68.2). They refused x and y on each of the 15 types
 # each of those series takes, the Basic's simulator answering a typed store
 # 0x1C. In a later probe, every attribute code can change on the Intelligent
 # was assigned on each type those series take, under each choice that gives
@@ -443,7 +443,7 @@ def _most_compiled(page_object, object_type, attribute: str, bound: str, limit: 
     length. It checks none of an attribute the component lacks
     (lacked_attributes): it compiled a video's or a sound's `path` longer
     than its `path_m` while their `from` was 0, and a variable's `txt`
-    longer than its `txt_maxl` while it held a number (Editor 3.1.73). It
+    longer than its `txt_maxl` while it held a number (Editor 1.68.2). It
     is taken to do alike for an animation's or a video's `vid`, which has
     no bound."""
     def value_of(name: str):
@@ -465,7 +465,7 @@ def bounded_attributes(object_type, names) -> list:
     stores (the test machine's "text limits"). The Editor refuses to compile
     a longer one ("The length exceeds the maximum value"), but where
     _most_compiled says otherwise. Seen for every `X_m` of every type
-    (Editor 3.1.73). A sliding text's `path_m` is none: its hint says it
+    (Editor 1.68.2). A sliding text's `path_m` is none: its hint says it
     sets aside room for the text's lines."""
     return [("txt", "txt_maxl")] + [
         (name[:-2], name) for name in names

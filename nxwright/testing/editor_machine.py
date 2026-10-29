@@ -152,7 +152,7 @@ _TEXT_SUBTRACTION = re.compile(r"^(%s)-(.+)$" % OPERAND)
 _MOST_TURNS = 10000
 # How deep events, clicked events, and called macros nest, counted together.
 # One more stopped the Editor's simulator: "Endless loop was detected, please
-# check your code!" (probed with the Editor 3.1.73). An instruction from the
+# check your code!" (probed with the Editor 1.68.2). An instruction from the
 # serial line is no level of its own.
 MOST_LEVELS = 9
 

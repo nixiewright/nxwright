@@ -43,7 +43,7 @@ _BLOCK_HEAD = re.compile(r"(if|while|for)\s*\(")
 _ASSIGNED_ATTRIBUTE = re.compile(r"([A-Za-z_]\w*)\.([A-Za-z_]\w*)(?:\.([A-Za-z_]\w*))?"
                                  r"(?:\+\+|--|[-+*/%&|^]?=(?!=))")
 # A tab after `int`, which the Editor reads as part of the name, refusing
-# the declaration. (Worked out from the Editor 3.1.73.)
+# the declaration. (Worked out from the Editor 1.68.2.)
 _TAB_AFTER_INT = re.compile(r"int\t")
 # sys0, sys1, or sys2 named outside a string: not part of a longer name, and
 # neither an attribute nor a component of that name, as in `sys0.txt`.
@@ -89,7 +89,7 @@ DATA_RECORD_ARGUMENTS = {"insert": (str,), "delete": (int, int), "up": (str, int
 # A call of one of those methods: its component's name, the method, and its arguments.
 DATA_RECORD_CALL = re.compile(r"([A-Za-z_]\w*)\.(insert|delete|up|clear)\((.*)\)$")
 # How many arguments each of a file stream's methods takes. The Nextion
-# Editor 3.1.73's compile refused any other number, "Invalid number of
+# Editor 1.68.2's compile refused any other number, "Invalid number of
 # arguments".
 FILE_STREAM_ARGUMENTS = {"open": 1, "read": 3, "write": 3, "close": 0, "find": 1}
 # A call of one of those methods: its component's name, the method, and its arguments.

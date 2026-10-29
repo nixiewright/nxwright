@@ -46,7 +46,7 @@ LABEL = re.compile(r"([^%s0-9][^%s]*):" % (_NOT_IN_A_LABEL, _NOT_IN_A_LABEL))
 # it compiles, in a quoted text too (code_preprocessor.with_own_attributes),
 # and refuses it in code of no event. A lone '& it keeps as written. The
 # name is an attribute's: letters, digits, and _, not starting with a digit.
-# (Worked out from the Editor 3.1.73.)
+# (Worked out from the Editor 1.68.2.)
 OWN_ATTRIBUTE = re.compile(r"'&([A-Za-z_][A-Za-z0-9_]*)&'")
 # Any form '&...&', whose name the Editor reads with its spaces dropped. One
 # whose name is no attribute's, as '&1a&' or '&a-b&', it refused as it

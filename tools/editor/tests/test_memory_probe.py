@@ -2,7 +2,7 @@
 its rounds: memory_series.py, memory_type_rounds.py, memory_global_rounds.py,
 and memory_need_rounds.py), against a stand-in
 for the Editor whose compile counts as a known table does, and refuses as
-the Editor 3.1.73 was seen to on a basic screen. The probe must find that
+the Editor 1.68.2 was seen to on a basic screen. The probe must find that
 table again. They need neither the Editor nor pywinauto."""
 from dataclasses import replace
 import unittest

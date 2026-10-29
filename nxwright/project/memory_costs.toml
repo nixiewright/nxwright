@@ -2,7 +2,7 @@
 # tools/editor/memory_probe.py measured it (docs/format.md, Memory).
 # Written by the probe: measure again rather than edit.
 
-editor = "3.1.73"
+editor = "1.68.2"
 
 [memory]
 NX1060P070 = 524288
