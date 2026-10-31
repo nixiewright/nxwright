@@ -3896,9 +3896,9 @@ on b1.down:
 
     def test_a_command_typed_alone(self):
         # As the Editor's simulator answered, as its compile refuses them: add
-        # alone is no instruction, and cuts alone, of a form no number of
-        # arguments matched, a wrong number of parameters. So did crcrest
-        # alone, as a command taking two.
+        # alone is no instruction, and cuts alone, a command taking seven, a
+        # wrong number of parameters. So did crcrest alone, as a command
+        # taking two.
         for text, code in (("add", 0x00), ("cuts", 0x1e), ("crcrest", 0x1e)):
             with self.subTest(text):
                 simulation, sent = self.answers(text)

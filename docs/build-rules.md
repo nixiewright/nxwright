@@ -228,7 +228,7 @@ In nxlang, the build refuses the attributes components lack too.
   - A first word with a capital letter, such as `CLS`, and `movelayer`, get "Invalid Variables" instead.
 - A command given another number of arguments than it takes, such as `cls 1,2` or `get 1,2`, or written alone, as `cls` ("Invalid number of arguments"). `add` alone gets "Invalid command".
   - The numbers are the vendor's instruction set's, or those an undocumented command was seen to compile with.
-  - A command whose number of arguments is not fixed, such as `sets`, takes any number. So do `i`, `cfguart`, `cuts`, `gets`, `meup`, `xnum`, `beepset`, and `piccolor`, whose forms are not known. None of them may be written alone.
+  - A command whose number of arguments is not fixed, such as `sets`, takes any number.
 
 ### What a series lacks
 
@@ -256,6 +256,15 @@ Labels are told apart by letter case: `goto Up` does not find `up:`.
 
 - Code using `sys0`, `sys1`, or `sys2` where `program.nx` does not declare it, in either language ("Invalid Variables"). The vendor's instruction set lists them among the system variables, but they are `program.nx`'s `int` variables. The Nextion Editor's new project declares them, as `nxwright new` does: `int sys0=0,sys1=0,sys2=0`.
 - In strict Nextion syntax, a tab after `int` in a declaration. The Nextion Editor reads it as part of the variable's name. nxlang writes a space there instead ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
+
+### Names of `program.nx`'s `int` variables
+
+In either language, the build refuses an `int` of `program.nx` whose name is already taken:
+
+- a command's, such as `int sets=0`, even one your screen's series lacks ("Conflict with instructions name");
+- a system variable's, such as `int dim=0` ("Illegal name");
+- a page's, such as `int page0=0` ("Conflict with page name");
+- a component's on any page, such as `int t0=0` ("Conflict with Component name"). So a component cannot be named `sys0`, `sys1`, or `sys2` while `program.nx` declares them, as a new project does.
 
 ### Attributes code cannot change
 

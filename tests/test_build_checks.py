@@ -85,9 +85,11 @@ class SourceFolderLimitTest(SourceFolderTestCase):
                                    r"name that starts with a digit")
 
     def test_names_like_them_that_the_editor_takes(self):
-        # Matched exactly, case included; and sys0 to sys2, the commands, and
-        # the keywords are not among them.
-        for name in ("DIM", "black", "dim1", "rtc7", "sys0", "eqlb", "page", "if"):
+        # Matched exactly, case included; and the commands and the keywords
+        # are not among them. sys0 to sys2 are not either, but program.nx
+        # declares them, and a component of the same name conflicts with its
+        # int (EditorCommandTest).
+        for name in ("DIM", "black", "dim1", "rtc7", "eqlb", "page", "if"):
             self.add_text_component(name, "x")
         export_dump(self.source, self.folder / "again")
 
@@ -722,7 +724,9 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
                                        'rdfile "sd0/a.txt",0,1,0,1', "twfile",
                                        'twfile "sd0/a.txt"', 'twfile "sd0/a.txt",5,6',
                                        "crcrest", "crcrest 1", "crcputs t0.txt,0,1",
-                                       "crcputu 0", "rest 1", "touch_j 1", "code_c 1")):
+                                       "crcputu 0", "rest 1", "touch_j 1", "code_c 1",
+                                       "i 1,2", "beepset 1", "meup 1,2,3", "gets 1",
+                                       "cfguart 1,2,3", "cuts 1,2", "xnum 1,2")):
             with self.subTest(line=line):
                 self.write_code(line)
                 with self.assertRaisesRegex(
@@ -733,7 +737,8 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
         # lacks, which takes any number, and commands that take none.
         self.write_code("cls 1", 'print "a,b"', "crcputh 0A 0B", "crcrest 1,0xffff",
                         'rdfile "sd0/a.txt",0,1,0', 'twfile "sd0/a.txt",5', "rest", "touch_j",
-                        "code_c")
+                        "code_c", "i 1,2,3,4", "beepset 1,2", "meup 1,2", "gets 1,2",
+                        "cfguart 1,2,3,4", "cuts 1,2,3,4,5,6,7", "xnum 1,2,3,4,5,6,7,8,9,10")
         export_dump(self.source, self.folder / "built")
 
     def test_nxlang_writes_such_texts_another_way(self):
@@ -1041,14 +1046,15 @@ class EditorCommandTest(_CodeOnFirstTestCase):
         "line 20,30,170,200,BLUE", "draw 10,10,70,70,GREEN", "cir 100,100,30,RED",
         "cirs 100,100,30,RED", "beep 100",
         # Those the vendor does not document, with the number of arguments
-        # each compiled with, and two for those no numeric form compiled.
+        # each compiled with.
         "getpassw", "lcd_refx", "lhmi_cle", "showqq", "getv 1", "init 1", "setbaudz 1",
         "pa_q 1,2", "whmi_cle 1,2", "nstr 1,2,3", "rfpt 1,2,3", "strsize 1,2,3", "wfpt 1,2,3",
         "pa_txt 1,2,3,4", "timerset 1,2,3,4", "zstr 1,2,3,4,5", "comok 1,2,3,4,5,6,7",
         "draw3d 1,2,3,4,5,6,7", "qrcode 1,2,3,4,5,6,7,8",
         "draw_h 1,2,3,4,5,6,7,8,9,10,11,12,13",
-        "setbrush 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15", "sets", "sets 1,2,3", "i 1,2",
-        "cfguart 1,2", "cuts 1,2", "gets 1,2", "meup 1,2", "xnum 1,2", "beepset 1,2",
+        "setbrush 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15", "sets", "sets 1,2,3", "i 1,2,3,4",
+        "cfguart 1,2,3,4", "cuts 1,2,3,4,5,6,7", "gets 1,2", "meup 1,2",
+        "xnum 1,2,3,4,5,6,7,8,9,10", "beepset 1,2",
         "done:", "return")
 
     def setUp(self):
@@ -1141,6 +1147,47 @@ class EditorCommandTest(_CodeOnFirstTestCase):
                     export_dump(self.source, self.folder / ("refused%d" % number))
         program.write_text(written + "vis 1,0\nvis sys0,0\n", encoding="utf-8", newline="\n")
         export_dump(self.source, self.folder / "built")
+
+    def test_an_int_of_program_nx_named_as_the_editor_refuses(self):
+        # The Editor refused an int named as one of its commands, even one
+        # the series lacks; as a system variable; as a page; and as a
+        # component of any page. It compiled other names. nxlang writes
+        # program.nx's ints as they are, so it refuses them too.
+        program = self.source / "program.nx"
+        text = program.read_text(encoding="utf-8")
+        written = text + ("" if text.endswith("\n") else "\n")
+        line_number = len(written.split("\n"))
+        cases = [("int sets=0", "Conflict with instructions name"),
+                 ("int vis=0", "Conflict with instructions name"),
+                 ("int fstr=0", "Conflict with instructions name"),
+                 ("int dim=0", "Illegal name"),
+                 ("int abc=0,first=1", "Conflict with page name"),
+                 ("int t0=1", "Conflict with Component name")]
+        for language in ("strict", "nxlang"):
+            if language == "nxlang":
+                switch_to_nxlang(self.source)
+            for number, (line, words) in enumerate(cases):
+                with self.subTest(language=language, line=line):
+                    program.write_text(written + line + "\n", encoding="utf-8", newline="\n")
+                    with self.assertRaisesRegex(
+                            NxwrightError, r"program\.nx line %d: %s: .*\(\"%s\"\)"
+                            % (line_number, re.escape(line), words)):
+                        export_dump(self.source, self.folder / ("%s%d" % (language, number)))
+            program.write_text(written + "int abc=0,t1=2\n", encoding="utf-8", newline="\n")
+            export_dump(self.source, self.folder / ("%s-built" % language))
+
+    def test_a_component_named_as_an_int_of_program_nx(self):
+        # The Editor refused a text named sys0 beside program.s's own
+        # declaration of sys0 to sys2, on the int's line.
+        add_component(self.source / "pages" / "first.page.toml", "sys0")
+        program = self.source / "program.nx"
+        line_number = program.read_text(encoding="utf-8").split("\n").index(
+            "int sys0=0,sys1=0,sys2=0") + 1
+        with self.assertRaisesRegex(
+                NxwrightError, r"program\.nx line %d: int sys0=0,sys1=0,sys2=0: sys0 is a "
+                r"component of page first, .*\(\"Conflict with Component name\"\)"
+                % line_number):
+            export_dump(self.source, self.folder / "refused")
 
     def test_program_nx_macros_and_nxlang(self):
         program = self.source / "program.nx"
@@ -1653,7 +1700,7 @@ class SeriesTest(SourceFolderTestCase):
                  ("NX4832K035", "sys0=scache", "scache", "variable", "NX4848E040"),
                  ("NX4832K035", "sys0=tprc", "tprc", "variable", "NX4848E040"),
                  ("NX8048P050", "fstr 1,2,3", "fstr", "instruction", "NX4832T035"),
-                 ("NX4832T035", "piccolor 1,2", "piccolor", "instruction", "NX4832F035"),
+                 ("NX4832T035", "piccolor 1,2,3,4", "piccolor", "instruction", "NX4832F035"),
                  ("NX4848E040", "sys0=lowpower", "lowpower", "variable", "NX4832F035")]
         for number, (model, line, word, kind, taking) in enumerate(cases):
             with self.subTest(line=line, model=model):
@@ -1662,6 +1709,21 @@ class SeriesTest(SourceFolderTestCase):
                 self.assert_refused(line, model, word, kind, number)
                 self.use_screen(taking)
                 export_dump(self.source, self.folder / ("taken%d" % number))
+
+    def test_piccolor_on_the_discovery_series(self):
+        # The Editor compiled piccolor with four arguments on the Discovery
+        # series, the one series that has it, and refused three and five
+        # ("Invalid number of arguments").
+        self.use_screen("NX4832F035")
+        for number, line in enumerate(("piccolor 1,2,3", "piccolor 1,2,3,4,5")):
+            with self.subTest(line=line):
+                self.write_code(line)
+                with self.assertRaisesRegex(
+                        NxwrightError, r"first\.nx line 2: %s: piccolor takes 4, .*\(\"Invalid "
+                        r"number of arguments\"\)" % re.escape(line)):
+                    export_dump(self.source, self.folder / ("refused%d" % number))
+        self.write_code("piccolor 1,2,3,4")
+        export_dump(self.source, self.folder / "built")
 
     def test_a_variable_anywhere_in_a_line(self):
         # In a condition, as an assignment's target, in arithmetic, and as

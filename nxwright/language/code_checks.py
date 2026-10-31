@@ -24,13 +24,14 @@ import re
 from nxwright import NxwrightError
 from nxwright.language.code_lines import (ARGUMENT, ASSIGNMENT, ELSE, LABEL, OWN_ATTRIBUTE,
                                           OWN_FORM, STRING, chain_parts, command_arguments,
-                                          command_word, compact, first_word, goto_label,
-                                          holds_own_attribute, is_declaration, minus_is_sign)
+                                          command_word, compact, declared_int_names,
+                                          first_word, goto_label, holds_own_attribute,
+                                          is_declaration, minus_is_sign)
 from nxwright.project.attribute_descriptions import code_cannot_change, describe, type_has
 from nxwright.project.editor_language import (EDITOR_COLOURS, EDITOR_COMMANDS,
                                               EDITOR_PROGRAM_VARIABLES,
                                               EDITOR_SYSTEM_VARIABLES, NO_COMMAND_WHEN_ALONE,
-                                              NO_NUMERIC_FORM, REFUSED_AS_A_NAME,
+                                              REFUSED_AS_A_NAME,
                                               SERIES_LACKED_COMMANDS, SERIES_LACKED_VARIABLES,
                                               UNDECLARED_PROGRAM_VARIABLE)
 from nxwright.project.editor_limits import (ATTRIBUTES_CODE_CANNOT_CHANGE_ON_SERIES,
@@ -119,6 +120,13 @@ COMMAND_PARAMETERS = {
     "init": 1, "setbaudz": 1, "pa_q": 2, "whmi_cle": 2, "fstr": 3, "nstr": 3, "rfpt": 3,
     "strsize": 3, "wfpt": 3, "pa_txt": 4, "timerset": 4, "zstr": 5, "comok": 7, "draw3d": 7,
     "qrcode": 8, "draw_h": 13, "setbrush": 15,
+    # Undocumented too: each compiled with one number of arguments, and the
+    # Editor refused the other numbers tried. Only the number is checked here.
+    # i takes two texts or two numbers, then two numbers. gets takes two
+    # values of any kind. piccolor takes three numbers, then one value of any
+    # kind. The others take numbers.
+    "i": 4, "beepset": 2, "meup": 2, "gets": 2, "cfguart": 4, "piccolor": 4, "cuts": 7,
+    "xnum": 10,
     "covx": 4, "cov": 3, "substr": 4, "spstr": 4, "strlen": 2, "btlen": 2,
     "newdir": 1, "deldir": 1, "delfile": 1, "refile": 2, "redir": 2, "newfile": 2,
     "findfile": 2, "finddir": 2, "rdfile": 4, "twfile": 2,
@@ -195,6 +203,8 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
                             fix={"kind": "tab-after-int", "text": "int\t", "new": "int "})
     _check_hex(code, number)
     if is_declaration(code):
+        if program_pages is not None:
+            _check_declared_names(code, program_pages, number)
         return
     if code.endswith("{") and code != "{":
         code = code[:-1].rstrip()
@@ -345,6 +355,39 @@ def _check_macro_references(code: str, objects: ObjectNames, number: int):
                                     % (first, second), line=number)
 
 
+def _check_declared_names(code: str, pages: dict, number: int):
+    """Raises NxwrightError for an int declaration of program.nx whose name
+    the Editor refuses. `pages` holds each page's objects, by page name, as
+    ObjectNames.pages does, the page itself among them.
+
+    The Editor refused four kinds of name:
+      - a command's, even one the series lacks, as `int sets=0` on T;
+      - a system variable's, as `int dim=0`;
+      - a page's;
+      - a component's, on any page.
+    Names are compared as written, letter case included. No probe tried
+    another case.
+
+    nxlang refuses these names too, rather than renaming the int. A
+    program.nx int is shared by name with whatever reads it over the serial
+    line, so a new name would break that reader."""
+    for name in declared_int_names(code):
+        if name in EDITOR_COMMANDS:
+            what, words = "a command of the Nextion Editor", "Conflict with instructions name"
+        elif name in EDITOR_SYSTEM_VARIABLES:
+            what, words = "a system variable", "Illegal name"
+        elif name in pages:
+            what, words = "a page", "Conflict with page name"
+        else:
+            owner = next((page for page, known in pages.items()
+                          if known is not None and name in known), None)
+            if owner is None:
+                continue
+            what, words = "a component of page %s" % owner, "Conflict with Component name"
+        raise NxwrightError("%s: %s is %s, and the Nextion Editor refuses that name for an "
+                            "int (\"%s\")" % (code, name, what, words), line=number)
+
+
 def _check_program_names(code: str, pages: dict, number: int):
     """Raises NxwrightError when a line of program.nx gives a command that
     names a component, as vis, tsw, ref, and click do, the name of a page,
@@ -491,13 +534,8 @@ def _check_parameter_count(code: str, number: int):
     number of arguments than it takes, counted as command_arguments counts
     them. A command written alone is given none: the Editor refused each
     that takes some, but add for no command (NO_COMMAND_WHEN_ALONE). A
-    command the table lacks takes any number, but one of no numeric form
-    takes some (NO_NUMERIC_FORM)."""
+    command the table lacks takes any number."""
     word = first_word(code)
-    if code == word and word in NO_NUMERIC_FORM:
-        raise NxwrightError("%s: the Nextion Editor refuses %s written alone, without its "
-                            "arguments (\"%s\")" % (code, word, INVALID_ARGUMENT_COUNT),
-                            line=number)
     wanted = COMMAND_PARAMETERS.get(word)
     if wanted is None or len(command_arguments(code[len(word):].strip())) == wanted:
         return

@@ -36,11 +36,7 @@ EDITOR_SYSTEM_VARIABLES = frozenset(
 # `if`, `while`, and `for`), and those it does not document. The community's
 # "Full Instruction Set" (UNUF/nxt-doc) lists the rest, such as `beep`, and
 # `lcd_dev`, a fix of the touch's offsets that a user's program.s held. Each
-# compiled in the Editor 1.68.2, but the eight of NO_NUMERIC_FORM, which no
-# number of numeric arguments made compile. The Editor knows those, and
-# judges their forms itself; written alone, it refused each.
-NO_NUMERIC_FORM = frozenset(["i", "cfguart", "cuts", "gets", "meup", "xnum", "beepset",
-                             "piccolor"])
+# compiled in the Editor 1.68.2.
 EDITOR_COMMANDS = frozenset([
     "page", "ref", "click", "ref_stop", "ref_star", "get", "sendme", "covx", "cov", "touch_j",
     "substr", "vis", "tsw", "com_stop", "com_star", "randset", "code_c", "prints", "print",
@@ -53,7 +49,7 @@ EDITOR_COMMANDS = frozenset([
     "beep", "lcd_dev", "getpassw", "lcd_refx", "lhmi_cle", "showqq", "getv", "init",
     "setbaudz", "pa_q", "whmi_cle", "fstr", "nstr", "rfpt", "strsize", "wfpt", "pa_txt",
     "timerset", "zstr", "comok", "draw3d", "qrcode", "draw_h", "setbrush",
-    "sets"]) | NO_NUMERIC_FORM
+    "sets", "i", "cfguart", "cuts", "gets", "meup", "xnum", "beepset", "piccolor"])
 # A word that is no command, which the Editor's compile refuses with other
 # words than "Invalid command": it reads movelayer as a name ("Invalid
 # Variables"), as it does any first word holding a capital letter.

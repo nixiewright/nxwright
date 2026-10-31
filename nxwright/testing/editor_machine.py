@@ -42,8 +42,8 @@ from nxwright.language.code_lines import (ASSIGNMENT, LABEL, NUMBER, OPERAND, ch
 from nxwright.language.resource_names import ANIMATION, FONT, NOUNS, PICTURE, SOUND, VIDEO
 from nxwright.project.attribute_descriptions import code_cannot_change, describe, type_has
 from nxwright.project.device_settings import DEFAULT_ENCODING, TextCodec
-from nxwright.project.editor_language import (EDITOR_COLOURS, GPIO_VARIABLES, NO_COMMAND_WHEN_ALONE,
-                                              NO_NUMERIC_FORM)
+from nxwright.project.editor_language import (EDITOR_COLOURS, GPIO_VARIABLES,
+                                              NO_COMMAND_WHEN_ALONE)
 from nxwright.project.editor_limits import code_cannot_change_on_series, screen_holds
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.screen_arithmetic import divide_toward_zero, int32
@@ -858,9 +858,6 @@ class EditorMachine:
         0x1E, but 0x00 for add alone, as its compile refuses that as no
         command (NO_COMMAND_WHEN_ALONE). In an event, it stops the run."""
         word, _, rest = line.partition(" ")
-        if not rest and word in NO_NUMERIC_FORM:
-            raise CompileRefusal(_INVALID_PARAMETER_COUNT, "%s takes parameters: %r"
-                                 % (word, line))
         wanted = COMMAND_PARAMETERS.get(word)
         if wanted is not None and len(command_arguments(rest)) != wanted:
             code = _NO_COMMAND_ANSWERS[INVALID_COMMAND] if not rest \
