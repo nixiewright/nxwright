@@ -1,6 +1,7 @@
 """The check of what a screen's series refuses on a page, as the Editor's
-compile refuses it: a component of a type the series lacks, or one holding
-a choice the series refuses (check_series_components).
+compile refuses it: a component of a type the series lacks, one holding a
+choice the series refuses, or one holding a value past its series' highest
+(check_series_components).
 
 It reads the attributes' choices from nxwright's descriptions
 (attribute_descriptions.py). project/ imports nothing of source/, so the
@@ -8,7 +9,7 @@ check sits here, beside its one caller, source_folder.py, rather than with
 the other page checks, in project/editor_limits.py."""
 from nxwright import NxwrightError
 from nxwright.project.attribute_descriptions import describe
-from nxwright.project.editor_limits import object_label
+from nxwright.project.editor_limits import object_label, object_lacked_attributes
 from nxwright.project.memory_table import memory_table
 from nxwright.project.object_types import TYPE_NAMES
 from nxwright.project.page_block import PageBlock
@@ -23,20 +24,32 @@ from nxwright.project.screen_models import ScreenModel
 # `psta` of 2, a square knob, the only type with that choice. (Worked out
 # from the Editor 1.68.2.)
 CHOICES_REFUSED_BY_SERIES = {series: {"sta": (3,), "psta": (2,)} for series in ("T", "K", "F")}
+# The highest value of an attribute on a series that takes fewer than
+# another series does. By series: {type: {attribute: highest}}. An object
+# that lacks the attribute by its choices (editor_limits.PRESENT_WHILE) is
+# not checked. The Intelligent and Edge series compiled a slider's ch, its
+# track's breadth, at 100, and refused 101 and 255 ("Out of range"), where
+# the Basic series takes up to 255. The ch's entry in the TFT file gives
+# the same highest. A slider has a ch only with a colour behind its track,
+# a sta of 1.
+HIGHEST_BY_SERIES = {series: {"slider": {"ch": 100}} for series in ("P", "E")}
 
 
 def check_series_components(page: PageBlock, screen: ScreenModel, where: str):
     """Raises NxwrightError, starting with `where` (the file at fault), for
     the first object of the page, the page among them, that the series of
-    `screen`, the folder's screen model, refuses: one of a type the series
-    refuses ("Unsupported component was found for this series device"), or
-    one whose attribute with choices holds a choice the series was seen to
-    refuse ("Out of range"). They come from the memory table
-    (memory_table.SeriesCosts, `refused` and `refused_values`), and the
-    choices from CHOICES_REFUSED_BY_SERIES as well. The table's other refused
-    values, each a sample past an attribute's range, are not checked, as the
-    range is not known. The error's `table` is the object's place in the
-    page, from 0 for the page."""
+    `screen`, the folder's screen model, refuses:
+      - one of a type the series refuses ("Unsupported component was found
+        for this series device");
+      - one whose attribute with choices holds a choice the series was seen
+        to refuse ("Out of range"), from the memory table
+        (memory_table.SeriesCosts, `refused` and `refused_values`) and
+        CHOICES_REFUSED_BY_SERIES;
+      - one whose attribute is past the series' highest (HIGHEST_BY_SERIES,
+        "Out of range").
+    The table's other refused values, each a sample past an attribute's
+    range, are not checked, as the range is not known. The error's `table`
+    is the object's place in the page, from 0 for the page."""
     costs = memory_table().series[screen.series]
     for index, page_object in enumerate(page.objects):
         type_name = TYPE_NAMES.get(int.from_bytes(page_object.attribute("type") or b"", "little"))
@@ -49,7 +62,10 @@ def check_series_components(page: PageBlock, screen: ScreenModel, where: str):
                                        costs.refused_values.get(type_name, {}), screen.name)
                        or _refused_choice(page_object, type_name,
                                           CHOICES_REFUSED_BY_SERIES.get(screen.series, {}),
-                                          screen.name))
+                                          screen.name)
+                       or _past_highest(page_object, type_name,
+                                        HIGHEST_BY_SERIES.get(screen.series, {}).get(type_name, {}),
+                                        screen.name))
         if problem is not None:
             error = NxwrightError("%s: %s: %s" % (where, object_label(page_object, index),
                                                   problem))
@@ -71,4 +87,22 @@ def _refused_choice(page_object, type_name: str, refused: dict, model: str):
         if value in described.choices and value in values:
             return ("its %s of %d is refused on the %s, as the Nextion Editor's compile refuses "
                     "it (\"Out of range\")" % (attribute, value, model))
+    return None
+
+
+def _past_highest(page_object, type_name: str, highest: dict, model: str):
+    """Returns why `page_object`, of the type `type_name`, holds a value past
+    its series' highest, among `highest`, {attribute: highest value}; or
+    None. An attribute the object lacks by its choices is not checked."""
+    if not highest:
+        return None
+    lacked = object_lacked_attributes(page_object, type_name)
+    for attribute, most in highest.items():
+        stored = page_object.attribute(attribute)
+        if stored is None or attribute in lacked:
+            continue
+        value = int.from_bytes(stored, "little")
+        if value > most:
+            return ("its %s of %d is refused on the %s, as the Nextion Editor's compile takes up "
+                    "to %d there (\"Out of range\")" % (attribute, value, model, most))
     return None

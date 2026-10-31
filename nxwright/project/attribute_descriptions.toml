@@ -1270,7 +1270,7 @@ code_can_change = true
 code_wraps = "u16"
 
 [slider.ch]
-description = "The track's breadth as a percentage of the slider's: 0 draws no track."
+description = "The track's breadth as a percentage of the slider's: 0 draws no track. The Intelligent and Edge series refuse more than 100."
 code_can_change = true
 code_range = [0, 100]
 

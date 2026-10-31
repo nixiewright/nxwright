@@ -54,7 +54,7 @@ The build names the first component past the limit. The limits are the same on e
 
 ### What a series refuses
 
-Each series of screens lacks some types and some choices, which the Nextion Editor's compile refuses ("Unsupported component was found for this series device", and "Out of range"). The build names the component.
+Each series of screens lacks some types, some choices, and some values, which the Nextion Editor's compile refuses ("Unsupported component was found for this series device", and "Out of range"). The build names the component.
 
 Types:
 
@@ -69,7 +69,11 @@ Choices:
   - a slider's `psta` of 2, a square knob.
 - On the P and E series: a data record of local scope, and a file stream of global scope.
 
-The full lists are in `nxwright/project/memory_costs.toml` (`refused` and `refused_values`) and in `nxwright/source/series_components.py` (`CHOICES_REFUSED_BY_SERIES`). A value past an attribute's range, such as a QR code's `txt_maxl` of 193 on the Enhanced series, is left to the Nextion Editor, since the range itself is not known.
+Values:
+
+- On the P and E series, a slider's `ch` past 100, with a colour behind its track (`sta` 1). The T series takes up to 255.
+
+The full lists are in `nxwright/project/memory_costs.toml` (`refused` and `refused_values`) and in `nxwright/source/series_components.py` (`CHOICES_REFUSED_BY_SERIES` and `HIGHEST_BY_SERIES`). A value past an attribute's range, such as a QR code's `txt_maxl` of 193 on the Enhanced series, is left to the Nextion Editor, since the range itself is not known.
 
 Place on the screen:
 

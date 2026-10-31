@@ -186,6 +186,15 @@ def lacked_attributes(type_name: str, value_of, screen: ScreenModel = None) -> d
     return lacked
 
 
+def object_lacked_attributes(page_object, type_name: str) -> dict:
+    """Returns lacked_attributes for `page_object` of the type `type_name`,
+    reading its choices from its stored attributes."""
+    def value_of(name: str):
+        stored = page_object.attribute(name)
+        return None if stored is None else int.from_bytes(stored, "little")
+    return lacked_attributes(type_name, value_of)
+
+
 # The attributes a screen does not hold, though code may name them, by the
 # series' letter: {series: {type: attributes}}, EVERY_TYPE's those of every
 # type that has them; and a bound, a name ending `_m`, as the sliding
@@ -446,10 +455,7 @@ def _most_compiled(page_object, object_type, attribute: str, bound: str, limit: 
     longer than its `txt_maxl` while it held a number (Editor 1.68.2). It
     is taken to do alike for an animation's or a video's `vid`, which has
     no bound."""
-    def value_of(name: str):
-        stored = page_object.attribute(name)
-        return None if stored is None else int.from_bytes(stored, "little")
-    if attribute in lacked_attributes(TYPE_NAMES.get(object_type), value_of):
+    if attribute in object_lacked_attributes(page_object, TYPE_NAMES.get(object_type)):
         return None
     if (object_type, bound) in _BOUNDS_COMPILED_TO_THEIR_ROOM:
         room = (limit + 1 + 3) // 4 * 4

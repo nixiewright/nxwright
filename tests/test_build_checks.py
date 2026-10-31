@@ -1603,6 +1603,32 @@ class SeriesTest(SourceFolderTestCase):
                 export_dump(self.source, self.folder / ("taken-" + kind))
                 page_file.write_bytes(page)
 
+    def test_a_value_past_the_highest_of_its_series(self):
+        # As the Editor 1.68.2 refused it on the Intelligent series, "Out of
+        # range": a slider's ch past 100, where the Basic series takes up to
+        # 255. The Edge series has the Intelligent's limit.
+        page_file = self.source / "pages" / "first.page.toml"
+        page = page_file.read_bytes()
+        for model, ch in (("NX8048P050", 101), ("NX8048P050", 255), ("NX4848E040", 101)):
+            with self.subTest(model=model, ch=ch):
+                self.use_screen(model)
+                self.add("h0", "slider", ch=ch)
+                self.assert_component_refused(r"h0: its ch of %d is refused on the %s, as the "
+                                              r"Nextion Editor's compile takes up to 100 there "
+                                              r"\(\"Out of range\"\)" % (ch, model))
+                page_file.write_bytes(page)
+        self.add("h0", "slider", ch=100)
+        export_dump(self.source, self.folder / "highest")
+        page_file.write_bytes(page)
+        # Seen with a colour behind the track alone: with a crop there, the
+        # ch has no entry, and no probe tried a larger one.
+        self.add("h0", "slider", sta=0, ch=255)
+        export_dump(self.source, self.folder / "crop")
+        page_file.write_bytes(page)
+        self.use_screen("NX4832T035")
+        self.add("h0", "slider", ch=255)
+        export_dump(self.source, self.folder / "basic")
+
     def test_assignments_the_series_refuses(self):
         # As the Editor 1.68.2 refused them on the Basic, Enhanced, and
         # Discovery series, on every type that has them and the page:
