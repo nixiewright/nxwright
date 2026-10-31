@@ -27,7 +27,7 @@ from nxwright.language.code_preprocessor import (Owner, preprocess, preprocess_w
 from nxwright.language.nxlang import GENERATED_GLOBAL, GENERATED_NAME
 from nxwright.language.resource_names import ResourceNames
 from nxwright.project.component_defaults import defaults_from_toml
-from nxwright.project.device_settings import DEFAULT_ENCODING
+from nxwright.project.device_settings import DEFAULT_ENCODING, TextCodec
 from nxwright.project.editor_limits import bounded_attributes, lacked_attributes
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.source import source_folder as folders
@@ -348,6 +348,7 @@ def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str
     page_objects = dict(tables.types)
     checked = text is None
     screen = screen_model(app) if checked else None
+    codec = TextCodec(_encoding(app)) if checked else None
     generated = []
     start = _program_start(read)
     if app["language"] == folders.NXLANG:
@@ -364,11 +365,12 @@ def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str
         placed = {}
         for key, lines in compiled.events.items():
             try:
-                placed[key] = preprocess_with_places(lines, names, objects, screen=screen)
+                placed[key] = preprocess_with_places(lines, names, objects, screen=screen,
+                                                     codec=codec)
             except NxwrightError as error:
                 # Its file named, as the build names it.
                 raise error.in_file(file_at_fault(compiled, key, page, names, objects,
-                                                  screen)) from None
+                                                  screen, codec)) from None
         places = _nxlang_places(compiled, placed)
         local_names = compiled.local_names
         code = {key: [text for _, text in lines] for key, lines in placed.items()}
@@ -386,7 +388,8 @@ def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str
         for key, block in blocks.items():
             try:
                 placed[key] = preprocess_with_places(block.code_lines(), names, objects,
-                                                     variables, macros, screen, owners[key])
+                                                     variables, macros, screen, owners[key],
+                                                     codec=codec)
             except NxwrightError as error:
                 raise error.in_file(path) from None
         places = {key: [Place(path, number, "%s.%s" % key) for number, _ in lines]
@@ -427,7 +430,8 @@ def _compile_macros(tables: FolderPageTables, read) -> dict:
         return {}
     compiled = compiled_macros(text, ResourceNames.of_app(tables.app), tables.types,
                                tables.globals, program_int_variables(read("program.nx")),
-                               tables.absent_attributes, screen_model(tables.app))
+                               tables.absent_attributes, screen_model(tables.app),
+                               TextCodec(_encoding(tables.app)))
     return {name: ([line for _, line in lines],
                    [Place(MACROS_PATH, number, "macro " + name) if number else None
                     for number, _ in lines])

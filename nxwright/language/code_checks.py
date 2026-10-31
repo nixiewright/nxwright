@@ -35,7 +35,7 @@ from nxwright.project.editor_language import (EDITOR_COLOURS, EDITOR_COMMANDS,
                                               SERIES_LACKED_COMMANDS, SERIES_LACKED_VARIABLES,
                                               UNDECLARED_PROGRAM_VARIABLE)
 from nxwright.project.editor_limits import (ATTRIBUTES_CODE_CANNOT_CHANGE_ON_SERIES,
-                                            code_cannot_change_on_series)
+                                            LONGEST_LINES, code_cannot_change_on_series)
 from nxwright.project.screen_models import ScreenModel
 
 _BLOCK_HEAD = re.compile(r"(if|while|for)\s*\(")
@@ -192,11 +192,13 @@ class ObjectNames:
 
 
 def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: frozenset,
-                screen: ScreenModel, number: int, program_pages: dict = None):
+                screen: ScreenModel, number: int, program_pages: dict = None, codec=None):
     """Raises NxwrightError for a line's code part, its resources' names
     resolved, that the Editor refuses as it compiles, as
     code_preprocessor.preprocess says. `program_pages`, for a line of
-    program.nx, holds each page's objects, by page name."""
+    program.nx, holds each page's objects, by page name. `codec`, the
+    project's TextCodec, counts the line's bytes for `screen`'s series
+    (_check_length)."""
     if _TAB_AFTER_INT.match(code):
         raise NxwrightError("a tab after int: the Nextion Editor takes int and a space only, and "
                             "refuses this declaration (\"Invalid Variables\")", line=number,
@@ -212,6 +214,8 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
             raise NxwrightError("\"{\" can only end an if, while, for, or else line",
                                 line=number)
     code = compact(code)
+    if codec is not None and screen is not None:
+        _check_length(code, codec, LONGEST_LINES[screen.series], number)
     _check_value_and_head(code, number)
     if objects is not None:
         if objects.page is None:
@@ -247,6 +251,45 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
         _check_type_names(code, objects, number)
         _check_absent_attributes(code, objects, number)
     _check_assignment_kinds(code, variables, number)
+
+
+def _check_length(code: str, codec, longest: int, number: int):
+    """Raises NxwrightError for a compacted line longer than `longest`
+    bytes in the project's encoding, `codec`. An `if`'s, an `else if`'s, or
+    a `while`'s head is not counted. Of a `for`'s head, its start and its
+    step are each counted as a line, and its condition is not. The Nextion
+    Editor refused a longer line or start ("The instructions are too
+    long"), and its compile did not end on a longer step. It compiled heads
+    of more than 1000 characters. A character the encoding cannot store is
+    left to the build, which refuses it."""
+    head, otherwise = _BLOCK_HEAD.match(code), ELSE.match(code)
+    if otherwise and otherwise[2] or head and head[1] != "for":
+        return
+    refusal = "on this series it takes at most %d (\"The instructions are too long\")" % longest
+    if not head:
+        _check_part_length(code, "this line", refusal, codec, longest, number)
+        return
+    # The parts end at the head's semicolons, which no text in a for's head
+    # may hold (_check_value_and_head).
+    parts = code[head.end():].removesuffix(")").split(";")
+    _check_part_length(parts[0], "this for's start", refusal, codec, longest, number)
+    if len(parts) > 2:
+        _check_part_length(parts[2], "this for's step",
+                           "on this series the Nextion Editor's compile does not end on a "
+                           "longer one than %d" % longest, codec, longest, number)
+
+
+def _check_part_length(part: str, what: str, refusal: str, codec, longest: int, number: int):
+    """Raises NxwrightError, saying `what` is too long and then `refusal`,
+    when `part` is longer than `longest` bytes in `codec`'s encoding
+    (_check_length)."""
+    try:
+        size = len(codec.encode(part, ""))
+    except NxwrightError:
+        return
+    if size > longest:
+        raise NxwrightError("%s is %d bytes in %s, without the spaces the Nextion Editor drops; "
+                            "%s" % (what, size, codec.name, refusal), line=number)
 
 
 def _check_value_and_head(code: str, number: int):

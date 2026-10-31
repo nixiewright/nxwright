@@ -234,6 +234,21 @@ In nxlang, the build refuses the attributes components lack too.
   - The numbers are the vendor's instruction set's, or those an undocumented command was seen to compile with.
   - A command whose number of arguments is not fixed, such as `sets`, takes any number.
 
+### Long lines
+
+In either language, the build refuses a line of code longer than the Nextion Editor compiles on your screen's series ("The instructions are too long"):
+
+- 767 bytes on the Basic (T), Enhanced (K), and Discovery (F) series;
+- 4095 bytes on the Intelligent (P) and Edge (E) series.
+
+This applies in a page's code, in `program.nx`, and in macros.
+
+- The bytes are counted in the folder's encoding. In gb2312, `t0.txt="中中…中"` with 380 中 is 769 bytes, too long on the Basic series.
+- Spaces the build removes, such as those around `=`, are not counted. Spaces inside a quoted text are.
+- An `int` declaration and the head of an `if` or a `while` are not counted. Of a `for`'s head, its start and its step are each counted as a line, such as `sys0=0` and `sys0++` in `for(sys0=0;sys0<9;sys0++)`. On a longer step, the Nextion Editor does not refuse the line, but its compile does not end.
+
+nxlang writes a long text assignment in several lines, so the build does not refuse it ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
+
 ### What a series lacks
 
 In either language, the build refuses a command or a system variable that the series of your screen lacks ("Do not support such instruction for this series device", or "such variable"). This applies in a page's code, in `program.nx`, and in macros. A name inside a quoted text is not a variable. The lists are `SERIES_LACKED_COMMANDS` and `SERIES_LACKED_VARIABLES` in `nxwright/project/editor_language.py`:

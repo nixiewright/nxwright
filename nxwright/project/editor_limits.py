@@ -23,6 +23,13 @@ from nxwright.project.screen_models import ScreenModel
 # The Editor keeps this many bytes of a page's or component's name, and cuts
 # the rest when it opens the project; code naming the full name then fails.
 NAME_LIMIT = 14
+# The most bytes the Editor takes in a line of code, by series, in the
+# project's encoding, counted without the spaces its compile drops
+# (code_lines.compact). A longer line it refuses as it compiles: "The
+# instructions are too long". An `int` declaration and the head of an `if`
+# or a `while` have no limit. A `for` holds its start and its step to it:
+# on a longer step, the Editor's compile does not end.
+LONGEST_LINES = {"T": 767, "K": 767, "F": 767, "P": 4095, "E": 4095}
 # The least width and height the Editor takes for a component: narrower or
 # lower, it says "Width can not be less than 2" as it opens the project, and
 # sets the side back to its type's default (least_size_words).

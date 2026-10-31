@@ -12,6 +12,7 @@ import tomli_w
 from nxwright import NxwrightError
 from nxwright.language.code_lines import first_word
 from nxwright.project.editor_language import EDITOR_COMMANDS, SERIES_LACKED_COMMANDS
+from nxwright.project.editor_limits import LONGEST_LINES
 from nxwright.project.project_writer import ProjectWriter
 from nxwright.source.device_keys import DEVICE_KEYS
 from nxwright.source.source_folder import export_dump, switch_to_nxlang
@@ -1469,11 +1470,10 @@ class ScreenEdgeTest(SourceFolderTestCase):
                 export_dump(self.source, self.folder / model)
 
 
-class SeriesTest(SourceFolderTestCase):
-    """Lines using a command or a system variable the folder's screen series
-    lacks, which the Editor 1.68.2 refused as it compiled. setUp adds the down
-    event to page first, and a text t0 on it. The small project's screen, an
-    NX1060P101, is of the Intelligent series."""
+class FirstDownTestCase(SourceFolderTestCase):
+    """The small project, its screen and code changed by its tests. setUp
+    adds the down event to page first, and a text t0 on it. The small
+    project's screen, an NX1060P101, is of the Intelligent series."""
 
     def setUp(self):
         super().setUp()
@@ -1481,10 +1481,12 @@ class SeriesTest(SourceFolderTestCase):
         edit_text(pages / "first.page.toml", "events = []", 'events = ["down"]')
         add_component(pages / "first.page.toml", "t0")
 
-    def use_screen(self, model: str):
+    def use_screen(self, model: str, **app_values):
+        """Sets the folder's screen to `model`, and its app.toml's other
+        values to `app_values`, such as its encoding."""
         app = self.source / "app.toml"
         data = tomllib.loads(app.read_text(encoding="utf-8"))
-        data["screen"] = model
+        data.update(screen=model, **app_values)
         app.write_text(tomli_w.dumps(data), encoding="utf-8", newline="\n")
 
     def write_code(self, *lines: str):
@@ -1492,6 +1494,11 @@ class SeriesTest(SourceFolderTestCase):
         code = "".join("  %s\n" % line for line in lines)
         (self.source / "pages" / "first.nx").write_text("on first.down:\n" + code,
                                                          encoding="utf-8", newline="\n")
+
+
+class SeriesTest(FirstDownTestCase):
+    """Lines using a command or a system variable the folder's screen series
+    lacks, which the Editor 1.68.2 refused as it compiled."""
 
     def assert_refused(self, line: str, model: str, word: str, kind: str, number: int,
                        file: str = r"first\.nx line 2"):
@@ -1833,6 +1840,108 @@ class SharedFileReferenceTest(SourceFolderTestCase):
     def test_an_unknown_component_is_reported_in_the_shared_file(self):
         self.write_library("t9")
         self.assert_export_refused(r"pages/lib/both\.nx line 2: t9 is neither on this page nor a page")
+
+
+def _text_line(size: int, character: str = "a", width: int = 1) -> str:
+    """Returns `t0.txt="..."` of `size` bytes, its text of `character`, each
+    `width` bytes in the folder's encoding."""
+    return 't0.txt="%s"' % (character * ((size - len('t0.txt=""')) // width))
+
+
+def _sum_line(size: int) -> str:
+    """Returns `sys0=1+1+...`, or `sys0=11+1+...`, of `size` bytes."""
+    start = "sys0=1" if size % 2 == 0 else "sys0=11"
+    return start + "+1" * ((size - len(start)) // 2)
+
+
+class LongLineTest(FirstDownTestCase):
+    """A line of code longer than the Editor 1.68.2 compiled on the folder's
+    series (editor_limits.LONGEST_LINES), counted in bytes of the folder's
+    encoding, without the spaces the Editor drops: "The instructions are too
+    long"."""
+
+    def assert_line_refused(self, size: int, number: int, where: str = r"first\.nx line 2",
+                            what: str = "this line", encoding: str = "iso-8859-1"):
+        with self.assertRaisesRegex(
+                NxwrightError, r"%s: %s is %d bytes in %s, without the spaces the Nextion Editor "
+                               r"drops; on this series it takes at most %d \(\"The instructions "
+                               r"are too long\"\)" % (where, what, size, encoding,
+                                                      LONGEST_LINES[self.series])):
+            export_dump(self.source, self.folder / ("refused%d" % number))
+
+    def use_series(self, model: str, **app_values):
+        self.use_screen(model, **app_values)
+        self.series = model[6]
+
+    def test_on_each_series(self):
+        # 767 bytes on T, K, and F, and more on P and E.
+        for number, model in enumerate(("NX4832T035", "NX4832K035", "NX4832F035", "NX4848E040",
+                                        "NX8048P050")):
+            with self.subTest(model=model):
+                self.use_series(model)
+                longest = LONGEST_LINES[self.series]
+                self.write_code(_text_line(longest))
+                export_dump(self.source, self.folder / model)
+                self.write_code(_text_line(longest + 1))
+                self.assert_line_refused(longest + 1, number)
+
+    def test_counted_in_bytes_of_the_encoding_without_spaces(self):
+        # 380 characters of 2 bytes in gb2312, 769 bytes in all. Spaces
+        # outside the text are not counted, but those inside it are.
+        self.use_series("NX4832T035", encoding="gb2312")
+        self.write_code(_text_line(769, "中", 2))
+        self.assert_line_refused(769, 0, encoding="gb2312")
+        self.use_series("NX4832T035", encoding="iso-8859-1")
+        self.write_code(_text_line(767).replace("=", "   =   "))
+        export_dump(self.source, self.folder / "spaced")
+        self.write_code(_text_line(767).replace('="a', '=" '))
+        export_dump(self.source, self.folder / "spaced-text")
+        self.write_code(_text_line(767).replace('="', '=" '))
+        self.assert_line_refused(768, 1)
+
+    def test_heads_and_declarations(self):
+        # The Editor compiled heads of an if, an else if, and a while of
+        # more than 1000 characters, and an int declaration of 1500. A for
+        # holds its start and its step to the limit, but not its condition:
+        # on a longer step, the Editor's compile did not end.
+        self.use_series("NX4832T035")
+        comparisons = "&&".join(["sys0==1"] * 120)
+        self.write_code("if(%s)" % comparisons, "{", "}else if(%s)" % comparisons, "{", "}",
+                        "while(%s)" % comparisons, "{", "}",
+                        "for(%s;%s;%s)" % (_sum_line(767), comparisons, _sum_line(767)),
+                        "{", "}")
+        export_dump(self.source, self.folder / "heads")
+        self.write_code("for(%s;sys0<1;sys0++)" % _sum_line(768), "{", "}")
+        self.assert_line_refused(768, 0, what="this for's start")
+        self.write_code("for(sys0=0;sys0<1;%s)" % _sum_line(768), "{", "}")
+        with self.assertRaisesRegex(
+                NxwrightError, r"first\.nx line 2: this for's step is 768 bytes in iso-8859-1, "
+                               r"without the spaces the Nextion Editor drops; on this series the "
+                               r"Nextion Editor's compile does not end on a longer one than 767"):
+            export_dump(self.source, self.folder / "step")
+        program = self.source / "program.nx"
+        program.write_text("int sys0=0,sys1=0,sys2=0,%s\npage 0\n"
+                           % ",".join("v%d=0" % index for index in range(300)),
+                           encoding="utf-8", newline="\n")
+        self.write_code("sys0=1")
+        export_dump(self.source, self.folder / "declaration")
+
+    def test_the_runner_refuses_it_as_the_build_does(self):
+        self.use_series("NX4832T035")
+        self.write_code(_text_line(768))
+        with self.assertRaisesRegex(NxwrightError, r"line 2: this line is 768 bytes"):
+            SourceFolderRunner(self.source).run("first", [("first", "down")])
+
+    def test_in_program_nx_and_in_a_macro(self):
+        self.use_series("NX4832T035")
+        program = self.source / "program.nx"
+        program.write_text("int sys0=0,sys1=0,sys2=0\n%s\npage 0\n" % _sum_line(768),
+                           encoding="utf-8", newline="\n")
+        self.assert_line_refused(768, 0, r"program\.nx line 2")
+        program.write_text("int sys0=0,sys1=0,sys2=0\npage 0\n", encoding="utf-8", newline="\n")
+        (self.source / "macros.nx").write_text("macro long:\n  %s\n" % _sum_line(768),
+                                               encoding="utf-8", newline="\n")
+        self.assert_line_refused(768, 1, r"macros\.nx line 2")
 
 
 if __name__ == "__main__":

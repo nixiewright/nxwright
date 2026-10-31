@@ -25,6 +25,9 @@ What the Editor allows, and so what the compiler works around:
     into a temporary holding 0 or 1.
   - A number cannot be joined to text. It is converted first with covx.
   - `-x` is refused; `0-x` is not.
+  - A line holds at most 767 bytes on some series (LONGEST_LINE). A
+    longer text assignment is written in parts, the first assigning and
+    the others appending with `+=`.
   - Names are at most 14 bytes (NAME_LIMIT, editor_limits.py), so generated
     names are short and numbered.
   - A hotspot is at least 2 by 2, and `click` runs its Touch Press event
@@ -109,7 +112,7 @@ from nxwright.language.code_preprocessor import with_own_attributes
 from nxwright.language.resource_names import REFERENCE_TEXT
 from nxwright.project.editor_language import (EDITOR_PROGRAM_VARIABLES, EDITOR_SYSTEM_VARIABLES,
                                               UNDECLARED_PROGRAM_VARIABLE)
-from nxwright.project.editor_limits import NAME_LIMIT
+from nxwright.project.editor_limits import LONGEST_LINES, NAME_LIMIT
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.page_text import STRING_ATTRIBUTES, is_string_attribute
 from nxwright.project.screen_arithmetic import int32
@@ -184,6 +187,12 @@ _TOKEN = re.compile(r'''[ \t]*(?:
     | (?P<operator><<=|>>=|<<|>>|<=|>=|==|!=|&&|\|\||\+\+|--|[-+*/%&|^]=|[-+*/%&|^<>!=()\[\].,;{}?:])
     )''', re.X)
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# The most bytes nxlang writes in a line it splits: the least any series
+# takes (_text_assignment_lines).
+LONGEST_LINE = min(LONGEST_LINES.values())
+# What a long quoted text is never cut inside (_cut_text): an escape, such
+# as \", or a character.
+_TEXT_PIECE = re.compile(r"\\.|.", re.DOTALL)
 STRING_LITERAL = re.compile(r'"(?:\\.|[^"\\])*"')
 _CONST_LINE = re.compile(r"const\b")
 _INCLUDE_LINE = re.compile(r"include\b")
@@ -697,6 +706,48 @@ def _render_chain(chain: list) -> str:
     return text
 
 
+def _utf8_size(code: str) -> int:
+    return len(code.encode("utf-8"))
+
+
+def _text_assignment_lines(target: str, operator: str, chain: list) -> list:
+    """Returns the lines of `target operator chain`, a text assignment with
+    `=` or `+=`. When the line would be longer than LONGEST_LINE bytes in
+    utf-8, it is written as several lines: the first assigns as written,
+    and each one after it appends with `+=`. A long quoted text is cut
+    between its characters (_cut_text). The lines are counted in utf-8
+    because no encoding of the Editor takes more bytes for a character, so
+    they fit in the project's encoding, whichever it is."""
+    line = target + operator + _render_chain(chain)
+    if _utf8_size(line) <= LONGEST_LINE:
+        return [line]
+    room = LONGEST_LINE - _utf8_size(target + "+=")
+    lines, joined = [], []
+    for operand in [piece for _, operand in chain for piece in _cut_text(operand, room)]:
+        head = target + (operator if not lines else "+=")
+        if joined and _utf8_size(head + "+".join(joined + [operand])) > LONGEST_LINE:
+            lines.append(head + "+".join(joined))
+            joined = []
+        joined.append(operand)
+    lines.append(target + (operator if not lines else "+=") + "+".join(joined))
+    return lines
+
+
+def _cut_text(operand: str, room: int) -> list:
+    """Returns `operand` as operands of at most `room` bytes in utf-8 each:
+    a quoted text cut into quoted texts, never inside an escape
+    (_TEXT_PIECE). Any other operand is returned as it is."""
+    if not operand.startswith('"') or _utf8_size(operand) <= room:
+        return [operand]
+    texts, current = [], ""
+    for piece in _TEXT_PIECE.findall(operand[1:-1]):
+        if current and _utf8_size('"%s%s"' % (current, piece)) > room:
+            texts.append('"%s"' % current)
+            current = ""
+        current += piece
+    return texts + ['"%s"' % current]
+
+
 class _Temporaries:
     """The temporaries shared by the events and functions of one call depth.
     A temporary lives only within one statement, so each statement takes
@@ -754,7 +805,7 @@ class _Emitter:
         if isinstance(expression, Literal):
             if in_condition and _refused_in_condition(expression):
                 target = self.temporary(TEXT)
-                self.emit(target + "=" + expression.text)
+                self.emit_assignment(target, TEXT, "=", [(None, expression.text)])
                 return target
             return expression.text
         if isinstance(expression, Local):
@@ -797,7 +848,7 @@ class _Emitter:
         kind = kind_of(expression, self.number)
         chain = self.chain(expression)
         target = self.temporary(kind)
-        self.emit(target + "=" + _render_chain(chain))
+        self.emit_assignment(target, kind, "=", chain)
         return target
 
     def chain(self, expression) -> list:
@@ -862,17 +913,27 @@ class _Emitter:
         chain = self.chain(expression)
         if target_kind == TEXT and _names_target_unsafely(target, operator, chain):
             temporary = self.temporary(TEXT)
-            self.emit(temporary + "=" + _render_chain(chain))
+            self.emit_assignment(temporary, TEXT, "=", chain)
             chain = [(None, temporary)]
         if operator == "=":
-            self.emit(target + "=" + _render_chain(chain))
+            self.emit_assignment(target, target_kind, "=", chain)
             return
         if len(chain) > 1 and not same_as_editor(operator[:-1], chain, target_kind):
             # The Editor reads `x-=a+b` as `(x-a)+b`: compute `a+b` first.
             temporary = self.temporary(kind)
             self.emit(temporary + "=" + _render_chain(chain))
             chain = [(None, temporary)]
-        self.emit(target + operator + _render_chain(chain))
+        self.emit_assignment(target, target_kind, operator, chain)
+
+    def emit_assignment(self, target: str, kind: str, operator: str, chain: list):
+        """Emits `target operator chain`, where `target` is of `kind`. A text
+        assignment with `=` or `+=` takes as many lines as the Editor needs
+        (_text_assignment_lines)."""
+        if kind == TEXT and operator in ("=", "+="):
+            for line in _text_assignment_lines(target, operator, chain):
+                self.emit(line)
+        else:
+            self.emit(target + operator + _render_chain(chain))
 
     def call(self, call: Call) -> str:
         """Emits a call; returns its result variable ("" without a result).

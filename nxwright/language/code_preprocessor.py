@@ -69,7 +69,7 @@ class Owner:
 def preprocess(lines: list, names: ResourceNames = None, objects: ObjectNames = None,
                variables: frozenset = None, macros: frozenset = None,
                screen: ScreenModel = None, owner: Owner = None,
-               program_pages: dict = None) -> list:
+               program_pages: dict = None, codec=None) -> list:
     """Returns `lines`, a list of (line number, text), as lines of text in
     Editor syntax.
     `names` resolves "@pic(...)" and the other resources' names; without it
@@ -87,18 +87,21 @@ def preprocess(lines: list, names: ResourceNames = None, objects: ObjectNames = 
     With `program_pages`, the lines are program.nx's, and it holds each
     page's objects, by page name: a command may not name a page or a
     component (code_checks.check_line).
+    With `codec`, the project's TextCodec, a line may hold no more bytes
+    than the Editor takes on its series (editor_limits.LONGEST_LINES).
 
     Raises NxwrightError naming the line number of anything it cannot turn
     into Editor syntax.
     """
     return [text for _, text in preprocess_with_places(lines, names, objects, variables, macros,
-                                                       screen, owner, program_pages)]
+                                                       screen, owner, program_pages, codec)]
 
 
 def preprocess_with_places(lines: list, names: ResourceNames = None,
                            objects: ObjectNames = None, variables: frozenset = None,
                            macros: frozenset = None, screen: ScreenModel = None,
-                           owner: Owner = None, program_pages: dict = None) -> list:
+                           owner: Owner = None, program_pages: dict = None,
+                           codec=None) -> list:
     """Returns what preprocess does, each line as (line number, text): the
     number of the line it comes from. An "else" joined to the "}" before it
     keeps the "}"'s line."""
@@ -119,7 +122,7 @@ def preprocess_with_places(lines: list, names: ResourceNames = None,
         else:
             read = with_own_attributes(forms, owner)
         try:
-            check_line(read, objects, variables, macros, screen, number, program_pages)
+            check_line(read, objects, variables, macros, screen, number, program_pages, codec)
         except NxwrightError as error:
             if read == code:
                 raise

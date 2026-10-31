@@ -475,15 +475,17 @@ def page_file_text(tables: list) -> str:
 
 def editor_code_of_block(block: EventBlock, page_name: str, names: ResourceNames, owner: Owner,
                          objects: ObjectNames = None, variables: frozenset = None,
-                         macros: frozenset = None, screen: ScreenModel = None) -> list:
+                         macros: frozenset = None, screen: ScreenModel = None,
+                         codec: TextCodec = None) -> list:
     """Returns the block's code in Editor syntax, one string per line, its
     comment first. `owner` is the object whose event it is, None when the
     page has none of that name. With `objects`, its references are checked,
     with `variables`, its names of program.nx's variables, with `macros`,
-    its calls, and with `screen`, what its series lacks (preprocess)."""
+    its calls, with `screen`, what its series lacks, and with `codec`, its
+    lines' lengths (preprocess)."""
     try:
         return block.marked_comment() + preprocess(block.code_lines(), names, objects, variables,
-                                                   macros, screen, owner)
+                                                   macros, screen, owner, codec=codec)
     except NxwrightError as error:
         raise error.in_file(page_nx_path(page_name), shown="%s.nx" % page_name) from None
 
@@ -534,7 +536,7 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
         own = frozenset(component_names) | {variable.name for variable in compiled.generated}
         objects = ObjectNames(own, page_objects, page_name, absent_attributes=absent_attributes)
     for key, lines in preprocess_compiled(compiled, page_name, names, objects=objects,
-                                          screen=screen).items():
+                                          screen=screen, codec=codec).items():
         where = "%s: %s.%s" % (compiled.sources.get(key, page_nx_path(page_name)), *key)
         code[key] = [codec.encode(line, where) for line in lines]
     return code, compiled.generated, compiled.globals, compiled.deepest_chain
@@ -618,28 +620,29 @@ def compile_page_files(page_files: PageFiles, page_name: str, component_names: l
 
 def preprocess_compiled(compiled, page_name: str, names: ResourceNames,
                         unknown_as_none: bool = False, objects: ObjectNames = None,
-                        screen: ScreenModel = None) -> dict:
+                        screen: ScreenModel = None, codec: TextCodec = None) -> dict:
     """Returns {key: Editor code} of a compiled page's events. With
     `unknown_as_none`, an event naming a picture or font the app does not
-    list gets None. With `objects`, references are checked, and with
-    `screen`, what its series lacks. Errors name the .nx file holding the
-    code at fault."""
+    list gets None. With `objects`, references are checked, with `screen`,
+    what its series lacks, and with `codec`, the lines' lengths. Errors
+    name the .nx file holding the code at fault."""
     out = {}
     for key, lines in compiled.events.items():
         try:
-            out[key] = preprocess(lines, names, objects, screen=screen)
+            out[key] = preprocess(lines, names, objects, screen=screen, codec=codec)
         except NxwrightError as error:
             if unknown_as_none and isinstance(error, UnknownNameError):
                 out[key] = None
                 continue
             # in_file keeps the type, which tells an unknown name apart from other problems.
             raise error.in_file(file_at_fault(compiled, key, page_name, names, objects,
-                                              screen)) from None
+                                              screen, codec)) from None
     return out
 
 
 def file_at_fault(compiled, key, page_name: str, names: ResourceNames,
-                  objects: ObjectNames = None, screen: ScreenModel = None) -> str:
+                  objects: ObjectNames = None, screen: ScreenModel = None,
+                  codec: TextCodec = None) -> str:
     """Returns the .nx file holding the code of `key` that does not preprocess.
     A hotspot's event holds several functions: the one at fault is found by
     preprocessing each body alone."""
@@ -648,7 +651,7 @@ def file_at_fault(compiled, key, page_name: str, names: ResourceNames,
     for name, function in compiled.functions.items():
         if function.hotspot == key[0]:
             try:
-                preprocess(compiled.bodies[name], names, objects, screen=screen)
+                preprocess(compiled.bodies[name], names, objects, screen=screen, codec=codec)
             except NxwrightError:
                 return function.file
     return page_nx_path(page_name)
@@ -732,7 +735,7 @@ def _parse_events(text: str, page_name: str, names: ResourceNames, codec: TextCo
         code[key] = [codec.encode(line, where)
                      for line in editor_code_of_block(block, page_name, names,
                                                       Owner.among(key[0], object_names), objects,
-                                                      variables, macros, screen)]
+                                                      variables, macros, screen, codec)]
     return code
 
 

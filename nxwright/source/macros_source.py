@@ -138,7 +138,8 @@ def followed_macros(read) -> dict:
 
 
 def compiled_macros(text: str, names, page_objects: dict, page_globals: dict,
-                    variables: frozenset, absent_attributes: dict = None, screen=None) -> dict:
+                    variables: frozenset, absent_attributes: dict = None, screen=None,
+                    codec=None) -> dict:
     """Returns {name: [(line number, Editor code line)]} of macros.nx's
     `text`, in its order: each macro's code turned into Editor syntax and
     checked as a page's is (code_preprocessor.py), its comment first, as
@@ -149,7 +150,8 @@ def compiled_macros(text: str, names, page_objects: dict, page_globals: dict,
     {attribute: why}}}, the attributes their components lack. `variables`
     are program.nx's int variables. With `screen`, the folder's
     ScreenModel, no line may use a command or a system variable its series
-    lacks.
+    lacks, and with `codec`, the project's TextCodec, no line may be longer
+    than the Editor takes on its series (editor_limits.LONGEST_LINES).
     Raises NxwrightError naming macros.nx and the line at fault."""
     objects = ObjectNames(frozenset(), page_objects, None, page_globals, absent_attributes)
     blocks = macro_blocks(text, MACROS_PATH)
@@ -161,7 +163,7 @@ def compiled_macros(text: str, names, page_objects: dict, page_globals: dict,
             raise NxwrightError(str(error), file=MACROS_PATH, line=block.number) from None
         try:
             code = preprocess_with_places(block.code_lines(), names, objects, variables,
-                                          frozenset(blocks), screen)
+                                          frozenset(blocks), screen, codec=codec)
         except NxwrightError as error:
             raise error.in_file(MACROS_PATH) from None
         macros[name] = [(None, line) for line in block.marked_comment()] + code

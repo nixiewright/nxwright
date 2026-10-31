@@ -1000,7 +1000,7 @@ class FolderSource:
         # program.nx's int variables, in either language.
         return compiled_macros(self.macros_text, self.names, self.page_objects,
                                self.page_globals, program_int_variables(self.program),
-                               self.absent_attributes, self.screen)
+                               self.absent_attributes, self.screen, TextCodec(self.encoding))
 
     @property
     def encoding(self) -> str:
@@ -1340,7 +1340,7 @@ def _program_from_source(text: str, names: ResourceNames, program: ProgramNames 
         if program is not None:
             lines = compile_program(lines, program)
         lines = preprocess(lines, names, variables=variables, macros=macros, screen=screen,
-                           program_pages=pages)
+                           program_pages=pages, codec=TextCodec(encoding))
     except NxwrightError as error:
         if error.file is not None:
             raise   # a refusal at a line of macros.nx, which program.nx calls

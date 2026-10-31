@@ -16,8 +16,9 @@ from nxwright.language.resource_names import ResourceNames
 from nxwright.language.editor_code import (editor_equivalent, global_declarations,
                                            keep_editor_meaning, without_global_declarations,
                                            write_expression)
-from nxwright.language.nxlang import (Binary, Literal, Macro, ProgramNames, _last_argument_start,
-                                      compile_page, compile_program, read_program_names)
+from nxwright.language.nxlang import (LONGEST_LINE, Binary, Literal, Macro, ProgramNames,
+                                      _last_argument_start, compile_page, compile_program,
+                                      read_program_names)
 from nxwright.source import source_folder
 from nxwright.source.folder_check import check_folder
 from nxwright.source.source_folder import export_dump, folder_reader, import_dump, switch_to_nxlang
@@ -678,6 +679,53 @@ class EditorMeaningTest(unittest.TestCase):
                          ["x.val=x.val-a0X1.val+0x02 // 0X03"])
         self.assertEqual(compile_lines("\n".join(text for _, text in nxlang_lines)),
                          editor_equivalent(editor))
+
+
+class LongTextTest(unittest.TestCase):
+    """A text assignment longer than the Editor takes in a line
+    (nxlang.LONGEST_LINE), written as an assignment, then appends."""
+
+    def assert_lines_fit(self, lines: list):
+        for line in lines:
+            self.assertLessEqual(len(line.encode("utf-8")), LONGEST_LINE, line[:20])
+
+    def test_a_long_text_in_parts(self):
+        # One line of 767 bytes stays whole; one of 768 takes two.
+        for length, count in ((LONGEST_LINE, 1), (LONGEST_LINE + 1, 2), (2000, 3)):
+            with self.subTest(length=length):
+                text = "a" * (length - len('t0.txt=""'))
+                lines = compile_lines('t0.txt = "%s"' % text)
+                self.assertEqual(len(lines), count)
+                self.assert_lines_fit(lines)
+                self.assertTrue(lines[0].startswith('t0.txt="'))
+                self.assertTrue(all(line.startswith('t0.txt+="') for line in lines[1:]))
+                self.assertEqual(run('t0.txt = "%s"' % text)["t0.txt"], text)
+
+    def test_counted_in_utf_8(self):
+        # 300 characters of 3 bytes each in utf-8.
+        lines = compile_lines('t0.txt = "%s"' % ("中" * 300))
+        self.assertEqual(len(lines), 2)
+        self.assert_lines_fit(lines)
+
+    def test_an_escape_stays_whole(self):
+        # \" is one character of text: no part may end between its two.
+        # One "a" first puts the cut at an odd place.
+        text = "a" + '\\"' * 400
+        lines = compile_lines('t0.txt = "%s"' % text)
+        self.assertEqual(len(lines), 2)
+        for line in lines:
+            self.assertEqual(line.split('"', 1)[1][:-1].lstrip("a").replace('\\"', ""), "")
+        self.assertEqual(run('t0.txt = "%s"' % text)["t0.txt"], "a" + '"' * 400)
+
+    def test_with_other_operands_and_appending(self):
+        # The text's other operands keep their order, and += appends every part.
+        long = "b" * 800
+        self.assertEqual(run('t0.txt = t1.txt + "%s" + t1.txt' % long)["t0.txt"],
+                         "ab" + long + "ab")
+        self.assertEqual(run('t0.txt += "%s"' % long, {"t0.txt": "x"})["t0.txt"], "x" + long)
+        lines = compile_lines('t0.txt += "%s"' % long)
+        self.assertTrue(all(line.startswith('t0.txt+="') for line in lines))
+        self.assert_lines_fit(lines)
 
 
 class NxlangFolderTestCase(SourceFolderTestCase):
