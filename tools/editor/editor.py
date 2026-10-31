@@ -1535,25 +1535,30 @@ def _compile_output(editor: DedicatedEditor, main, output: int, pressed: str,
     """Waits for the compile that pressing the button `pressed` started to
     end, and returns the Output panel's text, `output` being the panel's
     handle (editor_windows.CompileWatch). The Editor's crash dialog, or a
-    question it asks meanwhile, stops the wait. `pressing_failed` holds what
-    went wrong pressing the button, which a wait that runs out then says."""
+    question it asks meanwhile, stops the wait. A stopped wait's error says
+    what the Output panel last showed, if anything: a wait that runs out may
+    be a compile stopped on an error the watch does not know as an end. It
+    then says what went wrong pressing the button, `pressing_failed`."""
     watch = CompileWatch()
+    seen = [""]
 
     def ended():
         if not win32gui.IsWindowEnabled(editor.main_handle):
             editor.stop_on_crash()
             _stop_on_dialog(main, "while compiling")
-        text = control_text(output, DIALOG_WAIT)
+        text = seen[0] = control_text(output, DIALOG_WAIT)
         progress_shown = any(win32gui.GetWindowText(handle) == PROGRESS_FORM
                              for handle in shown_windows(editor.recorded.pid))
         return text if watch.look(text, progress_shown, time.monotonic()) else None
     try:
         return _wait_for(ended, COMPILING_WAIT, "the compile to end")
     except EditorError as error:
+        said = str(error)
+        if seen[0].strip():
+            said += ". The Output panel says:\n%s" % seen[0].replace("\r\n", "\n").rstrip("\n")
         if pressing_failed:
-            raise EditorError("%s; pressing %s failed: %r"
-                              % (error, pressed, pressing_failed[0])) from None
-        raise
+            said += "\nPressing %s failed: %r" % (pressed, pressing_failed[0])
+        raise EditorError(said) from None
 
 
 def write_tft(editor: DedicatedEditor, folder: Path) -> tuple:

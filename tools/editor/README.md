@@ -156,6 +156,7 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 
 - The command clears the Output panel first, so that the panel shows only this compile.
 - If the compile fails, the command still succeeds, and the Output panel says why.
+- If the compile has not ended after 120 seconds, the command stops, and its error quotes what the Output panel showed, if anything. `tft` stops the same way.
 
 ### `tft <folder>`
 

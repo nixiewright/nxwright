@@ -431,6 +431,23 @@ class CompileWatchTest(unittest.TestCase):
         self.assertFalse(watch.look(refused, False, 0))
         self.assertTrue(watch.look(refused, False, 1))
 
+    def test_a_sound_of_other_than_16_bits(self):
+        # An Intelligent screen's compile refusing a sound of 24 bits a
+        # sample, as the Editor 1.68.2 showed it: that line alone, and no
+        # last line. One of 8 bits at 22050 samples a second ends the same.
+        refused = "Error:Audio ID:0 Data bits exceed the valid range (only 16 bits are supported)"
+        watch = CompileWatch(settled=1)
+        self.assertFalse(watch.look(refused, False, 0))
+        self.assertTrue(watch.look(refused, False, 1))
+
+    def test_a_sound_of_more_than_two_channels(self):
+        # The same compile refusing a sound of 3 or 4 channels at 22050
+        # samples a second, as the Editor 1.68.2 showed it.
+        refused = "Error:Audio ID:0 Vocal Track Number Out of Effective Range (1/2)"
+        watch = CompileWatch(settled=1)
+        self.assertFalse(watch.look(refused, False, 0))
+        self.assertTrue(watch.look(refused, False, 1))
+
 
 class SaveQuestionTest(unittest.TestCase):
     """The Editor's question to save the project shown, as Open is pressed
