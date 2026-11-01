@@ -42,7 +42,7 @@ import re
 
 from nxwright import NxwrightError
 from nxwright.language.code_checks import (ObjectNames, check_labels, check_line, check_own_forms,
-                                           check_without_owner)
+                                           check_program_declarations, check_without_owner)
 from nxwright.language.code_lines import (OWN_ATTRIBUTE, compact, forms_without_spaces,
                                           is_declaration, outside_strings, split_line)
 from nxwright.language.resource_names import REFERENCE, ResourceNames
@@ -86,7 +86,10 @@ def preprocess(lines: list, names: ResourceNames = None, objects: ObjectNames = 
     in program.s and in macros.
     With `program_pages`, the lines are program.nx's, and it holds each
     page's objects, by page name: a command may not name a page or a
-    component (code_checks.check_line).
+    component (code_checks.check_line), and an int may not be declared
+    twice, nor after other code (code_checks.check_program_declarations).
+    Without it, with `objects`, the lines are an event's or a macro's, which
+    may not declare an int.
     With `codec`, the project's TextCodec, a line may hold no more bytes
     than the Editor takes on its series (editor_limits.LONGEST_LINES).
 
@@ -145,6 +148,8 @@ def preprocess_with_places(lines: list, names: ResourceNames = None,
         if opens_block:
             out.append([indent, "{", "", number])
     check_labels([(number, code) for _, code, _, number in out])
+    if program_pages is not None:
+        check_program_declarations([(number, code) for _, code, _, number in out])
     # The spaces and tabs ending a line are dropped, as the Nextion Editor's
     # compile drops them. split_line gives them with the comment.
     return [(number, (indent + code + comment).rstrip(" \t"))

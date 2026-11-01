@@ -287,7 +287,17 @@ In either language, the build refuses an `int` of `program.nx` whose name is alr
 - a command's, such as `int sets=0`, even one your screen's series lacks ("Conflict with instructions name");
 - a system variable's, such as `int dim=0` ("Illegal name");
 - a page's, such as `int page0=0` ("Conflict with page name");
-- a component's on any page, such as `int t0=0` ("Conflict with Component name"). So a component cannot be named `sys0`, `sys1`, or `sys2` while `program.nx` declares them, as a new project does.
+- a component's on any page, such as `int t0=0` ("Conflict with Component name"). So a component cannot be named `sys0`, `sys1`, or `sys2` while `program.nx` declares them, as a new project does;
+- a colour's, such as `int RED=1` ("Illegal name");
+- another `int`'s, on the same line or another, such as `int a=1,a=2` ("Repeated definition global variable name").
+
+Names are compared with their letter case, so `int Red=1` and `int a=1,A=2` are fine. A name may have up to 32 characters ("Illegal global variable name length").
+
+### Where an `int` goes, and its starting value
+
+- An `int` goes in `program.nx`, in either language. The build refuses one in an event or a macro, and in nxlang in a function ("Global variable definitions must precede all code in the program"). A local is declared with `var` ([language.md](language.md#local-variables)).
+- In strict Nextion syntax, an `int` goes before `program.nx`'s other code. Comments may come first. nxlang moves a later `int` line up for you ([nxlang-compiled.md](nxlang-compiled.md)).
+- In strict Nextion syntax, a decimal starting value must be within 32 bits, -2147483648 to 2147483647, so `int a=4294967295` is refused ("Initial value for a global variable must be a constant"). nxlang writes its low 32 bits instead, as C does ([language.md](language.md)).
 
 ### Attributes code cannot change
 

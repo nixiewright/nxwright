@@ -11,7 +11,8 @@ import tomli_w
 
 from nxwright import NxwrightError
 from nxwright.language.code_lines import first_word
-from nxwright.project.editor_language import EDITOR_COMMANDS, SERIES_LACKED_COMMANDS
+from nxwright.project.editor_language import (EDITOR_COMMANDS, EDITOR_PROGRAM_DECLARATION,
+                                              SERIES_LACKED_COMMANDS)
 from nxwright.project.editor_limits import LONGEST_LINES
 from nxwright.project.project_writer import ProjectWriter
 from nxwright.source.device_keys import DEVICE_KEYS
@@ -1270,10 +1271,12 @@ class EditorCommandTest(_CodeOnFirstTestCase):
         # the touch's offsets, for one version of a screen. Its four hex
         # values, spaced as printh's, are one argument; spaced by commas, they
         # are four, which the Editor refused.
+        # The int goes before program.nx's other code, as the Editor wants.
         program = self.source / "program.nx"
-        text = program.read_text(encoding="utf-8")
+        text = program.read_text(encoding="utf-8").replace(
+            EDITOR_PROGRAM_DECLARATION, EDITOR_PROGRAM_DECLARATION + "\nint display_mode=1", 1)
         program.write_text(text + ("" if text.endswith("\n") else "\n")
-                           + "int display_mode=1\nif(display_mode==1)\n{\n"
+                           + "if(display_mode==1)\n{\n"
                            "  lcd_dev fffb 0002 0000 0020// Fix touch offset for EU Version\n}\n",
                            encoding="utf-8", newline="\n")
         export_dump(self.source, self.folder / "built")
@@ -1303,10 +1306,15 @@ class EditorCommandTest(_CodeOnFirstTestCase):
         # the series lacks; as a system variable; as a page; and as a
         # component of any page. It compiled other names. nxlang writes
         # program.nx's ints as they are, so it refuses them too.
+        # Each declaration goes right after sys0 to sys2's, before program.nx's
+        # other code, as the Editor wants.
         program = self.source / "program.nx"
         text = program.read_text(encoding="utf-8")
-        written = text + ("" if text.endswith("\n") else "\n")
-        line_number = len(written.split("\n"))
+        line_number = text.split("\n").index(EDITOR_PROGRAM_DECLARATION) + 2
+
+        def written(line: str) -> str:
+            return text.replace(EDITOR_PROGRAM_DECLARATION,
+                                EDITOR_PROGRAM_DECLARATION + "\n" + line, 1)
         cases = [("int sets=0", "Conflict with instructions name"),
                  ("int vis=0", "Conflict with instructions name"),
                  ("int fstr=0", "Conflict with instructions name"),
@@ -1318,12 +1326,12 @@ class EditorCommandTest(_CodeOnFirstTestCase):
                 switch_to_nxlang(self.source)
             for number, (line, words) in enumerate(cases):
                 with self.subTest(language=language, line=line):
-                    program.write_text(written + line + "\n", encoding="utf-8", newline="\n")
+                    program.write_text(written(line), encoding="utf-8", newline="\n")
                     with self.assertRaisesRegex(
                             NxwrightError, r"program\.nx line %d: %s: .*\(\"%s\"\)"
                             % (line_number, re.escape(line), words)):
                         export_dump(self.source, self.folder / ("%s%d" % (language, number)))
-            program.write_text(written + "int abc=0,t1=2\n", encoding="utf-8", newline="\n")
+            program.write_text(written("int abc=0,t1=2"), encoding="utf-8", newline="\n")
             export_dump(self.source, self.folder / ("%s-built" % language))
 
     def test_a_component_named_as_an_int_of_program_nx(self):

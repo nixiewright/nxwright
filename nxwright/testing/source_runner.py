@@ -24,7 +24,7 @@ from nxwright.language.code_checks import ObjectNames
 from nxwright.language.code_lines import program_int_variables, split_line
 from nxwright.language.code_preprocessor import (Owner, preprocess, preprocess_with_places,
                                                  with_own_attributes)
-from nxwright.language.nxlang import GENERATED_GLOBAL, GENERATED_NAME
+from nxwright.language.nxlang import GENERATED_GLOBAL, GENERATED_NAME, int_starting_value
 from nxwright.language.resource_names import ResourceNames
 from nxwright.project.component_defaults import defaults_from_toml
 from nxwright.project.device_settings import DEFAULT_ENCODING, TextCodec
@@ -549,14 +549,16 @@ def table_limits(toml_tables: list, defaults: dict) -> dict:
 
 
 def _program_start(read) -> dict:
-    """Returns program.nx's `int` variables, at the value each declares, or 0. Only
-    program.nx itself declares them: the files it includes hold constants."""
+    """Returns program.nx's `int` variables, each at the value the build writes
+    for it (nxlang.int_starting_value), or 0. Only program.nx itself declares
+    them: the files it includes hold constants."""
     start = {}
-    # A tab after `int` declares in nxlang, which writes it as a space.
-    for declaration in re.findall(r"^int[ \t]+(.*)$", read("program.nx"), re.M):
-        for name, value in re.findall(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*(-?[0-9]+))?",
-                                      split_line(declaration, 0)[1]):
-            start[name] = int(value) if value else 0
+    # A tab after `int` declares in nxlang, which writes it as a space. An
+    # indented line declares too, wherever it is: nxlang moves it first.
+    for declaration in re.findall(r"^[ \t]*int[ \t]+(.*)$", read("program.nx"), re.M):
+        for name, value in re.findall(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*(-?\s*(?:0x[0-9A-Fa-f]+"
+                                      r"|[0-9]+)))?", split_line(declaration, 0)[1]):
+            start[name] = int_starting_value(re.sub(r"\s", "", value)) if value else 0
     return start
 
 

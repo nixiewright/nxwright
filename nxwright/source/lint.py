@@ -12,8 +12,10 @@ but that are likely mistakes. Each has a rule's name:
     page's code never calls. The build checks such a function, then leaves it
     out of the project.
   - number-past-32-bits, in nxlang: a hex number too large for 32 bits,
-    such as 0x0100000005. The build keeps its low 32 bits, 0x00000005, as
-    C does, and as a C compiler, warns.
+    such as 0x0100000005, or a decimal one outside -2147483648 to
+    2147483647, such as 4294967295. The build keeps its low 32 bits,
+    0x00000005 or -1, as C does, and as a C compiler, warns. printh's,
+    crcputh's, and lcd_dev's arguments are bytes, not numbers.
   - sound-file-form: a sound's file without the `hmic` chunk the Editor's
     Audio panel writes, or whose check value there does not match its
     samples (media_files.sound_file_problem), on app.toml's line naming
@@ -42,13 +44,14 @@ from dataclasses import dataclass, field
 import tomllib
 
 from nxwright import NxwrightError, listed_in_words
-from nxwright.language.code_lines import split_line
+from nxwright.language.code_lines import command_word, minus_is_sign, split_line
 from nxwright.language.editor_code import hex_written_0x, keep_editor_meaning
-from nxwright.language.nxlang import editor_number, is_constant_line, token_spans
+from nxwright.language.nxlang import BYTE_COMMANDS, editor_number, is_constant_line, token_spans
 from nxwright.project.component_defaults import nxwright_defaults
 from nxwright.project.media_files import VIDEO_HEAD_SIZE, sound_file_problem, sound_form_problem
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.pictures import picture_problem
+from nxwright.project.screen_arithmetic import int32
 from nxwright.source.nx_files import (EVENT_HEADING, FUNCTION_HEADING, event_blocks, read_nx_file,
                                       read_page_files)
 from nxwright.source.page_source import page_nx_path, page_toml_path
@@ -317,13 +320,33 @@ def _numbers_past_32_bits(app: dict, read) -> list:
                 code = split_line(line, number)[1]
             except NxwrightError:
                 continue    # the build reports a line it cannot read
+            if command_word(code) in BYTE_COMMANDS:
+                continue    # its digits are bytes, not numbers
+            spans = token_spans(code)
             found += [Finding(path, number, WARNING,
                               "%s does not fit in 32 bits: its low 32 bits are kept, %s"
                               % (written, editor_number(written)), "number-past-32-bits")
-                      for kind, written, _, _ in token_spans(code)
-                      if kind == "number" and written.startswith("0x")
-                      and int(written, 16) > 0xFFFFFFFF]
+                      for written in (_number_past_32_bits(spans, place, code)
+                                      for place in range(len(spans)))
+                      if written is not None]
     return found
+
+
+def _number_past_32_bits(spans: list, place: int, code: str):
+    """Returns the number constant that token `place` of `spans`, a line of
+    `code`'s tokens, starts, as written, when it is past 32 bits; else None.
+    A hex number is past 32 bits above 0xFFFFFFFF. A decimal one is past
+    them outside -2147483648 to 2147483647, its minus sign read: its value
+    changes there."""
+    kind, written, _, _ = spans[place]
+    if kind != "number":
+        return None
+    if written.startswith("0x"):
+        return written if int(written, 16) > 0xFFFFFFFF else None
+    # A minus right before the number is its sign, unless it follows an operand.
+    if place and spans[place - 1][1] == "-" and minus_is_sign(code[:spans[place - 1][2]]):
+        written = "-" + written
+    return written if int(written) != int32(int(written)) else None
 
 
 def _unused_functions(app: dict, read) -> list:

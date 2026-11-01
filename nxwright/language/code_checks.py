@@ -12,7 +12,10 @@ folder's macros, they refuse a `call` of a macro the folder lacks
 (macros_source.py). Given the folder's screen model, they refuse a command
 or a system variable the model's series lacks (series_lacks). With the
 names of the objects as well, they refuse an assignment the series refuses
-(editor_limits.code_cannot_change_on_series).
+(editor_limits.code_cannot_change_on_series). Given each page's objects,
+for a line of program.nx, they refuse an int whose name or starting value
+the Nextion Editor refuses, and check_program_declarations refuses an int declared
+twice or after other code. In an event or a macro, they refuse any int.
 
 Also here are the Nextion Editor's refusal words, such as INVALID_COMMAND,
 and the tables of commands' arguments, such as COMMAND_PARAMETERS and
@@ -36,6 +39,7 @@ from nxwright.project.editor_language import (EDITOR_COLOURS, EDITOR_COMMANDS,
                                               UNDECLARED_PROGRAM_VARIABLE)
 from nxwright.project.editor_limits import (ATTRIBUTES_CODE_CANNOT_CHANGE_ON_SERIES,
                                             LONGEST_LINES, code_cannot_change_on_series)
+from nxwright.project.screen_arithmetic import int32
 from nxwright.project.screen_models import ScreenModel
 
 _BLOCK_HEAD = re.compile(r"(if|while|for)\s*\(")
@@ -93,6 +97,12 @@ _NAME_IN_COMMAND = re.compile(r"(%s) ([A-Za-z_][\w.]*)(?=,|$)" % _NAMING_COMMAND
 # Compiled in the Editor, it also refused a constant past 32 bits, and a
 # sign on one after =, ==, and *.
 _HEX = re.compile(r"(?<![\w.])0[xX]([0-9A-Fa-f]*)(?![\w.])")
+# The most characters the Nextion Editor takes in the name of an int of
+# program.nx ("Illegal global variable name length").
+LONGEST_INT_NAME = 32
+# An int declaration's starting value written in decimal: its name, then,
+# after "=", the number with any minus sign.
+_DECIMAL_START = re.compile(r"([A-Za-z_]\w*)\s*=\s*(-?\s*[0-9]+)(?![\w.])")
 # A line the Editor reads as a label, whatever its characters.
 _LABEL_LIKE = re.compile(r"(\S+):")
 # What goes in each place of a data record's methods' arguments: a text or
@@ -225,6 +235,9 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
     if is_declaration(code):
         if program_pages is not None:
             _check_declared_names(code, program_pages, number)
+            _check_starting_values(code, number)
+        elif objects is not None:
+            _refuse_declaration_outside_program(code, objects, number)
         return
     if code.endswith("{") and code != "{":
         code = code[:-1].rstrip()
@@ -419,22 +432,29 @@ def _check_declared_names(code: str, pages: dict, number: int):
     the Editor refuses. `pages` holds each page's objects, by page name, as
     ObjectNames.pages does, the page itself among them.
 
-    The Editor refused four kinds of name:
+    The Nextion Editor refuses five kinds of name, and a name past
+    LONGEST_INT_NAME characters:
       - a command's, even one the series lacks, as `int sets=0` on T;
       - a system variable's, as `int dim=0`;
+      - a colour's, as `int RED=1`;
       - a page's;
       - a component's, on any page.
-    Names are compared as written, letter case included. No probe tried
-    another case.
+    Names are compared as written, letter case included, so `Red` is fine.
 
     nxlang refuses these names too, rather than renaming the int. A
     program.nx int is shared by name with whatever reads it over the serial
     line, so a new name would break that reader."""
     for name in declared_int_names(code):
+        if len(name) > LONGEST_INT_NAME:
+            raise NxwrightError("%s: %s has %d characters, and the Nextion Editor takes at most "
+                                "%d in an int's name (\"Illegal global variable name length\")"
+                                % (code, name, len(name), LONGEST_INT_NAME), line=number)
         if name in EDITOR_COMMANDS:
             what, words = "a command of the Nextion Editor", "Conflict with instructions name"
         elif name in EDITOR_SYSTEM_VARIABLES:
             what, words = "a system variable", "Illegal name"
+        elif name in EDITOR_COLOURS:
+            what, words = "a colour", "Illegal name"
         elif name in pages:
             what, words = "a page", "Conflict with page name"
         else:
@@ -445,6 +465,59 @@ def _check_declared_names(code: str, pages: dict, number: int):
             what, words = "a component of page %s" % owner, "Conflict with Component name"
         raise NxwrightError("%s: %s is %s, and the Nextion Editor refuses that name for an "
                             "int (\"%s\")" % (code, name, what, words), line=number)
+
+
+def _check_starting_values(code: str, number: int):
+    """Raises NxwrightError for an int declaration of program.nx whose
+    starting value is a decimal number outside -2147483648 to 2147483647,
+    which the Nextion Editor refuses, as `int a=2147483648`."""
+    for name, value in _DECIMAL_START.findall(code):
+        value = int(value.replace(" ", "").replace("\t", ""))
+        if value != int32(value):
+            raise NxwrightError("%s: %s starts at %d, past the 32 bits of -2147483648 to "
+                                "2147483647, and the Nextion Editor refuses it (\"Initial value "
+                                "for a global variable must be a constant\")"
+                                % (code, name, value), line=number)
+
+
+def _refuse_declaration_outside_program(code: str, objects: ObjectNames, number: int):
+    """Raises NxwrightError for an int declaration in an event, or in a
+    macro, whose code `objects` names: an int is a variable every page
+    shares, which the Nextion Editor takes in program.s alone. Its words
+    differ between the two."""
+    where, words = (("a macro", "Global variable definitions must precede all code in the "
+                                "program") if objects.page is None else
+                    ("an event", "Global variable definitions must precede all code in the "
+                                 "program.c"))
+    raise NxwrightError("%s: an int is a variable every page shares, declared in program.nx. "
+                        "The Nextion Editor refuses one in %s (\"%s\")" % (code, where, words),
+                        line=number)
+
+
+def check_program_declarations(lines: list):
+    """Raises NxwrightError for an int declaration among program.nx's
+    `lines`, as (line number, code), that the Nextion Editor refuses: one declaring
+    a name declared already, letter case included, and one after a line of
+    other code. A comment alone is no code, as `nxwright new`'s program
+    shows."""
+    declared, first_code = {}, None
+    for number, code in lines:
+        if not is_declaration(code):
+            if code and first_code is None:
+                first_code = number
+            continue
+        if first_code is not None:
+            raise NxwrightError("%s: an int goes before program.nx's other code, which starts on "
+                                "line %d. The Nextion Editor refuses one after (\"Global variable "
+                                "definitions must precede all code in the program\")"
+                                % (code, first_code), line=number)
+        for name in declared_int_names(code):
+            if name in declared:
+                raise NxwrightError("%s: %s is declared already, on line %d, and the Nextion "
+                                    "Editor refuses a name declared twice (\"Repeated "
+                                    "definition global variable name\")"
+                                    % (code, name, declared[name]), line=number)
+            declared[name] = number
 
 
 def _check_program_names(code: str, pages: dict, number: int):

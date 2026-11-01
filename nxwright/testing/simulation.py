@@ -167,6 +167,7 @@ from nxwright.drawing.page_drawing import inside_box
 from nxwright.drawing.select_drawing import SELECT_DEFAULTS
 from nxwright.drawing.slider_drawing import drawn_knob_size
 from nxwright.drawing.text_pictures import block_size, path_lines
+from nxwright.language.code_lines import is_declaration
 from nxwright.language.code_preprocessor import preprocess_with_places
 from nxwright.language.nxlang import GENERATED_NAME, compile_program
 from nxwright.language.resource_names import ANIMATION, LISTS, SOUND, VIDEO, ResourceNames
@@ -2856,7 +2857,8 @@ def _program_code(source_folder: Path, read, app: dict) -> tuple:
     if app["language"] == folders.NXLANG:
         lines = compile_program(lines, folders.program_names(text, read))
     placed = preprocess_with_places(lines, ResourceNames.of_app(app))
-    kept = [(number, line) for number, line in placed if not line.startswith("int ")]
+    kept = [(number, line) for number, line in placed
+            if not is_declaration(line.lstrip(" \t"))]
     return ([line for _, line in kept],
             [Place("program.nx", number, "program") if number else None for number, _ in kept])
 

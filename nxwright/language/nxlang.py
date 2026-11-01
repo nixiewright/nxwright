@@ -214,15 +214,21 @@ _CALL_START = re.compile(r"[A-Za-z_][A-Za-z0-9_]*[ \t]*\(")
 # A click the build can follow: a component's name, then 1 (Touch Press) or
 # 0 (Touch Release).
 _CLICK = re.compile(r"click\s+([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([01])")
-# A hex number in a command's arguments, with any minus right before it.
-_COMMAND_HEX = re.compile(r"(?<![\w.])(-?)(0x[0-9A-Fa-f]+)(?![\w.])")
-# A starting value of an `int` line written in hex, with any minus sign:
-# "=" and the spaces after it, the sign, and the number.
-_INT_HEX_VALUE = re.compile(r"(=\s*)(-?)\s*(0x[0-9A-Fa-f]+)\b")
+# A number in a command's arguments, hex or decimal, with any minus right
+# before it.
+_COMMAND_NUMBER = re.compile(r"(?<![\w.])(-?)(0x[0-9A-Fa-f]+|[0-9]+)(?![\w.])")
+# The commands whose arguments are bytes in hex digits, as `printh 0d 0a`,
+# not numbers: their digits are never read as a decimal number.
+BYTE_COMMANDS = frozenset({"printh", "crcputh", "lcd_dev"})
+# A starting value of an `int` line, with any minus sign: "=" and the spaces
+# after it, the sign, and the number, hex or decimal.
+_INT_VALUE = re.compile(r"(=\s*)(-?)\s*(0x[0-9A-Fa-f]+|[0-9]+)\b")
 # `int` and the whitespace after it, at an `int` line's start, when it holds
 # a tab, which the Editor would read as part of the name. Spaces alone are
 # kept, as the Editor takes them.
 _INT_START = re.compile(r"^int(?=[ \t]*\t)[ \t]+")
+# The code of an `int` line: `int`, then a space, a tab, or nothing.
+_INT_LINE = re.compile(r"int(?=[ \t]|$)")
 
 
 @dataclass(frozen=True)
@@ -1803,7 +1809,24 @@ def compile_program(lines: list, program: ProgramNames) -> list:
             if not _CONST_LINE.match(split_line(text, number)[1])
             and not _INCLUDE_LINE.match(split_line(text, number)[1])]
     _check_program_macros(kept, program.macros)
-    return _EventCompiler(page, None, allow_locals=False).compile(kept)
+    return _EventCompiler(page, None, allow_locals=False).compile(_declarations_first(kept))
+
+
+def _declarations_first(lines: list) -> list:
+    """Returns program.nx's `lines`, (line number, text), with each `int`
+    line that follows other code moved right before the first line of other
+    code, unindented, the `int` lines kept in order. The Nextion Editor
+    takes an int only before program.s's other code. A starting value is a constant, so
+    the move does not change what the line means, even out of a block.
+    Comments and blank lines are no code."""
+    codes = [split_line(text, number)[1] for number, text in lines]
+    first = next((place for place, code in enumerate(codes)
+                  if code and not _INT_LINE.match(code)), len(lines))
+    after = list(zip(lines[first:], codes[first:]))
+    return (lines[:first]
+            + [(number, text.lstrip(" \t")) for (number, text), code in after
+               if _INT_LINE.match(code)]
+            + [line for line, code in after if not _INT_LINE.match(code)])
 
 
 def _check_program_macros(lines: list, macros: dict):
@@ -2387,6 +2410,13 @@ class _EventCompiler:
             self.jump(number, indent, code, comment)
             return
         if word == "int":
+            if self.allow_locals:
+                # An event's or a function's line: program.nx alone has no locals.
+                raise NxwrightError("%s: an int is a variable every page shares, declared in "
+                                    "program.nx; var declares a local. The Nextion Editor "
+                                    "refuses an int in an event (\"Global variable definitions "
+                                    "must precede all code in the program.c\")" % code,
+                                    line=number)
             self.put(number, indent + _int_line(code) + comment)
             return
         if goto_label(code) is not None or LABEL.fullmatch(code):
@@ -2567,15 +2597,19 @@ class _EventCompiler:
                 return match[0]
             return found.text if isinstance(found, Literal) else _Emitter(None, "", number).atom(found)
 
-        def hex_number(match) -> str:
+        bytes_only = word is not None and word[0] in BYTE_COMMANDS
+
+        def number(match) -> str:
             # A minus right after an operand subtracts; any other is the number's sign.
             sign, written = match[1], match[2]
+            if bytes_only and not written.startswith("0x"):
+                return match[0]
             if sign and not minus_is_sign(match.string[:match.start()]):
                 return sign + editor_number(written)
             return editor_number(sign + written)
 
         def arguments(part: str) -> str:
-            return _COMMAND_HEX.sub(hex_number, _COMMAND_NAME.sub(replace, part))
+            return _COMMAND_NUMBER.sub(number, _COMMAND_NAME.sub(replace, part))
         return code[:start] + outside_strings(code[start:], arguments)
 
 
@@ -2587,8 +2621,10 @@ def editor_number(text: str) -> str:
     nxlang reads numbers as C does, in 32 bits. The Editor reads hex digits
     in pairs, a byte each, and refuses hex past 32 bits or with a sign (the
     vendor's instruction set, rule 1.8, and compiling in the Editor). So a
-    decimal number, and a hex one the Editor reads, is kept as written;
-    otherwise:
+    decimal number within 32 bits, and a hex one the Editor reads, is kept
+    as written; otherwise:
+      - a decimal number past 32 bits is written as its low 32 bits, as C
+        keeps them: 4294967295 is -1, and 2147483648 is -2147483648;
       - hex past 32 bits keeps its low 32 bits, its last 8 digits, as C
         keeps them: 0x0100000005 is 0x00000005;
       - hex of an odd count of digits gains a leading zero: 0x1 is 0x01;
@@ -2596,7 +2632,8 @@ def editor_number(text: str) -> str:
         -0xFFFFFFFF is 1, in 32 bits."""
     digits = text.lstrip("-")
     if not digits.startswith("0x"):
-        return text
+        value = int(text)
+        return text if value == int32(value) else str(int32(value))
     digits = digits[2:]
     if int(digits, 16) > 0xFFFFFFFF:
         digits = digits[-8:]
@@ -2610,12 +2647,24 @@ def editor_number(text: str) -> str:
 def _int_line(code: str) -> str:
     """Returns an `int` line as the Editor takes it. Whitespace after `int`
     holding a tab becomes one space: the Editor reads a tab there as part of
-    the name. Each starting value written in hex is written in
-    decimal, which the Editor refuses there (the vendor's rule 1.8), as
-    editor_number reads it: `int mask=0x8005` is `int mask=32773`."""
+    the name. Each starting value written in hex, or in decimal past 32
+    bits, is written in decimal as its 32 bits (int_starting_value), as the
+    Nextion Editor refuses either: `int mask=0x8005` is `int mask=32773`, and
+    `int all=4294967295` is `int all=-1`. Another is kept as written."""
     def decimal(match) -> str:
-        return match[1] + str(int32(_number_value(editor_number(match[2] + match[3]))))
-    return _INT_HEX_VALUE.sub(decimal, _INT_START.sub("int ", code, count=1))
+        sign, written = match[2], match[3]
+        value = int_starting_value(sign + written)
+        if not written.startswith("0x") and value == int(sign + written):
+            return match[0]
+        return match[1] + str(value)
+    return _INT_VALUE.sub(decimal, _INT_START.sub("int ", code, count=1))
+
+
+def int_starting_value(text: str) -> int:
+    """Returns the value an `int` of program.nx starts at, given its
+    starting value `text` as nxlang reads it: decimal, or hex after 0x, with
+    or without a minus sign, in 32 bits, as editor_number writes it."""
+    return int32(_number_value(editor_number(text)))
 
 
 def _number_value(text: str) -> int:

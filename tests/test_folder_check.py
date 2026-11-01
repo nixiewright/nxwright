@@ -326,6 +326,24 @@ class NxlangWarningTest(FolderTestCase):
                           "0x1FFFFFFFF does not fit in 32 bits: its low 32 bits are kept, "
                           "0xFFFFFFFF"])
 
+    def test_a_decimal_number_past_32_bits(self):
+        # Its value changes, so it is warned of from 2147483648 on, unlike a
+        # hexadecimal number. A minus sign is read: -2147483648 fits, and a
+        # minus after an operand subtracts. printh's bytes are not numbers.
+        self.write("pages/page0.nx", "on page0.load:\n  sys0 = 2147483648\n"
+                                     "  sys0 = -2147483648\n  sys0 = 2-2147483648\n"
+                                     "  printh 4294967296\n")
+        self.write("program.nx", "int big=-4294967297\n" + self.text("program.nx"))
+        self.assertEqual(self.warnings(), [("pages/page0.nx", 2, "number-past-32-bits"),
+                                           ("pages/page0.nx", 4, "number-past-32-bits"),
+                                           ("program.nx", 1, "number-past-32-bits")])
+        self.assertEqual([finding.message for finding in self.findings()],
+                         ["2147483648 does not fit in 32 bits: its low 32 bits are kept, "
+                          "-2147483648",
+                          "2147483648 does not fit in 32 bits: its low 32 bits are kept, "
+                          "-2147483648",
+                          "-4294967297 does not fit in 32 bits: its low 32 bits are kept, -1"])
+
     def test_an_unused_function(self):
         self.write("pages/page0.nx", "function used():\n  sys0 = 1\n\nfunction unused():\n"
                                      "  sys0 = 2\n\non page0.load:\n  used()\n")

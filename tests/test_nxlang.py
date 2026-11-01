@@ -207,6 +207,34 @@ class ExpressionTest(unittest.TestCase):
                          ["fill 0,0,10,10,0xF800", "fill 0,0,10,10,0x0F",
                           "substr t0.txt,t1.txt,a.val-0x01,-1", 'prints "0x1",0'])
 
+    def test_decimal_constants_past_32_bits(self):
+        # nxlang keeps a decimal constant's low 32 bits, as C does; one
+        # within 32 bits is kept as written. printh's, crcputh's, and
+        # lcd_dev's arguments are bytes, left as written.
+        for code, line, value in (
+                ("x.val = 2147483647", "x.val=2147483647", 2147483647),
+                ("x.val = -2147483648", "x.val=-2147483648", -2147483648),
+                ("x.val = 4294967295", "x.val=-1", -1),
+                ("x.val = 2147483648", "x.val=-2147483648", -2147483648),
+                ("x.val = -2147483649", "x.val=2147483647", 2147483647),
+                ("x.val = 2 - 4294967297", "x.val=2-1", 1)):
+            with self.subTest(code=code):
+                self.assertEqual(compile_lines(code), [line])
+                self.assertEqual(run(code)["x.val"], value)
+        self.assertEqual(compile_lines("x.val = BIG", preamble="const BIG = 4294967296\n"),
+                         ["x.val=0"])
+        self.assertEqual(compile_lines("cls 4294967295\nfill 0,0,10,10,-4294967297\n"
+                                       "substr t0.txt,t1.txt,a.val-4294967297,0\n"
+                                       "printh 4294967295\ncrcputh 4294967295\n"
+                                       "lcd_dev 4294967295"),
+                         ["cls -1", "fill 0,0,10,10,-1", "substr t0.txt,t1.txt,a.val-1,0",
+                          "printh 4294967295", "crcputh 4294967295", "lcd_dev 4294967295"])
+
+    def test_a_decimal_starting_value_past_32_bits(self):
+        self.assertEqual(compile_program(_numbered("int a=4294967295, b=-2147483649, "
+                                                   "c=2147483647, d=-2147483648"), ProgramNames()),
+                         [(1, "int a=-1, b=2147483647, c=2147483647, d=-2147483648")])
+
     def test_hex_in_an_ints_starting_value(self):
         # The Editor refuses hex there (the vendor's rule 1.8): it is written
         # in decimal, as its 32 bits.
