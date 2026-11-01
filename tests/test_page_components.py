@@ -550,15 +550,15 @@ class PasteSpecialTest(ComponentsTestCase):
                           % xfloat])
 
     def test_a_value_the_selected_type_cannot_hold(self):
-        # A number and a scrolling text share the meaning of vscope, but a
-        # scrolling text refuses a vscope of 2 on every series, where the
-        # Basic series takes it on a number.
-        number, scroller = self.add("number"), self.add("scrolling-text")
-        self.set(number, vscope="2")
-        self.assertEqual(self.notes([scroller], self.copy(number), "attributes"),
-                         ["Not pasted onto %s, because a scrolling-text can't hold the copied "
-                          "values: vscope" % scroller])
-        self.assertNotIn("vscope", self.table_of(scroller))
+        # A combo box and a text share the meaning of txt_maxl, but a text
+        # refuses one past 65534 on every series, where a combo box's range is
+        # checked on its own series alone.
+        combo, text = self.add("combo-box"), self.add("text")
+        self.set(combo, txt_maxl="65535")
+        self.assertEqual(self.notes([text], self.copy(combo), "attributes"),
+                         ["Not pasted onto %s, because a text can't hold the copied values: "
+                          "txt_maxl" % text])
+        self.assertNotIn("txt_maxl", self.table_of(text))
 
     def test_code_replaces_an_events_and_is_added_for_another(self):
         self.write("pages/page0.nx", self.text("pages/page0.nx")

@@ -137,6 +137,16 @@ class ErrorPlaceTest(FolderTestCase):
         self.assertEqual((finding.file, finding.line), ("pages/second.page.toml", header))
         self.assertIn("w must be a number", finding.message)
 
+    def test_a_value_outside_its_choices(self):
+        # Refused on every series, at its table's header.
+        self.write("pages/second.page.toml", self.text("pages/second.page.toml").replace(
+            "w = 100", "w = 100\nvscope = 2"))
+        [finding] = self.findings()
+        header = self.text("pages/second.page.toml").split("\n").index("[[component]]") + 1
+        self.assertEqual((finding.file, finding.line), ("pages/second.page.toml", header))
+        self.assertIn("vscope must be one of its choices: 0, local, or 1, global",
+                      finding.message)
+
     def test_a_table_whose_name_is_a_list(self):
         # As a table being typed may hold: the table's own error, at its
         # header, where Python's TypeError stopped the check.

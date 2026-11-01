@@ -66,6 +66,7 @@ from nxwright.source.nx_files import (CODE_INDENT, EVENT_COMMENT_MARKER, EventBl
                                       blank_lines_dropped, event_blocks, read_page_files)
 from nxwright.project.page_text import expected_width, is_string_attribute, text_form_number
 from nxwright.project.attribute_values import number_from_bytes, number_to_bytes
+from nxwright.project.attribute_descriptions import describe
 from nxwright.project.attribute_ranges import range_on_every_series
 from nxwright.language.resource_names import (ANIMATION, FONT, PICTURE, SOUND, VIDEO,
                                               ResourceNames, UnknownNameError)
@@ -1032,9 +1033,18 @@ def _value_to_bytes(key: str, value, object_type: int, names: ResourceNames, cod
         raise NxwrightError("%s: %s must be from %d to %d" % (where, key, allowed.start,
                                                              allowed.stop - 1))
     try:
-        return number_to_bytes(value, width)
+        stored = number_to_bytes(value, width)
     except OverflowError:
         raise NxwrightError("%s: %s does not fit in %d bytes" % (where, key, width)) from None
+    # A value outside the attribute's choices has no meaning, and the
+    # Nextion Editor's panel cannot give it, though the Nextion Editor's
+    # compile takes some.
+    described = describe(TYPE_NAMES.get(object_type, ""), key)
+    if described is not None and described.choices and value not in described.choices:
+        chosen = ["%d, %s" % item for item in sorted(described.choices.items())]
+        raise NxwrightError("%s: %s must be one of its choices: %s, or %s"
+                            % (where, key, ", ".join(chosen[:-1]), chosen[-1]))
+    return stored
 
 
 def _check_least_size(attributes: list, type_name: str, name: str, where: str):

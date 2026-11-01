@@ -41,6 +41,10 @@ The Nextion Editor's panel never shows these attributes, but refuses these value
 - a combo box's `drastate` past 1;
 - a hotspot's `drag` past 1, or its `effect` past 8.
 
+### Values outside an attribute's choices
+
+Many attributes take only a few values, each with a meaning, which the Nextion Editor's Attribute panel offers as a list. For example, a `vscope` is 0, local, or 1, global. The build refuses any other value, on every series. So `vscope = 2` stops the build with "vscope must be one of its choices: 0, local, or 1, global". In the VS Code extension, hovering over an attribute shows its choices.
+
 ### A page's place and size
 
 Every page fills the screen, in the project's rotation. The Nextion Editor resets each page to this when it opens a project, so the build does the same, and ignores any `x`, `y`, `w`, and `h` a page file gives the page. You can leave them out.
@@ -86,7 +90,6 @@ Choices:
 Values:
 
 - On the P and E series, a slider's `ch` over 100, when the slider has a colour behind its track (`sta` 1). The T series takes up to 255.
-- On the P and E series, a `vscope` other than 0 or 1, on any type. On the T, K, and F series, the build takes any `vscope`, except on a QR code and a scrolling text, where the Nextion Editor refused a `vscope` of 2.
 - On the P and E series, a component's `x` or `y` past 6000, or its `w` or `h` past 2000. On the T, K, and F series, a component must fit on the screen.
 - A QR code's `txt_maxl` past 192 on the T and K series, 368 on the F series, and 630 on the P and E series.
 

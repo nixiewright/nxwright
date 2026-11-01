@@ -2309,15 +2309,13 @@ class SeriesTest(FirstDownTestCase):
 
     def test_values_past_their_entry_on_a_series(self):
         # As the Editor 1.68.2 refused them on some series alone ("Out of
-        # range", or an error of its own for vscope): a vscope of 2 on a text
-        # and a button of the Intelligent and Edge series, which the Basic
-        # series compiled; a component's x past 6000 on the Intelligent
-        # series; and a QR code's txt_maxl past its series' highest.
+        # range"): a component's x past 6000 on the Intelligent series, and a
+        # QR code's txt_maxl past its series' highest. A vscope of 2, which
+        # the Intelligent and Edge series refused too, is outside its choices,
+        # which the build refuses first (test_values_outside_their_choices).
         page_file = self.source / "pages" / "first.page.toml"
         page = page_file.read_bytes()
         for number, (model, name, kind, attribute, value, lowest, highest) in enumerate((
-                ("NX8048P050", "c0", "text", "vscope", 2, 0, 1),
-                ("NX4848E040", "c0", "button", "vscope", 2, 0, 1),
                 ("NX8048P050", "c0", "text", "x", 6001, -6000, 6000),
                 ("NX4832K035", "qr0", "qr-code", "txt_maxl", 193, 0, 192),
                 ("NX8048P050", "qr0", "qr-code", "txt_maxl", 631, 0, 630))):
@@ -2338,15 +2336,40 @@ class SeriesTest(FirstDownTestCase):
                                 % (name, attribute, value, model, lowest, highest))
                 finally:
                     page_file.write_bytes(page)
-        # The Basic series compiled a vscope of 2 on a text, and the
-        # Intelligent a QR code's txt_maxl of 630.
-        self.use_screen("NX4832T035")
-        self.add("c0", "text", vscope=2)
-        export_dump(self.source, self.folder / "basic")
-        page_file.write_bytes(page)
+        # The Intelligent series compiled a QR code's txt_maxl of 630.
         self.use_screen("NX8048P050")
         self.add("qr0", "qr-code", txt_maxl=630)
         export_dump(self.source, self.folder / "intelligent")
+
+    def test_values_outside_their_choices(self):
+        # A value outside an attribute's choices has no meaning, and the
+        # Nextion Editor's panel cannot give it, so the build refuses it on
+        # every series, though the Basic series compiled some of them, such as
+        # a vscope of 2 on a text.
+        page_file = self.source / "pages" / "first.page.toml"
+        page = page_file.read_bytes()
+        for number, (model, values, refusal) in enumerate((
+                ("NX4832T035", {"vscope": 2}, "vscope must be one of its choices: 0, local, or "
+                                              "1, global"),
+                ("NX4848E040", {"vscope": 2}, "vscope must be one of its choices: 0, local, or "
+                                              "1, global"),
+                ("NX4832T035", {"drag": 2}, "drag must be one of its choices: 0, no, or 1, yes"),
+                ("NX4832K035", {"effect": 9}, "effect must be one of its choices: 0, at once, "),
+                ("NX4832F035", {"sendkey": 4}, "sendkey must be one of its choices: 0, none, "),
+                ("NX8048P050", {"sendkey": 4}, "sendkey must be one of its choices: 0, none, "))):
+            with self.subTest(model=model, values=values):
+                self.use_screen(model)
+                self.add("c0", "text", **values)
+                try:
+                    self.refused_with(number, ", object 2: " + refusal)
+                finally:
+                    page_file.write_bytes(page)
+        # Values among the choices are built: a page's effect of 10, which a
+        # page's choices give, and on the Intelligent series a sta of 3.
+        self.use_screen("NX8048P050")
+        edit_text(page_file, 'events = ["down"]', 'events = ["down"]\neffect = 10')
+        self.add("c0", "text", vscope=1, drag=1, effect=8, sendkey=3, sta=3)
+        export_dump(self.source, self.folder / "chosen")
 
     def test_assignments_the_series_refuses(self):
         # As the Editor 1.68.2 refused them on the Basic, Enhanced, and

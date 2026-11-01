@@ -13,9 +13,12 @@
 # table common, for an attribute with the same range on every type that has
 # it. A range is [lowest, highest] on every series, or a table of ranges by
 # series, T, K, F, P, and E, for one that differs by series or is checked on
-# some series alone. A vscope of 2, for one, compiled on most types of the
-# Basic, Enhanced, and Discovery series, and was refused on every type of the
-# Intelligent and Edge series.
+# some series alone. For example, a QR code's txt_maxl goes to 192 on the
+# Basic and Enhanced series, to 368 on the Discovery series, and to 630 on
+# the Intelligent and Edge series.
+#
+# The build also refuses a value outside an attribute's choices
+# (attribute_descriptions.toml), on every series, whatever its range here.
 
 [common]
 aph = [0, 127]
