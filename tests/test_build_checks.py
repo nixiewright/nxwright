@@ -767,6 +767,77 @@ class CommandComponentTest(_CodeOnFirstTestCase):
                             "nxlang")
 
 
+class NumberArgumentTest(_CodeOnFirstTestCase):
+    """A command's argument where it takes a number. The Nextion Editor
+    refused each line refused here as it compiled, and compiled each that
+    builds."""
+
+    def assert_refused(self, line: str, words: str, built: str):
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: %s: .*\(\"%s\"\)"
+                                    % (re.escape(line), words)):
+            export_dump(self.source, self.folder / built)
+
+    def test_a_text_or_a_txt(self):
+        for number, line in enumerate((
+                "cls t0.txt", 'cls "1"', "add t0.txt,0,1", 'add 1,"a",1', "addt 1,0,t0.txt",
+                'cle "a",0', "prints n0.val,t0.txt", 'prints n0.val,"x"',
+                'pa_txt "a",t0.txt,t0.txt,1', 'pa_txt "a",t0.txt,0,"1"',
+                'newfile "sd0/a.txt",t0.txt',
+                'newfile "sd0/a.txt","1"', 'rdfile "sd0/a.txt",t0.txt,10,0',
+                'rdfile "sd0/a.txt","0",10,0')):
+            with self.subTest(line=line):
+                self.write_code(line)
+                self.assert_refused(line, "Invalid variable operation", "refused%d" % number)
+        # pa_txt's second argument is a text, which takes either.
+        self.write_code('pa_txt "a","1",0,1', 'pa_txt "a",t0.txt,0,1', "cls 1", "add 1,0,n0.val",
+                        "prints t0.txt,n0.val")
+        export_dump(self.source, self.folder / "built")
+
+    def test_an_operand_the_nextion_editor_does_not_read(self):
+        lines = [line % form for form in ("RED+*1", "5a", "1_000", "-sys0")
+                 for line in ("cls %s", "add 1,0,%s", 'newfile "sd0/a.txt",%s',
+                              'rdfile "sd0/a.txt",%s,10,0', "prints n0.val,%s")]
+        for number, line in enumerate(lines):
+            with self.subTest(line=line):
+                self.write_code(line)
+                self.assert_refused(line, "Invalid Variables", "refused%d" % number)
+        self.write_code("cls -5", "add 1,0,sys0+1", "cls 0x0001")
+        export_dump(self.source, self.folder / "built")
+
+    def test_nxlang_computes_a_minus_before_a_name_first(self):
+        self.write_code("n0.val=0")
+        switch_to_nxlang(self.source)
+        self.write_code("cls -n0.val")
+        export_dump(self.source, self.folder / "built")
+        page = next((self.folder / "built" / "pages").glob("*-first.txt"))
+        self.assertRegex(page.read_text(encoding="utf-8"),
+                         r"\| (__g\w+)=0-n0\.val\n\s*\| cls \1\n")
+        # Any value nxlang reads and the Nextion Editor does not, as a minus
+        # before a name inside arithmetic, in each place of the line.
+        self.write_code("add 1,-n0.val,2*-n0.val // two", "cls -n0.val+1")
+        export_dump(self.source, self.folder / "more")
+        page = next((self.folder / "more" / "pages").glob("*-first.txt"))
+        written = page.read_text(encoding="utf-8")
+        self.assertRegex(written, r"\| add 1,__g\w+,__g\w+ // two\n")
+        self.assertRegex(written, r"\| cls __g\w+\n")
+        # What nxlang does not read either is refused as in strict syntax.
+        for number, (line, words) in enumerate((("cls t0.txt", "Invalid variable operation"),
+                                                ('cls "1"', "Invalid variable operation"),
+                                                ("cls 5a", "Invalid Variables"))):
+            with self.subTest(line=line):
+                self.write_code(line)
+                self.assert_refused(line, words, "nxlang%d" % number)
+        # program.nx has no temporaries, so the line stays refused there.
+        self.write_code("n0.val = 0")
+        program = self.source / "program.nx"
+        text = program.read_text(encoding="utf-8")
+        text += "" if text.endswith("\n") else "\n"
+        program.write_text(text + "cls -sys0\n", encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(NxwrightError, r"program\.nx line %d: cls -sys0: .*\(\"Invalid "
+                                    r"Variables\"\)" % len(text.split("\n"))):
+            export_dump(self.source, self.folder / "program")
+
+
 class FullyListedComponentTest(_CodeOnFirstTestCase):
     """Code naming a component whose page file lists every attribute, as the
     Nextion Editor compiled it: by the component's type. It makes such a

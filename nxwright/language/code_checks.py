@@ -67,6 +67,7 @@ LACKED_INSTRUCTION, LACKED_VARIABLE = "instruction", "variable"
 INVALID_COMMAND, INVALID_VARIABLES = "Invalid command", "Invalid Variables"
 INVALID_ARGUMENT_COUNT = "Invalid number of arguments"
 INVALID_COMPONENT_ID, INVALID_PAGE_ID = "Invalid Component ID", "Invalid Page ID"
+INVALID_VARIABLE_OPERATION = "Invalid variable operation"
 # "name.attribute" or "page.name.attribute", not part of a longer chain such
 # as "b[3].txt", whose component is chosen at run time.
 _DOTTED = re.compile(r"(?<![\w.\]])([A-Za-z_]\w*)\.([A-Za-z_]\w*)(?:\.([A-Za-z_]\w*))?")
@@ -87,6 +88,12 @@ _TXT = re.compile(r"[\w.\[\]]*\.txt")
 _INDEX = r"(?:[^\[\]]|\[[^\[\]]*\])*"
 SCREEN_ARRAY = re.compile(r"(?:p\[%s\]\.)?b\[(%s)\]" % (_INDEX, _INDEX))
 _NAME_ONLY = re.compile(r"[A-Za-z_]\w*")
+# The places of commands' arguments that take a number, counted from 0: the
+# Nextion Editor refused a text and a txt in each ("Invalid variable
+# operation"), and an operand it does not read, such as `5a` ("Invalid
+# Variables").
+NUMBER_PLACES = {"cls": (0,), "add": (0, 1, 2), "addt": (0, 1, 2), "cle": (0, 1),
+                 "prints": (1,), "pa_txt": (2, 3), "newfile": (1,), "rdfile": (1,)}
 # Such a command's first argument given by a name, a dotted one too: a
 # component's, which a macro may not give, or a variable's or value's,
 # holding the component's ID.
@@ -273,6 +280,7 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
     _check_first_argument(code, number)
     _check_xstr_text(code, number)
     _check_components(code, objects, variables, program_pages, number)
+    _check_number_arguments(code, number)
     _check_page_argument(code, number)
     if variables is not None:
         _check_program_variables(code, variables, number)
@@ -601,6 +609,35 @@ def _check_components(code: str, objects: ObjectNames, variables: frozenset,
             raise NxwrightError("%s: %s, so the Nextion Editor refuses it as %s's component "
                                 "(\"%s\")" % (code, what, word, INVALID_COMPONENT_ID),
                                 line=number)
+
+
+def _check_number_arguments(code: str, number: int):
+    """Raises NxwrightError for a command's argument in one of its number
+    places (NUMBER_PLACES) that the Nextion Editor refused as it compiled:
+      - a quoted text or a component's txt, as `cls t0.txt` ("Invalid
+        variable operation");
+      - an operand it does not read, as `cls 5a`, `cls 1_000`, `cls -a`,
+        or `cls RED+*1` ("Invalid Variables"), as in an assignment's value
+        (code_lines.chain_parts)."""
+    word = command_word(code)
+    places = NUMBER_PLACES.get(word)
+    if places is None:
+        return
+    arguments = command_arguments(code[len(word) + 1:])
+    for place in places:
+        if place >= len(arguments):
+            continue
+        argument = arguments[place].strip()
+        quoted = STRING.fullmatch(argument) is not None
+        if _TXT.fullmatch(argument) or quoted:
+            raise NxwrightError("%s: %s is a text, where %s takes a number, and the Nextion "
+                                "Editor refuses it (\"%s\")"
+                                % (code, argument, word, INVALID_VARIABLE_OPERATION),
+                                line=number)
+        if not quoted and chain_parts(argument) is None:
+            raise NxwrightError("%s: the Nextion Editor does not read %s as a number, or as "
+                                "numbers joined by operators (\"%s\")"
+                                % (code, argument, INVALID_VARIABLES), line=number)
 
 
 def _check_page_argument(code: str, number: int):

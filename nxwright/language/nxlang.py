@@ -104,10 +104,11 @@ import re
 
 from nxwright import NxwrightError
 from nxwright.language.code_checks import (COMPONENT_PLACES, DATA_RECORD_ARGUMENTS,
-                                           DATA_RECORD_CALL, ONE_OPERAND_FIRST, SCREEN_ARRAY,
-                                           ends_in_escaped_backslash, is_one_operand,
-                                           method_count_refusal)
-from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, command_arguments, command_word,
+                                           DATA_RECORD_CALL, NUMBER_PLACES, ONE_OPERAND_FIRST,
+                                           SCREEN_ARRAY, ends_in_escaped_backslash,
+                                           is_one_operand, method_count_refusal)
+from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, chain_parts, command_arguments,
+                                          command_word,
                                           declared_int_names, goto_label, minus_is_sign,
                                           outside_strings, split_line)
 from nxwright.language.code_preprocessor import with_own_attributes
@@ -2437,6 +2438,9 @@ class _EventCompiler:
         command = command_word(code)
         if command in COMPONENT_PLACES:
             code = self.component_arguments(command, code, number)
+        if (command in NUMBER_PLACES and command not in ONE_OPERAND_FIRST
+                and self.computed_arguments(number, indent, command, code, comment)):
+            return
         if command in ONE_OPERAND_FIRST:
             self.command_with_operands(number, indent, command, code[len(command):], comment)
             return
@@ -2580,6 +2584,41 @@ class _EventCompiler:
         # Joined again only when rewritten, as the split drops an empty
         # argument, which the line is otherwise written with.
         return code[:len(word)] + ",".join(arguments) if rewritten else code
+
+    def computed_arguments(self, number: int, indent: str, word: str, code: str,
+                           comment: str) -> bool:
+        """Compiles the command `code`, whose first word `word` is one of
+        NUMBER_PLACES, when one of its number places holds a value nxlang
+        reads but the Nextion Editor does not, as a minus before a name. The
+        value is computed into a temporary first: `cls -x.val` becomes
+        `__g0_0=0-x.val`, then `cls __g0_0`, and `cls 2*-x.val` alike.
+
+        Returns False, writing nothing, when no number place holds one, or
+        in program.nx, which has no temporaries. A value nxlang does not
+        read either, as `cls 5a`, is left as written. The build then refuses
+        the line as written."""
+        # program.nx alone is compiled without temporaries (compile_program).
+        if self.temporaries is None:
+            return False
+        arguments = command_arguments(code[len(word):])
+        emitter = None
+        for place in NUMBER_PLACES[word]:
+            if place >= len(arguments):
+                continue
+            text = arguments[place].strip()
+            if not text or STRING_LITERAL.fullmatch(text) or chain_parts(text) is not None:
+                continue
+            try:
+                expression = Parser(tokenize(text, number), number, self.scope).whole_expression()
+            except (NotParsed, NxwrightError):
+                continue
+            emitter = emitter or self.emitter(indent, number)
+            arguments[place] = arguments[place].replace(text, emitter.value(expression))
+        if emitter is None:
+            return False
+        emitter.emit(self.substitute_command(code[:len(word)] + ",".join(arguments), number))
+        self.put_lines(number, emitter.lines, comment)
+        return True
 
     def substitute_command(self, code: str, number: int) -> str:
         """Replaces locals and constants in a command's arguments, keeping its

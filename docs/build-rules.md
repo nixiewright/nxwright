@@ -151,6 +151,8 @@ In strict Nextion syntax, the build refuses a line the Nextion Editor cannot rea
 
 - A value that is not operands joined by operators, such as `n0.val=2+`, `n0.val=+2`, or `n0.val=(1+2)` ("Invalid Variables"). After an operator, a minus can start a number, as in `n0.val=2*-16`, but not a name: `n0.val=2*-n1.val` is refused.
 - An assignment with no value: `n0.val=` ("Invalid command").
+- Where a command takes a number ([Texts and numbers](#texts-and-numbers)), an operand the Nextion Editor does not read, as in `cls 5a`, `cls 1_000`, `cls RED+*1`, or `cls -n0.val` ("Invalid Variables").
+  - The build refuses these in nxlang too, with one exception. In a page's code, nxlang computes a value it reads first, such as a minus before a name, so `cls -n0.val` builds ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 - An `if`, `else if`, `while`, or `for` whose condition does not end with `)`.
 - A `for` whose head contains a text with a semicolon, in any of its parts, such as `for(n0.val=0;t0.txt!="a;b";n0.val++)` ("SYNTAX ERROR:for"). A `while` or an `if` takes such a text. nxlang writes such a `for` as its start and a `while` loop instead ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 
@@ -189,6 +191,8 @@ The text of `xstr`, its last argument, is one operand too: a text, a `txt`, a nu
 - In an assignment, a text joined to a number, or an operator other than `+` and `-` on a text: `t0.txt=t0.txt+5`, `n0.val+=t0.txt`, `t0.txt*=2` ("Invalid variable operation").
   - A text minus a number removes characters, and compiles.
   - A condition is not an assignment: `if(t0.txt=="a")` compiles.
+- A text or a `txt` where a command takes a number, as in `cls t0.txt` or `cls "1"` ("Invalid variable operation").
+  - The commands take a number in `cls`'s colour, in each argument of `add`, `addt`, and `cle`, in `prints`' length, in `newfile`'s size, in `rdfile`'s second argument, and in `pa_txt`'s third and fourth.
 
 nxlang refuses a text put into a number itself, and converts a number put into a text.
 
