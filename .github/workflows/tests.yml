@@ -66,6 +66,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     # A VS Code that hangs would otherwise hold the runner for hours.
     timeout-minutes: 30
+    env:
+      # The VS Code the tests run in, pinned so that a new VS Code release
+      # cannot change a run's result on its own. Raise it by hand.
+      VSCODE_VERSION: "1.139.1"
     strategy:
       fail-fast: false
       matrix:
@@ -88,16 +92,23 @@ jobs:
           node-version: "22"
       - name: The VS Code extension's packages
         run: npm ci
+      # The download of that version is kept between runs, so that a run
+      # downloads VS Code only when the version changes, or the cache was
+      # dropped after a week unused.
+      - name: The VS Code download, kept from an earlier run
+        uses: actions/cache@v4
+        with:
+          path: editors/vscode/.vscode-test/vscode-*
+          key: vscode-${{ runner.os }}-${{ runner.arch }}-${{ env.VSCODE_VERSION }}
       # run.mjs never downloads VS Code: it runs the one NXWRIGHT_TEST_VSCODE
       # names. So this step downloads one first, into .vscode-test/, apart
-      # from any other, and names its program. It takes the current stable
-      # release, the one users run, so a run that fails after a VS Code
-      # release may come from VS Code, not from this repository.
+      # from any other, and names its program. It downloads nothing when the
+      # cache gave that version back.
       - name: A VS Code installed apart, for the tests
         run: >-
           node --input-type=module -e "import { appendFileSync } from 'node:fs';
           import { downloadAndUnzipVSCode } from '@vscode/test-electron';
-          const program = await downloadAndUnzipVSCode('stable');
+          const program = await downloadAndUnzipVSCode(process.env.VSCODE_VERSION);
           appendFileSync(process.env.GITHUB_ENV, 'NXWRIGHT_TEST_VSCODE=' + program + '\n');"
       # VS Code needs a display, which a Linux runner has none of.
       - name: The tests inside VS Code, with a virtual display
