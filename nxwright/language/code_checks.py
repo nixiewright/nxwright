@@ -756,8 +756,9 @@ def _check_one_operand_arguments(code: str, number: int):
         parts = chain_parts(argument)
         if parts is not None and len(parts) > 1:
             raise NxwrightError("%s: %s takes one operand in this argument, such as a number, a "
-                                "text, or an attribute, not the expression %s. The Nextion "
-                                "Editor refuses the line (\"%s\")"
+                                "text, or an attribute, not the expression %s. Compute the "
+                                "expression into a variable first, then give that variable. "
+                                "The Nextion Editor refuses the line (\"%s\")"
                                 % (code, word, argument, INVALID_VARIABLES), line=number)
 
 
