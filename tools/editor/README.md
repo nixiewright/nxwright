@@ -191,13 +191,13 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 
 ### `close-message`
 
-`close-message` closes the messages the dedicated Editor shows, and prints what each one said. When the Nextion Editor shows a message, such as "First character of a Name can not be number" as it opens a project, a command stops on it and leaves it open, and every later command stops on it too.
+`close-message` closes the messages the dedicated Nextion Editor has left open, and prints each message's text. When a command stops on a message, such as "First character of a Name can not be number" as a project opens, it leaves the message open. Every later command then stops on that message too, until you close it.
 
-- It closes the Nextion Editor's own messages, and its other dialogs except a file dialog, which `close-file-dialog` cancels.
-- It closes each one as its close box does. It does not press a button such as OK or Yes.
-- If a message is still open after 15 seconds, the command says so.
-- Whether it closes a window over the simulator, such as "File Header Data Error", has not been tried.
-- The command never starts a Nextion Editor.
+- The command also closes the Nextion Editor's other dialogs. It leaves a file dialog to `close-file-dialog`, which cancels it.
+- Each message closes as its close box would close it. The command does not press a button, such as OK or Yes.
+- A message still open after 15 seconds is listed with "(still open)" after its words.
+- A window over the simulator, such as "File Header Data Error", has not been tried with this command.
+- `close-message` never starts a Nextion Editor.
 
 ## Every attribute of every type
 
