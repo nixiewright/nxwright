@@ -240,7 +240,7 @@ The Nextion Editor reads a text in code by its bytes, so some texts in these enc
 - A text in a condition, or before a comma in `prints`, `spstr`, `strlen`, `btlen`, or `crcputs`, whose last character ends in the byte 0x5C, a backslash's: `if(t0.txt=="表")` or `prints "日表",0` ("Invalid number of arguments").
   - Shift-jis's 表, big5's 許, and gb2312's 乗 each end in 0x5C. There the Nextion Editor reads that byte as a backslash that escapes the closing quote.
   - The same text compiles elsewhere, as in `t0.txt="日表"` or `print "日表"`.
-  - In an nxlang event, the build puts such a text of up to 255 bytes into a text temporary first, and the line builds ([nxlang-compiled.md](nxlang-compiled.md)).
+  - In an nxlang event, the build puts such a text into a text temporary first, and the line builds ([nxlang-compiled.md](nxlang-compiled.md)).
 
 ### Attributes a component lacks
 
@@ -294,6 +294,7 @@ The limit applies in a page's code, in `program.nx`, and in macros.
 - Spaces the build removes, such as those around `=`, are not counted. Spaces inside a quoted text are.
 - The build does not limit an `int` declaration, or the head of an `if` or a `while` as a whole. In a `for`'s head, the start and the step each count as a line of their own, such as `sys0=0` and `sys0++` in `for(sys0=0;sys0<9;sys0++)`.
 - Each comparison in a condition counts as a line of its own, because the Nextion Editor turns it into one. That line is the comparison's two sides plus 7 bytes. `t0.txt=="…"` with a text of 753 characters makes a line of 768 bytes, too long on the Basic series. A long condition of short comparisons, such as `sys0==1&&sys1==2&&…`, is not refused.
+  - In an nxlang event, the long texts of such a comparison go into text temporaries first, so the line builds. In `program.nx`, which has no temporaries, the build refuses it.
 
 nxlang writes a long text assignment, a long `print` of a text, and a long number assignment in several lines, so the build does not refuse them ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)). A long number assignment in `program.nx` is still refused, as it needs a temporary.
 

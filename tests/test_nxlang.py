@@ -17,7 +17,7 @@ from nxwright.project.device_settings import TextCodec
 from nxwright.language.editor_code import (editor_equivalent, global_declarations,
                                            keep_editor_meaning, without_global_declarations,
                                            write_expression)
-from nxwright.language.nxlang import (LONGEST_LINE, Binary, Literal, Macro, ProgramNames,
+from nxwright.language.nxlang import (LONGEST_LINE, TEXT, Binary, Literal, Macro, ProgramNames,
                                       _last_argument_start, compile_page, compile_program,
                                       read_program_names)
 from nxwright.source import source_folder
@@ -494,19 +494,17 @@ class RefusedFormTest(unittest.TestCase):
         self.assertEqual(compile_lines('prints "日表",0', codec=TextCodec("utf-8")),
                          ['prints "日表",0'])
 
-    def test_a_misread_text_longer_than_a_temporary_as_written(self):
-        # A text temporary keeps 255 bytes, which would cut the text short.
-        # The line is left as written, and the build refuses it.
+    def test_a_misread_text_longer_than_255_bytes(self):
+        # The temporary takes room for it (LongTextTemporaryTest), so a text
+        # of 256 bytes is computed first, as one of 255 is.
         codec = TextCodec("shift-jis")
-        long_text = '"%s表"' % ("a" * 254)
-        for code, written in (("prints %s,0" % long_text, "prints %s,0" % long_text),
-                              ("if (t0.txt == %s) {\n}" % long_text, "if(t0.txt==%s)" % long_text)):
-            with self.subTest(code=code[:10]):
-                self.assertEqual(compile_lines(code, codec=codec)[0], written)
-        # 253 letters and 表 make 255 bytes, which fit.
-        fitting = '"%s表"' % ("a" * 253)
-        self.assertEqual(compile_lines("prints %s,0" % fitting, codec=codec),
-                         ["__s0.txt=%s" % fitting, "prints __s0.txt,0"])
+        for letters in (253, 254):
+            text = '"%s表"' % ("a" * letters)
+            with self.subTest(letters=letters):
+                self.assertEqual(compile_lines("prints %s,0" % text, codec=codec),
+                                 ["__s0.txt=%s" % text, "prints __s0.txt,0"])
+                self.assertEqual(compile_lines("if (t0.txt == %s) {\n}" % text, codec=codec)[:2],
+                                 ["__s0.txt=%s" % text, "if(t0.txt==__s0.txt)"])
 
     def test_xstr_s_text_computed_first(self):
         # The build drops the spaces after the commas, as the Editor does.
@@ -950,6 +948,101 @@ class LongPrintAndNumberTest(unittest.TestCase):
         with self.assertRaisesRegex(NxwrightError, "temporary"):
             compile_program(_numbered(program + "sys0=" + terms),
                             read_program_names(_numbered(program)))
+
+
+
+class LongTextTemporaryTest(unittest.TestCase):
+    """A text nxlang puts in a text temporary, which keeps 255 bytes unless
+    it is given quoted texts of more, and a print of joined texts, which
+    needs no temporary."""
+
+    def rooms(self, code: str, codec: TextCodec = None) -> dict:
+        """Returns {name: txt_maxl} of the text temporaries `code` takes."""
+        compiled = compile_page("p", COMPONENTS, ProgramNames(), [("p.nx", [])],
+                                {KEY: ("p.nx", _numbered(code))}, codec=codec)
+        return {variable.name: variable.room for variable in compiled.generated
+                if variable.kind == TEXT}
+
+    def test_a_joined_print_is_one_print_for_each_part(self):
+        self.assertEqual(compile_lines('print "a" + t0.txt'), ['print "a"', "print t0.txt"])
+        # A number part becomes its digits first, as in a join.
+        self.assertEqual(compile_lines('print "a" + x.val + t1.txt'),
+                         ["covx x.val,__s0.txt,0,0", 'print "a"', "print __s0.txt",
+                          "print t1.txt"])
+        long = "a" * 300
+        sent = run('print "%s" + t1.txt' % long)["sent"]
+        self.assertEqual("".join(part for part, _ in sent), long + "ab")
+
+    def test_a_joined_prints_calls_run_before_it_prints(self):
+        # set() changes t0.txt, which is read after the call, as the join read it.
+        page = ('function set() -> text:\n  t0.txt = "z"\n  return "y"\n\n'
+                "on p.down:\n  print t0.txt + set()\n")
+        sent = run_page(page, {"t0.txt": "x"}).values["sent"]
+        self.assertEqual("".join(part for part, _ in sent), "zy")
+
+    def test_a_long_part_of_a_joined_print_is_split(self):
+        lines = compile_lines('print "%s" + t0.txt' % ("a" * 2000))
+        self.assertTrue(all(len(line.encode("utf-8")) <= LONGEST_LINE for line in lines))
+        self.assertEqual(lines[-1], "print t0.txt")
+        self.assertEqual(len(lines), 4)
+
+    def test_room_for_long_quoted_texts(self):
+        # 300 letters, and 255 for t0.txt, which may hold that many.
+        for code in ('if (t1.txt == "%s" + t0.txt) {\n  x.val = 1\n}' % ("b" * 300),
+                     'prints "%s" + t0.txt, 0' % ("c" * 300)):
+            with self.subTest(code=code[:10]):
+                self.assertEqual(self.rooms(code), {"__s0": 555})
+
+    def test_255_and_256_bytes(self):
+        # A condition's text that ends in an escaped backslash goes into a
+        # temporary: 254 letters and the backslash keep 255, and 255 take 256.
+        for letters, room in ((254, 255), (255, 256)):
+            with self.subTest(letters=letters):
+                self.assertEqual(self.rooms('if (t0.txt == "%s\\\\") {\n}' % ("a" * letters)),
+                                 {"__s0": room})
+        # A short joined text in a condition is written as before.
+        code = 'if (t1.txt == "b" + t0.txt) {\n}'
+        self.assertEqual(compile_lines(code), ['__s0.txt="b"+t0.txt', "if(t1.txt==__s0.txt)",
+                                               "{", "}"])
+        self.assertEqual(self.rooms(code), {"__s0": 255})
+
+    def test_a_long_case_ending_in_an_escaped_backslash(self):
+        text = "a" * 300 + "\\"
+        code = ('switch (t0.txt) {\n  case "%s\\":\n    r.val = 1\n    break\n}' % text)
+        self.assertEqual(self.rooms(code)["__s0"], 301)
+        page = "on p.down:\n" + block(code) + "\n"
+        self.assertEqual(run_page(page, {"t0.txt": text}).values["r.val"], 1)
+
+    def test_a_case_too_long_for_a_comparison(self):
+        # A case is compared as `value==case`, a comparison D3 also fits.
+        text = "a" * 760
+        code = 'switch (t0.txt) {\n  case "%s":\n    r.val = 1\n    break\n}' % text
+        lines = compile_lines(code)
+        # The build drops a line's indent before it counts the line.
+        self.assertTrue(all(len(line.strip().encode("utf-8")) <= LONGEST_LINE for line in lines))
+        self.assertEqual(self.rooms(code)["__s0"], 760)
+        page = "on p.down:\n" + block(code) + "\n"
+        self.assertEqual(run_page(page, {"t0.txt": text}).values["r.val"], 1)
+
+    def test_a_long_text_read_by_its_bytes(self):
+        # In shift-jis, 254 letters and 表 make 256 bytes, which a temporary
+        # now has room for.
+        codec = TextCodec("shift-jis")
+        long_text = '"%s表"' % ("a" * 254)
+        self.assertEqual(compile_lines("prints %s,0" % long_text, codec=codec),
+                         ["__s0.txt=%s" % long_text, "prints __s0.txt,0"])
+        self.assertEqual(self.rooms("prints %s,0" % long_text, codec), {"__s0": 256})
+
+    def test_a_comparison_too_long_for_a_line(self):
+        code = 'if (t0.txt == "%s") {\n  x.val = 1\n}' % ("a" * 760)
+        lines = compile_lines(code)
+        self.assertTrue(all(len(line.encode("utf-8")) <= LONGEST_LINE for line in lines))
+        self.assertIn("if(t0.txt==__s0.txt)", lines)
+        self.assertEqual(self.rooms(code), {"__s0": 760})
+        self.assertEqual(run(code, {"t0.txt": "a" * 760})["x.val"], 1)
+        # Two texts too long only together: the longer goes into the temporary.
+        code = 'if ("%s" == "%s") {\n}' % ("a" * 380, "b" * 400)
+        self.assertIn('if("%s"==__s0.txt)' % ("a" * 380), compile_lines(code))
 
 
 class NxlangFolderTestCase(SourceFolderTestCase):

@@ -127,7 +127,7 @@ What the code does outside the page is recorded among the values too, under name
 | `"reset"` | 1, once `rest` ran. |
 | `"other commands"` | The commands recorded but not otherwise run, and `move`, as they ran. |
 
-- `print` is recorded in `"sent"` as `prints` with a length of 0: it sends the same bytes.
+- `print` is recorded in `"sent"` as `prints` with a length of 0: it sends the same bytes. In nxlang, a `print` of joined texts prints each part in turn, so it is recorded as one send for each part.
 - Reading `rand` gives the value of `"rand"` that you set.
 
 How each command runs, and what it records, is in [How nxwright runs Nextion code](screen-code.md).

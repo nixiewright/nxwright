@@ -2757,13 +2757,23 @@ class LongComparisonTest(FirstDownTestCase):
         self.assert_comparison_refused('t0.txt=="' + "中" * 31, 769, 0, encoding="gb2312")
 
     def test_in_nxlang(self):
-        # A text temporary can contain only 255 characters, too few for this
-        # text. So nxlang compares the text as written, and the build
-        # refuses it.
+        # In an event, nxlang puts the long text into a text temporary with
+        # room for it, so the comparison fits, and the page builds.
         switch_to_nxlang(self.source)
         self.use_series("NX4832T035")
         self.write_code('if (t0.txt == "%s") {' % ("a" * 753), "}")
-        self.assert_comparison_refused('t0.txt=="' + "a" * 31, 768, 0)
+        dump = self.folder / "built"
+        export_dump(self.source, dump)
+        page = next((dump / "pages").glob("*-first.txt")).read_text(encoding="utf-8")
+        self.assertIn("if(t0.txt==__s0.txt)", page)
+        self.assertRegex(page, r'objname = "__s0"\n(?:  .*\n)*?  txt_maxl = 753\n')
+        # program.nx has no temporaries, so the build refuses it there.
+        program = self.source / "program.nx"
+        program.write_text('int sys0=0,sys1=0,sys2=0\nif ("%s" == "a") {\n  sys0 = 1\n}\npage 0\n'
+                           % ("a" * 758), encoding="utf-8", newline="\n")
+        self.write_code("sys0 = 1")
+        with self.assertRaisesRegex(NxwrightError, r"program\.nx line 2: .*770 bytes"):
+            export_dump(self.source, self.folder / "program")
 
 
 class TextBytesTest(FirstDownTestCase):

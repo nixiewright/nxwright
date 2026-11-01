@@ -70,7 +70,7 @@ from nxwright.project.attribute_ranges import range_on_every_series
 from nxwright.language.resource_names import (ANIMATION, FONT, PICTURE, SOUND, VIDEO,
                                               ResourceNames, UnknownNameError)
 from nxwright.language.nxlang import (GENERATED_NAME, GENERATED_PREFIX, HOTSPOT, HOTSPOT_PREFIX,
-                                      HOTSPOT_SIZE, TEXT, TEXT_TEMPORARY_SIZE, ProgramNames,
+                                      HOTSPOT_SIZE, TEXT, ProgramNames,
                                       compile_page)
 
 # Attributes holding a colour, stored as RGB565 (5 bits of red, 6 of green, 5
@@ -648,7 +648,7 @@ def generated_table(variable) -> dict:
                 "h": HOTSPOT_SIZE}
     table = {"name": variable.name, "type": "variable"}
     if variable.kind == TEXT:
-        table.update(sta=1, txt="", txt_maxl=TEXT_TEMPORARY_SIZE)
+        table.update(sta=1, txt="", txt_maxl=variable.room)
     return table
 
 

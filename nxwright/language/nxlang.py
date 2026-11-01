@@ -324,9 +324,12 @@ class Call:
 @dataclass
 class Generated:
     """A component the compiler adds to a page: a text variable (`kind` TEXT)
-    or a function hotspot (`kind` HOTSPOT)."""
+    or a function hotspot (`kind` HOTSPOT). A text variable keeps `room`
+    bytes, its txt_maxl. That is 255, or more for a text temporary given
+    quoted texts of more than 255 bytes (_PageState.make_room)."""
     name: str
     kind: str
+    room: int = TEXT_TEMPORARY_SIZE
 
 
 @dataclass(frozen=True)
@@ -682,17 +685,37 @@ def _refused_in_condition(literal: Literal, codec: TextCodec) -> bool:
     as 表 in shift-jis (code_checks.misread_byte_by_byte). Such a text goes
     into a text temporary first."""
     return literal.text.startswith('"') and (ends_in_escaped_backslash(literal.text)
-                                             or _misread_and_fits(literal.text, codec))
+                                             or misread_byte_by_byte(literal.text, codec))
 
 
-def _misread_and_fits(text: str, codec: TextCodec) -> bool:
-    """True when the Nextion Editor would read the quoted text `text` to
-    another end, by its bytes in `codec`'s encoding
-    (code_checks.misread_byte_by_byte), and the text fits a text temporary.
-    A longer one would be cut short there, so it is left as written, and the
-    build refuses it."""
-    return (misread_byte_by_byte(text, codec)
-            and len(codec.encode(text, "")) - len('""') <= TEXT_TEMPORARY_SIZE)
+def _stored_size(text: str, codec: TextCodec) -> int:
+    r"""Returns how many bytes the screen stores for the quoted text `text`,
+    its quotes left out: each character in `codec`'s encoding, or in utf-8
+    without one, which takes no fewer bytes; the escapes \\ and \" one
+    byte each, and \r two, a carriage return and a line feed."""
+    size = 0
+    for piece in _TEXT_PIECE.findall(text[1:-1]):
+        if piece.startswith("\\"):
+            size += 2 if piece == "\\r" else 1
+            continue
+        try:
+            size += len(codec.encode(piece, "")) if codec is not None else len(piece.encode())
+        except NxwrightError:
+            size += len(piece.encode())     # the build refuses a text it cannot store
+    return size
+
+
+def _room_for(chain: list, codec: TextCodec):
+    """Returns the bytes a text temporary needs to keep the text `chain`
+    whole, when its quoted texts take more than TEXT_TEMPORARY_SIZE: their
+    bytes, and TEXT_TEMPORARY_SIZE for each other part, whose length is known
+    only as the code runs. Returns None for a chain whose quoted texts take
+    no more, which a temporary keeps as before."""
+    quoted = [operand for _, operand in chain if operand.startswith('"')]
+    size = sum(_stored_size(operand, codec) for operand in quoted)
+    if size <= TEXT_TEMPORARY_SIZE:
+        return None
+    return size + TEXT_TEMPORARY_SIZE * (len(chain) - len(quoted))
 
 
 def _last_argument_start(code: str):
@@ -877,10 +900,11 @@ class _Emitter:
         refuses there (_refused_in_condition). With `read_byte_by_byte`, the
         literal is a command's argument that the Nextion Editor reads byte
         by byte. A text it would read to another end then goes into a text
-        temporary too, if it fits one (_misread_and_fits)."""
+        temporary too (code_checks.misread_byte_by_byte), with room for it
+        (emit_assignment)."""
         if isinstance(expression, Literal):
             if ((in_condition and _refused_in_condition(expression, self.codec))
-                    or (read_byte_by_byte and _misread_and_fits(expression.text, self.codec))):
+                    or (read_byte_by_byte and misread_byte_by_byte(expression.text, self.codec))):
                 target = self.temporary(TEXT)
                 self.emit_assignment(target, TEXT, "=", [(None, expression.text)])
                 return target
@@ -1008,7 +1032,12 @@ class _Emitter:
         """Emits `target operator chain`, where `target` is of `kind`. A text
         assignment with `=` or `+=`, and a number assignment, take as many
         lines as the Editor needs (_text_assignment_lines,
-        number_assignment_in_steps)."""
+        number_assignment_in_steps). A text temporary given quoted texts of
+        more than 255 bytes gets room for them (_room_for)."""
+        if kind == TEXT and target.startswith(TEMPORARY_PREFIX):
+            room = _room_for(chain, self.codec)
+            if room is not None:
+                self.temporaries.page.make_room(target, room)
         if kind == TEXT and operator in ("=", "+="):
             for line in _text_assignment_lines(target, operator, chain):
                 self.emit(line)
@@ -1108,8 +1137,24 @@ class _Emitter:
             raise NxwrightError("a comparison needs two numbers or two texts", line=self.number)
         if left_kind == TEXT and expression.operator not in ("==", "!="):
             raise NxwrightError("texts compare only with == and !=", line=self.number)
-        return (self.value(expression.left, True) + expression.operator
-                + self.value(expression.right, True))
+        sides = [self.value(expression.left, True), self.value(expression.right, True)]
+        if left_kind == TEXT and self.temporaries is not None:
+            self.fit_comparison(sides)
+        return sides[0] + expression.operator + sides[1]
+
+    def fit_comparison(self, sides: list):
+        """Puts the quoted texts of a text comparison's `sides`, longest
+        first, into text temporaries with room for them, until the line the
+        Nextion Editor makes of the comparison fits LONGEST_LINE. It turns a
+        comparison into `i <left>,<right>,<number>,0`, the two sides plus 7
+        bytes (code_checks._check_comparison_lengths)."""
+        for index in sorted((0, 1), key=lambda index: -_utf8_size(sides[index])):
+            if _utf8_size(sides[0]) + _utf8_size(sides[1]) + 7 <= LONGEST_LINE:
+                return
+            if sides[index].startswith('"'):
+                target = self.temporary(TEXT)
+                self.emit_assignment(target, TEXT, "=", [(None, sides[index])])
+                sides[index] = target
 
     def short_circuit(self, operator: str, children: list) -> str:
         """Computes `child && child ...` (or ||) into a number temporary
@@ -1298,6 +1343,14 @@ class _PageState:
                                 % self.page_name, line=number)
         self.generated.append(Generated(name, kind))
         return name
+
+    def make_room(self, temporary: str, room: int):
+        """Gives the text temporary `temporary`, such as __s0.txt, room for
+        `room` bytes, when it has less. A temporary serves many statements,
+        so it keeps the most any of them needs."""
+        name = temporary.split(".")[0]
+        variable = next(variable for variable in self.generated if variable.name == name)
+        variable.room = max(variable.room, room)
 
     def check_new_name(self, name: str, number: int, what: str):
         """Raises NxwrightError when `name` cannot be given to a new `what`:
@@ -2284,12 +2337,19 @@ class _EventCompiler:
     def case_test(self, number: int, indent: str, value: str, case_value: str) -> str:
         """Returns the test of a case, `value==case_value`. A case's text
         the Editor refuses in a condition (_refused_in_condition) is put
-        into a text temporary first, on a line of its own."""
+        into a text temporary first, on lines of its own, with room for it
+        (_Emitter.emit_assignment). So is one that makes the comparison too
+        long for a line (_Emitter.fit_comparison)."""
         codec = None if self.temporaries is None else self.page.codec
-        if not _refused_in_condition(Literal(case_value, TEXT), codec):
+        too_long = (self.temporaries is not None
+                    and _utf8_size(value) + _utf8_size(case_value) + 7 > LONGEST_LINE)
+        if not too_long and not _refused_in_condition(Literal(case_value, TEXT), codec):
             return "%s==%s" % (value, case_value)
-        target = self.emitter(indent, number).temporary(TEXT)
-        self.put(number, indent + target + "=" + case_value)
+        emitter = self.emitter(indent, number)
+        target = emitter.temporary(TEXT)
+        emitter.emit_assignment(target, TEXT, "=", [(None, case_value)])
+        for line in emitter.lines:
+            self.put(number, line)
         return "%s==%s" % (value, target)
 
     def case_label(self, number: int, indent: str, label: str, comment: str):
@@ -2382,10 +2442,20 @@ class _EventCompiler:
         first. Its other numbers, prints' length and covx's length and form,
         the Editor takes as arithmetic, so they are written as such. A print
         of a text too long for one line is written as several prints of its
-        parts, which send the same bytes (_cut_text)."""
+        parts, which send the same bytes (_cut_text). A print of joined texts
+        is written as a print of each part, every part computed first, so
+        that no temporary cuts the text short."""
         arguments = self.arguments(rest, number)
         emitter = self.emitter(indent, number)
         emitter.copy_results = sum(_count_calls(argument) for argument in arguments) > 1
+        if (word == "print" and len(arguments) == 1 and isinstance(arguments[0], Binary)
+                and kind_of(arguments[0], number) == TEXT):
+            parts = [operand for _, operand in emitter.text_chain(arguments[0])]
+            for part in parts:
+                for piece in _cut_text(part, LONGEST_LINE - _utf8_size("print ")):
+                    emitter.emit("print " + piece)
+            self.put_lines(number, emitter.lines, comment)
+            return
         # prints reads its text before a comma byte by byte.
         byte_by_byte = word in TEXTS_READ_BYTE_BY_BYTE and len(arguments) > 1
         operands = [emitter.value(argument, read_byte_by_byte=byte_by_byte)
@@ -2739,7 +2809,7 @@ class _EventCompiler:
             # commands byte by byte. A literal it would read to another end
             # goes into a temporary like an expression.
             byte_by_byte = (word in TEXTS_READ_BYTE_BY_BYTE and place < len(arguments) - 1
-                            and _misread_and_fits(text, self.page.codec))
+                            and misread_byte_by_byte(text, self.page.codec))
             if place in read_places and is_one_operand(text) and not byte_by_byte:
                 continue
             try:
