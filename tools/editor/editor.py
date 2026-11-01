@@ -231,6 +231,9 @@ def main(arguments=None) -> int:
                         help="close a simulator left open in the dedicated Editor")
     commands.add_parser("close-file-dialog", parents=[holding],
                         help="cancel a file dialog left open in the dedicated Editor")
+    commands.add_parser("close-message", parents=[holding],
+                        help="close a message left open in the dedicated Editor, printing "
+                        "what it said")
     taking = commands.add_parser("hold", help="hold the dedicated Editor across this holder's "
                                  "commands, refusing anyone else's, until release or its time")
     taking.add_argument("name", help="the holder, whose commands give it with --as")
@@ -306,13 +309,16 @@ def main(arguments=None) -> int:
 
 def _run_on_dedicated_editor(options, folder: Path):
     """Runs the command `options` names, but for status, hold, and release,
-    on the dedicated Editor, started if need be, under the lock. close-simulator
-    and close-file-dialog start no Editor."""
+    on the dedicated Editor, started if need be, under the lock. close-simulator,
+    close-file-dialog, and close-message start no Editor."""
     if options.command == "close-simulator":
         print(close_simulator(folder))
         return
     if options.command == "close-file-dialog":
         print(close_file_dialog(folder))
+        return
+    if options.command == "close-message":
+        print(close_message(folder))
         return
     # Before attaching to the Editor, which a fresh one replaces. A path
     # that is no file is refused by open_project, before the Editor is
@@ -334,8 +340,9 @@ def _run_on_dedicated_editor(options, folder: Path):
 
 
 def _run_command(options, editor: "DedicatedEditor", folder: Path):
-    """Runs the command `options` names, but for status, close-simulator, and
-    close-file-dialog, on the dedicated Editor `editor`, printing what it gives."""
+    """Runs the command `options` names, but for status, close-simulator,
+    close-file-dialog, and close-message, on the dedicated Editor `editor`,
+    printing what it gives."""
     if options.command == "open":
         print("Opened %s" % open_project(editor, folder, options.project))
     elif options.command == "attributes":
@@ -2032,6 +2039,43 @@ def close_file_dialog(folder: Path) -> str:
         return "No file dialog is open."
     _cancel_file_dialog(dialogs[0])
     return "Cancelled the file dialog."
+
+
+def close_message(folder: Path) -> str:
+    """Closes the messages the dedicated Editor shows, as their close box
+    does, and says what each one said. They are its own messages over its
+    main window (_message_forms) and its other dialogs, but a file dialog,
+    which close-file-dialog cancels. A message the tool stopped on is left
+    up, and every other command then stops on it too. It starts no
+    Editor."""
+    recorded = read_recorded(folder)
+    if recorded is None or not still_running(recorded):
+        return "No dedicated Editor runs, so no message is open."
+    main = DedicatedEditor(recorded).main_window()
+    messages = [*_message_forms(main),
+                *_dialogs(main, lambda dialog: not _is_file_dialog(dialog))]
+    if not messages:
+        return "No message is open."
+    # Read before closing, as a closed window has no words left to read.
+    said = ["%r: %s" % (message.element_info.name, _words_of(message)) for message in messages]
+    for message in messages:
+        try:
+            win32gui.PostMessage(message.handle, win32con.WM_CLOSE, 0, 0)
+        except pywintypes.error:
+            continue        # closed since it was listed
+    deadline = time.monotonic() + DIALOG_WAIT
+    while (any(win32gui.IsWindow(message.handle) for message in messages)
+           and time.monotonic() < deadline):
+        watchdog.progress()
+        time.sleep(_LOOK_PAUSE)
+    open_ = [win32gui.IsWindow(message.handle) for message in messages]
+    closed = open_.count(False)
+    lines = ["- %s%s" % (words, " (still open)" if still else "")
+             for words, still in zip(said, open_)]
+    head = "Closed %d %s" % (closed, "message" if closed == 1 else "messages")
+    if any(open_):
+        head += ", and %d stayed open" % open_.count(True)
+    return head + ":\n" + "\n".join(lines)
 
 
 def status(folder: Path, name) -> str:

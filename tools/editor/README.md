@@ -85,6 +85,7 @@ python tools/editor/editor.py tft tools/editor/build/tft
 python tools/editor/editor.py status
 python tools/editor/editor.py close-simulator
 python tools/editor/editor.py close-file-dialog
+python tools/editor/editor.py close-message
 python tools/editor/editor.py hold agent-b --minutes 15
 python tools/editor/editor.py open demo.HMI --as agent-b
 python tools/editor/editor.py release agent-b
@@ -187,6 +188,16 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 ### `close-file-dialog`
 
 `close-file-dialog` cancels a file dialog left open in the dedicated Editor by an `open` that was stopped from outside, for example by closing its terminal. While a file dialog is open, every other command stops on it. If `open` fails after its file dialog appears, `open` cancels the dialog itself. The command never starts a Nextion Editor.
+
+### `close-message`
+
+`close-message` closes the messages the dedicated Editor shows, and prints what each one said. When the Nextion Editor shows a message, such as "First character of a Name can not be number" as it opens a project, a command stops on it and leaves it open, and every later command stops on it too.
+
+- It closes the Nextion Editor's own messages, and its other dialogs except a file dialog, which `close-file-dialog` cancels.
+- It closes each one as its close box does. It does not press a button such as OK or Yes.
+- If a message is still open after 15 seconds, the command says so.
+- Whether it closes a window over the simulator, such as "File Header Data Error", has not been tried.
+- The command never starts a Nextion Editor.
 
 ## Every attribute of every type
 
