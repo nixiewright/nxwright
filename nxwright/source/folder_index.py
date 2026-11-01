@@ -132,6 +132,18 @@ def line_tokens(line: str) -> list:
             for kind, text, start, end in token_spans(code)]
 
 
+def _names_page(lines: list, page: str) -> bool:
+    """Whether a line of `lines` names the page `page` (FolderIndex.pages_naming)."""
+    for line in lines:
+        tokens = line_tokens(line)
+        for place, (kind, text, _, _) in enumerate(tokens):
+            if (kind == "name" and text == page and place + 1 < len(tokens)
+                    and tokens[place + 1][1] == "."
+                    and (place == 0 or tokens[place - 1][1] != ".")):
+                return True
+    return False
+
+
 def find_source_folder(path: Path, read):
     """Returns the source folder holding the file `path`: the nearest folder
     above it holding an app.toml, which `read(path)` returns the text of.
@@ -245,6 +257,17 @@ class FolderIndex:
     def pages_using(self, path: str) -> list:
         """Returns the pages whose code includes the .nx file `path`, or is it."""
         return [page for page, files in self.page_files.items() if path in files]
+
+    def pages_naming(self, page: str) -> list:
+        """Returns the pages whose code names the page `page`, as
+        `second.t0.txt` names `second`: a name token `page` followed by a
+        dot. Comments and quoted texts do not count, nor does a name after a
+        dot, as in `x.second.y`, which belongs to something else."""
+        naming = []
+        for found, files in self.page_files.items():
+            if any(_names_page(self.lines(path) or [], page) for path in files):
+                naming.append(found)
+        return naming
 
     def visible_files(self, path: str) -> list:
         """Returns the .nx files whose constants, functions, and `int`

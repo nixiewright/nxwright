@@ -361,6 +361,17 @@ class FolderIndexTest(FolderTestCase):
         self.assertEqual(index.program_files, ["program.nx", "units.nx"])
         self.assertEqual(index.pages_using("pages/lib/shared.nx"), ["home", "settings"])
 
+    def test_pages_naming_a_page(self):
+        # A name in a comment, in quotes, or after a dot is not the page's.
+        write_folder(self.root, {"pages/home.nx": (
+            'include "lib/shared.nx"\n\non save.up:\n  // settings.t0\n'
+            '  title.txt = "settings.t0"\n  title.txt = title.settings.txt\n')})
+        self.assertEqual(self.index().pages_naming("settings"), ["settings"])
+        # A name in an included file counts for each page including it.
+        write_folder(self.root, {"pages/lib/shared.nx": FOLDER["pages/lib/shared.nx"]
+                                 + '\nfunction peek():\n  settings.t0.txt = "a"\n'})
+        self.assertEqual(self.index().pages_naming("settings"), ["home", "settings"])
+
     def test_what_a_file_defines(self):
         index = self.index()
         home = index.nx_file("pages/home.nx")
@@ -1031,6 +1042,19 @@ class LiveCheckTest(CheckFolderTestCase):
                             "params": {"changes": [{"uri": self.uri("pages/page0.nx"),
                                                     "type": 2}]}})
         self.assertEqual(list(self.published()), [self.uri("pages/page0.nx")])
+
+    def test_a_page_naming_another_is_checked_with_its_file(self):
+        # page0's code names a component the second page lacks. Once the
+        # second page's file gains it, page0's error goes, though only that
+        # file changed.
+        self.change("pages/page0.nx", 'on page0.load:\n  second.extra.txt = "a"\n',
+                    "textDocument/didOpen")
+        [(_, severity, _)] = self.published()[self.uri("pages/page0.nx")]
+        self.assertEqual(severity, 1)
+        self.change("pages/second.page.toml", self.text("pages/second.page.toml")
+                    + '\n[[component]]\nname = "extra"\ntype = "text"\nx = 0\ny = 0\n'
+                      'w = 100\nh = 30\n', "textDocument/didOpen")
+        self.assertEqual(self.published().get(self.uri("pages/page0.nx")), [])
 
     def test_a_failing_check_does_not_end_the_server(self):
         self.change("pages/page0.nx", "", "textDocument/didOpen")
