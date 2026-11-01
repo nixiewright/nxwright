@@ -26,10 +26,10 @@ NAME_LIMIT = 14
 # The most bytes the Editor takes in a line of code, by series, in the
 # project's encoding, counted without the spaces its compile drops
 # (code_lines.compact). A longer line it refuses as it compiles: "The
-# instructions are too long". An `int` declaration and the head of an `if`
-# or a `while` have no limit. Each comparison in a condition does, as the
-# Editor compiles it into a line of its own. A `for` holds its start and its
-# step to it, each as a line.
+# instructions are too long". An `int` declaration has no limit, and
+# neither does the head of an `if` or a `while` as a whole. But each
+# comparison in a condition has one, because the Editor compiles it into a
+# line of its own. A `for`'s start and step are limited like lines too.
 LONGEST_LINES = {"T": 767, "K": 767, "F": 767, "P": 4095, "E": 4095}
 # The least width and height the Editor takes for a component: narrower or
 # lower, it says "Width can not be less than 2" as it opens the project, and

@@ -83,8 +83,8 @@ _WORD_LIST = "ListMessage"
 # command or a system variable the screen's series lacks; its refusal of a
 # video made for another rotation than the project's; its refusals of a
 # sound at 22050 samples a second of other than 16 bits, or of more than two
-# channels; and three more of its own, after refusing a comparison in a
-# condition as a line too long.
+# channels; and three more of its own, which follow its refusal of a
+# comparison that is too long.
 _EDITOR_STOPPED = ("Error:Destination array was not long enough",
                    "The direction of the file is inconsistent with the current engineering "
                    "display direction",

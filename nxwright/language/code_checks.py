@@ -43,14 +43,14 @@ from nxwright.project.screen_arithmetic import int32
 from nxwright.project.screen_models import ScreenModel
 
 _BLOCK_HEAD = re.compile(r"(if|while|for)\s*\(")
-# What joins a condition's comparisons, and what compares a comparison's two
-# sides.
+# The operators that join the comparisons of a condition, and the operators
+# that compare two values.
 _JOIN = re.compile(r"&&|\|\|")
 _COMPARISON_OPERATOR = re.compile(r"==|!=|<=|>=|<|>")
-# The bytes the Editor's line of a comparison, `i <left>,<right>,1,0`, has
-# beside its two sides; and the characters of a long comparison a message
-# shows.
+# The Nextion Editor turns each comparison into a line `i <left>,<right>,1,0`.
+# This is how many bytes that line adds to the two sides.
 _COMPARISON_LINE_EXTRA = len("i ,,1,0")
+# A message shows at most this many characters of a long comparison.
 _SHOWN_COMPARISON = 40
 # A line assigning to an object's attribute, in Editor syntax: the object,
 # or a page and its object, then the attribute, then the assignment.
@@ -308,14 +308,14 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
 
 def _check_length(code: str, codec, longest: int, number: int):
     """Raises NxwrightError for a compacted line longer than `longest`
-    bytes in the project's encoding, `codec`. An `if`'s, an `else if`'s, or
-    a `while`'s head is not counted as a line, but each comparison in its
-    condition is (_check_comparison_lengths). In a `for`'s head, the start
-    and the step are each counted as a line, and so is each comparison in
-    the condition. The Nextion Editor refused a longer line,
-    start, or step ("The instructions are too long"). It compiled heads of
-    more than 1000 characters. A character the encoding cannot store is
-    left to the build, which refuses it."""
+    bytes in the project's encoding, `codec`. The head of an `if`, an
+    `else if`, or a `while` is not limited as a whole, but each comparison
+    in it is (_check_comparison_lengths). In a `for`'s head, the start, the
+    step, and each comparison in the condition are limited like lines. The
+    Nextion Editor refused longer ones ("The instructions are too long"),
+    but it compiled heads of more than 1000 characters. If the encoding
+    cannot store a character, the line is left to the build, which refuses
+    it."""
     head, otherwise = _BLOCK_HEAD.match(code), ELSE.match(code)
     if otherwise and otherwise[2]:
         opening = code.find("(", otherwise.end())
@@ -341,13 +341,13 @@ def _check_length(code: str, codec, longest: int, number: int):
 
 
 def _check_comparison_lengths(condition: str, codec, longest: int, number: int):
-    """Raises NxwrightError for a comparison in the compacted `condition`
-    whose line, as the Nextion Editor compiles it, is longer than `longest`
-    bytes in `codec`'s encoding. The Editor compiles each comparison into a
-    line of its own, `i <left>,<right>,<number>,0`. That is the two sides
-    and 7 bytes more. On a longer line, it said "The instructions are too
-    long", then "Index was outside the bounds of the array", and wrote no
-    file."""
+    """Raises NxwrightError when a comparison in the compacted `condition`
+    is too long once the Nextion Editor compiles it. The Nextion Editor
+    turns each comparison into a line of its own, `i <left>,<right>,<number>,0`,
+    which is the two sides plus 7 bytes. When that line was longer than
+    `longest` bytes in `codec`'s encoding, the Nextion Editor said "The
+    instructions are too long", then "Index was outside the bounds of the
+    array", and wrote no file."""
     for comparison in _comparisons(condition):
         sides = _comparison_sides(comparison)
         if sides is None:
@@ -359,7 +359,8 @@ def _check_comparison_lengths(condition: str, codec, longest: int, number: int):
         if size > longest:
             shown = comparison if len(comparison) <= _SHOWN_COMPARISON else \
                 comparison[:_SHOWN_COMPARISON] + "…"
-            # Only a quoted text makes a side this long.
+            # Only a long quoted text can make a side this long, so the
+            # message suggests a shorter one.
             raise NxwrightError("the comparison %s is too long. The Nextion Editor turns it into "
                                 "a line of %d bytes in %s, and on this series it takes at most "
                                 "%d (\"The instructions are too long\"). Compare a shorter text."
@@ -367,12 +368,12 @@ def _check_comparison_lengths(condition: str, codec, longest: int, number: int):
 
 
 def _comparisons(condition: str) -> list:
-    """Returns the comparisons of a condition, apart at the `&&` and `||`
-    outside its texts: `t0.txt=="a&&b"&&sys0==1` gives `t0.txt=="a&&b"` and
-    `sys0==1`."""
+    """Returns the comparisons of a condition, split at each `&&` and `||`
+    outside its texts. For example, `t0.txt=="a&&b"&&sys0==1` gives
+    `t0.txt=="a&&b"` and `sys0==1`."""
     comparisons = [""]
-    # STRING.split gives the parts outside texts at even places, and the
-    # texts between them.
+    # STRING.split puts the parts outside texts at even places, and the
+    # texts at odd places.
     for index, piece in enumerate(STRING.split(condition)):
         if index % 2:
             comparisons[-1] += piece
@@ -384,8 +385,8 @@ def _comparisons(condition: str) -> list:
 
 
 def _comparison_sides(comparison: str):
-    """Returns the two sides of `comparison`, apart at its first comparison
-    operator outside its texts, or None when it has none."""
+    """Returns the two sides of `comparison`, split at its first comparison
+    operator outside its texts. Returns None if it has no such operator."""
     position = 0
     for index, piece in enumerate(STRING.split(comparison)):
         operator = _COMPARISON_OPERATOR.search(piece) if index % 2 == 0 else None

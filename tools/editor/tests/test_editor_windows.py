@@ -449,9 +449,9 @@ class CompileWatchTest(unittest.TestCase):
         self.assertTrue(watch.look(refused, False, 1))
 
     def test_a_line_too_long(self):
-        # A basic screen's compile refusing an if whose comparison is one
-        # internal line of 768 bytes, as the Editor 1.68.2 showed it: the
-        # refusal, then the Editor's own error, and no last line.
+        # What the Editor 1.68.2 showed when a Basic screen's compile refused
+        # an if whose comparison makes a line of 768 bytes. An error of the
+        # Editor's own follows the refusal, and there is no last line.
         refused = ("Page:page0 Memory Occupied:20+88=108\r\n"
                    "Error:The instructions are too long:i t0.txt,\"aaa\",1,0"
                    "( Double click to jump to code)\r\n"
@@ -461,8 +461,8 @@ class CompileWatchTest(unittest.TestCase):
         self.assertTrue(watch.look(refused, False, 1))
 
     def test_a_line_too_long_before_another_comparison(self):
-        # The same refusal, of the first comparison of an ||, as the Editor
-        # 1.68.2 showed it: another error of its own follows.
+        # The same refusal, for the first comparison of an ||. The Editor
+        # 1.68.2 then gave a different error of its own.
         refused = ("Error:The instructions are too long:i t0.txt,\"aaa\",6,0"
                    "( Double click to jump to code)\r\n"
                    "Error:Arithmetic operation resulted in an overflow.")
@@ -471,8 +471,8 @@ class CompileWatchTest(unittest.TestCase):
         self.assertTrue(watch.look(refused, False, 1))
 
     def test_a_line_too_long_in_a_for(self):
-        # The same refusal, of a for's condition, as the Editor 1.68.2
-        # showed it: a third error of its own follows.
+        # The same refusal, for a for's condition. The Editor 1.68.2 then
+        # gave a third error of its own.
         refused = ("Error:The instructions are too long:i t0.txt,\"aaa\",1,0"
                    "( Double click to jump to code)\r\n"
                    "Error:Index was out of range. Must be non-negative and less than the size "

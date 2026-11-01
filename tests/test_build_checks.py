@@ -2190,9 +2190,9 @@ class LongLineTest(FirstDownTestCase):
 
     def test_heads_and_declarations(self):
         # The Editor compiled heads of an if, an else if, and a while of
-        # more than 1000 characters, and an int declaration of 1500. A for
-        # holds its start and its step to the limit as lines, but not its
-        # condition (LongComparisonTest).
+        # more than 1000 characters, and an int declaration of 1500. A for's
+        # start and step are limited like lines. Its condition is limited
+        # comparison by comparison (LongComparisonTest).
         self.use_series("NX4832T035")
         comparisons = "&&".join(["sys0==1"] * 120)
         self.write_code("if(%s)" % comparisons, "{", "}else if(%s)" % comparisons, "{", "}",
@@ -2230,18 +2230,18 @@ class LongLineTest(FirstDownTestCase):
 
 
 def _text_comparison(size: int, text: str = "a", width: int = 1) -> str:
-    """Returns `t0.txt=="..."`, whose line as the Editor compiles it,
-    `i t0.txt,"...",1,0`, is `size` bytes, its text of `text`, each `width`
-    bytes in the folder's encoding."""
+    """Returns `t0.txt=="..."`, whose compiled line `i t0.txt,"...",1,0` has
+    `size` bytes. The text repeats `text`, which takes `width` bytes in the
+    folder's encoding."""
     return 't0.txt=="%s"' % (text * ((size - len('i t0.txt,"",1,0')) // width))
 
 
 class LongComparisonTest(FirstDownTestCase):
-    """A comparison in a condition, which the Editor 1.68.2 compiled into a
-    line of its own, `i <left>,<right>,<number>,0`, held to the series' limit
-    (editor_limits.LONGEST_LINES). On a longer one, it said "The instructions
-    are too long", then "Index was outside the bounds of the array", and
-    wrote no file."""
+    """A comparison in a condition. The Editor 1.68.2 compiled each one into
+    a line of its own, `i <left>,<right>,<number>,0`, with the same limit as
+    any line on the series (editor_limits.LONGEST_LINES). When the line was
+    longer, the Editor said "The instructions are too long", then "Index
+    was outside the bounds of the array", and wrote no file."""
 
     def use_series(self, model: str, **app_values):
         self.use_screen(model, **app_values)
@@ -2272,7 +2272,7 @@ class LongComparisonTest(FirstDownTestCase):
                 self.assert_comparison_refused('t0.txt=="' + "a" * 31, longest + 1, number)
 
     def test_in_each_condition(self):
-        # An if's, an else if's, and a while's head, and a for's middle part.
+        # The head of an if, an else if, and a while, and a for's condition.
         self.use_series("NX4832T035")
         long = _text_comparison(768)
         for number, lines in enumerate((
@@ -2296,7 +2296,7 @@ class LongComparisonTest(FirstDownTestCase):
         self.assert_comparison_refused('"' + "a" * 39, 768, 0)
 
     def test_joins_and_comparisons_inside_a_text(self):
-        # A text holding && or == is one side of one comparison.
+        # A text that contains && or == stays one side of one comparison.
         self.use_series("NX4832T035")
         text = ("a&&b==c<" * 95)[:753]
         self.write_code('if(t0.txt=="%s")' % text, "{", "}")
@@ -2312,8 +2312,9 @@ class LongComparisonTest(FirstDownTestCase):
         self.assert_comparison_refused('t0.txt=="' + "中" * 31, 769, 0, encoding="gb2312")
 
     def test_in_nxlang(self):
-        # A text temporary holds 255 characters, too few for such a text, so
-        # nxlang compares the text as written, and the build refuses it.
+        # A text temporary can contain only 255 characters, too few for this
+        # text. So nxlang compares the text as written, and the build
+        # refuses it.
         switch_to_nxlang(self.source)
         self.use_series("NX4832T035")
         self.write_code('if (t0.txt == "%s") {' % ("a" * 753), "}")
