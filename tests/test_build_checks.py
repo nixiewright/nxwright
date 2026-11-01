@@ -2251,10 +2251,10 @@ class LongComparisonTest(FirstDownTestCase):
                                   where: str = r"first\.nx line 2",
                                   encoding: str = "iso-8859-1"):
         with self.assertRaisesRegex(
-                NxwrightError, r"%s: the comparison %s… compiles to a line of %d bytes in %s: "
-                               r"its two sides, without the spaces the Nextion Editor drops, and "
-                               r"7 bytes more\. On this series the Nextion Editor takes at most "
-                               r"%d \(\"The instructions are too long\"\)"
+                NxwrightError, r"%s: the comparison %s… is too long\. The Nextion Editor turns "
+                               r"it into a line of %d bytes in %s, and on this series it takes "
+                               r"at most %d \(\"The instructions are too long\"\)\. Compare a "
+                               r"shorter text\.$"
                                % (where, re.escape(start), size, encoding,
                                   LONGEST_LINES[self.series])):
             export_dump(self.source, self.folder / ("refused%d" % number))

@@ -359,12 +359,11 @@ def _check_comparison_lengths(condition: str, codec, longest: int, number: int):
         if size > longest:
             shown = comparison if len(comparison) <= _SHOWN_COMPARISON else \
                 comparison[:_SHOWN_COMPARISON] + "…"
-            raise NxwrightError("the comparison %s compiles to a line of %d bytes in %s: its two "
-                                "sides, without the spaces the Nextion Editor drops, and %d bytes "
-                                "more. On this series the Nextion Editor takes at most %d (\"The "
-                                "instructions are too long\")"
-                                % (shown, size, codec.name, _COMPARISON_LINE_EXTRA, longest),
-                                line=number)
+            # Only a quoted text makes a side this long.
+            raise NxwrightError("the comparison %s is too long. The Nextion Editor turns it into "
+                                "a line of %d bytes in %s, and on this series it takes at most "
+                                "%d (\"The instructions are too long\"). Compare a shorter text."
+                                % (shown, size, codec.name, longest), line=number)
 
 
 def _comparisons(condition: str) -> list:
