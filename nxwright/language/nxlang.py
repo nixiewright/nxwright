@@ -1035,11 +1035,13 @@ class _Emitter:
         assignment with `=` or `+=`, and a number assignment, take as many
         lines as the Editor needs (_text_assignment_lines,
         number_assignment_in_steps). A text temporary or a shared text
-        variable, which holds a local, a parameter, or a result, given quoted
+        variable, which keeps a local, a parameter, or a result, given quoted
         texts of more than 255 bytes gets room for them (_room_for)."""
         if (kind == TEXT and self.temporaries is not None
                 and target.startswith((TEMPORARY_PREFIX, SHARED_PREFIX))):
-            room = _room_for(chain, self.codec, self.temporaries.page.text_rooms())
+            # += keeps the text the variable has, which counts at its room.
+            parts = ([(None, target)] if operator == "+=" else []) + chain
+            room = _room_for(parts, self.codec, self.temporaries.page.text_rooms())
             if room is not None:
                 self.temporaries.page.make_room(target, room)
         if kind == TEXT and operator in ("=", "+="):

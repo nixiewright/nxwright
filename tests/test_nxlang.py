@@ -1089,6 +1089,15 @@ class LongTextLocalTest(unittest.TestCase):
                 'on p.down:\n  show("%s")\n' % self.LONG)
         self.assertEqual(sorted(self.rooms(page).values()), [255, 400])
 
+    def test_appending_to_a_variable_that_has_room(self):
+        # += counts the text the variable keeps already, at its room.
+        page = 'on p.down:\n  var s = "%s"\n  s += "x"\n  t0.txt = s\n' % ("a" * 300)
+        self.assertEqual(self.rooms(page), {"__v0": 301})
+        # Short texts added in steps give no room: each is within 255, and
+        # so is the variable's room, though together they pass it.
+        page = 'on p.down:\n  var s = "%s"\n  s += "%s"\n  t0.txt = s\n' % ("a" * 200, "b" * 200)
+        self.assertEqual(self.rooms(page), {"__v0": 255})
+
     def test_255_bytes_keep_255(self):
         page = 'on p.down:\n  var s = "%s"\n  t0.txt = s\n' % ("a" * 255)
         self.assertEqual(self.rooms(page), {"__v0": 255})
