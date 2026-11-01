@@ -383,12 +383,14 @@ class CompiledPage:
 @dataclass
 class _CutCandidate:
     """A text written into a generated variable that holds a component's
-    text, recorded as it is compiled and judged once the page's rooms are
-    final (_cut_texts): the file and line, the variable, its quoted texts'
-    bytes, the components' texts with their most bytes, and the generated
-    variables among its parts."""
+    text or another generated variable, recorded as it is compiled and
+    judged once the page's rooms are final (_cut_texts): the file and line,
+    the event or function compiled (_owner_label), the variable, its quoted
+    texts' bytes, the components' texts with their most bytes, and the
+    generated variables among its parts."""
     file: str
     line: int
+    owner: str
     target: str
     quoted: int
     components: list    # [(text as code names it, such as big.txt, its most bytes)]
@@ -1067,14 +1069,14 @@ class _Emitter:
             # variable keeps already may be cut by += whatever its parts.
             components = [(operand, page.text_limits[operand]) for _, operand in chain
                           if operand in page.text_limits]
-            if components:
+            generated = [operand for _, operand in chain
+                         if operand.startswith((TEMPORARY_PREFIX, SHARED_PREFIX))]
+            if components or generated:
                 page.cut_candidates.append(_CutCandidate(
-                    page.current_file, self.number, target,
+                    page.current_file, self.number, page.current_owner, target,
                     sum(_stored_size(operand, self.codec) for _, operand in chain
                         if operand.startswith('"')),
-                    components,
-                    [operand for _, operand in chain
-                     if operand.startswith((TEMPORARY_PREFIX, SHARED_PREFIX))]))
+                    components, generated))
         if kind == TEXT and operator in ("=", "+="):
             for line in _text_assignment_lines(target, operator, chain):
                 self.emit(line)
@@ -1292,7 +1294,9 @@ class _PageState:
         # {text as code names it, such as big.txt or page1.big.txt: its most
         # bytes}, and the texts that may be cut (compile_page, _cut_texts)
         self.text_limits, self.cut_candidates = {}, []
-        self.current_file = ""  # the file of the event or function being compiled
+        # The file and the label (_owner_label) of the event or function
+        # being compiled.
+        self.current_file, self.current_owner = "", ""
         self.component_names = set(component_names)
         # {page: {name: type}}, a page's None while unknown (compile_page)
         self.object_types = object_types or {}
@@ -1614,6 +1618,7 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
             ends[owner] = max((ends[runs] for runs in graph[owner]), default=0)
             continue
         page.start_owner(max((ends[runs] for runs in graph[owner]), default=0))
+        page.current_owner = _owner_label(owner)
         if isinstance(owner, tuple):
             file, lines = events[owner]
             page.current_file = file
@@ -1654,26 +1659,40 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
                                  + compiled.events.get(load, []))
     compiled.generated = page.generated
     compiled.globals = page.globals
-    compiled.cut_texts = _cut_texts(page)
+    compiled.cut_texts = _cut_texts(page, compiled.local_names)
     return compiled
 
 
-def _cut_texts(page: "_PageState") -> list:
+def _cut_texts(page: "_PageState", local_names: dict) -> list:
     """Returns (file, line, message) of each text recorded as it was compiled
     (_CutCandidate) whose variable's final room is less than its parts can
     take: its quoted texts' bytes, each component's text at its most bytes,
     and each generated variable at its room. A variable keeps the most any
-    statement gives it, so this is known only once the page is compiled."""
+    statement gives it, so this is known only once the page is compiled.
+
+    A text is judged when a component's text is among its parts, or a
+    generated variable of more than TEXT_TEMPORARY_SIZE. Texts joined only
+    from shorter variables are not, or almost every join would be warned
+    about. `local_names`, CompiledPage's, names a local or a parameter in
+    the message."""
     rooms = page.text_rooms()
     found = []
     for candidate in page.cut_candidates:
         room = rooms[candidate.target]
+        long = [name for name in candidate.generated
+                if rooms.get(name, TEXT_TEMPORARY_SIZE) > TEXT_TEMPORARY_SIZE]
+        if not candidate.components and not long:
+            continue
         needed = (candidate.quoted + sum(most for _, most in candidate.components)
                   + sum(rooms.get(name, TEXT_TEMPORARY_SIZE) for name in candidate.generated))
         if needed <= room:
             continue
-        keeps = listed_in_words(["%s keeps up to %d" % component
-                                 for component in candidate.components])
+        names = local_names.get(candidate.owner, {})
+        keeps = listed_in_words(
+            ["%s keeps up to %d" % component for component in candidate.components]
+            + ["%s keeps up to %d" % (names[name], rooms[name]) if name in names
+               and names[name] != "(result)" else "a variable nxlang adds keeps up to %d"
+               % rooms[name] for name in long])
         found.append((candidate.file, candidate.line,
                       "this text can take %d bytes, as %s, but nxlang keeps it in a variable of "
                       "%d bytes here, so a longer text is cut. To keep it whole, put it in a "

@@ -630,6 +630,24 @@ class TextCutTest(FolderTestCase):
             'on page0.load:\n  var s = "a"\n  s += mid1.txt\n  s += big.txt\n'
             '  title.txt = s\n')], [4])
 
+    def test_a_copy_of_a_long_parameter(self):
+        # The function is compiled before its caller gives words its room.
+        self.assertEqual(self.cuts(
+            'function show(words: text):\n  var copy = words\n  title.txt = copy\n\n'
+            'on page0.load:\n  show("%s")\n' % ("a" * 400)), [Finding(
+            "pages/page0.nx", 2, WARNING,
+            "this text can take 400 bytes, as words keeps up to 400, but nxlang keeps it "
+            "in a variable of 255 bytes here, so a longer text is cut. To keep it whole, put it "
+            "in a variable component whose txt_maxl is at least 400", "text-cut")])
+
+    def test_none_for_a_join_of_two_short_locals(self):
+        self.assertEqual(self.cuts('on page0.load:\n  var a = "x"\n  var b = "y"\n'
+                                   '  var c = a + b\n  title.txt = c\n'), [])
+
+    def test_none_for_a_long_local_copied_in_the_same_event(self):
+        self.assertEqual(self.cuts('on page0.load:\n  var s = "%s"\n  var t = s\n'
+                                   '  title.txt = t\n' % ("a" * 400)), [])
+
     def test_none_in_a_function_the_page_never_calls(self):
         self.assertEqual(self.cuts("function unused():\n  var s = big.txt\n  title.txt = s\n\n"
                                    "on page0.load:\n  sys0 = 1\n"), [])
