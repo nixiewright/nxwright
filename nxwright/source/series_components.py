@@ -103,6 +103,6 @@ def _past_highest(page_object, type_name: str, highest: dict, model: str):
             continue
         value = int.from_bytes(stored, "little")
         if value > most:
-            return ("its %s of %d is refused on the %s, as the Nextion Editor's compile takes up "
-                    "to %d there (\"Out of range\")" % (attribute, value, model, most))
+            return ("its %s of %d is refused on the %s, as the Nextion Editor's compile takes at "
+                    "most %d on that screen (\"Out of range\")" % (attribute, value, model, most))
     return None

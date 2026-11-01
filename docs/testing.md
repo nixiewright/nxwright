@@ -60,7 +60,7 @@ Two options are for code editors:
 A run starts from:
 
 - the `values` you give;
-- the `int` variables of `program.nx`, each at the value it declares, as the build writes it, or 0;
+- the `int` variables of `program.nx`, each at the starting value the build writes for it, or 0;
 - the hidden variables that the nxlang compiler adds, at 0 or `""`;
 - `dp`, the current page's number.
 

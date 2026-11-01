@@ -414,16 +414,18 @@ def sound_file_problem(wav: bytes):
     return None
 
 
-def sound_form_problem(wav: bytes):
-    """Returns why a screen cannot play the sound whose file is `wav`, and
-    what to change in the file, or None. A screen plays sounds of 22050
-    samples a second, 16 bits a sample, mono or stereo. As it compiles, the
-    Nextion Editor converts a sound of any other rate to that form with
-    ffmpeg, whatever its bits and channels. It does not convert a sound of
-    22050 samples a second. It refuses one whose samples are not 16-bit,
-    as its format chunk gives them, whatever their format, and one of more
-    than two channels. A file that is not a WAV file has no such problem
-    to report."""
+def sound_form_refusal(wav: bytes):
+    """Returns (why, fix) when a screen cannot play the sound whose file is
+    `wav`, or None. `why` says what is wrong with the sound, and `fix` says
+    what to change in the file.
+
+    A screen plays only 16-bit sounds of 22050 samples a second, mono or
+    stereo. As it compiles, the Nextion Editor converts a sound of any
+    other rate to that form with ffmpeg, whatever its bits and channels. It
+    does not convert a sound of 22050 samples a second. It refuses one
+    that is not 16-bit, and one with more than two channels. The bits are
+    read from the format chunk, whatever the format of the samples. A file
+    that is not a WAV file has no such problem to report."""
     try:
         form, _ = _wav_format_and_samples(wav)
     except NxwrightError:
@@ -433,15 +435,24 @@ def sound_form_problem(wav: bytes):
         return None
     if bits != 16:
         return ('has %d bits a sample at %d samples a second ("Data bits exceed the valid '
-                'range (only 16 bits are supported)"). A screen plays only 16-bit sounds, and '
-                'the Nextion Editor converts only a sound of another rate. Make its samples '
-                '16-bit, or give it another rate' % (bits, rate))
+                'range (only 16 bits are supported)"). A screen plays only 16-bit sounds. The '
+                'Nextion Editor converts a sound of another rate, but not one at this rate'
+                % (bits, rate),
+                "Make its samples 16-bit, or give it another rate")
     if channels not in (1, 2):
         return ('has %d channels at %d samples a second ("Vocal Track Number Out of '
-                'Effective Range (1/2)"). A screen plays only mono and stereo sounds, and the '
-                'Nextion Editor converts only a sound of another rate. Make it mono or stereo, '
-                'or give it another rate' % (channels, rate))
+                'Effective Range (1/2)"). A screen plays only mono and stereo sounds. The '
+                'Nextion Editor converts a sound of another rate, but not one at this rate'
+                % (channels, rate),
+                "Make it mono or stereo, or give it another rate")
     return None
+
+
+def sound_form_problem(wav: bytes):
+    """Returns why a screen cannot play the sound whose file is `wav`,
+    followed by what to change in the file; or None (sound_form_refusal)."""
+    refusal = sound_form_refusal(wav)
+    return None if refusal is None else "%s. %s" % refusal
 
 
 def screen_crc(data: bytes) -> int:

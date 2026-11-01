@@ -54,7 +54,7 @@ The build names the first component past the limit. The limits are the same on e
 
 ### What a series refuses
 
-Each series of screens lacks some types, some choices, and some values, which the Nextion Editor's compile refuses ("Unsupported component was found for this series device", and "Out of range"). The build names the component.
+Each series of screens lacks some component types and choices, and some series take a smaller range of values for some attributes. The Nextion Editor refuses to compile a component that uses one of these ("Unsupported component was found for this series device", and "Out of range"). The build's error gives the component's name.
 
 Types:
 
@@ -71,7 +71,7 @@ Choices:
 
 Values:
 
-- On the P and E series, a slider's `ch` past 100, with a colour behind its track (`sta` 1). The T series takes up to 255.
+- On the P and E series, a slider's `ch` over 100, when the slider has a colour behind its track (`sta` 1). The T series takes up to 255.
 
 The full lists are in `nxwright/project/memory_costs.toml` (`refused` and `refused_values`) and in `nxwright/source/series_components.py` (`CHOICES_REFUSED_BY_SERIES` and `HIGHEST_BY_SERIES`). A value past an attribute's range, such as a QR code's `txt_maxl` of 193 on the Enhanced series, is left to the Nextion Editor, since the range itself is not known.
 
@@ -152,7 +152,7 @@ In strict Nextion syntax, the build refuses a line the Nextion Editor cannot rea
 - A value that is not operands joined by operators, such as `n0.val=2+`, `n0.val=+2`, or `n0.val=(1+2)` ("Invalid Variables"). After an operator, a minus can start a number, as in `n0.val=2*-16`, but not a name: `n0.val=2*-n1.val` is refused.
 - An assignment with no value: `n0.val=` ("Invalid command").
 - Where a command takes a number ([Texts and numbers](#texts-and-numbers)), an operand the Nextion Editor does not read, as in `cls 5a`, `cls 1_000`, `cls RED+*1`, or `cls -n0.val` ("Invalid Variables").
-  - The build refuses these in nxlang too, with one exception. In a page's code, nxlang computes an operand it can read, such as a minus before a name, into a temporary beforehand. So `cls -n0.val` builds ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
+  - The build refuses these in nxlang too, with one exception. nxlang reads some operands that the Nextion Editor does not, such as a minus before a name. In a page's code, nxlang computes such an operand into a temporary first, so `cls -n0.val` builds ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 - An `if`, `else if`, `while`, or `for` whose condition does not end with `)`.
 - A `for` whose head contains a text with a semicolon, in any of its parts, such as `for(n0.val=0;t0.txt!="a;b";n0.val++)` ("SYNTAX ERROR:for"). A `while` or an `if` takes such a text. nxlang writes such a `for` as its start and a `while` loop instead ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 
@@ -192,7 +192,7 @@ The text of `xstr`, its last argument, is one operand too: a text, a `txt`, a nu
   - A text minus a number removes characters, and compiles.
   - A condition is not an assignment: `if(t0.txt=="a")` compiles.
 - A text or a `txt` where a command takes a number, as in `cls t0.txt` or `cls "1"` ("Invalid variable operation").
-  - The commands take a number in `cls`'s colour, in each argument of `add`, `addt`, and `cle`, in `prints`' length, in `newfile`'s size, in `rdfile`'s second argument, and in `pa_txt`'s third and fourth.
+  - These arguments take a number: the colour of `cls`, every argument of `add`, `addt`, and `cle`, the length of `prints`, the size of `newfile`, the second argument of `rdfile`, and the third and fourth arguments of `pa_txt`.
 
 nxlang refuses a text put into a number itself, and converts a number put into a text.
 
@@ -252,11 +252,11 @@ In either language, the build refuses a line of code longer than the Nextion Edi
 - 767 bytes on the Basic (T), Enhanced (K), and Discovery (F) series;
 - 4095 bytes on the Intelligent (P) and Edge (E) series.
 
-This applies in a page's code, in `program.nx`, and in macros.
+The limit applies in a page's code, in `program.nx`, and in macros.
 
 - The bytes are counted in the folder's encoding. In gb2312, `t0.txt="中中…中"` with 380 中 is 769 bytes, too long on the Basic series.
 - Spaces the build removes, such as those around `=`, are not counted. Spaces inside a quoted text are.
-- An `int` declaration and the head of an `if` or a `while` are not counted. Of a `for`'s head, its start and its step are each counted as a line, such as `sys0=0` and `sys0++` in `for(sys0=0;sys0<9;sys0++)`. On a longer step, the Nextion Editor does not refuse the line, but its compile does not end.
+- The build does not limit an `int` declaration, or the head of an `if` or a `while`. In a `for`'s head, the start and the step each count as a line of their own, such as `sys0=0` and `sys0++` in `for(sys0=0;sys0<9;sys0++)`. When the step is longer than the limit, the Nextion Editor does not refuse the line, but its compile never ends.
 
 nxlang writes a long text assignment in several lines, so the build does not refuse it ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 
@@ -289,20 +289,20 @@ Labels are told apart by letter case: `goto Up` does not find `up:`.
 
 ### Names of `program.nx`'s `int` variables
 
-In either language, the build refuses an `int` of `program.nx` whose name is already taken:
+In either language, the build refuses an `int` variable of `program.nx` whose name is already used by:
 
-- a command's, such as `int sets=0`, even one your screen's series lacks ("Conflict with instructions name");
-- a system variable's, such as `int dim=0` ("Illegal name");
-- a page's, such as `int page0=0` ("Conflict with page name");
-- a component's on any page, such as `int t0=0` ("Conflict with Component name"). So a component cannot be named `sys0`, `sys1`, or `sys2` while `program.nx` declares them, as a new project does;
-- a colour's, such as `int RED=1` ("Illegal name");
-- another `int`'s, on the same line or another, such as `int a=1,a=2` ("Repeated definition global variable name").
+- a command, such as `int sets=0`, even one your screen's series lacks ("Conflict with instructions name");
+- a system variable, such as `int dim=0` ("Illegal name");
+- a page, such as `int page0=0` ("Conflict with page name");
+- a component on any page, such as `int t0=0` ("Conflict with Component name"). So a component cannot be named `sys0`, `sys1`, or `sys2` while `program.nx` declares them, as a new project does;
+- a colour, such as `int RED=1` ("Illegal name");
+- another `int`, on the same line or another, such as `int a=1,a=2` ("Repeated definition global variable name").
 
-Names are compared with their letter case, so `int Red=1` and `int a=1,A=2` are fine. A name may have up to 32 characters ("Illegal global variable name length").
+Names are case-sensitive, so `int Red=1` and `int a=1,A=2` are fine. A name may have up to 32 characters ("Illegal global variable name length").
 
 ### Where an `int` goes, and its starting value
 
-- An `int` goes in `program.nx`, in either language. The build refuses one in an event or a macro, and in nxlang in a function ("Global variable definitions must precede all code in the program"). In nxlang, `var` declares a local ([language.md](language.md#local-variables)).
+- An `int` goes in `program.nx`, in either language. The build refuses an `int` in an event, in a macro, or in an nxlang function ("Global variable definitions must precede all code in the program"). In nxlang, `var` declares a local ([language.md](language.md#local-variables)).
 - In strict Nextion syntax, an `int` goes before `program.nx`'s other code. Comments may come first. nxlang moves a later `int` line up for you ([nxlang-compiled.md](nxlang-compiled.md)).
 - In strict Nextion syntax, a decimal starting value must fit in 32 bits, from -2147483648 to 2147483647. The build refuses `int a=4294967295` ("Initial value for a global variable must be a constant"). nxlang writes the value's low 32 bits instead, as C does ([language.md](language.md)).
 
@@ -330,6 +330,6 @@ The Nextion Editor's compile refuses these, and so does the build ([Macros](sour
 
 - a `call` of a macro the folder lacks, in an event, a macro, or `program.nx`;
 - a macro's name used twice, and a name with characters other than letters, digits, underscores, and spaces, or starting with a digit;
-- in a macro, a component without its page's name, as in `t1.txt`, or of local scope, as in `page0.t0.txt` with `t0` local. A macro reaches only components of global scope, with their page's name: `page0.t1.txt`, with `t1` global.
+- in a macro, a component without its page's name, as in `t1.txt`, or of local scope, as in `page0.t0.txt` with `t0` local. A macro can use only components of global scope, with their page's name: `page0.t1.txt`, with `t1` global.
 - in a macro, a component given to `vis`, `tsw`, `ref`, or `click` by its name, with its page's name or not. A macro gives the component's number instead, as in `vis 1,0`, or a variable or a value that contains it, as in `vis sys0,0`.
 - in a macro, what the build refuses in an event's code, such as a `goto` without its label, an attribute code cannot change, or `sys0` undeclared.

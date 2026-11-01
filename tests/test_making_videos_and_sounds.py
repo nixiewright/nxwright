@@ -176,9 +176,9 @@ class SoundFormTest(unittest.TestCase):
                 self.assertEqual(sound_form_problem(wav(channels, 2, 22050, bytes(8 * channels))),
                                  'has %d channels at 22050 samples a second ("Vocal Track '
                                  'Number Out of Effective Range (1/2)"). A screen plays only '
-                                 'mono and stereo sounds, and the Nextion Editor converts only '
-                                 'a sound of another rate. Make it mono or stereo, or give it '
-                                 'another rate' % channels)
+                                 'mono and stereo sounds. The Nextion Editor converts a sound '
+                                 'of another rate, but not one at this rate. Make it mono or '
+                                 'stereo, or give it another rate' % channels)
 
     def test_the_forms_it_compiles(self):
         for channels, width, rate in ((1, 2, 22050), (2, 2, 22050), (1, 1, 11025),
@@ -353,9 +353,9 @@ class SoundCommandTest(MediaCommandTestCase):
         with mock.patch("nxwright.project.ffmpeg.shutil.which", return_value=None):
             with self.assertRaisesRegex(NxwrightError, "odd8.wav has 8 bits a sample at 22050 "
                                                        "samples a second .*A screen plays only "
-                                                       "16-bit sounds.*: nxwright converts it "
-                                                       "through ffmpeg, which is not on the "
-                                                       "PATH"):
+                                                       "16-bit sounds.*not one at this rate\. "
+                                                       "Converting odd8.wav needs ffmpeg, "
+                                                       "which is not on the PATH"):
                 add_sound(self.source, SOURCES / "odd8.wav")
         self.assertFalse((self.source / "sounds").exists())
 
@@ -372,9 +372,9 @@ class SoundCommandTest(MediaCommandTestCase):
                 mock.patch("nxwright.project.ffmpeg.subprocess.run", side_effect=ffmpeg_writes):
             with self.assertRaisesRegex(NxwrightError, "surround.wav has 4 channels at 22050 "
                                                        "samples a second .*A screen plays only "
-                                                       "mono and stereo sounds.*Make it mono "
-                                                       "or stereo, or give it another rate, "
-                                                       "with --mono or --rate"):
+                                                       "mono and stereo sounds.*not one at this "
+                                                       "rate\. "
+                                                       "Add --mono, or give another --rate"):
                 add_sound(self.source, source)
             self.assertFalse((self.source / "sounds").exists())
             add_sound(self.source, source, mono=True)
@@ -595,9 +595,9 @@ class SoundFormRefusedTest(MediaCommandTestCase):
         self.assertEqual(str(refused.exception),
                          'sounds/odd8.wav has 8 bits a sample at 22050 samples a second ("Data '
                          'bits exceed the valid range (only 16 bits are supported)"). A screen '
-                         'plays only 16-bit sounds, and the Nextion Editor converts only a '
-                         'sound of another rate. Make its samples 16-bit, or give it another '
-                         'rate')
+                         'plays only 16-bit sounds. The Nextion Editor converts a sound of '
+                         'another rate, but not one at this rate. Make its samples 16-bit, or '
+                         'give it another rate')
         self.assertFalse((self.folder / "made.HMI").exists())
 
     def test_the_build_refuses_one_of_more_than_two_channels(self):

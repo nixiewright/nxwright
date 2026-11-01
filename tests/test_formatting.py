@@ -231,7 +231,7 @@ class RenameTest(FolderTestCase):
         self.assertEqual(sorted(texts), ["pages/page0.nx", "pages/page0.page.toml"])
 
     def test_a_component_a_macro_names(self):
-        # A macro reaches only a component of global scope, with its page's
+        # A macro can use only a component of global scope, with its page's
         # name. The rename changes macros.nx too, and the folder builds.
         self.write("pages/page0.page.toml", self.text("pages/page0.page.toml").replace(
             'name = "title"\n', 'name = "title"\nvscope = 1\n'))

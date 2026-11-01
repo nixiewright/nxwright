@@ -300,8 +300,8 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
 def _check_length(code: str, codec, longest: int, number: int):
     """Raises NxwrightError for a compacted line longer than `longest`
     bytes in the project's encoding, `codec`. An `if`'s, an `else if`'s, or
-    a `while`'s head is not counted. Of a `for`'s head, its start and its
-    step are each counted as a line, and its condition is not. The Nextion
+    a `while`'s head is not counted. In a `for`'s head, the start and the
+    step are each counted as a line, and the condition is not. The Nextion
     Editor refused a longer line or start ("The instructions are too
     long"), and its compile did not end on a longer step. It compiled heads
     of more than 1000 characters. A character the encoding cannot store is
@@ -309,7 +309,7 @@ def _check_length(code: str, codec, longest: int, number: int):
     head, otherwise = _BLOCK_HEAD.match(code), ELSE.match(code)
     if otherwise and otherwise[2] or head and head[1] != "for":
         return
-    refusal = "on this series it takes at most %d (\"The instructions are too long\")" % longest
+    refusal = "and this series takes at most %d (\"The instructions are too long\")" % longest
     if not head:
         _check_part_length(code, "this line", refusal, codec, longest, number)
         return
@@ -319,8 +319,8 @@ def _check_length(code: str, codec, longest: int, number: int):
     _check_part_length(parts[0], "this for's start", refusal, codec, longest, number)
     if len(parts) > 2:
         _check_part_length(parts[2], "this for's step",
-                           "on this series the Nextion Editor's compile does not end on a "
-                           "longer one than %d" % longest, codec, longest, number)
+                           "and on this series the Nextion Editor's compile never ends on a "
+                           "step longer than %d" % longest, codec, longest, number)
 
 
 def _check_part_length(part: str, what: str, refusal: str, codec, longest: int, number: int):
@@ -332,8 +332,8 @@ def _check_part_length(part: str, what: str, refusal: str, codec, longest: int, 
     except NxwrightError:
         return
     if size > longest:
-        raise NxwrightError("%s is %d bytes in %s, without the spaces the Nextion Editor drops; "
-                            "%s" % (what, size, codec.name, refusal), line=number)
+        raise NxwrightError("%s is %d bytes in %s, not counting the spaces the Nextion Editor "
+                            "drops, %s" % (what, size, codec.name, refusal), line=number)
 
 
 def _check_value_and_head(code: str, number: int):
@@ -674,7 +674,7 @@ def _check_program_attributes(code: str, pages: dict, globals_: dict, number: in
                 known, reachable = pages[first], globals_.get(first)
                 if (third and known is not None and second in known and reachable is not None
                         and second not in reachable):
-                    raise NxwrightError("%s.%s.%s: %s is of local scope, and program.nx reaches "
+                    raise NxwrightError("%s.%s.%s: %s is of local scope, and program.nx can use "
                                         "only a component of global scope. The Nextion Editor "
                                         "refuses this line%s"
                                         % (first, second, third, second,
@@ -687,9 +687,9 @@ def _check_program_attributes(code: str, pages: dict, globals_: dict, number: in
             words = _program_refusal_words(code, local=False)
             reachable = globals_.get(page)
             if reachable is not None and first not in reachable:
-                # Its page's name alone would not do: no page has it of
-                # global scope.
-                raise NxwrightError("%s.%s: %s is of local scope, and program.nx reaches only a "
+                # Adding the page's name would not help, because no page
+                # has the component of global scope.
+                raise NxwrightError("%s.%s: %s is of local scope, and program.nx can use only a "
                                     "component of global scope, with its page's name. The "
                                     "Nextion Editor refuses this line%s"
                                     % (first, second, first, words), line=number)
@@ -701,7 +701,7 @@ def _check_program_attributes(code: str, pages: dict, globals_: dict, number: in
 
 def _program_refusal_words(code: str, local: bool) -> str:
     """Returns the Nextion Editor's words, as ' ("Invalid Variables")', for
-    refusing the line of program.nx `code` that names a component's
+    refusing the line of program.nx `code` that uses a component's
     attribute: of `local` scope with its page's name, or else without its
     page's name. Returns "" for a line of a form the Nextion Editor was not
     seen to refuse.

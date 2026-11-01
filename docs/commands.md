@@ -94,11 +94,11 @@ pages/home.nx line 12: error: unknown name speed
 ```
 
 - The build stops at the first error. The check reports the first error of each page.
-- An error in `app.toml`, `defaults.toml`, or `program.nx`'s declarations comes alone, since every page depends on them.
-- An error in a page's `.page.toml` file is placed at its table's header line.
-- The check opens each picture's file, without decoding its pixels, as the build reads it. A file nxwright cannot read is an error on the line of `app.toml` that gives the picture: `pictures/logo.png: not a picture nxwright reads: no kind of picture Pillow knows`. A picture whose pixels alone are damaged opens fine. Only the build finds it, and gives its file the same way.
-- A page whose memory the Nextion Editor's compile would refuse is an error on its `.page.toml` file ([Memory](build-rules.md#memory)).
-- A sound that the Nextion Editor refuses to compile is an error on the line of `app.toml` that gives the sound ([source-folder.md](source-folder.md#animations-videos-and-sounds)).
+- If `app.toml`, `defaults.toml`, or the declarations of `program.nx` have an error, the check reports only that error, since every page depends on these files.
+- The check also finds:
+  - a picture file nxwright cannot read, reported as `pictures/logo.png: not a picture nxwright reads: no kind of picture Pillow knows`. The check does not decode the pixels, so only the build finds a picture whose pixels are damaged;
+  - a page that takes more memory than the Nextion Editor's compile allows ([Memory](build-rules.md#memory));
+  - a sound the Nextion Editor refuses to compile ([source-folder.md](source-folder.md#animations-videos-and-sounds)).
 
 The [VS Code extension](../editors/vscode/README.md) runs the same checks as you type. It offers a quick fix for an error that has one sure fix, such as a command written in capitals.
 
@@ -109,7 +109,7 @@ The check also warns of likely mistakes that the build accepts. Each warning giv
 - `left-to-right`, in strict Nextion syntax: a line the Nextion Editor computes in another order than the usual one. `sys0=a+b*c` computes `(a+b)*c`, and the warning shows it.
 - `unused-constant`, in nxlang: a constant of a page's own `.nx` file, or of `program.nx`, that no code uses. Constants of other included files are left alone, since a library serves many pages.
 - `unused-function`, in nxlang: a function of a page's own `.nx` file that the page never calls.
-- `number-past-32-bits`, in nxlang: a hexadecimal number too large for 32 bits, such as `0x0100000005`, or a decimal number outside -2147483648 to 2147483647, such as `4294967295`. The build keeps its low 32 bits, `0x00000005` or `-1`, as C does.
+- `number-past-32-bits`, in nxlang: a hexadecimal number too large for 32 bits, such as `0x0100000005`, or a decimal number outside -2147483648 to 2147483647, such as `4294967295`. The build keeps only the low 32 bits, as C does, so these become `0x00000005` and `-1`.
 - `event-never-runs`: code for an event that its component's type does not have, such as a page's `postinit`. The Nextion Editor keeps the code, but the screen never runs it. The warning lists the type's events. For `preinit` and `postinit`, it also gives the event that the Nextion Editor's event pane means: a page's Preinitialize Event is `load`, and its Postinitialize Event is `loadend`.
 - `sound-file-form`: a sound's file without the `hmic` chunk that the Nextion Editor's Audio panel writes, or whose check value there does not match its samples. It shows on the line of `app.toml` that gives the sound. The Nextion Editor takes such a file, but a screen might check the value. `nxwright sound` writes the chunk and its check value.
 - `memory-not-checked`: the folder has something whose memory nxwright cannot count, so the pages are checked without it ([Memory](build-rules.md#memory)). The warning shows on the page with it.
@@ -374,7 +374,7 @@ Adds a sound after the folder's other sounds.
 - A WAV file of PCM samples, 8 or 16 bits, mono or stereo, is taken as it is. An 8-bit file at 22050 samples a second goes through ffmpeg instead, because the Nextion Editor refuses to compile it.
 - Any other sound file goes through ffmpeg, which makes its samples 16-bit. So does any file given `--rate` or `--mono`. Without ffmpeg, the command fails.
 - `--rate`: the samples a second to convert to, from 8,000 to 48,000.
-- `--mono`: converts to one channel. Use it, or another `--rate`, for a sound of more than two channels at 22050 samples a second, which the Nextion Editor refuses to compile.
+- `--mono`: converts to one channel. A sound with more than two channels at 22050 samples a second needs `--mono` or another `--rate`, because the Nextion Editor refuses to compile it.
 - `--ffmpeg`: the ffmpeg program to use. By default, the one on the PATH.
 
 ## sd-picture

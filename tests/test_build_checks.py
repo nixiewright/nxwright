@@ -1429,7 +1429,7 @@ class EditorCommandTest(_CodeOnFirstTestCase):
         # Of local scope on every page, no page's name would do.
         globals_["second"] = frozenset()
         with self.assertRaisesRegex(NxwrightError, r"n0\.val: n0 is of local scope, and program\.nx "
-                                                   r"reaches only a component of global scope"):
+                                                   r"can use only a component of global scope"):
             check_line("sys0=n0.val", None, None, None, None, 1, pages, None, globals_)
 
     def test_an_int_of_program_nx_named_as_the_editor_refuses(self):
@@ -1909,7 +1909,8 @@ class SeriesTest(FirstDownTestCase):
                 self.use_screen(model)
                 self.add("h0", "slider", ch=ch)
                 self.assert_component_refused(r"h0: its ch of %d is refused on the %s, as the "
-                                              r"Nextion Editor's compile takes up to 100 there "
+                                              r"Nextion Editor's compile takes at most 100 on "
+                                              r"that screen "
                                               r"\(\"Out of range\"\)" % (ch, model))
                 page_file.write_bytes(page)
         self.add("h0", "slider", ch=100)
@@ -2151,8 +2152,8 @@ class LongLineTest(FirstDownTestCase):
     def assert_line_refused(self, size: int, number: int, where: str = r"first\.nx line 2",
                             what: str = "this line", encoding: str = "iso-8859-1"):
         with self.assertRaisesRegex(
-                NxwrightError, r"%s: %s is %d bytes in %s, without the spaces the Nextion Editor "
-                               r"drops; on this series it takes at most %d \(\"The instructions "
+                NxwrightError, r"%s: %s is %d bytes in %s, not counting the spaces the Nextion "
+                               r"Editor drops, and this series takes at most %d \(\"The instructions "
                                r"are too long\"\)" % (where, what, size, encoding,
                                                       LONGEST_LINES[self.series])):
             export_dump(self.source, self.folder / ("refused%d" % number))
@@ -2204,8 +2205,9 @@ class LongLineTest(FirstDownTestCase):
         self.write_code("for(sys0=0;sys0<1;%s)" % _sum_line(768), "{", "}")
         with self.assertRaisesRegex(
                 NxwrightError, r"first\.nx line 2: this for's step is 768 bytes in iso-8859-1, "
-                               r"without the spaces the Nextion Editor drops; on this series the "
-                               r"Nextion Editor's compile does not end on a longer one than 767"):
+                               r"not counting the spaces the Nextion Editor drops, and on this "
+                               r"series the Nextion Editor's compile never ends on a step longer "
+                               r"than 767"):
             export_dump(self.source, self.folder / "step")
         program = self.source / "program.nx"
         program.write_text("int sys0=0,sys1=0,sys2=0,%s\npage 0\n"

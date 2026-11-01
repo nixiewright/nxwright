@@ -995,7 +995,7 @@ def _check_keyboard_scope(attributes: list, name: str, where: str):
     """Raises NxwrightError for a component bound to one of the Editor's
     keyboards, its `key` the keyboard's system page mark, whose scope is
     local. The keyboard page writes the typed text back into it from another
-    page, which reaches only a component of global scope. So the Editor
+    page, which can use only a component of global scope. So the Editor
     binds a keyboard only to one, and refuses to make a bound one local."""
     values = {attribute.name: int.from_bytes(attribute.value, "little")
               for attribute in attributes if attribute.name in ("key", "vscope")}

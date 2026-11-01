@@ -1872,7 +1872,7 @@ class Simulation:
         page's code names it: `p[1].b[5].txt` or `p[1].t0.txt`, a page by its
         number, then a component by its ID or its name; `b[5].txt`, a
         component of the page shown by its ID. Another page's component
-        goes by its page's name, which reaches only those of global scope,
+        goes by its page's name, which works only for those of global scope,
         as on the screen. None for none such."""
         match = _BY_INDEX.fullmatch(name)
         if match is None or match[1] is None and match[2] is None or self.page is None:
