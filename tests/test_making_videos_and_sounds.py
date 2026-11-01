@@ -150,15 +150,16 @@ class SoundFileTest(unittest.TestCase):
 
 
 class SoundFormTest(unittest.TestCase):
-    """The forms of sound the Nextion Editor refuses to compile: at 22050
-    samples a second, one of other than 16 bits a sample, or of more than
-    two channels. It resamples a sound of any other rate, and takes it."""
+    """The forms of sound a screen does not play, and the Nextion Editor does
+    not convert: at 22050 samples a second, one of other than 16 bits a
+    sample, or of more than two channels. The Nextion Editor resamples a
+    sound of any other rate."""
 
     def test_other_bits_at_22050(self):
         for width, form in ((1, 1), (3, 1), (4, 1), (4, 3)):
             with self.subTest(bits=8 * width, form=form):
-                self.assertIn('the Nextion Editor refuses to compile ("Data bits exceed the '
-                              'valid range (only 16 bits are supported)")',
+                self.assertIn('at 22050 samples a second ("Data bits exceed the valid range '
+                              '(only 16 bits are supported)")',
                               sound_form_problem(wav(1, width, 22050, bytes(8 * width), form)))
         self.assertTrue(sound_form_problem(wav(1, 1, 22050, bytes(8))).startswith(
             "has 8 bits a sample at 22050 samples a second"))
@@ -173,10 +174,11 @@ class SoundFormTest(unittest.TestCase):
         for channels in (3, 4):
             with self.subTest(channels=channels):
                 self.assertEqual(sound_form_problem(wav(channels, 2, 22050, bytes(8 * channels))),
-                                 'has %d channels at 22050 samples a second, which the Nextion '
-                                 'Editor refuses to compile ("Vocal Track Number Out of Effective '
-                                 'Range (1/2)"): make it mono or stereo, or give it another rate'
-                                 % channels)
+                                 'has %d channels at 22050 samples a second ("Vocal Track '
+                                 'Number Out of Effective Range (1/2)"). A screen plays only '
+                                 'mono and stereo sounds, and the Nextion Editor converts only '
+                                 'a sound of another rate. Make it mono or stereo, or give it '
+                                 'another rate' % channels)
 
     def test_the_forms_it_compiles(self):
         for channels, width, rate in ((1, 2, 22050), (2, 2, 22050), (1, 1, 11025),
@@ -350,10 +352,10 @@ class SoundCommandTest(MediaCommandTestCase):
     def test_without_ffmpeg_an_8_bit_sound_at_22050_is_refused(self):
         with mock.patch("nxwright.project.ffmpeg.shutil.which", return_value=None):
             with self.assertRaisesRegex(NxwrightError, "odd8.wav has 8 bits a sample at 22050 "
-                                                       "samples a second, which the Nextion "
-                                                       "Editor refuses to compile .*: nxwright "
-                                                       "converts it through ffmpeg, which is "
-                                                       "not on the PATH"):
+                                                       "samples a second .*A screen plays only "
+                                                       "16-bit sounds.*: nxwright converts it "
+                                                       "through ffmpeg, which is not on the "
+                                                       "PATH"):
                 add_sound(self.source, SOURCES / "odd8.wav")
         self.assertFalse((self.source / "sounds").exists())
 
@@ -369,10 +371,10 @@ class SoundCommandTest(MediaCommandTestCase):
         with mock.patch("nxwright.project.ffmpeg.shutil.which", return_value="ffmpeg"), \
                 mock.patch("nxwright.project.ffmpeg.subprocess.run", side_effect=ffmpeg_writes):
             with self.assertRaisesRegex(NxwrightError, "surround.wav has 4 channels at 22050 "
-                                                       "samples a second, which the Nextion "
-                                                       "Editor refuses to compile .*: make it "
-                                                       "mono or stereo, or give it another "
-                                                       "rate, with --mono or --rate"):
+                                                       "samples a second .*A screen plays only "
+                                                       "mono and stereo sounds.*Make it mono "
+                                                       "or stereo, or give it another rate, "
+                                                       "with --mono or --rate"):
                 add_sound(self.source, source)
             self.assertFalse((self.source / "sounds").exists())
             add_sound(self.source, source, mono=True)
@@ -572,7 +574,7 @@ class SoundWarningTest(MediaCommandTestCase):
 
 
 class SoundFormRefusedTest(MediaCommandTestCase):
-    """A sound the Nextion Editor refuses to compile, put in the folder by
+    """A sound a screen does not play, put in the folder by
     hand: the build refuses it, and the checks show it as an error."""
 
     def put_sound(self, name: str, data: bytes):
@@ -591,10 +593,11 @@ class SoundFormRefusedTest(MediaCommandTestCase):
         with self.assertRaises(NxwrightError) as refused:
             build(self.source, self.folder / "made.HMI")
         self.assertEqual(str(refused.exception),
-                         'sounds/odd8.wav has 8 bits a sample at 22050 samples a second, which '
-                         'the Nextion Editor refuses to compile ("Data bits exceed the valid '
-                         'range (only 16 bits are supported)"): make its samples 16-bit, or '
-                         'give it another rate')
+                         'sounds/odd8.wav has 8 bits a sample at 22050 samples a second ("Data '
+                         'bits exceed the valid range (only 16 bits are supported)"). A screen '
+                         'plays only 16-bit sounds, and the Nextion Editor converts only a '
+                         'sound of another rate. Make its samples 16-bit, or give it another '
+                         'rate')
         self.assertFalse((self.folder / "made.HMI").exists())
 
     def test_the_build_refuses_one_of_more_than_two_channels(self):
@@ -611,7 +614,7 @@ class SoundFormRefusedTest(MediaCommandTestCase):
         self.assertEqual([(found.file, found.severity, found.rule) for found in findings],
                          [("app.toml", "error", "sound-form")])
         self.assertIn('"odd8"', self.app().split("\n")[findings[0].line - 1])
-        self.assertIn("make its samples 16-bit, or give it another rate", findings[0].message)
+        self.assertIn("Make its samples 16-bit, or give it another rate", findings[0].message)
 
     def test_a_sound_of_another_rate_builds(self):
         self.put_sound("chirp", (FIXTURES / "chirp.wav").read_bytes())

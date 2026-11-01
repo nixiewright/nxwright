@@ -109,8 +109,9 @@ _PCM, _FLOAT, _EXTENSIBLE = 1, 3, 0xFFFE
 _SUBFORMAT_AT = 24
 # The size of the Editor's `hmic` chunk.
 _SOUND_NOTE_SIZE = 504
-# The samples a second at which the Editor keeps a sound as it is, and to
-# which it resamples a sound of any other rate as it compiles.
+# The samples a second of the sounds a screen plays. The Editor keeps a
+# sound of this rate as it is, and resamples one of any other rate to it
+# as it compiles.
 EDITOR_SOUND_RATE = 22050
 # Each byte's bits read the other way round (screen_crc).
 _BITS_REVERSED = bytes(int(format(value, "08b")[::-1], 2) for value in range(256))
@@ -414,14 +415,15 @@ def sound_file_problem(wav: bytes):
 
 
 def sound_form_problem(wav: bytes):
-    """Returns what keeps the Editor from compiling a project that plays the
-    sound whose file is `wav`, or None. At 22050 samples a second, the rate
-    it keeps a sound at, it refuses one of other than 16 bits a sample, as
-    its format chunk gives them, whatever the format of its samples, and
-    one of more than two channels. It resamples a sound of any other rate
-    with ffmpeg, whatever its bits and channels, and takes it. The problem
-    ends with what to change in the file. A file that is not a WAV file has
-    no such problem to report."""
+    """Returns why a screen cannot play the sound whose file is `wav`, and
+    what to change in the file, or None. A screen plays sounds of 22050
+    samples a second, 16 bits a sample, mono or stereo. As it compiles, the
+    Editor converts a sound of any other rate to that form with ffmpeg,
+    whatever its bits and channels. It does not convert a sound of 22050
+    samples a second, and refuses one of other bits than 16, as its format
+    chunk gives them, whatever the format of its samples, or of more than
+    two channels. A file that is not a WAV file has no such problem to
+    report."""
     try:
         form, _ = _wav_format_and_samples(wav)
     except NxwrightError:
@@ -430,13 +432,15 @@ def sound_form_problem(wav: bytes):
     if rate != EDITOR_SOUND_RATE:
         return None
     if bits != 16:
-        return ('has %d bits a sample at %d samples a second, which the Nextion Editor refuses '
-                'to compile ("Data bits exceed the valid range (only 16 bits are supported)"): '
-                'make its samples 16-bit, or give it another rate' % (bits, rate))
+        return ('has %d bits a sample at %d samples a second ("Data bits exceed the valid '
+                'range (only 16 bits are supported)"). A screen plays only 16-bit sounds, and '
+                'the Nextion Editor converts only a sound of another rate. Make its samples '
+                '16-bit, or give it another rate' % (bits, rate))
     if channels not in (1, 2):
-        return ('has %d channels at %d samples a second, which the Nextion Editor refuses to '
-                'compile ("Vocal Track Number Out of Effective Range (1/2)"): make it mono or '
-                'stereo, or give it another rate' % (channels, rate))
+        return ('has %d channels at %d samples a second ("Vocal Track Number Out of '
+                'Effective Range (1/2)"). A screen plays only mono and stereo sounds, and the '
+                'Nextion Editor converts only a sound of another rate. Make it mono or stereo, '
+                'or give it another rate' % (channels, rate))
     return None
 
 

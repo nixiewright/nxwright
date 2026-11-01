@@ -89,7 +89,7 @@ def check_folder(read, exists, pages: list = None, read_bytes=None) -> FolderChe
     media's files are read too: the pictures', each opened without its pixels
     decoded, to find one nxwright cannot read (lint.picture_errors); the
     sounds', to warn of one not in the Editor's form (lint.sound_warnings),
-    and to find one the Editor refuses to compile (lint.sound_errors); and
+    and to find one a screen does not play (lint.sound_errors); and
     the start of the videos', to find one made for another rotation
     (lint.video_rotation_errors)."""
     result = FolderCheck()

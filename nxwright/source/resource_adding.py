@@ -421,16 +421,16 @@ def add_sound(source_folder: Path, sound: Path, name: str = None, rate: int = No
     file's. Returns the name.
 
     A WAV file of PCM samples of 8 or 16 bits, mono or stereo, is taken as
-    it is, but one the Editor refuses to compile, of 8 bits at 22050
-    samples a second (media_files.sound_form_problem). Any other sound
+    it is, but one of 8 bits at 22050 samples a second, which a screen does
+    not play (media_files.sound_form_problem). Any other sound
     file, and any to be made `rate` samples a second or `mono`, goes
     through ffmpeg, the program `ffmpeg` names or the PATH finds, which
     makes its samples 16-bit. Raises NxwrightError, before writing
     anything, for a rate outside 8,000 to 48,000, the rates the Editor was
-    seen to take, a file neither nxwright nor ffmpeg reads, a sound the
-    Editor still refuses to compile once ffmpeg has made it 16-bit, of more
-    than two channels at 22050 samples a second, a name the folder has or
-    may not have, or a file already where the sound would go."""
+    seen to take, a file neither nxwright nor ffmpeg reads, a sound a
+    screen still does not play once ffmpeg has made it 16-bit, of more than
+    two channels at 22050 samples a second, a name the folder has or may
+    not have, or a file already where the sound would go."""
     source_folder, sound = Path(source_folder), Path(sound)
     app = parse_app(read_text(source_folder / "app.toml"))
     if rate is not None and rate not in SOUND_RATES:
@@ -448,8 +448,9 @@ def add_sound(source_folder: Path, sound: Path, name: str = None, rate: int = No
             content, why = None, "%s: %s: nxwright converts others through ffmpeg" % (
                 sound.name, error)
         else:
-            # The Editor's Audio panel keeps such a sound, but its compile
-            # refuses it, as of 8 bits at 22050 samples a second.
+            # The Editor's Audio panel keeps such a sound, of 8 bits at 22050
+            # samples a second, but a screen does not play it, and the
+            # Editor's compile does not convert it.
             problem = sound_form_problem(content)
             if problem:
                 content, why = None, "%s %s: nxwright converts it through ffmpeg" % (

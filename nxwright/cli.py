@@ -525,8 +525,8 @@ _SUBCOMMANDS = [
      "Adds a sound, sounds/<name>.wav, in the form the Nextion Editor's Audio panel writes, which "
      "keeps the samples as they are, listed after the folder's other sounds, named as the "
      "file unless --name gives a name. A WAV file of PCM samples of 8 or 16 bits, mono or "
-     "stereo, is taken as it is, but one of 8 bits at 22050 samples a second, which the "
-     "Nextion Editor refuses to compile. Any other sound file, and any given --rate or "
+     "stereo, is taken as it is, but one of 8 bits at 22050 samples a second, which a "
+     "screen does not play. Any other sound file, and any given --rate or "
      "--mono, goes through ffmpeg, found on the PATH or named by --ffmpeg, which makes 16-bit "
      "samples. A name the folder has, or a file that cannot be read, is refused, and nothing "
      "is written then.",

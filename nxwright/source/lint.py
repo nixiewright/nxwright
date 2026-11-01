@@ -31,14 +31,16 @@ but that are likely mistakes. Each has a rule's name:
 A file the build would refuse gets no warnings: its errors come first.
 
 Three rules find an error the build refuses too, which the checks show
-without building, each on app.toml's line naming the file's resource:
-video-rotation, a video made for another rotation than the folder's
-screen, which the Editor refuses to compile
-(source_folder.video_rotation_problem); sound-form, a sound the Editor
-refuses to compile, at 22050 samples a second
-(media_files.sound_form_problem);
-and picture-unreadable, a picture nxwright cannot read, found by opening
-its file without decoding its pixels (pictures.picture_problem).
+without building, each on the line of app.toml that lists the file's
+resource:
+  - video-rotation, a video made for another rotation than the folder's
+    screen, which the Editor refuses to compile
+    (source_folder.video_rotation_problem);
+  - sound-form, a sound of 22050 samples a second that a screen does not
+    play, which the Editor does not convert
+    (media_files.sound_form_problem);
+  - picture-unreadable, a picture nxwright cannot read, found by opening
+    its file without decoding its pixels (pictures.picture_problem).
 """
 from dataclasses import dataclass, field
 import tomllib
@@ -136,7 +138,8 @@ def video_rotation_errors(app: dict, read, read_bytes) -> list:
 def sound_errors(app: dict, read, read_bytes) -> list:
     """Returns the sound-form error Findings of the folder whose settings
     are `app`, whose files' text `read(path)` returns, and their bytes
-    `read_bytes(path)`: a sound the Editor refuses to compile
+    `read_bytes(path)`: a sound a screen does not play, which the Editor
+    does not convert
     (media_files.sound_form_problem)."""
     found = []
     for name in app["sounds"]:
