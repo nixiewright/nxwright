@@ -81,14 +81,18 @@ _WORD_LIST = "ListMessage"
 # The errors on which the Editor 1.68.2's compile stopped, writing no last
 # line: one of its own, after refusing a QR code's temporary need, or a
 # command or a system variable the screen's series lacks; its refusal of a
-# video made for another rotation than the project's; and its refusals of a
+# video made for another rotation than the project's; its refusals of a
 # sound at 22050 samples a second of other than 16 bits, or of more than two
-# channels.
+# channels; and three more of its own, after refusing a comparison in a
+# condition as a line too long.
 _EDITOR_STOPPED = ("Error:Destination array was not long enough",
                    "The direction of the file is inconsistent with the current engineering "
                    "display direction",
                    "(only 16 bits are supported)",
-                   "Vocal Track Number Out of Effective Range")
+                   "Vocal Track Number Out of Effective Range",
+                   "Error:Index was outside the bounds of the array",
+                   "Error:Arithmetic operation resulted in an overflow",
+                   "Error:Index was out of range")
 # The last line of the Output panel once a compile has ended: "Compile
 # Successful! 0 Errors, 0 Warnings,File Size:790,508", or "Error:Compile
 # failed! 1 Errors, 0 Warnings,".

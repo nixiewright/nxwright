@@ -448,6 +448,39 @@ class CompileWatchTest(unittest.TestCase):
         self.assertFalse(watch.look(refused, False, 0))
         self.assertTrue(watch.look(refused, False, 1))
 
+    def test_a_line_too_long(self):
+        # A basic screen's compile refusing an if whose comparison is one
+        # internal line of 768 bytes, as the Editor 1.68.2 showed it: the
+        # refusal, then the Editor's own error, and no last line.
+        refused = ("Page:page0 Memory Occupied:20+88=108\r\n"
+                   "Error:The instructions are too long:i t0.txt,\"aaa\",1,0"
+                   "( Double click to jump to code)\r\n"
+                   "Error:Index was outside the bounds of the array.")
+        watch = CompileWatch(settled=1)
+        self.assertFalse(watch.look(refused, False, 0))
+        self.assertTrue(watch.look(refused, False, 1))
+
+    def test_a_line_too_long_before_another_comparison(self):
+        # The same refusal, of the first comparison of an ||, as the Editor
+        # 1.68.2 showed it: another error of its own follows.
+        refused = ("Error:The instructions are too long:i t0.txt,\"aaa\",6,0"
+                   "( Double click to jump to code)\r\n"
+                   "Error:Arithmetic operation resulted in an overflow.")
+        watch = CompileWatch(settled=1)
+        self.assertFalse(watch.look(refused, False, 0))
+        self.assertTrue(watch.look(refused, False, 1))
+
+    def test_a_line_too_long_in_a_for(self):
+        # The same refusal, of a for's condition, as the Editor 1.68.2
+        # showed it: a third error of its own follows.
+        refused = ("Error:The instructions are too long:i t0.txt,\"aaa\",1,0"
+                   "( Double click to jump to code)\r\n"
+                   "Error:Index was out of range. Must be non-negative and less than the size "
+                   "of the collection.")
+        watch = CompileWatch(settled=1)
+        self.assertFalse(watch.look(refused, False, 0))
+        self.assertTrue(watch.look(refused, False, 1))
+
 
 class SaveQuestionTest(unittest.TestCase):
     """The Editor's question to save the project shown, as Open is pressed
