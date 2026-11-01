@@ -218,6 +218,17 @@ nxlang refuses a text put into a number itself, and converts a number put into a
 
 This applies in nxlang too, except for a text that ends in an escaped backslash, which nxlang puts into a temporary first ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)). `program.nx` has no temporaries, so there the build still refuses such a text in a condition.
 
+### Texts in gb2312, big5, and shift-jis
+
+The Nextion Editor reads a text in code by its bytes, so some texts in these encodings end in the wrong place. The build refuses them, in either language:
+
+- A shift-jis text with a half-width katakana, such as ｱ, that takes the closing quote: `t0.txt="aｱ"` ("Invalid Variables").
+  - The Nextion Editor reads every text in pairs of bytes. A half-width katakana is one byte, so it takes the byte after it as its second.
+  - `t0.txt="ｱa"` and `t0.txt="ｱｱ"` compile, as each pair ends before the closing quote.
+- A text in a condition, or before a comma in `prints`, `spstr`, `strlen`, `btlen`, or `crcputs`, whose last character ends in the byte 0x5C, a backslash's: `if(t0.txt=="表")` or `prints "日表",0` ("Invalid number of arguments").
+  - Shift-jis's 表, big5's 許, and gb2312's 乗 each end in 0x5C. There the Nextion Editor reads that byte as a backslash that escapes the closing quote.
+  - The same text compiles elsewhere, as in `t0.txt="日表"` or `print "日表"`.
+
 ### Attributes a component lacks
 
 The build refuses an attribute that a component, or the page, lacks, whether assigned or read ("Invalid Variables").

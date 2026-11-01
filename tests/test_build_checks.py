@@ -2575,5 +2575,113 @@ class LongComparisonTest(FirstDownTestCase):
         self.assert_comparison_refused('t0.txt=="' + "a" * 31, 768, 0)
 
 
+class TextBytesTest(FirstDownTestCase):
+    """Texts in code that the Nextion Editor 1.68.2 reads by their bytes, and
+    refused as it compiled. In gb2312, big5, and shift-jis, it reads every
+    text in pairs of bytes, so a shift-jis half-width katakana, one byte,
+    takes the byte after it. In a condition, and before a comma among the
+    arguments of prints, spstr, strlen, btlen, and crcputs, it reads a text
+    again byte by byte, so a 0x5C byte, as the second byte of 表, escapes
+    the closing quote."""
+
+    def setUp(self):
+        super().setUp()
+        self.use_screen("NX4832K035", encoding="shift-jis")
+        self.built = 0
+
+    def next_folder(self, kind: str) -> Path:
+        """Returns a folder no earlier build of the test wrote, as one that
+        failed leaves its folder behind."""
+        self.built += 1
+        return self.folder / ("%s%d" % (kind, self.built))
+
+    def assert_refused(self, lines: list, words: str):
+        refused = lines[0]
+        self.write_code(*lines)
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: %s: %s"
+                                    % (re.escape(refused), words)):
+            export_dump(self.source, self.next_folder("refused"))
+
+    def assert_taken(self, *lines: str):
+        self.write_code(*lines)
+        export_dump(self.source, self.next_folder("taken"))
+
+    def test_a_half_width_katakana_that_takes_the_closing_quote(self):
+        words = (r"the Nextion Editor reads this text in pairs of bytes\. The half-width "
+                 r"katakana ｱ takes the byte after it as its second, so the text no longer ends "
+                 r"at its closing quote")
+        for line in ('t0.txt="aｱ"', 't0.txt="ｱ"', 't0.txt="日ｱ"', 't0.txt="ｱｱｱ"',
+                     't0.txt="ｱ日"', 't0.txt="ｱ表"', 't0.txt="ｱ\\""', 'prints "ｱ",0',
+                     'print "aｱ"'):
+            with self.subTest(line=line):
+                self.assert_refused([line], words)
+        self.assert_taken('t0.txt="ｱa"', 't0.txt="ｱｱ"', 't0.txt="ｱ日a"', 't0.txt="表"')
+
+    def test_the_katakana_that_takes_the_closing_quote_is_given(self):
+        # ｱ and ｲ read as a pair, and 日 as one character, so ｳ is the
+        # katakana that takes the quote.
+        self.assert_refused(['t0.txt="ｱｲ日ｳ"'], r".*The half-width katakana ｳ takes")
+
+    def test_a_half_width_katakana_in_another_encoding(self):
+        self.use_screen("NX4832K035", encoding="utf-8")
+        self.assert_taken('t0.txt="aｱ"')
+
+    def test_a_data_record_call_is_left_to_the_nextion_editor(self):
+        with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8",
+                  newline="\n") as file:
+            file.write('\n[[component]]\nname = "d0"\ntype = "data-record"\nx = 0\ny = 40\n'
+                       'w = 200\nh = 100\n')
+        self.use_screen("NX8048P050", encoding="shift-jis")
+        self.assert_taken('d0.insert("ｱ")')
+
+    def test_a_byte_0x5c_that_escapes_the_closing_quote(self):
+        words = (r"表 ends in the byte 0x5C, which the Nextion Editor reads as a backslash "
+                 r"before the closing quote")
+        body = ["{", "sys1=1", "}"]
+        for lines in (['if(t0.txt=="表")'] + body, ['while(t0.txt!="表")'] + body,
+                      ['for(sys0=0;t0.txt!="表";sys0++)'] + body,
+                      ['if(t0.txt=="日表"&&sys0==1)'] + body,
+                      ['prints "日表",0'], ['spstr "表",t0.txt,"a",0'],
+                      ['spstr t0.txt,t0.txt,"表",0'], ['strlen "表",sys0'], ['btlen "表",sys0'],
+                      ['crcputs "表",0']):
+            with self.subTest(line=lines[0]):
+                self.assert_refused(lines, words)
+        self.write_code("if(sys0==1)", *body, 'else if(t0.txt=="表")', *body)
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 6: .*%s" % words):
+            export_dump(self.source, self.folder / "else-if")
+        # Taken: the text ending a line or joined in an assignment, a 0x5C
+        # that escapes a letter, and a for's first and last parts.
+        self.assert_taken('t0.txt="日表"', 't0.txt="日表"+t0.txt', 'print "日表"',
+                          'prints "表a",0', 'if(t0.txt=="表a")', *body,
+                          'for(t0.txt="表";sys0<1;sys0++)', *body,
+                          'for(sys0=0;sys0<1;t0.txt="表")', *body)
+
+    def test_a_byte_0x5c_inside_an_escape(self):
+        # 表's 0x5C escapes the first backslash, and the second the quote.
+        self.assert_refused(['prints "a表' + "\\\\" + '",0'], r"表 ends in the byte 0x5C")
+
+    def test_a_byte_0x5c_in_another_encoding(self):
+        # In utf-8, no character but the backslash has a byte 0x5C.
+        self.use_screen("NX4832K035", encoding="utf-8")
+        self.assert_taken('if(t0.txt=="表")', "{", "sys1=1", "}", 'prints "日表",0')
+
+    def test_in_big5_and_gb2312(self):
+        for encoding, character in (("big5", "許"), ("gb2312", "乗")):
+            with self.subTest(encoding=encoding):
+                self.use_screen("NX4832K035", encoding=encoding)
+                self.assert_refused(['prints "%s",0' % character],
+                                    r"%s ends in the byte 0x5C" % character)
+
+    def test_an_escaped_backslash_before_a_comma(self):
+        # A 0x5C that is a backslash's escape escapes the second, not the quote.
+        self.use_screen("NX4832T035", encoding="iso-8859-1")
+        self.assert_taken(r'prints "a\\",0', r'spstr "a\\",t0.txt,"b",0', r'prints "a\\b",0')
+
+    def test_in_nxlang(self):
+        # Until nxlang writes them another way, its texts are refused alike.
+        switch_to_nxlang(self.source)
+        self.assert_refused(['t0.txt="aｱ"'], r"the Nextion Editor reads this text in pairs")
+
+
 if __name__ == "__main__":
     unittest.main()

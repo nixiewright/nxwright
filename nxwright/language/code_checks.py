@@ -325,6 +325,9 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
         _check_call(code, macros, number)
     _check_escapes(code, number)
     _check_condition_texts(code, number)
+    if codec is not None:
+        _check_texts_in_pairs(code, codec, number)
+        _check_texts_byte_by_byte(code, codec, number)
     # A name a component's type lacks, or one its values leave out, first,
     # as the Editor names it.
     if objects is not None:
@@ -1047,19 +1050,147 @@ def _check_condition_texts(code: str, number: int):
     else if, or a while, or the middle part of a for's head. The Editor
     refused each as it compiled ("SYNTAX ERROR"). It compiled the same text
     in a for's first and last parts, and outside a head."""
-    head, otherwise = _BLOCK_HEAD.match(code), ELSE.match(code)
-    if not (head or (otherwise and otherwise[2])):
-        return
-    in_for = head is not None and head[1] == "for"
-    # A for's parts are apart at the semicolons outside its texts.
-    semicolons, after = 0, 0
-    for text in STRING.finditer(code):
-        semicolons += code.count(";", after, text.start())
-        after = text.end()
-        if ends_in_escaped_backslash(text[0]) and (not in_for or semicolons == 1):
+    for text in _condition_texts(code):
+        if ends_in_escaped_backslash(text):
             raise NxwrightError("%s: the Nextion Editor refuses a text that ends in an escaped "
                                 "backslash in a condition (\"SYNTAX ERROR\")" % code,
                                 line=number)
+
+
+# The encodings in which the Nextion Editor reads every text in code in
+# pairs of bytes: from the opening quote, a byte from 0x81 up takes the byte
+# after it, as the first byte of a character of two, and so does a
+# backslash's. The first quote left ends the text. In shift-jis, a
+# half-width katakana, one byte from 0xA1 to 0xDF, then takes the byte
+# after it too (nxtft/ResearchNotes/encodings.md).
+_PAIRED_ENCODINGS = frozenset({"gb2312", "big5", "shift-jis"})
+_BACKSLASH_BYTE, _QUOTE_BYTE = 0x5C, 0x22
+# The commands among whose arguments the Nextion Editor reads a text before
+# a comma byte by byte (_check_texts_byte_by_byte), as it refused `prints
+# "日表",0` in shift-jis. Other commands no probe tried.
+_TEXTS_READ_BYTE_BY_BYTE = frozenset({"prints", "spstr", "strlen", "btlen", "crcputs"})
+
+
+def _check_texts_in_pairs(code: str, codec, number: int):
+    """Raises NxwrightError for a quoted text of the line that the Nextion
+    Editor, reading it in pairs of bytes in `codec`'s encoding, ends
+    elsewhere than at its closing quote: in shift-jis, one with a half-width
+    katakana that takes the closing quote, as in `t0.txt="aｱ"`. It refused
+    such lines as it compiled. A data record's call is left to the Nextion
+    Editor, as no probe tried one."""
+    if codec.name not in _PAIRED_ENCODINGS or DATA_RECORD_CALL.match(code):
+        return
+    for text in STRING.findall(code):
+        stored = _stored_text(text, codec)
+        if stored is not None and _reading_in_pairs(stored)[-1] != len(stored) - 1:
+            katakana = _katakana_read_with_the_next_byte(text, codec)
+            raise NxwrightError("%s: the Nextion Editor reads this text in pairs of bytes. The "
+                                "half-width katakana %s takes the byte after it as its second, "
+                                "so the text no longer ends at its closing quote (\"Invalid "
+                                "Variables\"). Put another character after the katakana, or "
+                                "write the text another way." % (code, katakana), line=number)
+
+
+def _reading_in_pairs(stored: bytes) -> list:
+    """Returns where the Nextion Editor's reading in pairs of bytes of the
+    quoted text `stored`, its bytes with its quotes, starts each character
+    it reads, then where it ends the text: the place of the first quote it
+    does not take as a second byte."""
+    places = [1]
+    while places[-1] < len(stored) and stored[places[-1]] != _QUOTE_BYTE:
+        taken = stored[places[-1]] >= 0x81 or stored[places[-1]] == _BACKSLASH_BYTE
+        places.append(places[-1] + (2 if taken else 1))
+    return places
+
+
+def _katakana_read_with_the_next_byte(text: str, codec) -> str:
+    """Returns the half-width katakana of the quoted text `text` that the
+    reading in pairs (_reading_in_pairs) last takes as the first of two
+    bytes: putting a character after it ends the misreading. In `"ｱｲ日ｳ"`,
+    ｱ and ｲ read as a pair, and 日 as one character, so ｳ takes the closing
+    quote. The text's last character when none is."""
+    # Each one-byte character past ASCII, by the place of its byte.
+    katakana, place = {}, 1
+    for character in text[1:-1]:
+        size = len(_stored_text(character, codec) or b"")
+        if size == 1 and ord(character) > 0x7F:
+            katakana[place] = character
+        place += size
+    read = [katakana[start] for start in _reading_in_pairs(_stored_text(text, codec))[:-1]
+            if start in katakana]
+    return read[-1] if read else text[-2]
+
+
+def _check_texts_byte_by_byte(code: str, codec, number: int):
+    """Raises NxwrightError for a quoted text in a condition, or before a
+    comma among the arguments of _TEXTS_READ_BYTE_BY_BYTE's commands, that
+    the Nextion Editor's reading byte by byte ends elsewhere than at its
+    closing quote. There each 0x5C byte escapes the byte after it, so a
+    character whose last byte is 0x5C, as shift-jis's 表, escapes the
+    closing quote. It refused such lines as it compiled ("Invalid number of
+    arguments")."""
+    for text in _condition_texts(code) + _texts_before_commas(code):
+        stored = _stored_text(text, codec)
+        if stored is None or _end_byte_by_byte(stored) == len(stored) - 1:
+            continue
+        # The misreading starts at a character of more than one byte that
+        # ends in 0x5C: in `"a表\\"`, 表's 0x5C escapes the first backslash,
+        # and the second escapes the quote. The last such character is given.
+        escaping = next((character for character in reversed(text[1:-1])
+                         if len(_stored_text(character, codec) or b"") > 1
+                         and _stored_text(character, codec)[-1] == _BACKSLASH_BYTE), text[-2])
+        raise NxwrightError("%s: %s ends in the byte 0x5C, which the Nextion Editor reads as a "
+                            "backslash before the closing quote (\"Invalid number of "
+                            "arguments\"). Put the text in a variable first, and use the "
+                            "variable here." % (code, escaping), line=number)
+
+
+def _end_byte_by_byte(stored: bytes) -> int:
+    """Returns where the Nextion Editor's reading byte by byte ends the
+    quoted text `stored`, its bytes with its quotes: the place of the first
+    quote that no 0x5C byte escapes."""
+    place = 1
+    while place < len(stored) and stored[place] != _QUOTE_BYTE:
+        place += 2 if stored[place] == _BACKSLASH_BYTE else 1
+    return place
+
+
+def _condition_texts(code: str) -> list:
+    """Returns the quoted texts of a line's condition: the head of an if, an
+    else if, or a while, or the middle part of a for's head, as
+    _check_condition_texts finds them. [] for another line."""
+    head, otherwise = _BLOCK_HEAD.match(code), ELSE.match(code)
+    if not (head or (otherwise and otherwise[2])):
+        return []
+    in_for = head is not None and head[1] == "for"
+    # A for's parts are apart at the semicolons outside its texts.
+    found, semicolons, after = [], 0, 0
+    for text in STRING.finditer(code):
+        semicolons += code.count(";", after, text.start())
+        after = text.end()
+        if not in_for or semicolons == 1:
+            found.append(text[0])
+    return found
+
+
+def _texts_before_commas(code: str) -> list:
+    """Returns the quoted texts given as arguments other than the last to a
+    command of _TEXTS_READ_BYTE_BY_BYTE, as `"日表"` in `prints "日表",0`."""
+    word = command_word(code)
+    if word not in _TEXTS_READ_BYTE_BY_BYTE:
+        return []
+    arguments = [argument.strip() for argument in command_arguments(code[len(word) + 1:])]
+    return [argument for argument in arguments[:-1] if STRING.fullmatch(argument)]
+
+
+def _stored_text(text: str, codec):
+    """Returns `text` as the bytes it is stored as in `codec`'s encoding, or
+    None when the encoding cannot store it, which the build refuses
+    elsewhere."""
+    try:
+        return codec.encode(text, "")
+    except NxwrightError:
+        return None
 
 
 def ends_in_escaped_backslash(text: str) -> bool:
