@@ -87,7 +87,7 @@ The Nextion Editor accepts less than nxlang:
 - `a ? b : c` becomes an `if` on `a` and its `else`, which put `b` or `c` in a temporary. Each side is computed inside its own block, so only the chosen one runs.
 - A number joined to text is converted first, with `covx <number>,<temporary>,0,0`.
 - `-x` becomes `0-x`.
-- A number past 32 bits is written as its low 32 bits, as C keeps them: `4294967295` as `-1`, and `0x0100000005` as `0x00000005` ([language.md](language.md)).
+- A number past 32 bits is written as its low 32 bits, as C keeps them. For example, `4294967295` becomes `-1`, and `0x0100000005` becomes `0x00000005` ([language.md](language.md)).
 - A tab after an `int` line's `int` is written as one space. The Nextion Editor reads a tab there as part of the name, and refuses the declaration.
 - The Nextion Editor takes each argument of a data record's call, such as `d0.insert("Total: " + t0.txt)`, only as one text or one number. So an argument of more than one operand is computed into a temporary first. A number given for a text becomes its digits. A text given for a number is refused.
 - The Nextion Editor takes the first argument of `get`, `print`, `prints`, and `covx` only as one text or one number. So a first argument of more than one operand is computed into a temporary first: `print x.val + 1` becomes `__g0_0=x.val+1`, then `print __g0_0`. Their other numbers, `prints`' length and `covx`'s length and form, are written as arithmetic, which the Nextion Editor takes there.
@@ -148,4 +148,4 @@ In `program.nx`, nxlang turns `vis b[1], 0` into `vis 1,0`, and `vis b[n], 0` in
 
 `p[0].b[1]` is still refused, because page 0 may not be the page showing.
 
-An `int` line may go anywhere in `program.nx`. The Nextion Editor takes declarations only before the other code, so the compiler moves a later `int` line up to just before that code, unindented: `dim=100` then `int late=1` is written `int late=1` then `dim=100`. A starting value is a constant, so moving the line does not change it, even out of an `if` block. An error still gives the line where you wrote it.
+An `int` line may go anywhere in `program.nx`. The Nextion Editor takes declarations only before the other code, so the compiler moves each later `int` line up, unindented, to just before the first line of other code. For example, `dim=100` then `int late=1` is written as `int late=1` then `dim=100`. A starting value is a constant, so the move does not change the variable's value, even out of an `if` block. An error still gives the line where you wrote the `int`.

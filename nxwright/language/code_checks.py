@@ -474,32 +474,32 @@ def _check_starting_values(code: str, number: int):
     for name, value in _DECIMAL_START.findall(code):
         value = int(value.replace(" ", "").replace("\t", ""))
         if value != int32(value):
-            raise NxwrightError("%s: %s starts at %d, past the 32 bits of -2147483648 to "
-                                "2147483647, and the Nextion Editor refuses it (\"Initial value "
-                                "for a global variable must be a constant\")"
+            raise NxwrightError("%s: %s starts at %d, which does not fit in 32 bits "
+                                "(-2147483648 to 2147483647). The Nextion Editor refuses it "
+                                "(\"Initial value for a global variable must be a constant\")"
                                 % (code, name, value), line=number)
 
 
 def _refuse_declaration_outside_program(code: str, objects: ObjectNames, number: int):
     """Raises NxwrightError for an int declaration in an event, or in a
-    macro, whose code `objects` names: an int is a variable every page
+    macro when `objects` has no page. An int is a variable every page
     shares, which the Nextion Editor takes in program.s alone. The Nextion
     Editor's message differs between an event and a macro."""
     where, words = (("a macro", "Global variable definitions must precede all code in the "
                                 "program") if objects.page is None else
                     ("an event", "Global variable definitions must precede all code in the "
                                  "program.c"))
-    raise NxwrightError("%s: an int is a variable every page shares, declared in program.nx. "
-                        "The Nextion Editor refuses one in %s (\"%s\")" % (code, where, words),
-                        line=number)
+    raise NxwrightError("%s: an int is a variable every page shares, so declare it in "
+                        "program.nx. The Nextion Editor refuses an int in %s (\"%s\")"
+                        % (code, where, words), line=number)
 
 
 def check_program_declarations(lines: list):
     """Raises NxwrightError for an int declaration among program.nx's
     `lines`, as (line number, code), that the Nextion Editor refuses: one declaring
     a name declared already, letter case included, and one after a line of
-    other code. A comment alone is no code, as `nxwright new`'s program
-    shows."""
+    other code. A line of only a comment is not code: `nxwright new` writes
+    comments before its int line."""
     declared, first_code = {}, None
     for number, code in lines:
         if not is_declaration(code):
@@ -507,10 +507,10 @@ def check_program_declarations(lines: list):
                 first_code = number
             continue
         if first_code is not None:
-            raise NxwrightError("%s: an int goes before program.nx's other code, which starts on "
-                                "line %d. The Nextion Editor refuses one after (\"Global variable "
-                                "definitions must precede all code in the program\")"
-                                % (code, first_code), line=number)
+            raise NxwrightError("%s: an int goes before program.nx's other code, so move it "
+                                "above line %d. The Nextion Editor refuses an int after other "
+                                "code (\"Global variable definitions must precede all code in "
+                                "the program\")" % (code, first_code), line=number)
         for name in declared_int_names(code):
             if name in declared:
                 raise NxwrightError("%s: %s is declared already, on line %d, and the Nextion "

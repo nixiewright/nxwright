@@ -1272,7 +1272,7 @@ class EditorCommandTest(_CodeOnFirstTestCase):
         # values, spaced as printh's, are one argument; spaced by commas, they
         # are four, which the Editor refused.
         # The int goes before program.nx's other code, as the Nextion Editor
-        # takes declarations only there.
+        # takes declarations only before other code.
         program = self.source / "program.nx"
         text = program.read_text(encoding="utf-8").replace(
             EDITOR_PROGRAM_DECLARATION, EDITOR_PROGRAM_DECLARATION + "\nint display_mode=1", 1)
@@ -1308,7 +1308,7 @@ class EditorCommandTest(_CodeOnFirstTestCase):
         # component of any page. It compiled other names. nxlang writes
         # program.nx's ints as they are, so it refuses them too.
         # Each declaration goes right after sys0 to sys2's, before program.nx's
-        # other code, as the Nextion Editor takes declarations only there.
+        # other code, as the Nextion Editor takes declarations only before it.
         program = self.source / "program.nx"
         text = program.read_text(encoding="utf-8")
         line_number = text.split("\n").index(EDITOR_PROGRAM_DECLARATION) + 2

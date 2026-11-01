@@ -336,8 +336,8 @@ def _number_past_32_bits(spans: list, place: int, code: str):
     """Returns the number constant that token `place` of `spans`, a line of
     `code`'s tokens, starts, as written, when it is past 32 bits; else None.
     A hex number is past 32 bits above 0xFFFFFFFF. A decimal one is past
-    them outside -2147483648 to 2147483647, its minus sign read: its value
-    changes there."""
+    them outside -2147483648 to 2147483647, its minus sign included. The
+    build changes the value of a decimal number past 32 bits."""
     kind, written, _, _ = spans[place]
     if kind != "number":
         return None

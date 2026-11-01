@@ -218,7 +218,7 @@ _CLICK = re.compile(r"click\s+([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([01])")
 # before it.
 _COMMAND_NUMBER = re.compile(r"(?<![\w.])(-?)(0x[0-9A-Fa-f]+|[0-9]+)(?![\w.])")
 # The commands whose arguments are bytes in hex digits, as `printh 0d 0a`,
-# not numbers: their digits are never read as a decimal number.
+# not numbers. Their digits are never read as a decimal number.
 BYTE_COMMANDS = frozenset({"printh", "crcputh", "lcd_dev"})
 # A starting value of an `int` line, with any minus sign: "=" and the spaces
 # after it, the sign, and the number, hex or decimal.
@@ -1818,7 +1818,7 @@ def _declarations_first(lines: list) -> list:
     code, unindented, the `int` lines kept in order. The Nextion Editor
     takes an int only before program.s's other code. A starting value is a constant, so
     the move does not change what the line means, even out of a block.
-    Comments and blank lines are no code."""
+    Comments and blank lines are not code."""
     codes = [split_line(text, number)[1] for number, text in lines]
     first = next((place for place, code in enumerate(codes)
                   if code and not _INT_LINE.match(code)), len(lines))
@@ -2412,8 +2412,8 @@ class _EventCompiler:
         if word == "int":
             if self.allow_locals:
                 # An event's or a function's line: program.nx alone has no locals.
-                raise NxwrightError("%s: an int is a variable every page shares, declared in "
-                                    "program.nx; var declares a local. The Nextion Editor "
+                raise NxwrightError("%s: an int is a variable every page shares, so declare it "
+                                    "in program.nx. For a local, write var. The Nextion Editor "
                                     "refuses an int in an event (\"Global variable definitions "
                                     "must precede all code in the program.c\")" % code,
                                     line=number)
@@ -2621,7 +2621,7 @@ def editor_number(text: str) -> str:
     nxlang reads numbers as C does, in 32 bits. The Editor reads hex digits
     in pairs, a byte each, and refuses hex past 32 bits or with a sign (the
     vendor's instruction set, rule 1.8, and compiling in the Editor). So a
-    decimal number within 32 bits, and a hex one the Editor reads, is kept
+    decimal number within 32 bits, and a hex one the Nextion Editor reads, is kept
     as written; otherwise:
       - a decimal number past 32 bits is written as its low 32 bits, as C
         keeps them: 4294967295 is -1, and 2147483648 is -2147483648;

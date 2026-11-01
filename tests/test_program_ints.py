@@ -103,9 +103,9 @@ class NxlangProgramIntTest(ProgramIntTest):
         return SourceFolderRunner(self.root).run("page0", [("page0", "load")])
 
     def test_an_int_in_an_event(self):
-        # nxlang's message adds what declares a local.
+        # nxlang's message adds how to write a local.
         super().test_an_int_in_an_event()
-        self.assertIn("var declares a local", self.findings()[0].message)
+        self.assertIn("For a local, write var.", self.findings()[0].message)
 
     def test_an_int_in_a_function(self):
         self.write("pages/page0.nx", "function f():\n  int i=5\n\non page0.load:\n  f()\n")

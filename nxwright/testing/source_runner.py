@@ -551,7 +551,7 @@ def table_limits(toml_tables: list, defaults: dict) -> dict:
 def _program_start(read) -> dict:
     """Returns program.nx's `int` variables, each at the value the build writes
     for it (nxlang.int_starting_value), or 0. Only program.nx itself declares
-    them: the files it includes hold constants."""
+    them: the files it includes contain constants."""
     start = {}
     # A tab after `int` declares in nxlang, which writes it as a space. An
     # indented line declares too, wherever it is: nxlang moves it first.

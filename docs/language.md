@@ -84,7 +84,7 @@ Hexadecimal numbers are written as in C: `0x1F`, `0x1`, `-0x10`.
 - The Nextion Editor reads fewer forms: digits in pairs, without a sign, within 32 bits, and no hexadecimal number in an `int`'s starting value. So the build rewrites the other forms: `0x1` as `0x01`, `-0x10` as `-16`, and an `int`'s starting value in decimal.
 - A number too large for 32 bits, such as `0x0100000005`, keeps its low 32 bits, `0x00000005`, as C keeps them. `nxwright check` warns of it.
 
-A decimal number past 32 bits, outside -2147483648 to 2147483647, keeps its low 32 bits too, as in C: `4294967295` is written `-1`, and `nxwright check` warns of it. The arguments of `printh`, `crcputh`, and `lcd_dev` are bytes, not numbers, and stay as written.
+A decimal number outside -2147483648 to 2147483647 keeps its low 32 bits too, as in C. For example, the build writes `4294967295` as `-1`, and `nxwright check` warns of it. The arguments of `printh`, `crcputh`, and `lcd_dev` are bytes, not numbers, so they stay as written.
 
 ### Text
 
@@ -250,7 +250,7 @@ The build writes your nxlang into strict Nextion syntax, adding hidden variables
 - **No call or click may come back to an event, function, or macro already running**, such as two events clicking each other. An event or a function has one set of variables, which the second run would overwrite. For a macro, the build could not count how deep it nests.
 - **Text worked out on the way keeps up to 255 characters.** For example, in `print "Total: " + t0.txt`, the joined text is cut after 255 characters, where the Nextion Editor would refuse the line.
 - **At most 8,000 hidden globals.** That many are known to work. The build stops past that.
-- **`program.nx` has no hidden variables, and no locals.** An expression there that would need a hidden variable stops the build: write it as simpler steps. So does a text assignment that uses its own target anywhere but first, such as `t0.txt = "-" + t0.txt`. Its `int` lines may go anywhere. The build moves them before its other code, as the Nextion Editor takes declarations only there.
+- **`program.nx` has no hidden variables, and no locals.** An expression there that would need a hidden variable stops the build: write it as simpler steps. So does a text assignment that uses its own target anywhere but first, such as `t0.txt = "-" + t0.txt`. Its `int` lines may go anywhere. The build moves them before its other code, since the Nextion Editor takes declarations only before other code.
 - **A page with functions needs its `load` event.** The build turns off the touches of the hidden hotspots there. The `load` event is listed by default.
 - **A data record's call takes a number for a number.** A text given for a number is refused. A number given for a text becomes its digits.
 - **What the Nextion Editor refuses is refused in nxlang too.** An escape the screen does not read, such as `\n` in a quoted text, a variable's `val` while it stores a text, or a command given another number of arguments than it takes, is written as it is, and the build refuses it ([build-rules.md](build-rules.md)).
