@@ -570,7 +570,8 @@ class EditorLanguagePageAtScreenSizeTest(PageAtScreenSizeTest):
 
 
 class TextCutTest(FolderTestCase):
-    """Where nxlang puts a text holding a component's text into a variable
+    """Where nxlang puts a text that contains a component's text, or one of
+    nxlang's variables with more than 255 bytes of room, into a variable
     whose room is less than its parts can take, the checks warn that the text
     may be cut (rule text-cut). Page0 has texts big, of txt_maxl 1000, mid1
     and mid2, of 200, and full, of 255. The second page has a big of its own."""

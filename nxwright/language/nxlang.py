@@ -382,7 +382,7 @@ class CompiledPage:
 
 @dataclass
 class _CutCandidate:
-    """A text written into a generated variable that holds a component's
+    """A text written into a generated variable that contains a component's
     text or another generated variable, recorded as it is compiled and
     judged once the page's rooms are final (_cut_texts): the file and line,
     the event or function compiled (_owner_label), the variable, its quoted
@@ -1673,8 +1673,8 @@ def _cut_texts(page: "_PageState", local_names: dict) -> list:
     A text is judged when a component's text is among its parts, or a
     generated variable of more than TEXT_TEMPORARY_SIZE. Texts joined only
     from shorter variables are not, or almost every join would be warned
-    about. `local_names`, CompiledPage's, names a local or a parameter in
-    the message."""
+    about. `local_names` is CompiledPage.local_names. It gives the nxlang
+    name of a local or a parameter for the message."""
     rooms = page.text_rooms()
     found = []
     for candidate in page.cut_candidates:
