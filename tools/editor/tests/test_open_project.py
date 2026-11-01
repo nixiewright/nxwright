@@ -53,6 +53,55 @@ class RetriedWhileBusyTest(unittest.TestCase):
             editor._retried_while_busy(action)
 
 
+class CancelLeftDialogTest(unittest.TestCase):
+    """A file dialog left up is cancelled. When it shows a message over
+    itself, as "The file name is not valid", the message is closed first:
+    with it up, the dialog cannot be cancelled."""
+
+    def cancel(self, owned: list) -> list:
+        """Cancels a stand-in file dialog that owns the windows `owned`, each
+        gone once sent WM_CLOSE. Returns what happened, in order."""
+        happened = []
+        left = list(owned)
+        dialog = SimpleNamespace(handle=10, element_info=SimpleNamespace(process_id=5))
+
+        def post_message(handle, message, *arguments):
+            happened.append(("closed", handle, message))
+            left.remove(handle)
+        with mock.patch.object(editor, "owned_windows",
+                               side_effect=lambda pid, owner: list(left)), \
+                mock.patch.object(editor.win32gui, "PostMessage", side_effect=post_message), \
+                mock.patch.object(editor, "_LOOK_PAUSE", 0), \
+                mock.patch.object(editor, "_cancel_file_dialog",
+                                  side_effect=lambda shown: happened.append(("cancelled",))):
+            editor._cancel_left_dialog(dialog)
+        return happened
+
+    def test_a_message_over_the_dialog_is_closed_before_it_is_cancelled(self):
+        self.assertEqual(self.cancel([11]),
+                         [("closed", 11, editor.win32con.WM_CLOSE), ("cancelled",)])
+
+    def test_a_dialog_without_a_message_is_cancelled_at_once(self):
+        self.assertEqual(self.cancel([]), [("cancelled",)])
+
+    def test_a_message_gone_before_it_is_closed_is_let_be(self):
+        # Windows refuses a message to a window that has closed since it was
+        # listed (ERROR_INVALID_WINDOW_HANDLE): the dialog is cancelled all
+        # the same.
+        happened = []
+        dialog = SimpleNamespace(handle=10, element_info=SimpleNamespace(process_id=5))
+        gone = editor.pywintypes.error(1400, "PostMessage", "Invalid window handle.")
+        listed = [[11], []]
+        with mock.patch.object(editor, "owned_windows",
+                               side_effect=lambda pid, owner: listed.pop(0) if listed else []), \
+                mock.patch.object(editor.win32gui, "PostMessage", side_effect=gone), \
+                mock.patch.object(editor, "_LOOK_PAUSE", 0), \
+                mock.patch.object(editor, "_cancel_file_dialog",
+                                  side_effect=lambda shown: happened.append("cancelled")):
+            editor._cancel_left_dialog(dialog)
+        self.assertEqual(happened, ["cancelled"])
+
+
 class OpenProjectTest(unittest.TestCase):
 
     def test_a_dialog_left_up_when_the_project_does_not_open_is_cancelled(self):
@@ -80,6 +129,7 @@ class OpenProjectTest(unittest.TestCase):
                     mock.patch.object(editor, "_is_file_dialog", return_value=True), \
                     mock.patch.object(editor, "_wait_for", side_effect=wait_for), \
                     mock.patch.object(editor, "_drop_other_copies") as drop, \
+                    mock.patch.object(editor, "_close_messages_over"), \
                     mock.patch.object(editor, "_cancel_file_dialog") as cancel:
                 with self.assertRaisesRegex(editor.EditorError, "the project to open"):
                     editor.open_project(dedicated, Path(folder), project)

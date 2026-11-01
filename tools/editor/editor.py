@@ -673,12 +673,33 @@ def _drop_other_copies(folder: Path, keep: Path):
 def _cancel_left_dialog(dialog):
     """Cancels the file dialog `dialog`, which this command showed, if it is
     still up, as when the project did not open in time: left up, it would
-    stop every later command. A dialog already closing is let be: the error
-    that stopped the open is the one to say."""
+    stop every later command. A message the dialog shows over itself, such
+    as "The file name is not valid.", is closed first, as the dialog cannot
+    be cancelled while it is up (_close_messages_over). A dialog already
+    closing is let be: the error that stopped the open is the one to say."""
     try:
+        _close_messages_over(dialog)
         _cancel_file_dialog(dialog)
     except (ElementNotFoundError, COMError):
         pass
+
+
+def _close_messages_over(dialog):
+    """Closes the windows the file dialog `dialog` owns, its messages, as
+    their close box does, and waits up to DIALOG_WAIT for them to go.
+    Pressing such a message's OK button with pywinauto did not close it, but
+    WM_CLOSE did. A message that stays up is left, as the caller is already
+    raising the error that stopped the open."""
+    pid = dialog.element_info.process_id
+    for handle in owned_windows(pid, dialog.handle):
+        try:
+            win32gui.PostMessage(handle, win32con.WM_CLOSE, 0, 0)
+        except pywintypes.error:
+            continue        # closed since it was listed
+    deadline = time.monotonic() + DIALOG_WAIT
+    while owned_windows(pid, dialog.handle) and time.monotonic() < deadline:
+        watchdog.progress()
+        time.sleep(_LOOK_PAUSE)
 
 
 def _wait_for_file_dialog(main, unsaved: bool, pressing_failed: list):
@@ -1730,10 +1751,13 @@ def _explorer_windows() -> dict:
         raise EditorError("Windows' list of Explorer windows could not be read: %s"
                           % error) from None
     for window in listed:
+        # A window closing as it is read raises com_error. A shell window of
+        # another kind than Explorer's may lack the property, and win32com
+        # then raises AttributeError.
         try:
             found[int(window.HWND)] = window
-        except pywintypes.com_error:
-            continue        # closing as it is read
+        except (pywintypes.com_error, AttributeError):
+            continue
     return found
 
 
@@ -1748,9 +1772,11 @@ def _close_explorer_on(folder: Path, before: set) -> bool:
         windows = _explorer_windows()
         locations = {}
         for handle, window in windows.items():
+            # As in _explorer_windows: a window closing, or one without a
+            # location, which is no Explorer window on a folder.
             try:
                 locations[handle] = window.LocationURL
-            except pywintypes.com_error:
+            except (pywintypes.com_error, AttributeError):
                 continue
         opened = explorer_windows_on(before, locations, folder)
         if opened:
