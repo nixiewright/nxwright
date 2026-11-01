@@ -4417,10 +4417,13 @@ class MoveTest(SimulationTestCase):
         self.assertEqual(self.xs(simulation)[0], 360)
 
     def test_a_move_before_any_page_shows_is_logged(self):
-        self.program("move t0,0,40,600,40,0,1000\npage page0\n")
+        # program.nx belongs to no page, so a move there gives its component
+        # by ID: the Nextion Editor refused `move t0,...` there ("Invalid
+        # Component ID").
+        self.program("move 1,0,40,600,40,0,1000\npage page0\n")
         self.moves("")
         simulation = Simulation(self.root)
-        self.assertIn("move t0: no page shows yet, so nothing moves",
+        self.assertIn("move 1: no page shows yet, so nothing moves",
                       [line for _, line in simulation.log])
 
     def test_a_page_change_drops_the_queue(self):

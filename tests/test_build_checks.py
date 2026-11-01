@@ -460,7 +460,8 @@ class ReferenceTest(SourceFolderTestCase):
 
     def test_an_unknown_component_in_a_command(self):
         self.write_code("vis t9,1")
-        self.assert_export_refused(r"first\.nx line 2: vis names t9, which is not on this page")
+        self.assert_export_refused(r"first\.nx line 2: vis t9,1: t9 is neither a component of "
+                                   r"this page nor a variable, so the Nextion Editor refuses it")
 
     def test_the_runner_refuses_what_the_build_refuses(self):
         self.write_code('t9.txt=""')
@@ -619,6 +620,150 @@ class CommandArgumentTest(_CodeOnFirstTestCase):
                          r"\| (__g\w+)=n0\.val\+1\n\s*\| get \1\n")
 
 
+class CommandComponentTest(_CodeOnFirstTestCase):
+    """A command's component: the argument saying which component it acts
+    on, as vis's first. The Nextion Editor refused each line refused here as
+    it compiled ("Invalid Component ID"), and compiled each that builds."""
+
+    def setUp(self):
+        super().setUp()
+        self.program = self.source / "program.nx"
+        self.read_program()
+
+    def read_program(self):
+        """Keeps program.nx's lines, which write_program_line writes after."""
+        text = self.program.read_text(encoding="utf-8")
+        self.program_text = text + ("" if text.endswith("\n") else "\n")
+
+    def switch_to_nxlang(self):
+        """Switches the folder to nxlang, which compiles its event's code
+        first, and so after `n0.val=0` alone."""
+        self.write_code("n0.val=0")
+        self.program.write_text(self.program_text, encoding="utf-8", newline="\n")
+        switch_to_nxlang(self.source)
+        self.read_program()
+
+    def write_program_line(self, line: str) -> int:
+        """Writes program.nx with `line` after its own lines, and returns the
+        line's number."""
+        self.program.write_text(self.program_text + line + "\n", encoding="utf-8",
+                                newline="\n")
+        return len(self.program_text.split("\n"))
+
+    def assert_refused(self, where: str, line: str, words: str, built: str):
+        with self.assertRaisesRegex(NxwrightError, r"%s: %s: .*%s"
+                                    % (where, re.escape(line), re.escape(words))):
+            export_dump(self.source, self.folder / built)
+
+    def test_a_txt_as_a_component(self):
+        for number, line in enumerate(("vis t0.txt,0", "tsw t0.txt,0", "click t0.txt,0",
+                                       "ref t0.txt", "cfgpio 1,1,t0.txt",
+                                       "move t0.txt,0,0,10,10,0,100", "setlayer t0.txt,n0",
+                                       "setlayer n0,t0.txt")):
+            with self.subTest(line=line):
+                self.write_code(line)
+                self.assert_refused(r"first\.nx line 2", line, '("Invalid Component ID")',
+                                    "refused%d" % number)
+        self.switch_to_nxlang()
+        self.write_code("vis t0.txt, 0")
+        self.assert_refused(r"first\.nx line 2", "vis t0.txt,0", '("Invalid Component ID")',
+                            "nxlang")
+
+    def test_a_variable_as_a_component_in_an_event(self):
+        self.write_code("vis sys0,0", "tsw sys1,1", "click sys2,0", "ref dim", "vis RED,0",
+                        "cfgpio 1,1,sys0", "vis n0,0")
+        export_dump(self.source, self.folder / "built")
+        # nxlang's way to give one a computed component: a local, which it
+        # writes as an int of program.s. nxlang knows no colour's name.
+        self.switch_to_nxlang()
+        self.write_code("var x = 1", "vis x, 0")
+        export_dump(self.source, self.folder / "nxlang")
+        # sys0 too, but only once program.nx declares it, as anywhere.
+        self.assertIn("int sys0=0,sys1=0,sys2=0", self.program_text)
+        self.program.write_text(self.program_text.replace("int sys0=0,sys1=0,sys2=0",
+                                                          "int sys1=0,sys2=0"),
+                                encoding="utf-8", newline="\n")
+        self.write_code("vis sys0, 0")
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: .*sys0"):
+            export_dump(self.source, self.folder / "undeclared")
+
+    def test_a_name_that_is_no_component_and_no_variable(self):
+        for number, line in enumerate(("vis zz,0", "tsw zz,1", "click zz,0", "ref zz",
+                                       "cfgpio 1,1,zz", "move zz,0,0,10,10,0,100",
+                                       "setlayer zz,n0")):
+            with self.subTest(line=line):
+                self.write_code(line)
+                self.assert_refused(r"first\.nx line 2", line, '("Invalid Component ID")',
+                                    "event%d" % number)
+        self.write_code("n0.val=0")
+        for number, line in enumerate(("vis zz,0", "tsw zz,1", "click zz,0", "ref zz",
+                                       "cfgpio 1,1,zz", "move zz,0,0,10,10,0,100",
+                                       "move t0,0,0,10,10,0,100", "setlayer zz,n0")):
+            with self.subTest(line=line):
+                line_number = self.write_program_line(line)
+                self.assert_refused(r"program\.nx line %d" % line_number, line,
+                                    '("Invalid Component ID")', "program%d" % number)
+        self.write_program_line("vis dim,0")
+        export_dump(self.source, self.folder / "built")
+        # nxlang refuses a name it does not know, as anywhere.
+        self.switch_to_nxlang()
+        self.write_code("vis zz, 0")
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: unknown name zz"):
+            export_dump(self.source, self.folder / "nxlang")
+        self.write_code("n0.val = 0")
+        line_number = self.write_program_line("vis zz, 0")
+        with self.assertRaisesRegex(NxwrightError,
+                                    r"program\.nx line %d: unknown name zz" % line_number):
+            export_dump(self.source, self.folder / "nxlang-program")
+
+    def test_the_screen_s_arrays_in_program_nx(self):
+        for number, line in enumerate(("vis b[1],0", "vis b[sys0],1", "vis p[0].b[1],0",
+                                       "tsw b[1],1", "click b[1],0", "ref b[1]",
+                                       "move b[1],0,0,10,10,0,100", "cfgpio 1,1,b[1]",
+                                       "setlayer b[1],n0")):
+            with self.subTest(line=line):
+                line_number = self.write_program_line(line)
+                self.assert_refused(r"program\.nx line %d" % line_number, line,
+                                    '("Invalid Component ID")', "refused%d" % number)
+        # `b[i]` is the current page's component of ID i, as a command's
+        # component in program.nx is an ID, so nxlang writes the ID. The
+        # Editor's simulator hid the component of ID 1 for `vis b[1],0`, as
+        # for `vis 1,0`. Another page's, `p[n].b[i]`, it still refuses.
+        self.switch_to_nxlang()
+        self.write_program_line("vis b[1], 0")
+        export_dump(self.source, self.folder / "nxlang")
+        self.assertIn(b"vis 1,0", (self.folder / "nxlang" / "program.s").read_bytes())
+        # A component given by arithmetic over the arrays is not one `b[i]`,
+        # and is written as it is.
+        self.write_program_line("vis b[1]+b[2], 0")
+        export_dump(self.source, self.folder / "nxlang-sum")
+        self.assertIn(b"vis b[1]+b[2],0",
+                      (self.folder / "nxlang-sum" / "program.s").read_bytes())
+        # An index other than a number or a name, which no probe tried as a
+        # component, is not written as the component: the build refuses
+        # `b[...]` there.
+        line_number = self.write_program_line("vis b[sys0+1], 0")
+        self.assert_refused(r"program\.nx line %d" % line_number, "vis b[sys0+1],0",
+                            '("Invalid Component ID")', "nxlang-index")
+        # The name written in place of `b[i]` is checked as any other.
+        line_number = self.write_program_line("vis b[zz], 0")
+        with self.assertRaisesRegex(NxwrightError,
+                                    r"program\.nx line %d: unknown name zz" % line_number):
+            export_dump(self.source, self.folder / "nxlang-unknown")
+        line_number = self.write_program_line("vis p[0].b[1], 0")
+        self.assert_refused(r"program\.nx line %d" % line_number, "vis p[0].b[1],0",
+                            '("Invalid Component ID")', "nxlang-refused")
+
+    def test_page_given_a_text(self):
+        self.write_code('page "first"')
+        self.assert_refused(r"first\.nx line 2", 'page "first"', '("Invalid Page ID")',
+                            "refused")
+        self.switch_to_nxlang()
+        self.write_code('page "first"')
+        self.assert_refused(r"first\.nx line 2", 'page "first"', '("Invalid Page ID")',
+                            "nxlang")
+
+
 class FullyListedComponentTest(_CodeOnFirstTestCase):
     """Code naming a component whose page file lists every attribute, as the
     Nextion Editor compiled it: by the component's type. It makes such a
@@ -727,7 +872,9 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
                                        "crcrest", "crcrest 1", "crcputs t0.txt,0,1",
                                        "crcputu 0", "rest 1", "touch_j 1", "code_c 1",
                                        "i 1,2", "beepset 1", "meup 1,2,3", "gets 1",
-                                       "cfguart 1,2,3", "cuts 1,2", "xnum 1,2")):
+                                       "cfguart 1,2,3", "cuts 1,2", "xnum 1,2",
+                                       "doevents 1", "ref_stop 1", "ref_star 1",
+                                       "com_stop 1", "com_star 1", "page 1,2", "page")):
             with self.subTest(line=line):
                 self.write_code(line)
                 with self.assertRaisesRegex(
@@ -739,7 +886,8 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
         self.write_code("cls 1", 'print "a,b"', "crcputh 0A 0B", "crcrest 1,0xffff",
                         'rdfile "sd0/a.txt",0,1,0', 'twfile "sd0/a.txt",5', "rest", "touch_j",
                         "code_c", "i 1,2,3,4", "beepset 1,2", "meup 1,2", "gets 1,2",
-                        "cfguart 1,2,3,4", "cuts 1,2,3,4,5,6,7", "xnum 1,2,3,4,5,6,7,8,9,10")
+                        "cfguart 1,2,3,4", "cuts 1,2,3,4,5,6,7", "xnum 1,2,3,4,5,6,7,8,9,10",
+                        "doevents", "ref_stop", "ref_star", "com_stop", "com_star", "page 0")
         export_dump(self.source, self.folder / "built")
 
     def test_nxlang_writes_such_texts_another_way(self):

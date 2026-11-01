@@ -633,6 +633,12 @@ class CommandArgumentTest(unittest.TestCase):
                          ["covx 1234,t0.txt,x.val-3,x.val-4"])
         self.assertEqual(compile_lines("prints t0.txt, x.val + 1"), ["prints t0.txt,x.val+1"])
 
+    def test_a_component_as_written(self):
+        # A command that takes a component is written as it is, an empty
+        # argument included, but where nxlang writes `b[i]` in program.nx as
+        # `i`.
+        self.assertEqual(compile_lines("vis t0,,0"), ["vis t0,,0"])
+
     def test_one_operand_as_written(self):
         self.assertEqual(compile_lines("get x.val"), ["get x.val"])
         self.assertEqual(compile_lines('print "a, b"'), ['print "a, b"'])

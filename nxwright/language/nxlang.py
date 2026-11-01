@@ -103,11 +103,13 @@ from dataclasses import dataclass, field
 import re
 
 from nxwright import NxwrightError
-from nxwright.language.code_checks import (DATA_RECORD_ARGUMENTS, DATA_RECORD_CALL,
-                                           ONE_OPERAND_FIRST, ends_in_escaped_backslash,
-                                           is_one_operand, method_count_refusal)
-from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, command_word, declared_int_names,
-                                          goto_label, minus_is_sign, outside_strings, split_line)
+from nxwright.language.code_checks import (COMPONENT_PLACES, DATA_RECORD_ARGUMENTS,
+                                           DATA_RECORD_CALL, ONE_OPERAND_FIRST, SCREEN_ARRAY,
+                                           ends_in_escaped_backslash, is_one_operand,
+                                           method_count_refusal)
+from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, command_arguments, command_word,
+                                          declared_int_names, goto_label, minus_is_sign,
+                                          outside_strings, split_line)
 from nxwright.language.code_preprocessor import with_own_attributes
 from nxwright.language.resource_names import REFERENCE_TEXT
 from nxwright.project.editor_language import (EDITOR_PROGRAM_VARIABLES, EDITOR_SYSTEM_VARIABLES,
@@ -2402,6 +2404,8 @@ class _EventCompiler:
             self.data_record_call(number, indent, call, comment)
             return
         command = command_word(code)
+        if command in COMPONENT_PLACES:
+            code = self.component_arguments(command, code, number)
         if command in ONE_OPERAND_FIRST:
             self.command_with_operands(number, indent, command, code[len(command):], comment)
             return
@@ -2500,6 +2504,49 @@ class _EventCompiler:
         # Declared after its value, so "var x = x" cannot read itself.
         self.scope.locals[name] = local
         return emitter.lines
+
+    def component_arguments(self, word: str, code: str, number: int) -> str:
+        """Returns the command `code`, whose first word `word` is one of
+        COMPONENT_PLACES, with the components it gives checked as nxlang
+        checks every name. A name alone must be a component of the page or
+        the page itself, a constant, a local, an int variable, or a system
+        variable.
+
+        In program.nx, which has no page, `b[i]` becomes `i`, `i` a number or
+        a name. `b[i]` is the current page's component of ID i, and a
+        component there is an ID: the Editor's simulator hid the component
+        of ID 1 for `vis b[1],0`, as for `vis 1,0`. The Editor refuses
+        `b[i]` in program.s. Any other form is left to the build's checks."""
+        arguments = command_arguments(code[len(word):])
+        # program.nx alone is compiled without temporaries (compile_program).
+        in_program = self.temporaries is None
+        rewritten = False
+        for place in COMPONENT_PLACES[word]:
+            if place >= len(arguments):
+                continue
+            component = arguments[place].strip()
+            array = SCREEN_ARRAY.fullmatch(component)
+            if (in_program and array and not component.startswith("p[")
+                    and re.fullmatch(r"[0-9]+|[A-Za-z_]\w*", array[1].strip())):
+                arguments[place] = arguments[place].replace(component, array[1].strip())
+                rewritten = True
+                # The name written in its place is checked as any other.
+                component = array[1].strip()
+            if (re.fullmatch(r"[A-Za-z_]\w*", component)
+                  and self.scope.lookup(component) is None
+                  and component not in self.page.component_names
+                  and (in_program or component != self.page.page_name)
+                  and component not in self.page.variables
+                  and component not in EDITOR_SYSTEM_VARIABLES):
+                if component in EDITOR_PROGRAM_VARIABLES:
+                    raise NxwrightError(UNDECLARED_PROGRAM_VARIABLE % component, line=number,
+                                        fix={"kind": "declare", "variable": component})
+                raise NxwrightError("unknown name %s: not a component of this page, a constant, "
+                                    "a local, an int variable, or a system variable"
+                                    % component, line=number)
+        # Joined again only when rewritten, as the split drops an empty
+        # argument, which the line is otherwise written with.
+        return code[:len(word)] + ",".join(arguments) if rewritten else code
 
     def substitute_command(self, code: str, number: int) -> str:
         """Replaces locals and constants in a command's arguments, keeping its

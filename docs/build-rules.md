@@ -110,8 +110,8 @@ The build stops at the first line that uses something that does not exist:
 
 - `t0.txt` must be a component of the page.
 - `settings.t0.txt` must be a page and one of its components.
-- `vis t0,1`, `tsw`, `ref`, and `click` must give a component of the page.
-  - In `program.nx`, which belongs to no page, they take a component's number, as in `vis 1,0`, or a variable that contains it, as in `vis sys0,0`. A page's or a component's name is refused there, with or without a page's name, as in `vis t0,0` or `vis page0.t0,0` ("Invalid Component ID").
+- A command's component, as in `vis t0,1`, must be a component of the page, its number, or a variable that contains it, as in `vis sys0,0`. The same goes for `tsw`, `ref`, `click`, and `move`, for `cfgpio`'s third argument, and for both of `setlayer`'s. A name that is neither a component nor a variable is refused, as in `vis zz,0`, and so is a component's `txt`, as in `vis t0.txt,0` ("Invalid Component ID").
+  - In `program.nx`, which belongs to no page, they take a component's number, as in `vis 1,0`, or a variable that contains it, as in `vis sys0,0`. A page's or a component's name is refused there, with or without a page's name, as in `vis t0,0` or `vis page0.t0,0`, and so is `b[1]` or `p[0].b[1]` ("Invalid Component ID"). In nxlang, `b[1]` there is written as `1` ([nxlang-compiled.md](nxlang-compiled.md#programnx)).
 - A name alone in a value or a condition, as `abc` in `n0.val=abc+1`, must be an `int` of `program.nx`, a system variable, or a colour in capitals, as `RED`. A component's or a page's name alone is refused.
 - Another page's components need their page's name, whatever their scope.
 
@@ -230,9 +230,10 @@ In nxlang, the build refuses the attributes components lack too.
 - A line whose first word is not a command the Nextion Editor knows ("Invalid command"). That includes `dir`, and a name alone, such as `sys0`.
   - The commands are the vendor's instruction set's, and those it does not document that the Nextion Editor knows, such as `beep`, `lcd_dev`, and `setbrush`, written in small letters (`EDITOR_COMMANDS` in `nxwright/project/editor_language.py`).
   - A first word with a capital letter, such as `CLS`, and `movelayer`, get "Invalid Variables" instead.
-- A command given another number of arguments than it takes, such as `cls 1,2` or `get 1,2`, or written alone, as `cls` ("Invalid number of arguments"). `add` alone gets "Invalid command".
+- A command given another number of arguments than it takes, such as `cls 1,2`, `get 1,2`, or `doevents 1`, or written alone, as `cls` or `page` ("Invalid number of arguments"). `add` alone gets "Invalid command".
   - The numbers are the vendor's instruction set's, or those an undocumented command was seen to compile with.
   - A command whose number of arguments is not fixed, such as `sets`, takes any number.
+- `page` given a quoted text, as in `page "page0"` ("Invalid Page ID"). It takes a page's name without quotes, or its number.
 
 ### Long lines
 
