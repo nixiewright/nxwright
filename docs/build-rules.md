@@ -46,11 +46,17 @@ The Nextion Editor's panel never shows these attributes, but refuses these value
 
 ### How many of a kind a page takes
 
-The build names the first component past the limit. The limits are the same on every series that has these types:
+A page can have at most 250 components, of any type ("Too many components"). This includes the components nxlang adds to run your code.
+
+Some kinds have limits of their own. The build's message gives the first component past the limit. The limits are the same on every series that has these types:
 
 - 5 waveforms ("Waveform components exceed maximum in page:5");
 - 16 animations and videos together;
 - 12 timers and scrolling texts together, which the Nextion Editor calls timer events.
+
+### How many pages a project can have
+
+A project can have at most 251 pages, keyboard pages included ("Too many pages"). The build points to the line of `app.toml` that lists the 252nd page. `nxwright new-page` and `nxwright keyboard` refuse to add a page once a folder has 251.
 
 ### What a series refuses
 

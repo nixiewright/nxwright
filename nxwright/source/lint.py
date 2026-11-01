@@ -57,8 +57,9 @@ from nxwright.project.screen_arithmetic import int32
 from nxwright.source.nx_files import (EVENT_HEADING, FUNCTION_HEADING, event_blocks, read_nx_file,
                                       read_page_files)
 from nxwright.source.page_source import page_nx_path, page_toml_path
-from nxwright.source.source_folder import (check_picture_file, code_files, picture_file,
-                                           types_in_page_data, video_rotation_problem)
+from nxwright.source.source_folder import (check_picture_file, code_files, line_naming,
+                                           picture_file, types_in_page_data,
+                                           video_rotation_problem)
 
 ERROR, WARNING = "error", "warning"
 
@@ -172,14 +173,6 @@ def picture_errors(app: dict, read, read_bytes, exists) -> list:
             found.append(Finding("app.toml", line_naming(read("app.toml"), name), ERROR,
                                  "%s: %s" % (path, problem), "picture-unreadable"))
     return found
-
-
-def line_naming(text: str, name: str) -> int:
-    """Returns the line, from 1, of app.toml naming `name` in quotation marks, or 0."""
-    for number, line in enumerate(text.split("\n"), start=1):
-        if '"%s"' % name in line:
-            return number
-    return 0
 
 
 def _left_to_right(app: dict, read) -> list:

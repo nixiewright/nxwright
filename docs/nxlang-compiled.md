@@ -97,7 +97,7 @@ The Nextion Editor accepts less than nxlang:
 
 ## The hidden variables and components
 
-A page has at most 256 objects, so the compiler adds as few as it can. Everything it adds has a name starting with `__`.
+A page has at most 250 components, so the compiler adds as few as it can. Everything it adds has a name starting with `__`.
 
 - **Numbers are globals.** Every number the compiler needs is an `int` global of `program.s`, named after its page: `__g3_17` is page 3's 18th. The build declares them in lines at the top of `program.s`, and extracting leaves those lines out of `program.nx`. Pages never share one, since changing page runs the new page's Preinitialize event in the middle of the old page's event. Up to 8,000 globals are known to work, and the build stops past that.
 - **Only text needs a component** on the page: `__s0`, `__s1`, ... for temporaries, and `__v0`, `__v1`, ... for text that lasts longer: locals, parameters, results, and a `switch`'s value. They store up to 255 characters.

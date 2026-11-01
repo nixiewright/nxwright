@@ -9,6 +9,7 @@ from pathlib import Path
 
 from nxwright import NxwrightError
 from nxwright.language.resource_names import check_names
+from nxwright.project.editor_limits import check_room_for_a_page
 from nxwright.project.font_drawing import draw_font_block, font_warning
 from nxwright.project.truetype import TrueTypeFont
 from nxwright.project.zi_font import UTF8, decode_font, text_codes
@@ -44,13 +45,14 @@ def add_keyboard(source_folder: Path, kind: str, typeface: Path = None, font: st
     caller's text in another shows a gap; or, of the Chinese keyboard's font
     drawn from a typeface, which characters the typeface lacks.
 
-    Raises NxwrightError, before writing anything, for a folder without
-    screen settings, one that has that keyboard already, as a page of any
-    name marked as that system page, one with a page of the keyboard's name
-    that is another page, or a file already at the place of one the
-    keyboard adds; for the Chinese keyboard in a folder of another encoding
-    than gb2312, and for its font as _chinese_keyboard refuses it; and for
-    `typeface` or `font` given another keyboard.
+    Raises NxwrightError, before writing anything, for a folder without screen
+    settings, one that already has 251 pages, the most the Nextion Editor
+    compiles (editor_limits.check_room_for_a_page), one that has that keyboard
+    already, as a page of any name marked as that system page, one with a page
+    of the keyboard's name that is another page, or a file already at the
+    place of one the keyboard adds; for the Chinese keyboard in a folder of
+    another encoding than gb2312, and for its font as _chinese_keyboard
+    refuses it; and for `typeface` or `font` given another keyboard.
     """
     if kind not in KEYBOARD_PAGES:
         raise NxwrightError("%r is not a keyboard; they are %s" % (kind, ", ".join(KEYBOARD_PAGES)))
@@ -76,6 +78,7 @@ def add_keyboard(source_folder: Path, kind: str, typeface: Path = None, font: st
         if name.lower() == page.lower():
             raise NxwrightError("the folder has a page named %s that is not the %s"
                                 % (name, kind))
+    check_room_for_a_page(len(app["pages"]))
     fonts = app["fonts"]
     if chinese:
         made, block, warning = _chinese_keyboard(source_folder, fonts, settings, typeface, font)

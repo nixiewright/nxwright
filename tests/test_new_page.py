@@ -15,6 +15,7 @@ from nxwright.project.screen_models import model_named
 from nxwright.source.project_files import build
 from nxwright.source.source_folder import add_page, new_source_folder
 from tests.language_server_connection import initialized
+from tests.test_build_checks import add_pages_up_to
 from tests.test_folder_check import FolderTestCase
 
 
@@ -69,6 +70,11 @@ class AddPageTest(FolderTestCase):
         # The Nextion Editor refused a project with such a page as it opened it.
         self.assertRefused('the Nextion Editor refuses a name that starts with a digit, saying '
                            '"First character of a Name can not be number": 2page', "2page")
+
+    def test_a_folder_of_251_pages_is_refused(self):
+        add_pages_up_to(self.root, 251)
+        self.assertRefused('the folder has 251 pages, the most the Nextion Editor compiles '
+                           '("Too many pages"). Remove a page first.', None)
 
     def test_a_file_already_there_is_refused(self):
         self.write("pages/settings.nx", "")

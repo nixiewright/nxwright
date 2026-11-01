@@ -33,16 +33,16 @@ What the Editor allows, and so what the compiler works around:
   - A hotspot is at least 2 by 2, and `click` runs its Touch Press event
     at once, even with its touch turned off by `tsw`.
 
-A page holds at most 256 objects, so the compiler adds as few as it can.
-Every number it needs is an `int` global of program.s, `__g<page>_<n>`,
-declared by the build; pages never share one, since changing page runs the
-new page's Preinitialize event in the middle of the old page's event. Only
-text needs a variable component on the page: `__s0` for temporaries, and
-`__v0` for the text that lasts longer: locals, parameters, results, and a
-switch's value. Their names start with "__", which the project's own names
-may not; one "_" is the project's to use. The code calls the `__v` text
-"shared", since events and functions that never run at once share it (see
-below).
+A page has at most 250 components (editor_limits.MOST_COMPONENTS), so the
+compiler adds as few as it can. Every number it needs is an `int` global of
+program.s, `__g<page>_<n>`, declared by the build; pages never share one,
+since changing page runs the new page's Preinitialize event in the middle of
+the old page's event. Only text needs a variable component on the page:
+`__s0` for temporaries, and `__v0` for the text that lasts longer: locals,
+parameters, results, and a switch's value. Their names start with "__",
+which the project's own names may not; one "_" is the project's to use. The
+code calls the `__v` text "shared", since events and functions that never
+run at once share it (see below).
 
 No event runs in the middle of another except through `click`: a hand-made
 one, or a call, which clicks a hotspot. So the compiler knows what may run

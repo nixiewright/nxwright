@@ -41,7 +41,7 @@ from nxwright.project.device_settings import read_device_settings
 from nxwright.project.dump_folder import (MACROS_BLOCK, MACROS_FILE, check_dump_format,
                                           check_ids_without_gaps, copied_contents, dump_pictures,
                                           page_text_files)
-from nxwright.project.editor_limits import check_page_limits
+from nxwright.project.editor_limits import check_page_limits, page_count_refusal
 from nxwright.project.page_block import encode_page, parse_page
 from nxwright.project.page_text import page_from_text
 from nxwright.project.picture_cache import make_screen_copy, opened_cache
@@ -167,6 +167,9 @@ def _plan_pages(plan: WritePlan, container: HmiContainer, manifest, dump_folder:
     """Matches the dump's pages to the project's page blocks by page name."""
     files = page_text_files(dump_folder)
     check_ids_without_gaps(files, "page")
+    refusal = page_count_refusal(len(files), "the dump")
+    if refusal is not None:
+        raise NxwrightError(refusal)
     project_blocks = {parse_page(container.blocks[name]).name: name
                       for name in manifest.block_names("pa")}
     next_number = _next_block_number(container, "pa")

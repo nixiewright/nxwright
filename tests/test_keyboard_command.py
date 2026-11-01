@@ -20,6 +20,7 @@ from nxwright.source.project_files import build
 from nxwright.source.source_folder import new_source_folder
 from nxwright.source.resource_adding import add_font, add_font_file
 from nxwright.source.keyboard_adding import add_keyboard
+from tests.test_build_checks import add_pages_up_to
 from tests.test_folder_check import edited_app
 from tests.test_font_command import folder_files
 from tests.test_zi_font import utf8_fixture
@@ -213,6 +214,8 @@ class KeyboardCommandTest(unittest.TestCase):
         cased = self.new_folder(name="cased")
         keypad_font = keyboard("keypad", 480, 320).font_name
         add_font(cased, NOTO_SANS, 20, name=keypad_font.lower())
+        full = self.new_folder(name="full")
+        add_pages_up_to(full, 251)
         unset = self.temp / "unset"
         unset.mkdir()
         (unset / "app.toml").write_text('format = 1\nlanguage = "nextion"\npages = []\n'
@@ -225,6 +228,8 @@ class KeyboardCommandTest(unittest.TestCase):
                 (stray, "keypad", "keybdB.page.toml is already there, though app.toml does "
                                   "not list it"),
                 (unset, "keypad", "app.toml gives no screen settings"),
+                (full, "keypad", 'the folder has 251 pages, the most the Nextion Editor '
+                                 'compiles ("Too many pages"). Remove a page first.'),
                 (cased, "keypad", "fonts: %s and %s are the same name"
                                   % (keypad_font.lower(), keypad_font))):
             with self.subTest(message=message):

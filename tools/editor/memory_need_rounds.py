@@ -5,8 +5,8 @@ one attribute a need follows; the edges of its steps, found by halving; and
 what two of a type on a page need."""
 from dataclasses import dataclass
 
+from nxwright.project.editor_limits import MOST_COMPONENTS
 from nxwright.project.memory_table import Part, Steps
-from nxwright.source.page_source import MOST_OBJECTS
 from tools.editor.memory_cases import (Case, Component, bounded_text, defaults, is_buffer,
                                        most_value)
 from tools.editor.memory_global_rounds import reserve_at
@@ -61,8 +61,8 @@ class NeedPages:
             return cost_of(self.types["text"], {**base, "txt_maxl": txt_maxl})
         largest = self._largest_filler()
         on_page = self.empty_own - self.objects.of(1) + sum(map(self._on_page, components))
-        # A page holds at most MOST_OBJECTS objects, itself among them.
-        for count in range(1, MOST_OBJECTS - len(components)):
+        # A page has at most MOST_COMPONENTS components, counting the fillers.
+        for count in range(1, MOST_COMPONENTS + 1 - len(components)):
             room = self.probe.memory - global_memory - on_page - \
                 self.objects.of(len(components) + 1 + count) - (count - 1) * costs(largest)
             if room < costs(0):

@@ -221,7 +221,7 @@ The toolbar above the page has buttons to zoom in and out, to fit the page in th
 
 ### Good to know
 
-- The status bar shows how many objects the page has, out of the 256 allowed, and its longest chain of calls and clicks, out of the 7 allowed. (A Nextion screen lets events nest 9 deep. The event that starts the chain takes one level, and one more is kept free for a page change, which runs the new page's load event.)
+- The status bar shows how many objects the page has (its components plus the page itself), out of the 251 allowed, and its longest chain of calls and clicks, out of the 7 allowed. (A Nextion screen lets events nest 9 deep. The event that starts the chain takes one level, and one more is kept free for a page change, which runs the new page's load event.)
 - Save your changes first. Adding a page, a font, pictures, an animation, a video, a sound, or a keyboard page is refused while `app.toml` has unsaved changes. Extracting, switching to nxlang, and changing the screen, rotation, or encoding are refused while any file of the project has unsaved changes.
 - Some of the extension's own edits check the result before they are applied, and are refused with a message if the project would no longer build: Rename (for example, to a name already in use), adding or pasting a component (for example, on a page that is full), and Format Document (on a file with errors).
 - VS Code saves `.nx` files in UTF-8, as nxwright reads them, and never guesses another encoding for them, whatever you set `files.encoding` and `files.autoGuessEncoding` to for all files. This only covers VS Code. A `.nx` file that another program saved in another encoding may not be valid UTF-8. The build then refuses it, with a message that it is not UTF-8 text.

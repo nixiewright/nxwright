@@ -30,10 +30,10 @@ from lsprotocol import types
 
 from nxwright.language.nxlang import MOST_CALL_DEPTH, MOST_GLOBALS
 from nxwright.language_server.file_texts import uri_of
+from nxwright.project.editor_limits import MOST_COMPONENTS
 from nxwright.source.folder_index import APP_FILE, FolderIndex, page_of
 from nxwright.source.folder_check import check_folder, memory_findings
 from nxwright.source.lint import ERROR
-from nxwright.source.page_source import MOST_OBJECTS
 from nxwright.source.source_folder import folder_byte_reader
 
 _EVERY_PAGE_FILES = {APP_FILE, "defaults.toml"}
@@ -95,7 +95,8 @@ class LiveChecks:
         if page is None:
             return None
         measures = state.measures[page]
-        return {"page": page, "objects": measures.objects, "mostObjects": MOST_OBJECTS,
+        # The objects are the page's components and the page itself.
+        return {"page": page, "objects": measures.objects, "mostObjects": MOST_COMPONENTS + 1,
                 "chain": measures.chain, "mostChain": MOST_CALL_DEPTH,
                 "globals": sum(found.globals_used for found in state.measures.values()),
                 "mostGlobals": MOST_GLOBALS}

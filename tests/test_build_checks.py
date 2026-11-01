@@ -14,10 +14,12 @@ from nxwright.language.code_checks import check_line
 from nxwright.language.code_lines import first_word
 from nxwright.project.editor_language import (EDITOR_COMMANDS, EDITOR_PROGRAM_DECLARATION,
                                               SERIES_LACKED_COMMANDS)
+from nxwright.project import editor_limits
 from nxwright.project.editor_limits import LONGEST_LINES
 from nxwright.project.project_writer import ProjectWriter
 from nxwright.source.device_keys import DEVICE_KEYS
-from nxwright.source.source_folder import export_dump, switch_to_nxlang
+from nxwright.source.folder_check import check_folder
+from nxwright.source.source_folder import app_text, export_dump, folder_reader, switch_to_nxlang
 from nxwright.testing import SourceFolderRunner
 from tests.test_project_writer import edit_text
 from tests.test_source_folder import SourceFolderTestCase
@@ -407,6 +409,139 @@ class PageCapTest(SourceFolderTestCase):
                                                    r"page holds 6 waveforms"):
             ProjectWriter(self.project, dump, self.folder / "out.HMI").write()
         self.assertFalse((self.folder / "out.HMI").exists())
+
+
+def add_pages_up_to(folder: Path, count: int):
+    """Adds pages to a source folder until its app.toml lists `count`, each a
+    copy of its first page, named more2, more3, and so on, with no code."""
+    app_path = folder / "app.toml"
+    app = tomllib.loads(app_path.read_text(encoding="utf-8"))
+    first = app["pages"][0]
+    text = (folder / "pages" / ("%s.page.toml" % first)).read_text(encoding="utf-8")
+    for number in range(len(app["pages"]), count):
+        name = "more%d" % number
+        (folder / "pages" / ("%s.page.toml" % name)).write_text(
+            text.replace('name = "%s"' % first, 'name = "%s"' % name, 1), encoding="utf-8")
+        (folder / "pages" / ("%s.nx" % name)).write_text("", encoding="utf-8")
+        app["pages"].append(name)
+    app_path.write_text(app_text(app), encoding="utf-8", newline="\n")
+
+
+class ComponentCountTest(SourceFolderTestCase):
+    """The Nextion Editor's compile refuses a page of more than 250
+    components, "Too many components", on every series, whatever their type
+    or scope (Nextion Editor 1.68.2). The build refuses one too, naming the
+    first component past 250."""
+
+    REFUSED = (r"first\.page\.toml: component v250: the page has %d components\. The "
+               r"Nextion Editor's compile refuses more than 250 on a page \(\"Too many "
+               r"components\"\)\. Remove %s, or move %s to another page\.")
+
+    def setUp(self):
+        super().setUp()
+        self.added = 0
+
+    def add(self, count: int):
+        """Adds `count` variables to the page first, named v0, v1, and so on."""
+        with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8",
+                  newline="\n") as file:
+            for _ in range(count):
+                file.write('\n[[component]]\nname = "v%d"\ntype = "variable"\n' % self.added)
+                self.added += 1
+
+    def test_250_build_and_251_are_refused(self):
+        self.add(250)
+        export_dump(self.source, self.folder / "most")
+        self.add(1)
+        self.assert_export_refused(self.REFUSED % (251, "1 component", "it"))
+
+    def test_the_message_gives_how_many_to_remove(self):
+        self.add(253)
+        self.assert_export_refused(self.REFUSED % (253, "3 components", "them"))
+
+    def test_in_nxlang(self):
+        switch_to_nxlang(self.source)
+        self.add(251)
+        self.assert_export_refused(self.REFUSED % (251, "1 component", "it"))
+
+    def test_check_gives_the_component_s_line(self):
+        self.add(251)
+        page_file = self.source / "pages" / "first.page.toml"
+        found = check_folder(folder_reader(self.source), lambda path: (self.source / path).is_file())
+        errors = [finding for finding in found.errors() if "Too many components" in finding.message]
+        self.assertEqual(len(errors), 1)
+        lines = page_file.read_text(encoding="utf-8").split("\n")
+        self.assertEqual((lines[errors[0].line - 1], lines[errors[0].line]),
+                         ("[[component]]", 'name = "v250"'))
+
+    def test_nxlang_s_components_count(self):
+        # The page first, 249 components of its file, and 2 nxlang adds.
+        names = ["first"] + ["v%d" % number for number in range(249)] + ["__s0", "__f0"]
+        with self.assertRaises(NxwrightError) as raised:
+            editor_limits.check_component_count(names, 2, "first.page.toml")
+        self.assertEqual(str(raised.exception),
+                         "first.page.toml: nxlang adds 2 components to run this page's code, "
+                         "which brings the page to 251 components. The Nextion Editor's compile "
+                         "refuses more than 250 on a page (\"Too many components\"). Remove 1 "
+                         "component, or move it to another page.")
+        self.assertEqual(raised.exception.table, 0)
+        editor_limits.check_component_count(names[:-1], 1, "first.page.toml")
+
+    def test_the_build_of_a_dump(self):
+        # A dump past the limit, as one of a project the Nextion Editor saved
+        # but cannot compile: a 251st component, copied from the 250th.
+        self.add(250)
+        dump = self.folder / "most"
+        export_dump(self.source, dump)
+        page = dump / "pages" / "00-first.txt"
+        text = page.read_text(encoding="utf-8")
+        last = text[text.index("object 250 v249"):]
+        more = re.sub(r"\bv249\b", "v250", last.replace("object 250 v249", "object 251 v250", 1))
+        more = re.sub(r"(?m)^  id = 250$", "  id = 251", more)
+        page.write_text(text.rstrip("\n") + "\n\n" + more, encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(NxwrightError, r"pages[/\\]00-first\.txt: component v250: the "
+                                                   r"page has 251 components"):
+            ProjectWriter(self.project, dump, self.folder / "out.HMI").write()
+        self.assertFalse((self.folder / "out.HMI").exists())
+
+
+class PageCountTest(SourceFolderTestCase):
+    """The Nextion Editor's compile refuses a project of more than 251 pages,
+    "Too many pages", on every series (Nextion Editor 1.68.2). The build
+    refuses one too, at the line of app.toml that gives the 252nd page."""
+
+    REFUSED = (r"the project has 252 pages, and the Nextion Editor's compile refuses more "
+               r"than 251 \(\"Too many pages\"\)\. Remove 1 page\.")
+
+    def test_251_build_and_252_are_refused(self):
+        add_pages_up_to(self.source, 251)
+        export_dump(self.source, self.folder / "most")
+        add_pages_up_to(self.source, 252)
+        line = self.page_line("more251")
+        self.assert_export_refused(r"^app\.toml line %d: %s$" % (line, self.REFUSED))
+
+    def test_check_gives_the_line(self):
+        add_pages_up_to(self.source, 252)
+        found = check_folder(folder_reader(self.source), lambda path: (self.source / path).is_file())
+        errors = [finding for finding in found.errors() if "Too many pages" in finding.message]
+        self.assertEqual([(finding.file, finding.line) for finding in errors],
+                         [("app.toml", self.page_line("more251"))])
+
+    def test_the_build_of_a_dump(self):
+        add_pages_up_to(self.source, 251)
+        dump = self.folder / "most"
+        export_dump(self.source, dump)
+        pages = dump / "pages"
+        (pages / "251-more251.txt").write_bytes((pages / "250-more250.txt").read_bytes())
+        with self.assertRaisesRegex(NxwrightError, r"^the dump has 252 pages, and the Nextion "
+                                                   r"Editor's compile refuses more than 251"):
+            ProjectWriter(self.project, dump, self.folder / "out.HMI").write()
+        self.assertFalse((self.folder / "out.HMI").exists())
+
+    def page_line(self, page: str) -> int:
+        """Returns the line, from 1, of app.toml giving the page `page`."""
+        lines = (self.source / "app.toml").read_text(encoding="utf-8").split("\n")
+        return lines.index('    "%s",' % page) + 1
 
 
 class WriterLimitTest(SourceFolderTestCase):

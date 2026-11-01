@@ -923,15 +923,15 @@ class NxlangSourceFolderTest(NxlangFolderTestCase):
         with self.assertRaisesRegex(NxwrightError, "component __a starts with"):
             import_dump(dump, self.source)
 
-    def test_build_refuses_a_page_past_id_255(self):
+    def test_build_refuses_a_page_past_250_components_with_a_temporary(self):
         switch_to_nxlang(self.source)
         with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8", newline="\n") as file:
-            for number in range(253):
+            for number in range(248):
                 file.write('\n[[component]]\nname = "v%d"\ntype = "variable"\n' % number)
         self.write_text_join()
-        # The page, its 255 components, and the text temporary.
-        self.assert_export_refused("first: with the variables nxlang adds, the page "
-                                   "has 257 objects; at most 256 fit")
+        # The page's 250 components, and the text temporary.
+        self.assert_export_refused(r"^first\.page\.toml: nxlang adds 1 component to run this "
+                                   r"page's code, which brings the page to 251 components")
 
     def test_globals_of_two_pages_and_an_import_after_reordering(self):
         switch_to_nxlang(self.source)
@@ -1314,12 +1314,13 @@ class FunctionSourceFolderTest(NxlangFolderTestCase):
         self.assertIn("| tsw __f0,0\n    | x.val=5",
                       (self.folder / "again" / "pages" / "00-first.txt").read_text(encoding="utf-8"))
 
-    def test_build_refuses_a_page_past_id_255_through_functions(self):
+    def test_build_refuses_a_page_past_250_components_through_functions(self):
         with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8", newline="\n") as file:
-            for number in range(253):
+            for number in range(248):
                 file.write('\n[[component]]\nname = "v%d"\ntype = "variable"\n' % number)
-        # The page, its 255 components, and the function's hotspot.
-        self.assert_export_refused("the page has 257 objects; at most 256 fit")
+        # The page's 250 components, and the function's hotspot.
+        self.assert_export_refused(r"^first\.page\.toml: nxlang adds 1 component to run this "
+                                   r"page's code, which brings the page to 251 components")
 
 
 class EventCommentTest(NxlangFolderTestCase):

@@ -193,6 +193,7 @@ Adds a blank page the size of the screen, at the folder's rotation, with an empt
 
 - Without a name, the page is called `page0`, `page1`, and so on: the first one the folder does not have.
 - These names are refused, and nothing is written: a name the folder has, in any letter case; a name longer than 14 characters; and a name the Nextion Editor refuses, such as `dim`.
+- If the folder already has 251 pages, the command refuses, because the Nextion Editor cannot compile more.
 
 ## picture
 
@@ -314,6 +315,7 @@ To show a syllable's characters, tests and the simulator need the screen's pinyi
 
 - A folder that already has that keyboard: a page of any name marked as that system page, whether the Nextion Editor's or nxwright's.
 - A folder with a page of the keyboard's name that is another page.
+- A folder that already has 251 pages, the most the Nextion Editor can compile.
 
 ### With the Nextion Editor
 

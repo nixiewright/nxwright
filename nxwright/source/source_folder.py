@@ -46,7 +46,9 @@ from nxwright import MissingFileError, NxwrightError
 from nxwright.language.code_lines import program_int_variables
 from nxwright.language.code_preprocessor import preprocess
 from nxwright.project.editor_language import EDITOR_PROGRAM_DECLARATION, NAMES_THE_EDITOR_REFUSES
-from nxwright.project.editor_limits import NAME_LIMIT, check_component_places, lacked_attributes
+from nxwright.project.editor_limits import (MOST_PAGES, NAME_LIMIT, check_component_places,
+                                            check_room_for_a_page, lacked_attributes,
+                                            page_count_refusal)
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.page_memory import measure_page, project_memory
 from nxwright.project.font_drawing import draw_font_block, drawn_codes, lacking_words
@@ -551,16 +553,18 @@ def add_page(source_folder: Path, name: str = None) -> str:
     the first of page0, page1, and so on that the folder lacks. Returns the
     page's name.
 
-    Raises NxwrightError, before writing anything, for a folder without
-    screen settings; a name app.toml's pages may not hold, or one the build
-    refuses for a page (editor_limits.check_page_limits); a name the folder
-    has already, in any case; and a file already at the place of one it
-    writes."""
+    Raises NxwrightError, before writing anything, for a folder without screen
+    settings; a folder that already has 251 pages, the most the Nextion Editor
+    compiles (editor_limits.check_room_for_a_page); a name app.toml's pages
+    may not hold, or one the build refuses for a page
+    (editor_limits.check_page_limits); a name the folder has already, in any
+    case; and a file already at the place of one it writes."""
     source_folder = Path(source_folder)
     app = parse_app(read_text(source_folder / "app.toml"))
     settings = settings_from_keys(app)
     if settings is None:
         raise NxwrightError("app.toml gives no screen settings, so the page's size is not known")
+    check_room_for_a_page(len(app["pages"]))
     taken = {page.lower(): page for page in app["pages"]}
     if name is None:
         name = next("page%d" % number for number in count() if "page%d" % number not in taken)
@@ -818,6 +822,25 @@ def _source_files_from_dump(dump_folder: Path, source_folder: Path, old_app,
         app.update(device_keys(settings))
     files["app.toml"] = app_text(app).encode("utf-8")
     return files, names, generated, warnings
+
+
+def line_naming(text: str, name: str) -> int:
+    """Returns the line, from 1, of app.toml naming `name` in quotation marks, or 0."""
+    for number, line in enumerate(text.split("\n"), start=1):
+        if '"%s"' % name in line:
+            return number
+    return 0
+
+
+def check_page_count(app: dict, app_toml: str):
+    """Raises NxwrightError, at the line of app.toml giving the first page
+    past MOST_PAGES, when app.toml lists more pages than the Nextion
+    Editor's compile takes. `app` is app.toml's data, and `app_toml` its
+    text."""
+    reason = page_count_refusal(len(app["pages"]), "the project")
+    if reason is not None:
+        raise NxwrightError(reason, file="app.toml",
+                            line=line_naming(app_toml, app["pages"][MOST_PAGES]))
 
 
 def app_text(app: dict) -> str:
@@ -1155,6 +1178,7 @@ def _dump_files_from_source(source_folder: Path, refuse_by_table: bool) -> tuple
     checking the pages against the memory table as export_dump says."""
     folder = read_folder_source(folder_reader(source_folder), refuse_by_table=refuse_by_table)
     app = folder.app
+    check_page_count(app, folder.read("app.toml"))
     files = {"project.txt": (DUMP_FORMAT_LINE + "\n").encode("utf-8")}
     globals_used = []
     measured = {}       # {page name: what page_memory.measure_page found}

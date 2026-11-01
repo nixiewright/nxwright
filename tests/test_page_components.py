@@ -119,9 +119,9 @@ class AddTest(ComponentsTestCase):
                 self.add(type_name)
 
     def test_a_page_that_would_no_longer_build(self):
-        # A page holds at most 256 objects: here the page, title, and 254 more.
+        # A page has at most 250 components: here title, and 249 more.
         self.write("pages/page0.page.toml", self.text("pages/page0.page.toml") + "".join(
-            '\n[[component]]\nname = "v%d"\ntype = "variable"\n' % number for number in range(254)))
+            '\n[[component]]\nname = "v%d"\ntype = "variable"\n' % number for number in range(249)))
         with self.assertRaisesRegex(NxwrightError, "the page would not build after adding va0: "
                                                    "pages/page0.page.toml"):
             self.add("variable")

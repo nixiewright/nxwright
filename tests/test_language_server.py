@@ -1107,8 +1107,9 @@ class LiveCheckTest(CheckFolderTestCase):
         self.connection.handle({"jsonrpc": "2.0", "id": 2, "method": "nxwright/limits", "params": {
             "textDocument": {"uri": self.uri("pages/page0.nx")}}})
         limits = self.sent[-1]["result"]
-        self.assertEqual((limits["page"], limits["objects"], limits["chain"], limits["mostChain"]),
-                         ("page0", 3, ["page0.load", "show"], 7))
+        self.assertEqual((limits["page"], limits["objects"], limits["mostObjects"],
+                          limits["chain"], limits["mostChain"]),
+                         ("page0", 3, 251, ["page0.load", "show"], 7))
 
 
 if __name__ == "__main__":

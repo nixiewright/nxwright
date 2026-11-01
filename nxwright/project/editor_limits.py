@@ -1,10 +1,17 @@
-"""Limits of the Editor that a page can break, checked before the page is
-written: its names, its texts, and how many components of some kinds it
-holds (PAGE_CAPS); and, given the screen, a component reaching past it on
-a series that refuses that (check_component_places). The Editor itself
+"""Limits of the Nextion Editor that a page or a project can break. The
+build checks them before it writes the page, because the Nextion Editor
 reports them only when it opens or compiles the project, far from the page
-file at fault. Also which attributes a component has under its choices and
-its series (lacked_attributes, screen_holds).
+file at fault. They are:
+
+- the names and texts of a page and its components;
+- how many components a page has in all (MOST_COMPONENTS), and how many of
+  some kinds (PAGE_CAPS);
+- a component reaching past the screen, on a series that refuses it
+  (check_component_places);
+- how many pages a project has (MOST_PAGES).
+
+The module also says which attributes a component has under its choices
+and its series (lacked_attributes, screen_holds).
 
 The types and choices a series refuses are checked in
 source/series_components.py, as that check reads the attributes'
@@ -44,6 +51,18 @@ LEAST_SIDE = 2
 # default the memory table shows these series refusing. (Worked out from
 # the Editor 1.68.2.)
 SERIES_NEW_COMPONENT_VALUES = {series: {"gauge": {"sta": 1}} for series in ("T", "K", "F")}
+
+
+# The most components the Nextion Editor's compile takes on a page, the page
+# itself not counted. It refused a page of 251 on every series
+# ("Error:Page:page0 Too many components."), hotspots or variables, of local
+# or global scope alike. (Worked out from the Nextion Editor 1.68.2.)
+MOST_COMPONENTS = 250
+# The most pages the Nextion Editor's compile takes in a project. It refused
+# a project of 252 on every series ("Error:Too many pages."). Its compile
+# adds no keyboard page of its own, so it counts the pages app.toml lists.
+# (Worked out from the Nextion Editor 1.68.2.)
+MOST_PAGES = 251
 
 
 @dataclass(frozen=True)
@@ -296,7 +315,10 @@ def check_page_limits(page: PageBlock, where: str):
     when the page holds more components of some kinds than the Editor's
     compile takes (PAGE_CAPS). The error's `table` is the place in the page
     of the object at fault, from 0 for the page: past a cap, the first
-    component past it."""
+    component past it; and when the page has more components than
+    MOST_COMPONENTS (check_component_count)."""
+    check_component_count([(page_object.attribute("objname") or b"").decode("latin-1")
+                           for page_object in page.objects], 0, where)
     for index, page_object in enumerate(page.objects):
         try:
             _check_object_limits(page_object, index, where)
@@ -380,6 +402,64 @@ def code_cannot_change_on_series(type_name: str, attribute: str, series: str) ->
     by_type = ATTRIBUTES_CODE_CANNOT_CHANGE_ON_SERIES.get(series, {})
     return (attribute in by_type.get(EVERY_TYPE, frozenset())
             or attribute in by_type.get(type_name, frozenset()))
+
+
+def check_component_count(names: list, generated: int, where: str):
+    """Raises NxwrightError, starting with `where` (the file at fault), when a
+    page has more components than the Nextion Editor's compile takes
+    (MOST_COMPONENTS). `names` are the names of the page's objects, the page
+    first, and the last `generated` of them are the components nxlang adds
+    to run the page's code.
+
+    When the page file's own components are too many, the message gives the
+    first past the limit, and the error's `table` is that component's place
+    in the page. When only nxlang's components take the page past the
+    limit, the message says so, and the `table` is the page's own, 0."""
+    components = len(names) - 1
+    own = components - generated
+    if own > MOST_COMPONENTS:
+        error = NxwrightError("%s: component %s: the page has %d components. %s"
+                              % (where, names[MOST_COMPONENTS + 1], own,
+                                 _too_many_components(own)))
+        error.table = MOST_COMPONENTS + 1
+        raise error
+    if components > MOST_COMPONENTS:
+        error = NxwrightError("%s: nxlang adds %d %s to run this page's code, which brings the "
+                              "page to %d components. %s"
+                              % (where, generated, "component" if generated == 1 else "components",
+                                 components, _too_many_components(components)))
+        error.table = 0
+        raise error
+
+
+def _too_many_components(components: int) -> str:
+    """Returns the end of the refusal of a page of `components` components:
+    the Nextion Editor's limit, and how many components to remove."""
+    past = components - MOST_COMPONENTS
+    return ("The Nextion Editor's compile refuses more than %d on a page (\"Too many "
+            "components\"). Remove %d %s, or move %s to another page."
+            % (MOST_COMPONENTS, past, "component" if past == 1 else "components",
+               "it" if past == 1 else "them"))
+
+
+def page_count_refusal(pages: int, whose: str):
+    """Returns the refusal of a project of `pages` pages, when it has more
+    than MOST_PAGES, starting with `whose`, such as "the project". Returns
+    None when the Nextion Editor's compile takes that many."""
+    if pages <= MOST_PAGES:
+        return None
+    past = pages - MOST_PAGES
+    return ("%s has %d pages, and the Nextion Editor's compile refuses more than %d (\"Too many "
+            "pages\"). Remove %d %s." % (whose, pages, MOST_PAGES, past,
+                                         "page" if past == 1 else "pages"))
+
+
+def check_room_for_a_page(pages: int):
+    """Raises NxwrightError when a folder of `pages` pages has no room for
+    another one, as the Nextion Editor's compile takes at most MOST_PAGES."""
+    if pages >= MOST_PAGES:
+        raise NxwrightError("the folder has %d pages, the most the Nextion Editor compiles (\"Too "
+                            "many pages\"). Remove a page first." % pages)
 
 
 def object_label(page_object, index: int) -> str:

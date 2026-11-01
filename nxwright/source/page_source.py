@@ -57,7 +57,8 @@ from nxwright.project.screen_models import ScreenModel
 from nxwright.project.component_defaults import DERIVED_ATTRIBUTES, PLACEMENT_ATTRIBUTES
 from nxwright.project.device_settings import (DEFAULT_ENCODING, TextCodec, encoding_code,
                                               is_password_hash_text)
-from nxwright.project.editor_limits import LEAST_SIDE, check_page_limits, least_size_words
+from nxwright.project.editor_limits import (LEAST_SIDE, check_component_count,
+                                             check_page_limits, least_size_words)
 from nxwright.project.page_block import HEADER_SIZE, Attribute, Event, Marker, PageBlock, PageObject
 from nxwright.project.page_header import (NO_LOCK_PASSWORD, SYSTEM_PAGES, PageHeader, header_16,
                                          header_40, page_header_of)
@@ -132,7 +133,7 @@ _APH_RANGE = range(0, 128)
 _VARIABLE = TYPES_BY_NAME["variable"]
 _HOTSPOT = TYPES_BY_NAME["hotspot"]
 # Object IDs are one byte.
-MOST_OBJECTS = 256
+_MOST_IDS = 256
 
 
 def reference_kind(object_type, attribute: str):
@@ -284,6 +285,7 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
     header = _page_header(page_table, components, page_name)
     codec = TextCodec(encoding)
     tables = [page_table] + components
+    page_file_tables = len(tables)
     # The code is compiled against the tables' names, so a name that is no
     # name, as a table being typed may hold, is refused first, as below.
     for index, table in enumerate(tables):
@@ -311,10 +313,11 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
         if chain is not None:
             chain.extend(deepest)
         tables += [generated_table(variable) for variable in generated]
-        if len(tables) > MOST_OBJECTS:
-            raise NxwrightError("%s: with the variables nxlang adds, the page has "
-                                "%d objects; at most %d fit" % (page_name, len(tables), MOST_OBJECTS))
     object_names = [table.get("name") for table in tables]
+    # Checked before the objects are made, because making an object past ID
+    # 255 fails.
+    check_component_count(object_names, len(tables) - page_file_tables,
+                          "%s.page.toml" % page_name)
     if len(set(object_names)) != len(object_names):
         raise NxwrightError("%s.page.toml: two objects are named %s"
                             % (page_name, next(name for name in object_names if object_names.count(name) > 1)))
@@ -707,7 +710,7 @@ def strip_generated(page: PageBlock, encoding: str = DEFAULT_ENCODING) -> tuple:
 def _with_id(page_object: PageObject, index: int) -> PageObject:
     """Returns `page_object` with its id set to `index`, or unchanged when
     `index` does not fit in the one byte an ID has."""
-    if index >= MOST_OBJECTS:
+    if index >= _MOST_IDS:
         return page_object
     return PageObject([Attribute("id", bytes([index]))
                        if isinstance(item, Attribute) and item.name == "id" else item

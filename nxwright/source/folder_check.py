@@ -29,10 +29,11 @@ import re
 from nxwright import NxwrightError
 from nxwright.project.page_memory import measure_page, project_memory
 from nxwright.project.screen_models import ScreenModel
-from nxwright.source.lint import (ERROR, WARNING, Finding, line_naming, picture_errors,
-                                 sound_errors, sound_warnings, video_rotation_errors, warnings)
+from nxwright.source.lint import (ERROR, WARNING, Finding, picture_errors, sound_errors,
+                                 sound_warnings, video_rotation_errors, warnings)
 from nxwright.source.page_source import page_toml_path
-from nxwright.source.source_folder import (RESOURCE_FILES, check_globals_count, memory_refusal,
+from nxwright.source.source_folder import (RESOURCE_FILES, check_globals_count,
+                                           check_page_count, line_naming, memory_refusal,
                                            program_ints, read_folder_source, resource_problems)
 
 _TABLE_HEADER = re.compile(r"\s*\[")
@@ -99,6 +100,10 @@ def check_folder(read, exists, pages: list = None, read_bytes=None) -> FolderChe
         result.folder_findings.append(_finding(error, read))
         result.read_failed = True
         return result
+    try:
+        check_page_count(folder.app, read("app.toml"))
+    except NxwrightError as error:
+        result.folder_findings.append(_finding(error, read))
     globals_used = []
     for page_id, page in enumerate(folder.app["pages"]):
         if pages is not None and page not in pages:
