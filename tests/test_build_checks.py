@@ -674,7 +674,7 @@ class CommandComponentTest(_CodeOnFirstTestCase):
                         "cfgpio 1,1,sys0", "vis n0,0")
         export_dump(self.source, self.folder / "built")
         # nxlang's way to give one a computed component: a local, which it
-        # writes as an int of program.s. nxlang knows no colour's name.
+        # writes as an int of program.s.
         self.switch_to_nxlang()
         self.write_code("var x = 1", "vis x, 0")
         export_dump(self.source, self.folder / "nxlang")
@@ -725,10 +725,11 @@ class CommandComponentTest(_CodeOnFirstTestCase):
                 line_number = self.write_program_line(line)
                 self.assert_refused(r"program\.nx line %d" % line_number, line,
                                     '("Invalid Component ID")', "refused%d" % number)
-        # `b[i]` is the current page's component of ID i, as a command's
-        # component in program.nx is an ID, so nxlang writes the ID. The
-        # Editor's simulator hid the component of ID 1 for `vis b[1],0`, as
-        # for `vis 1,0`. Another page's, `p[n].b[i]`, it still refuses.
+        # In program.nx, nxlang turns `vis b[1], 0` into `vis 1,0`. The
+        # Nextion Editor refuses `b[1]` in program.s, but takes `1`. Both
+        # mean the component with ID 1 on the page that is showing: in the
+        # simulator, each hid it. `p[0].b[1]` stays refused, as page 0 may
+        # not be the page showing.
         self.switch_to_nxlang()
         self.write_program_line("vis b[1], 0")
         export_dump(self.source, self.folder / "nxlang")

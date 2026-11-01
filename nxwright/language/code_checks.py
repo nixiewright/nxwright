@@ -148,9 +148,9 @@ COMMAND_PARAMETERS = {
     "crcrest": 2, "crcputs": 2, "crcputu": 2,
     # The Editor compiled each alone, and refused each given one argument.
     "rest": 0, "touch_j": 0, "code_c": 0,
-    # The Editor refused `doevents 1` and `page 1,2` as it compiled, and
-    # `page` alone, and its simulator answered 1E to each typed, as to
-    # `get 1,2`.
+    # The Nextion Editor refused `doevents 1`, `page 1,2`, and `page` alone
+    # as it compiled. Its simulator answered 1E to the first two typed, as
+    # to `get 1,2`.
     "doevents": 0, "ref_stop": 0, "ref_star": 0, "com_stop": 0, "com_star": 0, "page": 1,
 }
 # One operand alone: a string, a number, or a name, which may be dotted.
@@ -476,21 +476,25 @@ def _check_program_names(code: str, pages: dict, number: int):
 def _check_components(code: str, objects: ObjectNames, variables: frozenset,
                       program_pages: dict, number: int):
     """Raises NxwrightError for a command's component (COMPONENT_PLACES) that
-    the Editor refused as it compiled ("Invalid Component ID").
+    the Nextion Editor refused as it compiled ("Invalid Component ID").
 
-    In a page's event, it refused a component's txt, as `vis t0.txt,0`, and
-    a name that is neither on the page nor a variable, as `vis zz,0` and
-    `move zz,...`. It compiled a variable there, as `vis sys0,0`. In
-    program.nx, which belongs to no page, it refused a component reached
-    through the screen's arrays, as `vis b[1],0`, `vis p[0].b[1],0`, and
-    `cfgpio 1,1,b[1]`, and a name that is no variable, as `ref zz` and
-    `move t0,...`. _check_program_names refuses a page's or a component's
-    name there first, for the commands it knows.
+    In a page's event, the Nextion Editor refused:
+      - a component's txt, as `vis t0.txt,0`;
+      - a name that is neither on the page nor a variable, as `vis zz,0`
+        and `move zz,...`.
+    It compiled a variable in an event, as `vis sys0,0`.
+
+    program.nx belongs to no page. In program.nx, the Nextion Editor refused:
+      - a component reached through the screen's arrays, as `vis b[1],0`,
+        `vis p[0].b[1],0`, and `cfgpio 1,1,b[1]`;
+      - a name that is not a variable, as `ref zz` and `move t0,...`.
+    _check_program_names refuses a page's or a component's name in
+    program.nx first, for the commands it knows.
 
     A variable is an int of program.nx (`variables`), a system variable, or
-    a colour. With `variables` None, as for nxlang, whose compiler checks
-    names itself, a name is not checked. Macros have their own rules
-    (_check_macro_references)."""
+    a colour. When `variables` is None, as for nxlang, a name is not
+    checked: nxlang's compiler checks names itself. Macros have their own
+    rules (_check_macro_references)."""
     word = command_word(code)
     places = COMPONENT_PLACES.get(word)
     in_program = program_pages is not None
@@ -510,14 +514,14 @@ def _check_components(code: str, objects: ObjectNames, variables: frozenset,
                                 "component (\"%s\")"
                                 % (code, component, word, INVALID_COMPONENT_ID), line=number)
         if in_program and SCREEN_ARRAY.fullmatch(component):
-            raise NxwrightError("%s: program.nx belongs to no page, so %s reaches no component "
-                                "there: give the component's number, or a variable that "
-                                "contains it (\"%s\")"
+            raise NxwrightError("%s: program.nx belongs to no page, so %s does not reach a "
+                                "component in program.nx. Give the component's number, or a "
+                                "variable that contains it (\"%s\")"
                                 % (code, component, INVALID_COMPONENT_ID), line=number)
         if (_NAME_ONLY.fullmatch(component) and known is not None and component not in known
                 and not (in_event and component in objects.own)):
             what = ("%s is neither a component of this page nor a variable" % component
-                    if in_event else "program.nx belongs to no page, and %s is no variable"
+                    if in_event else "program.nx belongs to no page, and %s is not a variable"
                     % component)
             raise NxwrightError("%s: %s, so the Nextion Editor refuses it as %s's component "
                                 "(\"%s\")" % (code, what, word, INVALID_COMPONENT_ID),
@@ -526,9 +530,9 @@ def _check_components(code: str, objects: ObjectNames, variables: frozenset,
 
 def _check_page_argument(code: str, number: int):
     """Raises NxwrightError for a quoted text given to `page`, as
-    `page "page0"`, which the Editor refused as it compiled ("Invalid Page
-    ID"). It takes a page's name without quotes, or its number. nxlang does
-    not read a quoted text as a page's name either."""
+    `page "page0"`, which the Nextion Editor refused as it compiled
+    ("Invalid Page ID"). `page` takes a page's name without quotes, or its
+    number. nxlang does not read a quoted text as a page's name either."""
     if command_word(code) == "page" and STRING.fullmatch(code[len("page"):].strip()):
         raise NxwrightError("%s: page takes a page's name without quotes, or its number, and "
                             "the Nextion Editor refuses a text (\"%s\")"

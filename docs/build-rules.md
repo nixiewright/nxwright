@@ -110,8 +110,11 @@ The build stops at the first line that uses something that does not exist:
 
 - `t0.txt` must be a component of the page.
 - `settings.t0.txt` must be a page and one of its components.
-- A command's component, as in `vis t0,1`, must be a component of the page, its number, or a variable that contains it, as in `vis sys0,0`. The same goes for `tsw`, `ref`, `click`, and `move`, for `cfgpio`'s third argument, and for both of `setlayer`'s. A name that is neither a component nor a variable is refused, as in `vis zz,0`, and so is a component's `txt`, as in `vis t0.txt,0` ("Invalid Component ID").
-  - In `program.nx`, which belongs to no page, they take a component's number, as in `vis 1,0`, or a variable that contains it, as in `vis sys0,0`. A page's or a component's name is refused there, with or without a page's name, as in `vis t0,0` or `vis page0.t0,0`, and so is `b[1]` or `p[0].b[1]` ("Invalid Component ID"). In nxlang, `b[1]` there is written as `1` ([nxlang-compiled.md](nxlang-compiled.md#programnx)).
+- A command's component must be a component of the page, as in `vis t0,1`, a component's number, as in `vis 1,0`, or a variable that contains a component's number, as in `vis sys0,0`. The component is the first argument of `vis`, `tsw`, `ref`, `click`, and `move`, the third of `cfgpio`, and both arguments of `setlayer`.
+  - A name that is neither a component nor a variable is refused, as in `vis zz,0` ("Invalid Component ID").
+  - A component's `txt` is refused as well, as in `vis t0.txt,0` ("Invalid Component ID").
+  - `program.nx` belongs to no page, so these commands take a component's number or a variable in `program.nx`. A page's or a component's name is refused in `program.nx`, with or without a page's name, as in `vis t0,0` or `vis page0.t0,0` ("Invalid Component ID").
+  - `b[1]` and `p[0].b[1]` are refused in `program.nx` too ("Invalid Component ID"). In nxlang, `vis b[1],0` in `program.nx` is written as `vis 1,0` ([nxlang-compiled.md](nxlang-compiled.md#programnx)).
 - A name alone in a value or a condition, as `abc` in `n0.val=abc+1`, must be an `int` of `program.nx`, a system variable, or a colour in capitals, as `RED`. A component's or a page's name alone is refused.
 - Another page's components need their page's name, whatever their scope.
 

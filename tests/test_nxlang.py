@@ -638,6 +638,10 @@ class CommandArgumentTest(unittest.TestCase):
         # argument included, but where nxlang writes `b[i]` in program.nx as
         # `i`.
         self.assertEqual(compile_lines("vis t0,,0"), ["vis t0,,0"])
+        # A colour's name too, as nxlang passes a command's arguments on as
+        # written, as in `cls RED`. The Nextion Editor compiled `vis RED,0`.
+        self.assertEqual(compile_lines("vis RED, 0"), ["vis RED,0"])
+        self.assertEqual(compile_lines("cfgpio 1, 1, BLUE"), ["cfgpio 1,1,BLUE"])
 
     def test_one_operand_as_written(self):
         self.assertEqual(compile_lines("get x.val"), ["get x.val"])

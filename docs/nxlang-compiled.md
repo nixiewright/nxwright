@@ -143,4 +143,6 @@ The Nextion Editor has none of them:
 
 `program.nx` can use constants and expressions, but not locals. It has no page, so no temporaries: an expression there that would need one stops the build, as does a text assignment that uses its own target anywhere but first.
 
-A command's component there is a number, so `b[i]`, the current page's component of number `i`, is written as `i` when `i` is a number or a name: `vis b[1], 0` becomes `vis 1,0`, and `vis b[n], 0` becomes `vis n,0`. The Nextion Editor refuses `b[i]` in `program.s`. `p[0].b[1]` names a page that may not be the one showing, so it is refused.
+In `program.nx`, nxlang turns `vis b[1], 0` into `vis 1,0`, and `vis b[n], 0` into `vis n,0`. The Nextion Editor refuses `b[1]` in `program.s`, but takes `1`. Both mean the component with ID 1 on the page that is showing.
+
+`p[0].b[1]` is still refused, because page 0 may not be the page showing.

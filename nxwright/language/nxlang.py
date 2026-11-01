@@ -112,7 +112,8 @@ from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, command_argument
                                           outside_strings, split_line)
 from nxwright.language.code_preprocessor import with_own_attributes
 from nxwright.language.resource_names import REFERENCE_TEXT
-from nxwright.project.editor_language import (EDITOR_PROGRAM_VARIABLES, EDITOR_SYSTEM_VARIABLES,
+from nxwright.project.editor_language import (EDITOR_COLOURS, EDITOR_PROGRAM_VARIABLES,
+                                              EDITOR_SYSTEM_VARIABLES,
                                               UNDECLARED_PROGRAM_VARIABLE)
 from nxwright.project.editor_limits import LONGEST_LINES, NAME_LIMIT
 from nxwright.project.object_types import TYPES_BY_NAME
@@ -2509,14 +2510,15 @@ class _EventCompiler:
         """Returns the command `code`, whose first word `word` is one of
         COMPONENT_PLACES, with the components it gives checked as nxlang
         checks every name. A name alone must be a component of the page or
-        the page itself, a constant, a local, an int variable, or a system
-        variable.
+        the page itself, a constant, a local, an int variable, a system
+        variable, or a colour, which nxlang passes on in a command's
+        arguments as written, as in `cls RED`.
 
-        In program.nx, which has no page, `b[i]` becomes `i`, `i` a number or
-        a name. `b[i]` is the current page's component of ID i, and a
-        component there is an ID: the Editor's simulator hid the component
-        of ID 1 for `vis b[1],0`, as for `vis 1,0`. The Editor refuses
-        `b[i]` in program.s. Any other form is left to the build's checks."""
+        In program.nx, `b[i]` becomes `i` when `i` is a number or a name, so
+        `vis b[1],0` becomes `vis 1,0`. The Nextion Editor refuses `b[1]` in
+        program.s, but takes `1`. Both mean the component with ID 1 on the
+        page that is showing: in the simulator, each hid it. Any other form
+        is left to the build's checks."""
         arguments = command_arguments(code[len(word):])
         # program.nx alone is compiled without temporaries (compile_program).
         in_program = self.temporaries is None
@@ -2537,7 +2539,8 @@ class _EventCompiler:
                   and component not in self.page.component_names
                   and (in_program or component != self.page.page_name)
                   and component not in self.page.variables
-                  and component not in EDITOR_SYSTEM_VARIABLES):
+                  and component not in EDITOR_SYSTEM_VARIABLES
+                  and component not in EDITOR_COLOURS):
                 if component in EDITOR_PROGRAM_VARIABLES:
                     raise NxwrightError(UNDECLARED_PROGRAM_VARIABLE % component, line=number,
                                         fix={"kind": "declare", "variable": component})
