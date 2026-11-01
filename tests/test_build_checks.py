@@ -2191,8 +2191,8 @@ class LongLineTest(FirstDownTestCase):
     def test_heads_and_declarations(self):
         # The Editor compiled heads of an if, an else if, and a while of
         # more than 1000 characters, and an int declaration of 1500. A for
-        # holds its start and its step to the limit, but not its condition:
-        # on a longer step, the Editor's compile did not end.
+        # holds its start and its step to the limit as lines, but not its
+        # condition (LongComparisonTest).
         self.use_series("NX4832T035")
         comparisons = "&&".join(["sys0==1"] * 120)
         self.write_code("if(%s)" % comparisons, "{", "}else if(%s)" % comparisons, "{", "}",
@@ -2203,12 +2203,7 @@ class LongLineTest(FirstDownTestCase):
         self.write_code("for(%s;sys0<1;sys0++)" % _sum_line(768), "{", "}")
         self.assert_line_refused(768, 0, what="this for's start")
         self.write_code("for(sys0=0;sys0<1;%s)" % _sum_line(768), "{", "}")
-        with self.assertRaisesRegex(
-                NxwrightError, r"first\.nx line 2: this for's step is 768 bytes in iso-8859-1, "
-                               r"not counting the spaces the Nextion Editor drops, and on this "
-                               r"series the Nextion Editor's compile never ends on a step longer "
-                               r"than 767"):
-            export_dump(self.source, self.folder / "step")
+        self.assert_line_refused(768, 1, what="this for's step")
         program = self.source / "program.nx"
         program.write_text("int sys0=0,sys1=0,sys2=0,%s\npage 0\n"
                            % ",".join("v%d=0" % index for index in range(300)),
@@ -2232,6 +2227,97 @@ class LongLineTest(FirstDownTestCase):
         (self.source / "macros.nx").write_text("macro long:\n  %s\n" % _sum_line(768),
                                                encoding="utf-8", newline="\n")
         self.assert_line_refused(768, 1, r"macros\.nx line 2")
+
+
+def _text_comparison(size: int, text: str = "a", width: int = 1) -> str:
+    """Returns `t0.txt=="..."`, whose line as the Editor compiles it,
+    `i t0.txt,"...",1,0`, is `size` bytes, its text of `text`, each `width`
+    bytes in the folder's encoding."""
+    return 't0.txt=="%s"' % (text * ((size - len('i t0.txt,"",1,0')) // width))
+
+
+class LongComparisonTest(FirstDownTestCase):
+    """A comparison in a condition, which the Editor 1.68.2 compiled into a
+    line of its own, `i <left>,<right>,<number>,0`, held to the series' limit
+    (editor_limits.LONGEST_LINES). On a longer one, it said "The instructions
+    are too long", then "Index was outside the bounds of the array", and
+    wrote no file."""
+
+    def use_series(self, model: str, **app_values):
+        self.use_screen(model, **app_values)
+        self.series = model[6]
+
+    def assert_comparison_refused(self, start: str, size: int, number: int,
+                                  where: str = r"first\.nx line 2",
+                                  encoding: str = "iso-8859-1"):
+        with self.assertRaisesRegex(
+                NxwrightError, r"%s: the comparison %s… compiles to a line of %d bytes in %s: "
+                               r"its two sides, without the spaces the Nextion Editor drops, and "
+                               r"7 bytes more\. On this series the Nextion Editor takes at most "
+                               r"%d \(\"The instructions are too long\"\)"
+                               % (where, re.escape(start), size, encoding,
+                                  LONGEST_LINES[self.series])):
+            export_dump(self.source, self.folder / ("refused%d" % number))
+
+    def test_on_each_series(self):
+        # 767 bytes on T, K, and F, and 4095 on P and E.
+        for number, model in enumerate(("NX4832T035", "NX4832K035", "NX4832F035", "NX4848E040",
+                                        "NX8048P050")):
+            with self.subTest(model=model):
+                self.use_series(model)
+                longest = LONGEST_LINES[self.series]
+                self.write_code("if(%s)" % _text_comparison(longest), "{", "}")
+                export_dump(self.source, self.folder / model)
+                self.write_code("if(%s)" % _text_comparison(longest + 1), "{", "}")
+                self.assert_comparison_refused('t0.txt=="' + "a" * 31, longest + 1, number)
+
+    def test_in_each_condition(self):
+        # An if's, an else if's, and a while's head, and a for's middle part.
+        self.use_series("NX4832T035")
+        long = _text_comparison(768)
+        for number, lines in enumerate((
+                ["if(sys0==1)", "{", "}else if(%s)" % long, "{", "}"],
+                ["while(%s)" % long, "{", "}"],
+                ["for(sys0=0;%s;sys0++)" % long, "{", "}"])):
+            with self.subTest(lines=lines[0][:12]):
+                self.write_code(*lines)
+                self.assert_comparison_refused('t0.txt=="' + "a" * 31, 768, number,
+                                               r"first\.nx line %d" % (4 if number == 0 else 2))
+
+    def test_each_comparison_on_its_own(self):
+        # A head longer than 767 builds when each comparison is shorter. Two
+        # texts are too long together though neither is near 753.
+        self.use_series("NX4832T035")
+        self.write_code("if(sys0==1&&%s)" % _text_comparison(767), "{", "}",
+                        "while(sys0==1||%s||sys1==2)" % _text_comparison(767), "{", "}",
+                        'if("%s"=="%s")' % ("a" * 378, "b" * 378), "{", "}")
+        export_dump(self.source, self.folder / "built")
+        self.write_code('if(sys0==1&&"%s"=="%s")' % ("a" * 378, "b" * 379), "{", "}")
+        self.assert_comparison_refused('"' + "a" * 39, 768, 0)
+
+    def test_joins_and_comparisons_inside_a_text(self):
+        # A text holding && or == is one side of one comparison.
+        self.use_series("NX4832T035")
+        text = ("a&&b==c<" * 95)[:753]
+        self.write_code('if(t0.txt=="%s")' % text, "{", "}")
+        self.assert_comparison_refused('t0.txt=="' + text[:31], 768, 0)
+
+    def test_counted_in_bytes_of_the_encoding_without_spaces(self):
+        # 376 characters of 2 bytes in gb2312 make a line of 767 bytes.
+        self.use_series("NX4832T035", encoding="gb2312")
+        self.write_code("if ( %s )" % _text_comparison(767, "中", 2).replace("==", " == "),
+                        "{", "}")
+        export_dump(self.source, self.folder / "built")
+        self.write_code("if(%s)" % _text_comparison(769, "中", 2), "{", "}")
+        self.assert_comparison_refused('t0.txt=="' + "中" * 31, 769, 0, encoding="gb2312")
+
+    def test_in_nxlang(self):
+        # A text temporary holds 255 characters, too few for such a text, so
+        # nxlang compares the text as written, and the build refuses it.
+        switch_to_nxlang(self.source)
+        self.use_series("NX4832T035")
+        self.write_code('if (t0.txt == "%s") {' % ("a" * 753), "}")
+        self.assert_comparison_refused('t0.txt=="' + "a" * 31, 768, 0)
 
 
 if __name__ == "__main__":

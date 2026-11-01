@@ -43,6 +43,15 @@ from nxwright.project.screen_arithmetic import int32
 from nxwright.project.screen_models import ScreenModel
 
 _BLOCK_HEAD = re.compile(r"(if|while|for)\s*\(")
+# What joins a condition's comparisons, and what compares a comparison's two
+# sides.
+_JOIN = re.compile(r"&&|\|\|")
+_COMPARISON_OPERATOR = re.compile(r"==|!=|<=|>=|<|>")
+# The bytes the Editor's line of a comparison, `i <left>,<right>,1,0`, has
+# beside its two sides; and the characters of a long comparison a message
+# shows.
+_COMPARISON_LINE_EXTRA = len("i ,,1,0")
+_SHOWN_COMPARISON = 40
 # A line assigning to an object's attribute, in Editor syntax: the object,
 # or a page and its object, then the attribute, then the assignment.
 _ASSIGNED_ATTRIBUTE = re.compile(r"([A-Za-z_]\w*)\.([A-Za-z_]\w*)(?:\.([A-Za-z_]\w*))?"
@@ -300,14 +309,22 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
 def _check_length(code: str, codec, longest: int, number: int):
     """Raises NxwrightError for a compacted line longer than `longest`
     bytes in the project's encoding, `codec`. An `if`'s, an `else if`'s, or
-    a `while`'s head is not counted. In a `for`'s head, the start and the
-    step are each counted as a line, and the condition is not. The Nextion
-    Editor refused a longer line or start ("The instructions are too
-    long"), and its compile did not end on a longer step. It compiled heads
-    of more than 1000 characters. A character the encoding cannot store is
+    a `while`'s head is not counted as a line, but each comparison in its
+    condition is (_check_comparison_lengths). In a `for`'s head, the start
+    and the step are each counted as a line, and so is each comparison in
+    the condition. The Nextion Editor refused a longer line,
+    start, or step ("The instructions are too long"). It compiled heads of
+    more than 1000 characters. A character the encoding cannot store is
     left to the build, which refuses it."""
     head, otherwise = _BLOCK_HEAD.match(code), ELSE.match(code)
-    if otherwise and otherwise[2] or head and head[1] != "for":
+    if otherwise and otherwise[2]:
+        opening = code.find("(", otherwise.end())
+        if opening >= 0:
+            _check_comparison_lengths(code[opening + 1:].removesuffix(")"), codec, longest,
+                                      number)
+        return
+    if head and head[1] != "for":
+        _check_comparison_lengths(code[head.end():].removesuffix(")"), codec, longest, number)
         return
     refusal = "and this series takes at most %d (\"The instructions are too long\")" % longest
     if not head:
@@ -317,10 +334,67 @@ def _check_length(code: str, codec, longest: int, number: int):
     # may hold (_check_value_and_head).
     parts = code[head.end():].removesuffix(")").split(";")
     _check_part_length(parts[0], "this for's start", refusal, codec, longest, number)
+    if len(parts) > 1:
+        _check_comparison_lengths(parts[1], codec, longest, number)
     if len(parts) > 2:
-        _check_part_length(parts[2], "this for's step",
-                           "and on this series the Nextion Editor's compile never ends on a "
-                           "step longer than %d" % longest, codec, longest, number)
+        _check_part_length(parts[2], "this for's step", refusal, codec, longest, number)
+
+
+def _check_comparison_lengths(condition: str, codec, longest: int, number: int):
+    """Raises NxwrightError for a comparison in the compacted `condition`
+    whose line, as the Nextion Editor compiles it, is longer than `longest`
+    bytes in `codec`'s encoding. The Editor compiles each comparison into a
+    line of its own, `i <left>,<right>,<number>,0`. That is the two sides
+    and 7 bytes more. On a longer line, it said "The instructions are too
+    long", then "Index was outside the bounds of the array", and wrote no
+    file."""
+    for comparison in _comparisons(condition):
+        sides = _comparison_sides(comparison)
+        if sides is None:
+            continue
+        try:
+            size = sum(len(codec.encode(side, "")) for side in sides) + _COMPARISON_LINE_EXTRA
+        except NxwrightError:
+            return
+        if size > longest:
+            shown = comparison if len(comparison) <= _SHOWN_COMPARISON else \
+                comparison[:_SHOWN_COMPARISON] + "…"
+            raise NxwrightError("the comparison %s compiles to a line of %d bytes in %s: its two "
+                                "sides, without the spaces the Nextion Editor drops, and %d bytes "
+                                "more. On this series the Nextion Editor takes at most %d (\"The "
+                                "instructions are too long\")"
+                                % (shown, size, codec.name, _COMPARISON_LINE_EXTRA, longest),
+                                line=number)
+
+
+def _comparisons(condition: str) -> list:
+    """Returns the comparisons of a condition, apart at the `&&` and `||`
+    outside its texts: `t0.txt=="a&&b"&&sys0==1` gives `t0.txt=="a&&b"` and
+    `sys0==1`."""
+    comparisons = [""]
+    # STRING.split gives the parts outside texts at even places, and the
+    # texts between them.
+    for index, piece in enumerate(STRING.split(condition)):
+        if index % 2:
+            comparisons[-1] += piece
+            continue
+        first, *others = _JOIN.split(piece)
+        comparisons[-1] += first
+        comparisons += others
+    return comparisons
+
+
+def _comparison_sides(comparison: str):
+    """Returns the two sides of `comparison`, apart at its first comparison
+    operator outside its texts, or None when it has none."""
+    position = 0
+    for index, piece in enumerate(STRING.split(comparison)):
+        operator = _COMPARISON_OPERATOR.search(piece) if index % 2 == 0 else None
+        if operator:
+            return (comparison[:position + operator.start()],
+                    comparison[position + operator.end():])
+        position += len(piece)
+    return None
 
 
 def _check_part_length(part: str, what: str, refusal: str, codec, longest: int, number: int):

@@ -256,7 +256,8 @@ The limit applies in a page's code, in `program.nx`, and in macros.
 
 - The bytes are counted in the folder's encoding. In gb2312, `t0.txt="中中…中"` with 380 中 is 769 bytes, too long on the Basic series.
 - Spaces the build removes, such as those around `=`, are not counted. Spaces inside a quoted text are.
-- The build does not limit an `int` declaration, or the head of an `if` or a `while`. In a `for`'s head, the start and the step each count as a line of their own, such as `sys0=0` and `sys0++` in `for(sys0=0;sys0<9;sys0++)`. When the step is longer than the limit, the Nextion Editor does not refuse the line, but its compile never ends.
+- The build does not limit an `int` declaration, or the head of an `if` or a `while` as a whole. In a `for`'s head, the start and the step each count as a line of their own, such as `sys0=0` and `sys0++` in `for(sys0=0;sys0<9;sys0++)`.
+- Each comparison in a condition counts as a line of its own, because the Nextion Editor turns it into one. That line is the comparison's two sides, and 7 bytes more. `t0.txt=="…"` with a text of 753 characters makes a line of 768 bytes, too long on the Basic series. A long condition of short comparisons, such as `sys0==1&&sys1==2&&…`, is not refused.
 
 nxlang writes a long text assignment in several lines, so the build does not refuse it ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 
