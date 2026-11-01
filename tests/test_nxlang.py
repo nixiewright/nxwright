@@ -526,6 +526,23 @@ class RefusedFormTest(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(compile_lines(head + text), [written + text])
 
+    def test_a_minus_before_a_constant_stays_a_number(self):
+        # nxlang writes a constant as its number, and the Nextion Editor
+        # takes a minus before a number where a command takes a single value
+        # or a number. So no temporary is needed.
+        for line, written in (("wepo -TWO, 0", "wepo -2,0"),
+                              ("strlen -TWO, x.val", "strlen -2,x.val"), ("cls -TWO", "cls -2"),
+                              ("xstr 0, 0, 100, 30, 0, RED, WHITE, 0, 0, 1, -TWO",
+                               "xstr 0,0,100,30,0,RED,WHITE,0,0,1,-2")):
+            with self.subTest(line=line):
+                self.assertEqual(compile_lines(line, preamble="const TWO = 2"), [written])
+        # A minus before a negative constant would be written as two minuses,
+        # so it is computed first.
+        for line, written in (("cls -LOW", "cls __g0_0"), ("wepo -LOW, 0", "wepo __g0_0,0")):
+            with self.subTest(line=line):
+                lines = compile_lines(line, preamble="const LOW = -16")
+                self.assertEqual(lines[-1], written)
+
     def test_a_for_whose_head_holds_a_text_with_a_semicolon(self):
         # Its start, then a while, which runs its step at the end of each
         # pass, after a continue too.

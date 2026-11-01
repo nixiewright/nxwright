@@ -623,6 +623,18 @@ def kind_of(expression, number: int) -> str:
     return NUMBER
 
 
+def _is_negative_number(expression) -> bool:
+    """True for a minus before a number, such as `-TWO` when TWO is a
+    constant. A command's arguments are written with each constant as its
+    number (substitute_command), so `-TWO` reaches the Editor as `-2`. The
+    Editor takes that wherever a command takes a number or a single value,
+    so it needs no temporary. A minus before a negative constant is not
+    one: it would be written as two minuses, which the Editor refuses."""
+    return (isinstance(expression, Unary) and expression.operator == "-"
+            and isinstance(expression.operand, Literal) and expression.operand.kind == NUMBER
+            and not expression.operand.text.startswith("-"))
+
+
 def _is_atomic(expression) -> bool:
     """True for a literal, local, or reference: an operand with no operator
     of its own, though a reference's index may hold one."""
@@ -2344,6 +2356,8 @@ class _EventCompiler:
             expression = Parser(tokenize(text, number), number, self.scope).whole_expression()
         except NotParsed as error:
             raise NxwrightError(error.reason, line=error.line) from None
+        if _is_negative_number(expression):
+            return False
         emitter = self.emitter(indent, number)
         operand = emitter.value(expression)
         spaces = text[:len(text) - len(text.lstrip())]
@@ -2673,7 +2687,8 @@ class _EventCompiler:
                 expression = Parser(tokenize(text, number), number, self.scope).whole_expression()
             except (NotParsed, NxwrightError):
                 continue
-            if word == "wepo" and kind_of(expression, number) == TEXT:
+            if _is_negative_number(expression) or (word == "wepo"
+                                                   and kind_of(expression, number) == TEXT):
                 continue
             emitter = emitter or self.emitter(indent, number)
             arguments[place] = arguments[place].replace(
