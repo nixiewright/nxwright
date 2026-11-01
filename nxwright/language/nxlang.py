@@ -2589,26 +2589,25 @@ class _EventCompiler:
 
     def computed_arguments(self, number: int, indent: str, word: str, code: str,
                            comment: str) -> bool:
-        """Compiles the command `code`, whose first word `word` is one of
-        NUMBER_PLACES or READ_ONE_OPERAND_PLACES, when one of those places
-        holds a value the Nextion Editor refuses there. The value is
-        computed into a temporary first:
-          - in a number place, a value nxlang reads but the Nextion Editor
-            does not, as a minus before a name: `cls -x.val` becomes
-            `__g0_0=0-x.val`, then `cls __g0_0`, and `cls 2*-x.val` alike;
-          - in a place the command only reads, an expression:
-            `strlen t0.txt+"a",n0.val` becomes `__s0.txt=t0.txt+"a"`, then
-            `strlen __s0.txt,n0.val`.
+        """Compiles the command `code`, whose first word is `word`, when one
+        of its arguments must be put in a temporary first. Two kinds of
+        argument may need it:
+          - an argument that takes a number (NUMBER_PLACES), given a value
+            the Nextion Editor does not read, such as a minus before a
+            name. `cls -x.val` becomes `__g0_0=0-x.val`, then `cls __g0_0`.
+          - an argument the command only reads (READ_ONE_OPERAND_PLACES),
+            given an expression. `strlen t0.txt+"a",n0.val` becomes
+            `__s0.txt=t0.txt+"a"`, then `strlen __s0.txt,n0.val`.
 
-        wepo's value is computed only when it is a number. For a text
-        variable, wepo writes as many bytes as its txt_maxl, plus one. A
-        text temporary can contain 255 characters, so wepo would write 256
-        bytes for it.
+        wepo is the exception for texts. When wepo saves a text, it writes
+        as many bytes as the text field has room for, plus one. A text
+        temporary has room for 255 characters, so wepo would write 256
+        bytes. So a text expression in wepo is left as written.
 
-        Returns False, writing nothing, when no place holds such a value, or
-        in program.nx, which has no temporaries. A value nxlang does not
-        read either, as `cls 5a`, is left as written. The build then refuses
-        the line as written."""
+        Returns False, writing nothing, when no argument needs a temporary,
+        or in program.nx, which has no temporaries. A value nxlang cannot
+        read either, such as `cls 5a`, is also left as written. The build
+        then refuses the line."""
         # program.nx alone is compiled without temporaries (compile_program).
         if self.temporaries is None:
             return False

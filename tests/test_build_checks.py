@@ -1029,6 +1029,18 @@ class OneOperandArgumentTest(_CodeOnFirstTestCase):
                         'spstr t0.txt,t0.txt,"a",0', "crcputs t0.txt,0", "getv b[1].txt")
         export_dump(self.source, self.folder / "built")
 
+    def test_the_advice_fits_the_place(self):
+        self.use_screen("NX4832T035")
+        for number, (line, advice) in enumerate((
+                ('strlen t0.txt+"a",n0.val', "Put the expression in a variable first, then "
+                                             "give that variable."),
+                ("cov n0.val,sys0+1,0", "Give the variable that is to take the result."),
+                ("getv sys0+1", "Give a single value."))):
+            with self.subTest(line=line):
+                self.write_code(line)
+                with self.assertRaisesRegex(NxwrightError, re.escape(advice)):
+                    export_dump(self.source, self.folder / ("advice%d" % number))
+
     def written_code(self, built: str) -> str:
         export_dump(self.source, self.folder / built)
         page = next((self.folder / built / "pages").glob("*-first.txt"))
