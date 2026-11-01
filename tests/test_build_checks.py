@@ -2777,6 +2777,20 @@ class LongComparisonTest(FirstDownTestCase):
             export_dump(self.source, self.folder / "program")
 
 
+
+class TextRoomTest(FirstDownTestCase):
+    """The room nxlang gives a text variable it adds, built as its txt_maxl."""
+
+    def test_a_local_given_a_long_text(self):
+        switch_to_nxlang(self.source)
+        self.use_screen("NX8048P050")
+        self.write_code('var s = "%s"' % ("a" * 400), "t0.txt = s")
+        dump = self.folder / "built"
+        export_dump(self.source, dump)
+        page = next((dump / "pages").glob("*-first.txt")).read_text(encoding="utf-8")
+        self.assertRegex(page, r'objname = "__v0"\n(?:  .*\n)*?  txt_maxl = 400\n')
+
+
 class TextBytesTest(FirstDownTestCase):
     """Texts in code that the Nextion Editor 1.68.2 reads by their bytes, and
     refused as it compiled. In gb2312, big5, and shift-jis, it reads every

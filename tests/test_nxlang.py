@@ -1053,6 +1053,53 @@ class LongTextTemporaryTest(unittest.TestCase):
         self.assertIn('if("%s"==__s0.txt)' % ("a" * 380), compile_lines(code))
 
 
+
+class LongTextLocalTest(unittest.TestCase):
+    """A text local, parameter, or function result, kept in a shared text
+    variable (__v0, ...), given quoted texts of more than 255 bytes, which
+    gets room for them as a text temporary does."""
+
+    LONG = "a" * 400
+
+    def rooms(self, page: str) -> dict:
+        """Returns {name: txt_maxl} of the shared text variables of `page`, a
+        page's .nx file."""
+        compiled = compile_nxlang_page(page, "p", COMPONENTS, ProgramNames())
+        return {variable.name: variable.room for variable in compiled.generated
+                if variable.name.startswith("__v")}
+
+    def test_a_local(self):
+        page = 'on p.down:\n  var s = "%s"\n  t0.txt = s\n' % self.LONG
+        self.assertEqual(self.rooms(page), {"__v0": 400})
+
+    def test_a_result_and_a_local_copied_from_it(self):
+        page = ('function label() -> text:\n  return "%s"\n\n'
+                "on p.down:\n  var s = label()\n  t0.txt = s\n" % self.LONG)
+        self.assertEqual(sorted(self.rooms(page).values()), [400, 400])
+
+    def test_a_parameter(self):
+        page = ('function show(words: text):\n  t0.txt = words\n\n'
+                'on p.down:\n  show("%s")\n' % self.LONG)
+        self.assertEqual(list(self.rooms(page).values()), [400])
+
+    def test_a_parameter_copied_inside_its_function_keeps_255(self):
+        # The function is compiled before its caller gives the parameter
+        # room, so the copy keeps 255 (the plan's Non-goals).
+        page = ('function show(words: text):\n  var copy = words\n  t0.txt = copy\n\n'
+                'on p.down:\n  show("%s")\n' % self.LONG)
+        self.assertEqual(sorted(self.rooms(page).values()), [255, 400])
+
+    def test_255_bytes_keep_255(self):
+        page = 'on p.down:\n  var s = "%s"\n  t0.txt = s\n' % ("a" * 255)
+        self.assertEqual(self.rooms(page), {"__v0": 255})
+
+    def test_a_variable_two_functions_share_keeps_the_most(self):
+        # Two events that never run at once share __v0.
+        page = ('on p.down:\n  var s = "%s"\n  t0.txt = s\n\n'
+                'on p.up:\n  var s = "%s"\n  t0.txt = s\n' % ("a" * 300, "b" * 400))
+        self.assertEqual(self.rooms(page), {"__v0": 400})
+
+
 class NxlangFolderTestCase(SourceFolderTestCase):
     """The small project's first page, given the variables a and x and a down event in
     Editor code, `x.val=a.val+a.val*2`. Most tests switch the folder to nxlang."""
