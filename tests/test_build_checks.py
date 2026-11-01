@@ -999,6 +999,23 @@ class OneOperandArgumentTest(_CodeOnFirstTestCase):
         "NX4832K035": ["wepo sys0+1,0", "repo sys0+1,0", 'wepo t0.txt+"a",0'],
         "NX4832F035": ["piccolor 0,0,0,sys0+1", 'piccolor 0,0,0,t0.txt+"a"'],
     }
+    # Each series' model, with the lines of a minus before a name refused on it.
+    MINUS_REFUSED = {
+        "NX4832T035": [
+            "pa_q t0.txt,-sys0", "pa_q -sys0,sys1", 'pa_txt "a",-sys0,0,1', "crcputs -sys0,0",
+            "getv -sys0", "getv -n0.val", "getv -RED", "fstr -sys0,0,0", "strsize 0,0,-sys0",
+            "ucopy -sys0,0,2,0", "i -sys0,t0.txt,1,2", "i t0.txt,-sys0,1,2",
+            "nstr -sys0,0x01,1000", "zstr 0,0,0,0,-sys0", "qrcode 0,0,0,0,0,0,0,-sys0",
+            "cov n0.val,-sys0,0", "strlen t0.txt,-sys0", "covx n0.val,-sys0,0,0",
+            "strlen -sys0,sys1", "substr -sys0,t0.txt,0,1", 'spstr -sys0,t0.txt,"a",0',
+            "spstr t0.txt,t0.txt,-sys0,0", "btlen -sys0,sys1", "get -sys0", "print -sys0",
+            "print -RED", "prints -sys0,0", "covx -sys0,t0.txt,0,0",
+            "xstr 0,0,100,30,0,RED,BLACK,0,0,1,-sys0", "getv 1+-sys0", "strlen 1*-sys0,sys1"],
+        "NX8048P050": ["delfile -sys0", 'findfile "sd0/a.txt",-sys0', "gets n0.val,-sys0",
+                       "sets -sys0,0", "sets 0,-sys0"],
+        "NX4832K035": ["wepo -sys0,0", "repo -sys0,0"],
+        "NX4832F035": ["piccolor 0,0,0,-sys0"],
+    }
 
     def setUp(self):
         super().setUp()
@@ -1033,11 +1050,31 @@ class OneOperandArgumentTest(_CodeOnFirstTestCase):
                         'spstr t0.txt,t0.txt,"a",0', "crcputs t0.txt,0", "getv b[1].txt")
         export_dump(self.source, self.folder / "built")
 
+    def test_a_minus_before_a_name(self):
+        number = 0
+        for model, lines in self.MINUS_REFUSED.items():
+            self.use_screen(model)
+            for line in lines:
+                with self.subTest(line=line):
+                    self.write_code(line)
+                    number += 1
+                    self.assert_refused(line, "refused%d" % number)
+        # xstr's message says what was refused.
+        self.use_screen("NX4832T035")
+        self.write_code("xstr 0,0,100,30,0,RED,BLACK,0,0,1,-sys0")
+        with self.assertRaisesRegex(NxwrightError, "a minus before a name"):
+            export_dump(self.source, self.folder / "xstr")
+        # A minus before a number, and a colour's name alone, build.
+        self.write_code("getv -5", "print -5", "getv RED")
+        export_dump(self.source, self.folder / "built")
+
     def test_the_advice_fits_the_place(self):
         self.use_screen("NX4832T035")
         for number, (line, advice) in enumerate((
                 ('strlen t0.txt+"a",n0.val', "Put the expression in a variable first, then "
                                              "give that variable."),
+                ("strlen -sys0,n0.val", "Put the expression in a variable first, then give "
+                                        "that variable."),
                 ("cov n0.val,sys0+1,0", "Give the variable that is to take the result."),
                 ("getv sys0+1", "Give a single value."))):
             with self.subTest(line=line):
@@ -1094,6 +1131,50 @@ class OneOperandArgumentTest(_CodeOnFirstTestCase):
                 program.write_text(text + line + "\n", encoding="utf-8", newline="\n")
                 self.assert_refused(line, "program%d" % number, r"program\.nx",
                                     len(text.split("\n")))
+
+    def test_nxlang_computes_a_minus_before_a_name_a_command_only_reads_first(self):
+        # The NX8048P050 has each of these commands.
+        self.use_screen("NX8048P050")
+        self.write_code("n0.val=0")
+        switch_to_nxlang(self.source)
+        self.write_code("strlen -n0.val, n0.val", "spstr t0.txt, t0.txt, -n0.val, 0",
+                        "crcputs -n0.val, 0", "wepo -n0.val, 0", "delfile -n0.val",
+                        "substr -n0.val, t0.txt, 0, 1", "btlen -n0.val, n0.val",
+                        "xstr 0, 0, 100, 30, 0, RED, BLACK, 0, 0, 1, -n0.val")
+        written = self.written_code("built")
+        for line in ("strlen %s,n0.val", "spstr t0.txt,t0.txt,%s,0", "crcputs %s,0",
+                     "wepo %s,0", "delfile %s", "substr %s,t0.txt,0,1", "btlen %s,n0.val",
+                     "xstr 0,0,100,30,0,RED,BLACK,0,0,1,%s"):
+            with self.subTest(line=line):
+                self.assertRegex(written, r"\| (__g\w+)=0-n0\.val\n\s*\| %s\n"
+                                 % re.escape(line).replace("%s", r"\1"))
+        # A place the command writes and a place of an undocumented command
+        # stay refused. The build's message quotes the line without its spaces.
+        for number, line in enumerate(("cov n0.val,-n0.val,0", "getv -n0.val")):
+            with self.subTest(line=line):
+                self.write_code(line)
+                self.assert_refused(line, "nxlang%d" % number)
+        # program.nx has no temporaries, so each line stays refused there.
+        self.write_code("n0.val = 0")
+        program = self.source / "program.nx"
+        text = program.read_text(encoding="utf-8")
+        text += "" if text.endswith("\n") else "\n"
+        for number, line in enumerate((
+                "wepo -sys0,0", "crcputs -sys0,0", "delfile -sys0", "strlen -sys0,sys1",
+                "substr -sys0,sys1,0,1", 'spstr -sys0,sys1,"a",0', 'spstr "a",sys1,-sys0,0',
+                "btlen -sys0,sys1")):
+            with self.subTest(line=line):
+                program.write_text(text + line + "\n", encoding="utf-8", newline="\n")
+                self.assert_refused(line, "program%d" % number, r"program\.nx",
+                                    len(text.split("\n")))
+        # nxlang refuses xstr's text itself, as it computes that text before
+        # the build checks the line.
+        program.write_text(text + "xstr 0,0,100,30,0,RED,BLACK,0,0,1,-sys0\n", encoding="utf-8",
+                           newline="\n")
+        with self.assertRaisesRegex(NxwrightError, r"program\.nx line %d: this needs a temporary "
+                                    r"variable, which program\.nx cannot have"
+                                    % len(text.split("\n"))):
+            export_dump(self.source, self.folder / "program-xstr")
 
 
 class FullyListedComponentTest(_CodeOnFirstTestCase):

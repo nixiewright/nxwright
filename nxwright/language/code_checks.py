@@ -207,6 +207,8 @@ COMMAND_PARAMETERS = {
 }
 # One operand alone: a string, a number, or a name, which may be dotted.
 _ONE_OPERAND = re.compile(r'"(?:\\.|[^"\\])*"|-?\w+(?:\[[^\]]*\])?(?:\.\w+(?:\[[^\]]*\])?)*')
+# A minus before a name, as in -sys0 or -RED (_has_minus_before_a_name).
+_MINUS_BEFORE_A_NAME = re.compile(r"-[A-Za-z_]")
 # The commands whose first argument is one operand alone. The Editor
 # refused arithmetic there as it compiled ("Invalid Variables"), as in
 # `get n0.val+1`, and texts joined, as in `print "a"+t0.txt`. It took
@@ -747,8 +749,9 @@ def _check_number_arguments(code: str, number: int):
 def _check_one_operand_arguments(code: str, number: int):
     """Raises NxwrightError when a command is given an expression in an
     argument that takes a single value (ONE_OPERAND_PLACES), as in
-    `getv sys0+1` or `spstr t0.txt,t0.txt,"a"+"b",0`. The Nextion Editor
-    refused such lines as it compiled ("Invalid Variables"). The message's
+    `getv sys0+1` or `spstr t0.txt,t0.txt,"a"+"b",0`, or a minus before a
+    name, as in `getv -sys0` or `getv -RED`. The Nextion Editor refused
+    such lines as it compiled ("Invalid Variables"). The message's
     advice depends on whether the command reads the argument, puts its
     result in it, or is undocumented."""
     word = command_word(code)
@@ -762,7 +765,9 @@ def _check_one_operand_arguments(code: str, number: int):
             continue
         argument = arguments[place].strip()
         parts = chain_parts(argument)
-        if parts is None or len(parts) == 1:
+        joined = parts is not None and len(parts) > 1
+        # chain_parts cannot read a minus before a name, so this looks for one separately.
+        if not joined and not _has_minus_before_a_name(argument):
             continue
         if place in READ_ONE_OPERAND_PLACES.get(word, ()):
             advice = "Put the expression in a variable first, then give that variable."
@@ -930,29 +935,52 @@ def _check_file_stream_call(code: str, objects: ObjectNames, number: int):
 
 def _check_first_argument(code: str, number: int):
     """Raises NxwrightError for a command of ONE_OPERAND_FIRST whose first
-    argument is arithmetic, which the Editor refuses as it compiles."""
+    argument is arithmetic, which the Editor refuses as it compiles. A
+    minus before a name counts as arithmetic: the Nextion Editor refused
+    `print -sys0` and `print -RED` ("Invalid Variables"), and compiled
+    `print -5`."""
     word = command_word(code)
     if word not in ONE_OPERAND_FIRST:
         return
     first = ARGUMENT.match(code[len(word):].strip())
-    if first is not None and not is_one_operand(first[0]):
+    if first is None or is_one_operand(first[0]):
+        return
+    if _has_minus_before_a_name(first[0]):
         raise NxwrightError("%s: the Nextion Editor takes one text or number as the first "
-                            "argument of %s, not arithmetic or texts joined" % (code, word),
-                            line=number)
+                            "argument of %s, and it refuses a minus before a name there "
+                            "(\"%s\")" % (code, word, INVALID_VARIABLES), line=number)
+    raise NxwrightError("%s: the Nextion Editor takes one text or number as the first "
+                        "argument of %s, not arithmetic or texts joined" % (code, word),
+                        line=number)
 
 
 def is_one_operand(text: str) -> bool:
     """Whether `text` is one operand alone: a text, a number, or a name,
     which may be dotted, as the Editor takes where it refuses arithmetic
-    and texts joined (_ONE_OPERAND)."""
-    return _ONE_OPERAND.fullmatch(text.strip()) is not None
+    and texts joined (_ONE_OPERAND). A minus before a number is part of
+    the number. A minus before a name is not one operand, as the Nextion
+    Editor refused it in such places."""
+    return _ONE_OPERAND.fullmatch(text.strip()) is not None and not _has_minus_before_a_name(text)
+
+
+def _has_minus_before_a_name(text: str) -> bool:
+    """Whether `text`, a command's argument, has a minus that is the sign
+    of a name, as in `-sys0`, `-RED`, or `1+-sys0`. Where a command takes a
+    single value, the Nextion Editor refused each of these ("Invalid
+    Variables"), though it took a minus before a number, as in `getv -5`.
+    A minus right after an operand subtracts, as in `sys0-sys1`, and one
+    inside a quoted text is part of the text."""
+    text = STRING.sub('""', text.strip())
+    return any(minus_is_sign(text[:minus.start()])
+               for minus in _MINUS_BEFORE_A_NAME.finditer(text))
 
 
 def _check_xstr_text(code: str, number: int):
     """Raises NxwrightError for an xstr whose text, its last argument, is
     more than one operand, as texts joined or arithmetic. The Editor
     refused `"a"+"b"`, `t0.txt+"b"`, `"a"+t0.txt+"c"`, `sys0+1`, and
-    `n0.val*2` there as it compiled ("Invalid Variables"), and compiled one
+    `n0.val*2` there as it compiled ("Invalid Variables"), and a minus
+    before a name, as in `-sys0` and `-RED`. It compiled one
     operand alone, as a text, a txt, a number, or a variable. An xstr of
     another number of arguments is refused by _check_parameter_count."""
     if command_word(code) != "xstr":
@@ -961,8 +989,8 @@ def _check_xstr_text(code: str, number: int):
     if len(arguments) == COMMAND_PARAMETERS["xstr"] and not is_one_operand(arguments[-1]):
         raise NxwrightError("%s: the text of xstr must be one operand: a text, a txt, a "
                             "number, or a variable. The Nextion Editor refuses texts "
-                            "joined or arithmetic there (\"%s\")" % (code, INVALID_VARIABLES),
-                            line=number)
+                            "joined, arithmetic, or a minus before a name there (\"%s\")"
+                            % (code, INVALID_VARIABLES), line=number)
 
 
 def _check_first_word(code: str, number: int):

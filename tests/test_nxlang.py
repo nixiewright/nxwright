@@ -514,13 +514,15 @@ class RefusedFormTest(unittest.TestCase):
         self.assertEqual(compile_lines(head + '"a" + t0.txt'),
                          ['__s0.txt="a"+t0.txt', written + "__s0.txt"])
         self.assertEqual(compile_lines(head + "x.val * 2"), ["__g0_0=x.val*2", written + "__g0_0"])
+        # The Nextion Editor refuses a minus before a name there too.
+        self.assertEqual(compile_lines(head + "-x.val"), ["__g0_0=0-x.val", written + "__g0_0"])
         # A call's commas, and a text's, stay inside the last argument.
         for line in ("xstr 0,1,add(a.val, 2) * 2", 'xstr 0,1,"a, b"+t0.txt', "xstr 0,1,b[1, 2]"):
             with self.subTest(line=line):
                 self.assertEqual(_last_argument_start(line), len("xstr 0,1,"))
         # One operand, as the build's check reads it, as written: a text
-        # holding a comma, and a negative name, among them.
-        for text in ("t0.txt", '"a, b"', "x.val", "-5", "-x.val", "RED", "b[1].val"):
+        # holding a comma, and a negative number, among them.
+        for text in ("t0.txt", '"a, b"', "x.val", "-5", "RED", "b[1].val"):
             with self.subTest(text=text):
                 self.assertEqual(compile_lines(head + text), [written + text])
 

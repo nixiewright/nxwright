@@ -2634,8 +2634,8 @@ class _EventCompiler:
             the Nextion Editor does not read, such as a minus before a
             name. `cls -x.val` becomes `__g0_0=0-x.val`, then `cls __g0_0`.
           - an argument the command only reads (READ_ONE_OPERAND_PLACES),
-            given an expression. `strlen t0.txt+"a",n0.val` becomes
-            `__s0.txt=t0.txt+"a"`, then `strlen __s0.txt,n0.val`.
+            given an expression or a minus before a name. `strlen t0.txt+"a",n0.val`
+            becomes `__s0.txt=t0.txt+"a"`, then `strlen __s0.txt,n0.val`.
 
         wepo is the exception for texts. When wepo saves a text, it writes
         as many bytes as the text field has room for, plus one. A text
