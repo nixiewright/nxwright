@@ -83,8 +83,8 @@ _WORD_LIST = "ListMessage"
 # command or a system variable the screen's series lacks; its refusal of a
 # video made for another rotation than the project's; its refusals of a
 # sound at 22050 samples a second of other than 16 bits, or of more than two
-# channels; and three more of its own, which follow its refusal of a
-# comparison that is too long.
+# channels; three more of its own, which follow its refusal of a comparison
+# that is too long; and its refusal of a project of more than 251 pages.
 _EDITOR_STOPPED = ("Error:Destination array was not long enough",
                    "The direction of the file is inconsistent with the current engineering "
                    "display direction",
@@ -92,7 +92,8 @@ _EDITOR_STOPPED = ("Error:Destination array was not long enough",
                    "Vocal Track Number Out of Effective Range",
                    "Error:Index was outside the bounds of the array",
                    "Error:Arithmetic operation resulted in an overflow",
-                   "Error:Index was out of range")
+                   "Error:Index was out of range",
+                   "Error:Too many pages.")
 # The last line of the Output panel once a compile has ended: "Compile
 # Successful! 0 Errors, 0 Warnings,File Size:790,508", or "Error:Compile
 # failed! 1 Errors, 0 Warnings,".

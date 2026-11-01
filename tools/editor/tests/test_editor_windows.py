@@ -481,6 +481,15 @@ class CompileWatchTest(unittest.TestCase):
         self.assertFalse(watch.look(refused, False, 0))
         self.assertTrue(watch.look(refused, False, 1))
 
+    def test_too_many_pages(self):
+        # A compile refusing a project of 252 pages, as the Editor 1.68.2
+        # showed it on every series: this line alone, and no last line. The
+        # tool did not always see the compile's progress window come and go.
+        refused = "Error:Too many pages."
+        watch = CompileWatch(settled=1)
+        self.assertFalse(watch.look(refused, False, 0))
+        self.assertTrue(watch.look(refused, False, 1))
+
 
 class SaveQuestionTest(unittest.TestCase):
     """The Editor's question to save the project shown, as Open is pressed
