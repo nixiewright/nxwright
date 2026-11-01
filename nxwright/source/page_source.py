@@ -659,8 +659,8 @@ def table_limits(toml_tables: list, defaults: dict) -> dict:
     `toml_tables` that have a name: a `txt`'s `txt_maxl`, and each `X`'s
     `X_m`, as a `path`'s `path_m` (editor_limits.bounded_attributes). Each
     limit is the table's own, or else its type's, from `defaults`. A table
-    whose type is not text, as a malformed page file may give, has none: the
-    page's build refuses it."""
+    whose type is not a string, as a malformed page file may give, has none:
+    the page's build refuses it."""
     limits = {}
     for table in toml_tables:
         if "name" not in table or not isinstance(table.get("type"), str):

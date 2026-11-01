@@ -617,6 +617,12 @@ class TextCutTest(FolderTestCase):
             'on page0.load:\n  if (title.txt == "a" + big.txt) {\n    sys0 = 1\n  }\n'
             '  if (title.txt == "%s" + title.txt) {\n    sys0 = 2\n  }\n' % ("b" * 1100)), [])
 
+    def test_a_loop_condition_warns_once(self):
+        # A while loop's condition is computed again at the end of each pass.
+        self.assertEqual([finding.line for finding in self.cuts(
+            'on page0.load:\n  while (title.txt == "a" + big.txt) {\n    sys0 = 1\n  }\n')],
+            [2])
+
     def test_an_addition_counts_the_parts_it_adds(self):
         # The text the local keeps already is not counted: short texts added
         # in steps stay at 255 bytes, as the docs say.
