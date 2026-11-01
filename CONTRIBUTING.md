@@ -56,7 +56,7 @@ npm run compile
 
 `npm run test:host` compiles the client, then runs the tests that need VS Code itself (`test/host/`): the extension activating on a source folder, its commands registered, the language server's errors as code is typed, the page preview opening, and an agent driving a simulation through the agent channel, `nxwright mcp`'s own client included.
 
-- The tests run in a VS Code installed apart from your own, which `@vscode/test-electron` starts, and never downloads.
+- The tests run in a VS Code installed apart from your own, which `@vscode/test-electron` starts, and never downloads. In CI, on Linux and macOS, the workflow downloads one first (`.github/workflows/tests.yml`).
 - To set one up:
   1. Download [VS Code's zip](https://code.visualstudio.com/download), and unpack it in a folder of its own, such as `C:\Tools\vscode`.
   2. In that folder, beside `Code.exe`, create an empty folder named `data`. That VS Code then keeps its settings there, apart from your own VS Code's.

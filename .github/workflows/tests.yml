@@ -57,3 +57,52 @@ jobs:
           npm run compile
       - name: Test the page preview's painting
         run: npm test
+
+  # The tests inside VS Code (`npm run test:host`). Contributors run them on
+  # Windows (CONTRIBUTING.md). Here they run on Linux and macOS, where
+  # nothing else tries the client's code that needs VS Code, such as the
+  # folder of the agent channel's files, which depends on the system.
+  extension-host:
+    runs-on: ${{ matrix.os }}
+    # A VS Code that hangs would otherwise hold the runner for hours.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      # The tests run this checkout's nxwright, with `python`, for the
+      # language server (test/host/run.mjs).
+      - name: nxwright's dependencies, from pyproject.toml
+        working-directory: .
+        run: python -m pip install .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: The VS Code extension's packages
+        run: npm ci
+      # run.mjs never downloads VS Code: it runs the one NXWRIGHT_TEST_VSCODE
+      # names. So this step downloads one first, into .vscode-test/, apart
+      # from any other, and names its program. It takes the current stable
+      # release, the one users run, so a run that fails after a VS Code
+      # release may come from VS Code, not from this repository.
+      - name: A VS Code installed apart, for the tests
+        run: >-
+          node --input-type=module -e "import { appendFileSync } from 'node:fs';
+          import { downloadAndUnzipVSCode } from '@vscode/test-electron';
+          const program = await downloadAndUnzipVSCode('stable');
+          appendFileSync(process.env.GITHUB_ENV, 'NXWRIGHT_TEST_VSCODE=' + program + '\n');"
+      # VS Code needs a display, which a Linux runner has none of.
+      - name: The tests inside VS Code, with a virtual display
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:host
+      - name: The tests inside VS Code
+        if: runner.os != 'Linux'
+        run: npm run test:host
