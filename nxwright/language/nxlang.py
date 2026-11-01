@@ -105,7 +105,8 @@ import re
 from nxwright import NxwrightError
 from nxwright.language.code_checks import (COMPONENT_PLACES, DATA_RECORD_ARGUMENTS,
                                            DATA_RECORD_CALL, NUMBER_PLACES, ONE_OPERAND_FIRST,
-                                           SCREEN_ARRAY, ends_in_escaped_backslash,
+                                           READ_ONE_OPERAND_PLACES, SCREEN_ARRAY,
+                                           ends_in_escaped_backslash,
                                            is_one_operand, method_count_refusal)
 from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, chain_parts, command_arguments,
                                           command_word,
@@ -2438,7 +2439,8 @@ class _EventCompiler:
         command = command_word(code)
         if command in COMPONENT_PLACES:
             code = self.component_arguments(command, code, number)
-        if (command in NUMBER_PLACES and command not in ONE_OPERAND_FIRST
+        if ((command in NUMBER_PLACES and command not in ONE_OPERAND_FIRST
+             or command in READ_ONE_OPERAND_PLACES)
                 and self.computed_arguments(number, indent, command, code, comment)):
             return
         if command in ONE_OPERAND_FIRST:
@@ -2588,12 +2590,22 @@ class _EventCompiler:
     def computed_arguments(self, number: int, indent: str, word: str, code: str,
                            comment: str) -> bool:
         """Compiles the command `code`, whose first word `word` is one of
-        NUMBER_PLACES, when one of its number places holds a value nxlang
-        reads but the Nextion Editor does not, as a minus before a name. The
-        value is computed into a temporary first: `cls -x.val` becomes
-        `__g0_0=0-x.val`, then `cls __g0_0`, and `cls 2*-x.val` alike.
+        NUMBER_PLACES or READ_ONE_OPERAND_PLACES, when one of those places
+        holds a value the Nextion Editor refuses there. The value is
+        computed into a temporary first:
+          - in a number place, a value nxlang reads but the Nextion Editor
+            does not, as a minus before a name: `cls -x.val` becomes
+            `__g0_0=0-x.val`, then `cls __g0_0`, and `cls 2*-x.val` alike;
+          - in a place the command only reads, an expression:
+            `strlen t0.txt+"a",n0.val` becomes `__s0.txt=t0.txt+"a"`, then
+            `strlen __s0.txt,n0.val`.
 
-        Returns False, writing nothing, when no number place holds one, or
+        wepo's value is computed only when it is a number. For a text
+        variable, wepo writes as many bytes as its txt_maxl, plus one. A
+        text temporary can contain 255 characters, so wepo would write 256
+        bytes for it.
+
+        Returns False, writing nothing, when no place holds such a value, or
         in program.nx, which has no temporaries. A value nxlang does not
         read either, as `cls 5a`, is left as written. The build then refuses
         the line as written."""
@@ -2601,16 +2613,25 @@ class _EventCompiler:
         if self.temporaries is None:
             return False
         arguments = command_arguments(code[len(word):])
+        number_places = NUMBER_PLACES.get(word, ())
+        read_places = READ_ONE_OPERAND_PLACES.get(word, ())
         emitter = None
-        for place in NUMBER_PLACES[word]:
+        for place in number_places + read_places:
             if place >= len(arguments):
                 continue
             text = arguments[place].strip()
-            if not text or STRING_LITERAL.fullmatch(text) or chain_parts(text) is not None:
+            if not text:
+                continue
+            if place in number_places and (STRING_LITERAL.fullmatch(text)
+                                           or chain_parts(text) is not None):
+                continue
+            if place in read_places and is_one_operand(text):
                 continue
             try:
                 expression = Parser(tokenize(text, number), number, self.scope).whole_expression()
             except (NotParsed, NxwrightError):
+                continue
+            if word == "wepo" and kind_of(expression, number) == TEXT:
                 continue
             emitter = emitter or self.emitter(indent, number)
             arguments[place] = arguments[place].replace(text, emitter.value(expression))

@@ -187,6 +187,12 @@ The first argument of `get`, `print`, `prints`, and `covx` is one text or one nu
 - Arithmetic is fine in `prints`' length, in `covx`'s length and form, and in `newfile`'s size.
 - In nxlang, such a first argument is computed first instead ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 
+Some commands take one operand in other arguments too. The build refuses an expression in these arguments, such as `getv sys0+1` or `spstr t0.txt,t0.txt,"a"+"b",0` ("Invalid Variables"):
+
+- `wepo`'s and `crcputs`' value, `delfile`'s path, the source of `strlen`, `substr`, `spstr`, and `btlen`, and `spstr`'s separator. These commands only read the argument. So in nxlang, an expression in one of them is computed first, except a text in `wepo`, and except in `program.nx`.
+- The destination of `cov`, `covx`, `strlen`, `repo`, and `ucopy`, and `findfile`'s answer, where the command writes its result.
+- Arguments of commands the vendor does not document: `getv`'s, `fstr`'s first, `strsize`'s third, both of `pa_q`'s, `pa_txt`'s second, `gets`' second, each of `sets`', the first two of `i`, `nstr`'s first, `zstr`'s fifth, `qrcode`'s eighth, and `piccolor`'s fourth.
+
 The text of `xstr`, its last argument, is one operand too: a text, a `txt`, a number, or a variable. The build refuses texts joined or arithmetic there, such as `xstr 0,0,100,30,0,RED,WHITE,0,0,1,"a"+"b"` ("Invalid Variables"). In nxlang, such a text is computed first instead, as a first argument is, except in `program.nx`, which has no temporaries.
 
 ### Texts and numbers

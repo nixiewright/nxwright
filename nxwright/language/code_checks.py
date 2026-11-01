@@ -103,6 +103,29 @@ _NAME_ONLY = re.compile(r"[A-Za-z_]\w*")
 # Variables").
 NUMBER_PLACES = {"cls": (0,), "add": (0, 1, 2), "addt": (0, 1, 2), "cle": (0, 1),
                  "prints": (1,), "pa_txt": (2, 3), "newfile": (1,), "rdfile": (1,)}
+# The places of commands' arguments that take one operand alone, counted
+# from 0. The Nextion Editor refused an expression in each as it compiled,
+# as `wepo sys0+1,0` ("Invalid Variables"). They come in two tables:
+#   - the places a command only reads, as the vendor's instruction set
+#     documents them: wepo's and crcputs' value, delfile's path, the source
+#     of strlen, substr, spstr, and btlen, and spstr's separator. In an
+#     event, nxlang computes an expression in one of these places into a
+#     temporary first;
+#   - the others: where a command writes its result, as cov's destination,
+#     and the arguments of commands the vendor does not document.
+# covx's first argument is checked with get's (ONE_OPERAND_FIRST).
+READ_ONE_OPERAND_PLACES = {"wepo": (0,), "crcputs": (0,), "delfile": (0,), "strlen": (0,),
+                           "substr": (0,), "spstr": (0, 2), "btlen": (0,)}
+_OTHER_ONE_OPERAND_PLACES = {
+    "repo": (0,), "ucopy": (0,), "findfile": (1,), "cov": (1,), "covx": (1,), "strlen": (1,),
+    "getv": (0,), "fstr": (0,), "strsize": (2,), "pa_q": (0, 1), "pa_txt": (1,), "gets": (1,),
+    "i": (0, 1), "nstr": (0,), "zstr": (4,), "qrcode": (7,), "piccolor": (3,)}
+ONE_OPERAND_PLACES = {
+    word: READ_ONE_OPERAND_PLACES.get(word, ()) + _OTHER_ONE_OPERAND_PLACES.get(word, ())
+    for word in READ_ONE_OPERAND_PLACES.keys() | _OTHER_ONE_OPERAND_PLACES.keys()}
+# sets takes any number of arguments, and the Nextion Editor refused an
+# expression in each.
+ONE_OPERAND_EVERYWHERE = ("sets",)
 # Such a command's first argument given by a name, a dotted one too: a
 # component's, which a macro may not give, or a variable's or value's,
 # holding the component's ID.
@@ -290,6 +313,7 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
     _check_xstr_text(code, number)
     _check_components(code, objects, variables, program_pages, number)
     _check_number_arguments(code, number)
+    _check_one_operand_arguments(code, number)
     _check_page_argument(code, number)
     if variables is not None:
         _check_program_variables(code, variables, number)
@@ -712,6 +736,29 @@ def _check_number_arguments(code: str, number: int):
             raise NxwrightError("%s: the Nextion Editor does not read %s as a number, or as "
                                 "numbers joined by operators (\"%s\")"
                                 % (code, argument, INVALID_VARIABLES), line=number)
+
+
+def _check_one_operand_arguments(code: str, number: int):
+    """Raises NxwrightError for an expression, operands joined by operators,
+    in a place of a command's arguments that takes one operand alone
+    (ONE_OPERAND_PLACES), as `getv sys0+1` or `spstr t0.txt,t0.txt,"a"+"b",0`.
+    The Nextion Editor refused it as it compiled ("Invalid Variables")."""
+    word = command_word(code)
+    if word not in ONE_OPERAND_PLACES and word not in ONE_OPERAND_EVERYWHERE:
+        return
+    arguments = command_arguments(code[len(word) + 1:])
+    places = (range(len(arguments)) if word in ONE_OPERAND_EVERYWHERE
+              else ONE_OPERAND_PLACES[word])
+    for place in places:
+        if place >= len(arguments):
+            continue
+        argument = arguments[place].strip()
+        parts = chain_parts(argument)
+        if parts is not None and len(parts) > 1:
+            raise NxwrightError("%s: %s takes one operand in this argument, such as a number, a "
+                                "text, or an attribute, not the expression %s. The Nextion "
+                                "Editor refuses the line (\"%s\")"
+                                % (code, word, argument, INVALID_VARIABLES), line=number)
 
 
 def _check_page_argument(code: str, number: int):

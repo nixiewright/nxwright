@@ -973,6 +973,113 @@ class NumberArgumentTest(_CodeOnFirstTestCase):
             export_dump(self.source, self.folder / "program")
 
 
+class OneOperandArgumentTest(_CodeOnFirstTestCase):
+    """An expression where a command takes one operand. The Nextion Editor
+    refused each line refused here as it compiled ("Invalid Variables"), on
+    the series given, and compiled each that builds."""
+
+    # Each series' model, with the lines refused on it.
+    REFUSED = {
+        "NX4832T035": [
+            "pa_q t0.txt,n0.val+1", "pa_q sys0+1,sys1", 'pa_txt "a",sys0+1,0,1',
+            "crcputs 0x01+1,4", "getv sys0+1", "fstr sys0+1,0,0", "strsize 0,0,sys0+1",
+            "ucopy sys0+1,0,2,0", "i sys0+1,0,0,0", "i 0,sys0+1,0,0", "nstr sys0+1,0x01,1000",
+            "zstr 0,0,0,0,sys0+1", "qrcode 0,0,0,0,0,0,0,sys0+1",
+            "cov n0.val,sys0+1,0", "strlen t0.txt,sys0+1", "covx n0.val,n0.val+1,0,0",
+            "strlen sys0+1,sys1", "substr sys0+1,t0.txt,0,1", 'spstr sys0+1,t0.txt,"a",0',
+            "btlen sys0+1,sys1", 'spstr t0.txt,t0.txt,"a"+"b",0', 'getv t0.txt+"a"',
+            'strlen t0.txt+"a",sys1'],
+        "NX8048P050": [
+            "delfile sys0+1", 'findfile "sd0/a.txt",sys0+1', "gets n0.val,sys0+1",
+            "sets sys0+1,0", "sets 0,sys0+1", 'delfile t0.txt+"a"', 'sets 0,t0.txt+"a"'],
+        "NX4832K035": ["wepo sys0+1,0", "repo sys0+1,0", 'wepo t0.txt+"a",0'],
+        "NX4832F035": ["piccolor 0,0,0,sys0+1", 'piccolor 0,0,0,t0.txt+"a"'],
+    }
+
+    def setUp(self):
+        super().setUp()
+        # A data record is of the Intelligent series alone.
+        edit_text(self.source / "pages" / "first.page.toml",
+                  '\n[[component]]\nname = "d0"\ntype = "data-record"\nx = 0\ny = 40\n'
+                  'w = 200\nh = 100\n', "")
+
+    def use_screen(self, model: str):
+        app = self.source / "app.toml"
+        data = tomllib.loads(app.read_text(encoding="utf-8"))
+        data["screen"] = model
+        app.write_text(tomli_w.dumps(data), encoding="utf-8", newline="\n")
+
+    def assert_refused(self, line: str, built: str, file: str = r"first\.nx", place: int = 2):
+        with self.assertRaisesRegex(NxwrightError, r"%s line %d: %s: .*\(\"Invalid Variables\"\)"
+                                    % (file, place, re.escape(line))):
+            export_dump(self.source, self.folder / built)
+
+    def test_an_expression(self):
+        number = 0
+        for model, lines in self.REFUSED.items():
+            self.use_screen(model)
+            for line in lines:
+                with self.subTest(line=line):
+                    self.write_code(line)
+                    number += 1
+                    self.assert_refused(line, "refused%d" % number)
+        # One operand in each place builds.
+        self.use_screen("NX4832T035")
+        self.write_code("ucopy -1,0,2,0", 'strlen "a",n0.val', "cov n0.val,t0.txt,0",
+                        'spstr t0.txt,t0.txt,"a",0', "crcputs t0.txt,0", "getv b[1].txt")
+        export_dump(self.source, self.folder / "built")
+
+    def written_code(self, built: str) -> str:
+        export_dump(self.source, self.folder / built)
+        page = next((self.folder / built / "pages").glob("*-first.txt"))
+        return page.read_text(encoding="utf-8")
+
+    def test_nxlang_computes_an_expression_a_command_only_reads_first(self):
+        # The NX8048P050 has each of these commands.
+        self.use_screen("NX8048P050")
+        self.write_code("n0.val=0")
+        switch_to_nxlang(self.source)
+        self.write_code('strlen t0.txt + "a", n0.val', 'spstr t0.txt, t0.txt, "a" + "b", 0',
+                        "crcputs n0.val + 1, 0 // sum", "wepo n0.val * 2, 0",
+                        'delfile "sd0/" + t0.txt', 'substr t0.txt + "b", t0.txt, 0, 1',
+                        'btlen t0.txt + "c", n0.val')
+        written = self.written_code("built")
+        self.assertRegex(written, r'\| (__s\w+)\.txt=t0\.txt\+"a"\n\s*\| strlen \1\.txt,n0\.val\n')
+        self.assertRegex(written, r'\| (__s\w+)\.txt="a"\+"b"\n\s*\| spstr t0\.txt,t0\.txt,'
+                                  r'\1\.txt,0\n')
+        self.assertRegex(written, r"\| (__g\w+)=n0\.val\+1\n\s*\| crcputs \1,0 // sum\n")
+        self.assertRegex(written, r"\| (__g\w+)=n0\.val\*2\n\s*\| wepo \1,0\n")
+        self.assertRegex(written, r'\| (__s\w+)\.txt="sd0/"\+t0\.txt\n\s*\| delfile \1\.txt\n')
+        self.assertRegex(written, r'\| (__s\w+)\.txt=t0\.txt\+"b"\n\s*\| substr \1\.txt,t0\.txt,'
+                                  r'0,1\n')
+        self.assertRegex(written, r'\| (__s\w+)\.txt=t0\.txt\+"c"\n\s*\| btlen \1\.txt,n0\.val\n')
+        # Two places of one line take a temporary each.
+        self.write_code('spstr t0.txt + "a", t0.txt, "a" + "b", 0')
+        self.assertRegex(self.written_code("two"),
+                         r"\| spstr (__s\w+)\.txt,t0\.txt,(?!\1)__s\w+\.txt,0\n")
+        # A place the command writes, a place of an undocumented command, and
+        # wepo's text, whose temporary would write 256 bytes, stay refused.
+        # The build's message quotes the line without its spaces.
+        for number, line in enumerate(("cov n0.val,n0.val+1,0", "getv n0.val+1",
+                                       'wepo t0.txt+"a",0')):
+            with self.subTest(line=line):
+                self.write_code(line)
+                self.assert_refused(line, "nxlang%d" % number)
+        # program.nx has no temporaries, so each line stays refused there.
+        self.write_code("n0.val = 0")
+        program = self.source / "program.nx"
+        text = program.read_text(encoding="utf-8")
+        text += "" if text.endswith("\n") else "\n"
+        for number, line in enumerate((
+                "wepo sys0+1,0", "crcputs sys0+1,0", "delfile sys0+1", "strlen sys0+1,sys1",
+                "substr sys0+1,sys1,0,1", 'spstr sys0+1,sys1,"a",0', 'spstr "a",sys1,"a"+"b",0',
+                "btlen sys0+1,sys1")):
+            with self.subTest(line=line):
+                program.write_text(text + line + "\n", encoding="utf-8", newline="\n")
+                self.assert_refused(line, "program%d" % number, r"program\.nx",
+                                    len(text.split("\n")))
+
+
 class FullyListedComponentTest(_CodeOnFirstTestCase):
     """Code naming a component whose page file lists every attribute, as the
     Nextion Editor compiled it: by the component's type. It makes such a
