@@ -705,17 +705,19 @@ def _stored_size(text: str, codec: TextCodec) -> int:
     return size
 
 
-def _room_for(chain: list, codec: TextCodec):
+def _room_for(chain: list, codec: TextCodec, rooms: dict):
     """Returns the bytes a text temporary needs to keep the text `chain`
-    whole, when its quoted texts take more than TEXT_TEMPORARY_SIZE: their
-    bytes, and TEXT_TEMPORARY_SIZE for each other part, whose length is known
-    only as the code runs. Returns None for a chain whose quoted texts take
-    no more, which a temporary keeps as before."""
-    quoted = [operand for _, operand in chain if operand.startswith('"')]
-    size = sum(_stored_size(operand, codec) for operand in quoted)
-    if size <= TEXT_TEMPORARY_SIZE:
+    whole, when a part of it is known to take more than TEXT_TEMPORARY_SIZE:
+    a quoted text, or a text temporary that `rooms`, {temporary: its room},
+    gives more. The room is the quoted texts' bytes, each such temporary's
+    room, and TEXT_TEMPORARY_SIZE for each other part, whose length is known
+    only as the code runs. Returns None when no part is known to take more,
+    which a temporary keeps as before."""
+    quoted = sum(_stored_size(operand, codec) for _, operand in chain if operand.startswith('"'))
+    held = [rooms.get(operand, 0) for _, operand in chain if not operand.startswith('"')]
+    if quoted <= TEXT_TEMPORARY_SIZE and all(room <= TEXT_TEMPORARY_SIZE for room in held):
         return None
-    return size + TEXT_TEMPORARY_SIZE * (len(chain) - len(quoted))
+    return quoted + sum(max(room, TEXT_TEMPORARY_SIZE) for room in held)
 
 
 def _last_argument_start(code: str):
@@ -1035,7 +1037,7 @@ class _Emitter:
         number_assignment_in_steps). A text temporary given quoted texts of
         more than 255 bytes gets room for them (_room_for)."""
         if kind == TEXT and target.startswith(TEMPORARY_PREFIX):
-            room = _room_for(chain, self.codec)
+            room = _room_for(chain, self.codec, self.temporaries.page.text_rooms())
             if room is not None:
                 self.temporaries.page.make_room(target, room)
         if kind == TEXT and operator in ("=", "+="):
@@ -1343,6 +1345,12 @@ class _PageState:
                                 % self.page_name, line=number)
         self.generated.append(Generated(name, kind))
         return name
+
+    def text_rooms(self) -> dict:
+        """Returns {temporary, as code names it, such as __s0.txt: its room}
+        of the page's text variables."""
+        return {variable.name + ".txt": variable.room for variable in self.generated
+                if variable.kind == TEXT}
 
     def make_room(self, temporary: str, room: int):
         """Gives the text temporary `temporary`, such as __s0.txt, room for

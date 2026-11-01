@@ -993,6 +993,14 @@ class LongTextTemporaryTest(unittest.TestCase):
             with self.subTest(code=code[:10]):
                 self.assertEqual(self.rooms(code), {"__s0": 555})
 
+    def test_room_for_a_temporary_inside_another(self):
+        # The conditional's temporary gets room for its 400 letters, and the
+        # join around it gets that room too, and the "x".
+        long = "a" * 400
+        code = ('if (((x.val > 0 ? "%s" : "b") + "x") == t1.txt) {\n  r.val = 1\n}' % long)
+        self.assertEqual(max(self.rooms(code).values()), 401)
+        self.assertEqual(run(code, {"x.val": 1, "t1.txt": long + "x"})["r.val"], 1)
+
     def test_255_and_256_bytes(self):
         # A condition's text that ends in an escaped backslash goes into a
         # temporary: 254 letters and the backslash keep 255, and 255 take 256.
