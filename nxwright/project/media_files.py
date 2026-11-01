@@ -109,9 +109,9 @@ _PCM, _FLOAT, _EXTENSIBLE = 1, 3, 0xFFFE
 _SUBFORMAT_AT = 24
 # The size of the Editor's `hmic` chunk.
 _SOUND_NOTE_SIZE = 504
-# The samples a second of the sounds a screen plays. The Editor keeps a
-# sound of this rate as it is, and resamples one of any other rate to it
-# as it compiles.
+# The samples a second of the sounds a screen plays. The Nextion Editor
+# keeps a sound of this rate as it is, and resamples one of any other rate
+# to it as it compiles.
 EDITOR_SOUND_RATE = 22050
 # Each byte's bits read the other way round (screen_crc).
 _BITS_REVERSED = bytes(int(format(value, "08b")[::-1], 2) for value in range(256))
@@ -418,12 +418,12 @@ def sound_form_problem(wav: bytes):
     """Returns why a screen cannot play the sound whose file is `wav`, and
     what to change in the file, or None. A screen plays sounds of 22050
     samples a second, 16 bits a sample, mono or stereo. As it compiles, the
-    Editor converts a sound of any other rate to that form with ffmpeg,
-    whatever its bits and channels. It does not convert a sound of 22050
-    samples a second, and refuses one of other bits than 16, as its format
-    chunk gives them, whatever the format of its samples, or of more than
-    two channels. A file that is not a WAV file has no such problem to
-    report."""
+    Nextion Editor converts a sound of any other rate to that form with
+    ffmpeg, whatever its bits and channels. It does not convert a sound of
+    22050 samples a second. It refuses one whose samples are not 16-bit,
+    as its format chunk gives them, whatever their format, and one of more
+    than two channels. A file that is not a WAV file has no such problem
+    to report."""
     try:
         form, _ = _wav_format_and_samples(wav)
     except NxwrightError:

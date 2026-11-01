@@ -351,7 +351,7 @@ The Nextion Editor lists them in the manifest after the fonts and before the pag
 - The check value is the CRC of the stamps (Checksums, below), fed 32-bit little-endian words, as the screen's chip computes it. It runs from the `data` chunk's header, for as many bytes as the samples take, so the samples' last 8 bytes are left out.
 - The Nextion Editor takes a sound without `hmic`, and one whose check value is zeroed. Its simulator plays a sound without `hmic` in just the sound's length, where it takes about 400 ms to play a sound of 50 ms with `hmic`.
 - A screen plays sounds of 22050 samples a second, 16 bits a sample, mono or stereo. The Nextion Editor's compile resamples a sound of any other rate to 22050 samples a second, 16 bits, whatever its bits and channels.
-- The compile does not convert a sound of 22050 samples a second. It refuses one of other bits than 16, as its format chunk gives them ("Data bits exceed the valid range (only 16 bits are supported)"), and one of more than two channels ("Vocal Track Number Out of Effective Range (1/2)").
+- The compile does not convert a sound of 22050 samples a second. It refuses a sound whose samples are not 16-bit, as its format chunk gives them ("Data bits exceed the valid range (only 16 bits are supported)"), and one of more than two channels ("Vocal Track Number Out of Effective Range (1/2)").
 
 An animation's `N.gmov` and a video's `N.v` list their frames, JPEG pictures, in a table after the header. In `N.gmov`, the table also gives each frame's duration. `nxwright/project/media_files.py` gives the byte layout of all these files.
 

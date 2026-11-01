@@ -616,20 +616,17 @@ def _check_page_argument(code: str, number: int):
 
 def _check_program_attributes(code: str, pages: dict, globals_: dict, number: int):
     """Raises NxwrightError when a line of program.nx names a component's
-    attribute in a way the Editor refuses. It refuses two kinds:
+    attribute in a way the Nextion Editor refuses. program.s belongs to no
+    page, so a component's attribute there needs its page's name, as
+    `page0.n2.val`, and the component must be of global scope. Two kinds
+    of line are refused:
       - an attribute named without its page, as `n0.val`;
       - an attribute of a component of local scope, even with its page's
         name, as `page0.n0.val`.
-    `pages` holds each page's objects, by page name, as ObjectNames.pages
-    does. `globals_` holds each page's components of global scope. A page's
-    entry is None or missing when its components are unknown.
-
-    program.s belongs to no page. On the T series, the Editor refused
-    `sys0=n0.val` there, with n0 a number of page0 of local scope or of
-    global scope. It also refused `sys0=n1.val`, with n1 a number of page1.
-    It refused `sys0=page0.n0.val` with n0 of local scope, and compiled
-    `sys0=page0.n2.val` with n2 of global scope. Its words are in
-    _program_refusal_words.
+    `pages` contains each page's objects, by page name, as
+    ObjectNames.pages does. `globals_` contains each page's components of
+    global scope. A page's entry is None or missing when its components
+    are unknown. The Nextion Editor's words are in _program_refusal_words.
 
     nxlang does not add the page's name itself. program.nx is compiled
     apart from the pages' components, and a name may belong to several
@@ -666,12 +663,14 @@ def _check_program_attributes(code: str, pages: dict, globals_: dict, number: in
 
 
 def _program_refusal_words(code: str, local: bool) -> str:
-    """Returns the Editor's words, as ' ("Invalid Variables")', for refusing
-    the line of program.nx `code` that names a component's attribute: of
-    `local` scope with its page's name, or else without its page's name.
-    Returns "" for a line of a form the Editor was not seen to refuse.
+    """Returns the Nextion Editor's words, as ' ("Invalid Variables")', for
+    refusing the line of program.nx `code` that names a component's
+    attribute: of `local` scope with its page's name, or else without its
+    page's name. Returns "" for a line of a form the Nextion Editor was not
+    seen to refuse.
 
-    The Editor said "Invalid Variables" for both kinds in an assignment,
+    On the T series, the Nextion Editor said "Invalid Variables" for both
+    kinds in an assignment,
     as `sys0=n0.val`. Without the page's name, it said "Invalid Page ID"
     for `page n0.val`, and "Invalid Component ID" for `vis n0.val,0` and
     `tsw n0.val,1`."""

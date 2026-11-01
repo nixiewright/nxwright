@@ -448,9 +448,9 @@ def add_sound(source_folder: Path, sound: Path, name: str = None, rate: int = No
             content, why = None, "%s: %s: nxwright converts others through ffmpeg" % (
                 sound.name, error)
         else:
-            # The Editor's Audio panel keeps such a sound, of 8 bits at 22050
-            # samples a second, but a screen does not play it, and the
-            # Editor's compile does not convert it.
+            # The Nextion Editor's Audio panel keeps such a sound, of 8 bits
+            # at 22050 samples a second. But a screen does not play it, and
+            # the Nextion Editor's compile does not convert it.
             problem = sound_form_problem(content)
             if problem:
                 content, why = None, "%s %s: nxwright converts it through ffmpeg" % (

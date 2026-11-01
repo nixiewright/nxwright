@@ -1304,14 +1304,14 @@ class EditorCommandTest(_CodeOnFirstTestCase):
         export_dump(self.source, self.folder / "built")
 
     def test_a_components_attribute_in_program_nx(self):
-        # program.s belongs to no page. It reaches a component with its
-        # page's name, and of global scope alone. The Editor refused, on a
-        # screen of the T series, a component's attribute named without its
-        # page as an assignment's value, "Invalid Variables", as page's
-        # argument, "Invalid Page ID", and as vis's and tsw's component,
-        # "Invalid Component ID"; and one of local scope named with its page,
-        # "Invalid Variables". n0 is of local scope, n2 of global, and t1 is
-        # on page second.
+        # program.s belongs to no page, so a component's attribute there
+        # needs its page's name, and the component must be of global scope.
+        # On the T series, the Nextion Editor refused an attribute named
+        # without its page: "Invalid Variables" in an assignment, "Invalid
+        # Page ID" given to page, and "Invalid Component ID" given to vis
+        # and tsw. It refused one of local scope with its page's name too,
+        # "Invalid Variables". Here n0 is of local scope, n2 is of global
+        # scope, and t1 is on page second.
         add_component(self.source / "pages" / "second.page.toml", "t1")
         with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8",
                   newline="\n") as page:
@@ -1333,9 +1333,9 @@ class EditorCommandTest(_CodeOnFirstTestCase):
                 with self.assertRaisesRegex(
                         NxwrightError, r"program\.nx line %d: .*\(\"%s\"\)" % (line_number, said)):
                     export_dump(self.source, self.folder / ("refused%d" % number))
-        # A component of global scope with its page's name, as the Editor
-        # compiled `sys0=page0.n2.val`; and a text holding such a name, which
-        # is no name.
+        # A component of global scope with its page's name builds, as the
+        # Nextion Editor compiled `sys0=page0.n2.val`. A quoted text that
+        # contains such a name is not a name, and builds too.
         program.write_text(written + 'sys0=first.n2.val\nprint "n0.val"\n', encoding="utf-8",
                            newline="\n")
         export_dump(self.source, self.folder / "built")
@@ -1351,6 +1351,10 @@ class EditorCommandTest(_CodeOnFirstTestCase):
         # assignment alone, so a line of page gives none.
         with self.assertRaisesRegex(NxwrightError, r"refuses this line$"):
             check_line("page first.n0.val", None, None, None, None, 1, pages, None, globals_)
+        # A form the Nextion Editor was not seen to refuse gets no words.
+        with self.assertRaisesRegex(NxwrightError, r"in program\.nx, a component needs "
+                                                   r"its page's name.*refuses this line$"):
+            check_line("print n0.val", None, None, None, None, 1, pages, None, globals_)
         # Of local scope on every page, no page's name would do.
         globals_["second"] = frozenset()
         with self.assertRaisesRegex(NxwrightError, r"n0\.val: n0 is of local scope, and program\.nx "
