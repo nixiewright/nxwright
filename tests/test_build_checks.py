@@ -2248,8 +2248,8 @@ class SeriesTest(FirstDownTestCase):
                 self.use_screen(model)
                 self.add("h0", "slider", ch=ch)
                 self.assert_component_refused(r"h0: its ch of %d is refused on the %s, as the "
-                                              r"Nextion Editor's compile takes at most 100 on "
-                                              r"that screen "
+                                              r"Nextion Editor's compile takes from 0 to 100 "
+                                              r"on that screen "
                                               r"\(\"Out of range\"\)" % (ch, model))
                 page_file.write_bytes(page)
         self.add("h0", "slider", ch=100)
@@ -2263,6 +2263,89 @@ class SeriesTest(FirstDownTestCase):
         self.use_screen("NX4832T035")
         self.add("h0", "slider", ch=255)
         export_dump(self.source, self.folder / "basic")
+
+    def add_unplaced(self, name: str, kind: str, **values):
+        """Adds a component of type `kind` that has no place, such as a
+        timer, to page first, with `values`."""
+        with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8",
+                  newline="\n") as file:
+            file.write('\n[[component]]\nname = "%s"\ntype = "%s"\n' % (name, kind)
+                       + "".join("%s = %d\n" % item for item in values.items()))
+
+    def refused_with(self, number: int, pattern: str):
+        """Asserts that the build refuses page first as the pattern `pattern`
+        says, its message going on after "first.page.toml", into a folder of
+        its own, `number`."""
+        with self.assertRaisesRegex(NxwrightError, r"first\.page\.toml" + pattern):
+            export_dump(self.source, self.folder / ("refused-%d" % number))
+
+    def test_values_past_their_entry_on_every_series(self):
+        # As the Editor 1.68.2 refused them on every series ("Out of range",
+        # or an error of its own for vscope), one past the range the
+        # attribute's entry gives, at either end. A QR code and a scrolling
+        # text refused a vscope of 2 on every series.
+        page_file = self.source / "pages" / "first.page.toml"
+        page = page_file.read_bytes()
+        for number, (model, kind, values, refusal) in enumerate((
+                ("NX4832T035", "text", {"xcen": 3}, "xcen must be from 0 to 2"),
+                ("NX8048P050", "text", {"txt_maxl": 65535}, "txt_maxl must be from 0 to 65534"),
+                ("NX4832T035", "timer", {"tim": 49}, "tim must be from 50 to 65534"),
+                ("NX4832K035", "number", {"lenth": 16}, "lenth must be from 0 to 15"),
+                ("NX4832T035", "qr-code", {"vscope": 2}, "vscope must be from 0 to 1"),
+                ("NX4832F035", "scrolling-text", {"vscope": 2}, "vscope must be from 0 to 1"))):
+            with self.subTest(model=model, values=values):
+                self.use_screen(model)
+                (self.add_unplaced if kind == "timer" else self.add)("c0", kind, **values)
+                try:
+                    self.refused_with(number, ", object 2: " + refusal)
+                finally:
+                    page_file.write_bytes(page)
+        # The ends of the ranges are built.
+        self.use_screen("NX8048P050")
+        self.add("c0", "text", xcen=2, txt_maxl=65534)
+        self.add_unplaced("c1", "timer", tim=50)
+        export_dump(self.source, self.folder / "ends")
+
+    def test_values_past_their_entry_on_a_series(self):
+        # As the Editor 1.68.2 refused them on some series alone ("Out of
+        # range", or an error of its own for vscope): a vscope of 2 on a text
+        # and a button of the Intelligent and Edge series, which the Basic
+        # series compiled; a component's x past 6000 on the Intelligent
+        # series; and a QR code's txt_maxl past its series' highest.
+        page_file = self.source / "pages" / "first.page.toml"
+        page = page_file.read_bytes()
+        for number, (model, name, kind, attribute, value, lowest, highest) in enumerate((
+                ("NX8048P050", "c0", "text", "vscope", 2, 0, 1),
+                ("NX4848E040", "c0", "button", "vscope", 2, 0, 1),
+                ("NX8048P050", "c0", "text", "x", 6001, -6000, 6000),
+                ("NX4832K035", "qr0", "qr-code", "txt_maxl", 193, 0, 192),
+                ("NX8048P050", "qr0", "qr-code", "txt_maxl", 631, 0, 630))):
+            with self.subTest(model=model, kind=kind, attribute=attribute):
+                self.use_screen(model)
+                if attribute == "x":
+                    # add gives each component an x of its own.
+                    self.add(name, kind)
+                    edit_text(page_file, 'name = "%s"\ntype = "%s"\nx = 0' % (name, kind),
+                              'name = "%s"\ntype = "%s"\nx = %d' % (name, kind, value))
+                else:
+                    self.add(name, kind, **{attribute: value})
+                try:
+                    self.refused_with(
+                        number, r": component %s: its %s of %d is refused on the %s, as the "
+                                r"Nextion Editor's compile takes from %d to %d on that screen "
+                                r"\(\"Out of range\"\)"
+                                % (name, attribute, value, model, lowest, highest))
+                finally:
+                    page_file.write_bytes(page)
+        # The Basic series compiled a vscope of 2 on a text, and the
+        # Intelligent a QR code's txt_maxl of 630.
+        self.use_screen("NX4832T035")
+        self.add("c0", "text", vscope=2)
+        export_dump(self.source, self.folder / "basic")
+        page_file.write_bytes(page)
+        self.use_screen("NX8048P050")
+        self.add("qr0", "qr-code", txt_maxl=630)
+        export_dump(self.source, self.folder / "intelligent")
 
     def test_assignments_the_series_refuses(self):
         # As the Editor 1.68.2 refused them on the Basic, Enhanced, and

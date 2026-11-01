@@ -20,7 +20,7 @@ positive in 32 bits, stays negative once its sign is taken off, so that at
 `vvs1` 3 it is written "--2147483.-648", as the Editor's simulator wrote it.
 An xfloat's `vvs1` runs from 0 to 8, and its `vvs0` from 0 to 10: the
 Editor refuses more as it compiles, and the running screen refuses code
-setting more (page_source._RANGES, and attribute_descriptions.toml's
+setting more (attribute_ranges.toml, and attribute_descriptions.toml's
 `code_range`),
 as the Editor's simulator showed (tests/fixtures/drawing-assumptions/,
 page7).

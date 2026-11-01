@@ -30,6 +30,7 @@ For each refusal below: what is refused, an example, and the Nextion Editor's ow
 - a scrolling text's `tim` outside 80 to 65534;
 - an xfloat's `vvs1` past 8, the digits after its point, or its `vvs0` past 10, the digits before it;
 - a waveform's `dir` past 2;
+- any other value outside the range the Nextion Editor takes for its attribute, such as a text's `xcen` past 2 or a timer's `tim` under 50. `nxwright/project/attribute_ranges.toml` gives each range;
 - a component narrower or lower than 2 pixels. When it opens the project, the Nextion Editor reports "Width can not be less than 2", or "Height", and sets that side back to the type's default. The project would then differ from the page file;
 - a component bound to a keyboard by its `key` whose scope is local. The Nextion Editor binds a keyboard only to a component of global scope (`vscope = 1`).
 
@@ -85,8 +86,11 @@ Choices:
 Values:
 
 - On the P and E series, a slider's `ch` over 100, when the slider has a colour behind its track (`sta` 1). The T series takes up to 255.
+- On the P and E series, a `vscope` other than 0 or 1, on any type. The T, K, and F series take any `vscope`, except on a QR code and a scrolling text.
+- On the P and E series, a component's `x` or `y` past 6000, or its `w` or `h` past 2000. On the T, K, and F series, a component must lie on the screen.
+- A QR code's `txt_maxl` past 192 on the T and K series, 368 on the F series, and 630 on the P and E series.
 
-The full lists are in `nxwright/project/memory_costs.toml` (`refused` and `refused_values`) and in `nxwright/source/series_components.py` (`CHOICES_REFUSED_BY_SERIES` and `HIGHEST_BY_SERIES`). A value past an attribute's range, such as a QR code's `txt_maxl` of 193 on the Enhanced series, is left to the Nextion Editor, since the range itself is not known.
+The full lists are in `nxwright/project/memory_costs.toml` (`refused` and `refused_values`), in `nxwright/source/series_components.py` (`CHOICES_REFUSED_BY_SERIES`), and in `nxwright/project/attribute_ranges.toml`.
 
 Place on the screen:
 

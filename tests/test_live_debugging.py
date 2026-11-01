@@ -783,7 +783,7 @@ on go.down:
         # would fall further behind at each catch-up, each several times
         # longer than the last: within a few presses, one waits for seconds.
         self.program("int count=0, turns=0, runs=0\n\npage page0\n")
-        self.page("page0", [placed("go", "button", 0, 0), table("tick", "timer", tim=10)], """\
+        self.page("page0", [placed("go", "button", 0, 0), table("tick", "timer", tim=50)], """\
 on go.down:
   count = count + 1
 
@@ -794,21 +794,21 @@ on tick.timer:
     turns = turns + 1
   }
 """)
-        live = CostedLiveSimulation(self.root, self.wall, statement=0.0001)
-        presses = [self.press_at(live, 0.2 * number) for number in range(1, 7)]
-        self.run_until(live, 1.5)
+        live = CostedLiveSimulation(self.root, self.wall, statement=0.0005)
+        presses = [self.press_at(live, 1.0 * number) for number in range(1, 7)]
+        self.run_until(live, 7.5)
         # The ticks took more than twice their period, as this test needs.
-        self.assertLess(live.simulation.globals["runs"], 1.5 / 0.020)
+        self.assertLess(live.simulation.globals["runs"], 7.5 / 0.100)
         for number, times in enumerate(presses, 1):
             self.assertEqual(len(times), 2, "press %d was not answered" % number)
-            self.assertLess(times[1] - times[0], 0.1, "press %d" % number)
+            self.assertLess(times[1] - times[0], 0.5, "press %d" % number)
 
     def test_a_late_timer_runs_once_not_once_for_each_period_missed(self):
         # While each tick takes longer than its period, the simulation's time
         # falls behind the wall's. Once the ticks are quick again, they run
         # at their period: the periods missed are not run in a burst.
         self.program("int slow=1, turns=0, runs=0\n\npage page0\n")
-        self.page("page0", [placed("go", "button", 0, 0), table("tick", "timer", tim=10)], """\
+        self.page("page0", [placed("go", "button", 0, 0), table("tick", "timer", tim=50)], """\
 on go.down:
   slow = 0
 
@@ -821,17 +821,17 @@ on tick.timer:
     }
   }
 """)
-        live = CostedLiveSimulation(self.root, self.wall, statement=0.0001)
-        self.press_at(live, 1)
+        live = CostedLiveSimulation(self.root, self.wall, statement=0.0005)
+        self.press_at(live, 5)
         runs = []
-        for moment in (1, 1.2):
+        for moment in (5, 6):
             self.wall.at(moment, lambda: runs.append(live.simulation.globals["runs"]))
-        self.run_until(live, 1.5)
+        self.run_until(live, 7.5)
         # Before the press, the ticks took more than twice their period.
-        self.assertLess(runs[0], 1 / 0.020)
+        self.assertLess(runs[0], 5 / 0.100)
         # After it, the tick already due runs at once, then one each period,
         # as on a screen.
-        self.assertLessEqual(runs[1] - runs[0], 1 + 0.2 / 0.010)
+        self.assertLessEqual(runs[1] - runs[0], 1 + 1.0 / 0.050)
 
     def test_a_long_event_is_drawn_as_it_runs(self):
         # Every LIVE_DRAWING seconds of its work, as the Editor's simulator

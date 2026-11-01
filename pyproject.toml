@@ -55,7 +55,8 @@ packages = ["nxwright", "nxwright.debug_adapter", "nxwright.drawing", "nxwright.
 
 [tool.setuptools.package-data]
 "nxwright.project" = ["fonts/NotoSans-Regular.ttf", "fonts/OFL.txt", "memory_costs.toml",
-                      "component_defaults.toml", "attribute_descriptions.toml"]
+                      "component_defaults.toml", "attribute_descriptions.toml",
+                      "attribute_ranges.toml"]
 "nxwright.mcp_server" = ["guide.md"]
 "nxwright.docs" = ["*.md"]
 

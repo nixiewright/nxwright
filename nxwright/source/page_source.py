@@ -66,6 +66,7 @@ from nxwright.source.nx_files import (CODE_INDENT, EVENT_COMMENT_MARKER, EventBl
                                       blank_lines_dropped, event_blocks, read_page_files)
 from nxwright.project.page_text import expected_width, is_string_attribute, text_form_number
 from nxwright.project.attribute_values import number_from_bytes, number_to_bytes
+from nxwright.project.attribute_ranges import range_on_every_series
 from nxwright.language.resource_names import (ANIMATION, FONT, PICTURE, SOUND, VIDEO,
                                               ResourceNames, UnknownNameError)
 from nxwright.language.nxlang import (GENERATED_NAME, GENERATED_PREFIX, HOTSPOT, HOTSPOT_PREFIX,
@@ -99,37 +100,6 @@ _DERIVED = ("id", "objname", "endx", "endy")
 # name that is not reaches that check rather than a decoding error.
 _NAME_ENCODING = "latin-1"
 _NAME = re.compile(r"[A-Za-z0-9_]+")
-# The values the Editor allows for an attribute, by (type, attribute), where
-# they are fewer than the attribute's bytes can hold. The Editor refuses a
-# text of style 4 ("styles.text4.style Out of range"): style 4, 3D auto, is
-# a button's. It refuses a select of style 2, sunken, on every series that
-# has a select. It refuses a gauge whose val is past 360 degrees ("page0.g14.val
-# Out of range"), and a scrolling text's `tim` of 79 or 65535 alike. It
-# refuses a gauge whose `left` is past 1024, whatever the gauge's size. Of
-# the attributes its panel never shows, it refuses a button's `val` past 1,
-# a file browser's `xcen` past 2, a combo box's `drastate` past 1, a
-# gauge's `wid` outside 1 to 20, whatever its size, and a hotspot's `drag`
-# and `effect` past 1 and 8. It refuses an xfloat's `vvs1` past 8, the
-# digits after its point, and `vvs0` past 10, the digits before it, and a
-# waveform's `dir` past 2.
-_RANGES = {(TYPES_BY_NAME["text"], "style"): range(0, 4),
-           (TYPES_BY_NAME["select"], "style"): range(0, 2),
-           (TYPES_BY_NAME["gauge"], "val"): range(0, 361),
-           (TYPES_BY_NAME["gauge"], "left"): range(0, 1025),
-           (TYPES_BY_NAME["scrolling-text"], "tim"): range(80, 65535),
-           (TYPES_BY_NAME["button"], "val"): range(0, 2),
-           (TYPES_BY_NAME["file-browser"], "xcen"): range(0, 3),
-           (TYPES_BY_NAME["combo-box"], "drastate"): range(0, 2),
-           (TYPES_BY_NAME["gauge"], "wid"): range(1, 21),
-           (TYPES_BY_NAME["hotspot"], "drag"): range(0, 2),
-           (TYPES_BY_NAME["hotspot"], "effect"): range(0, 9),
-           (TYPES_BY_NAME["xfloat"], "vvs1"): range(0, 9),
-           (TYPES_BY_NAME["xfloat"], "vvs0"): range(0, 11),
-           (TYPES_BY_NAME["waveform"], "dir"): range(0, 3)}
-# The `aph` the Editor allows, on every type that has one: it refused 128 on
-# a text, a button, a number, a picture, a hotspot, and a page alike, the
-# page's on every series (memory_costs.toml, `refused_values`).
-_APH_RANGE = range(0, 128)
 _VARIABLE = TYPES_BY_NAME["variable"]
 _HOTSPOT = TYPES_BY_NAME["hotspot"]
 # Object IDs are one byte.
@@ -147,11 +117,12 @@ def reference_kind(object_type, attribute: str):
 
 def attribute_range(object_type: int, attribute: str):
     """Returns the range of values the build takes for `attribute` of a
-    component of type `object_type`, a number, where the Editor allows fewer
-    than the attribute's bytes hold (_RANGES, _APH_RANGE); None elsewhere."""
-    if attribute == "aph":
-        return _APH_RANGE
-    return _RANGES.get((object_type, attribute))
+    component of type `object_type`, a number, where the Nextion Editor's
+    compile takes fewer than the attribute's bytes can store, the same on every
+    series (attribute_ranges.py); None elsewhere. A range that differs by
+    series is checked once the screen is known (series_components.py)."""
+    found = range_on_every_series(TYPE_NAMES.get(object_type, ""), attribute)
+    return None if found is None else range(found[0], found[1] + 1)
 
 
 @dataclass

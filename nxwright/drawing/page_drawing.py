@@ -125,7 +125,7 @@ point enters at the left and pushes the others right; with `dir` 1, at the
 right, pushing them left, the first point at the left edge until they
 fill the waveform; with `dir` 2, in the same order, the last point at the
 right edge. The Editor refuses other values as it compiles, and the build
-too (page_source._RANGES); code cannot change `dir` at all, as the build
+too (attribute_ranges.toml); code cannot change `dir` at all, as the build
 refuses such a line (attribute_descriptions.code_cannot_change). A value
 of v is v * `dis` / 100 pixels up from the bottom row, cut toward zero,
 and each point is joined to its neighbour on the left by a line in its

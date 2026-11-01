@@ -1,0 +1,311 @@
+# The values the Nextion Editor's compile takes for an attribute of a page or
+# a component, where it takes fewer than the attribute's bytes can store. The
+# Nextion Editor 1.68.2 refused a value outside as it compiled ("Out of
+# range"), so the build refuses it too (attribute_ranges.py).
+#
+# Each range is the attribute's entry in the TFT file the Nextion Editor
+# writes: its lowest, then its highest. A range is kept here only where the
+# Nextion Editor was seen to refuse a value past it. The IDs of pictures,
+# fonts, and the resource a vid plays are left out. The Nextion Editor
+# compiles a picture's ID past the project's last picture.
+#
+# A table per type, named as component_defaults.toml names types, and a
+# table common, for an attribute with the same range on every type that has
+# it. A range is [lowest, highest] on every series, or a table of ranges by
+# series, T, K, F, P, and E, for one that differs by series or is checked on
+# some series alone. A vscope of 2, for one, compiled on most types of the
+# Basic, Enhanced, and Discovery series, and was refused on every type of the
+# Intelligent and Edge series.
+
+[common]
+aph = [0, 127]
+buffsize = { P = [0, 2147483647], E = [0, 2147483647] }
+drastate = [0, 1]
+fps = { P = [0, 50], E = [0, 50] }
+from = { P = [0, 1], E = [0, 1] }
+h = { P = [-2000, 2000], E = [-2000, 2000] }
+loop = { P = [0, 1], E = [0, 1] }
+order = { P = [0, 1], E = [0, 1] }
+pw = [0, 1]
+w = { P = [-2000, 2000], E = [-2000, 2000] }
+x = { P = [-6000, 6000], E = [-6000, 6000] }
+y = { P = [-6000, 6000], E = [-6000, 6000] }
+
+[audio]
+dis = { P = [10, 1000], E = [10, 1000] }
+en = { P = [0, 2], E = [0, 2] }
+vscope = { P = [0, 1], E = [0, 1] }
+
+[button]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+isbr = [0, 1]
+sta = { T = [0, 2], K = [0, 2], F = [0, 2], P = [0, 3], E = [0, 3] }
+style = [0, 4]
+txt_maxl = [0, 65534]
+val = [0, 1]
+vscope = { P = [0, 1], E = [0, 1] }
+xcen = [0, 2]
+ycen = [0, 2]
+
+[checkbox]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+style = [0, 3]
+val = [0, 1]
+vscope = { P = [0, 1], E = [0, 1] }
+
+[combo-box]
+ch = { P = [0, 32], E = [0, 32] }
+dis = { P = [0, 100], E = [0, 100] }
+down = { P = [0, 1], E = [0, 1] }
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+hig = { P = [16, 255], E = [16, 255] }
+mode = { P = [0, 2], E = [0, 2] }
+qty = { P = [1, 254], E = [1, 254] }
+sta = { P = [0, 3], E = [0, 3] }
+style = { P = [0, 3], E = [0, 3] }
+txt_maxl = { P = [0, 65534], E = [0, 65534] }
+up = { P = [0, 1], E = [0, 1] }
+vscope = { P = [0, 1], E = [0, 1] }
+wid = { P = [8, 255], E = [8, 255] }
+xcen = { P = [0, 2], E = [0, 2] }
+ycen = { P = [0, 2], E = [0, 2] }
+
+[crop]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+vscope = { P = [0, 1], E = [0, 1] }
+
+[data-record]
+ch = { P = [0, 32], E = [0, 32] }
+dez = { P = [1, 12], E = [1, 12] }
+dis = { P = [0, 1], E = [0, 1] }
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+hig = { P = [1, 255], E = [1, 255] }
+left = { P = [0, 2], E = [0, 2] }
+lenth = { P = [2, 255], E = [2, 255] }
+maxval = { P = [1, 2147483647], E = [1, 2147483647] }
+mode = { P = [0, 1], E = [0, 1] }
+sta = { P = [0, 3], E = [0, 3] }
+style = { P = [0, 3], E = [0, 3] }
+vscope = { P = [1, 1], E = [1, 1] }
+xcen = { P = [0, 2], E = [0, 2] }
+
+[dual-state-button]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+isbr = [0, 1]
+sta = { T = [0, 2], K = [0, 2], F = [0, 2], P = [0, 3], E = [0, 3] }
+style = [0, 4]
+txt_maxl = [0, 65534]
+val = [0, 1]
+vscope = { P = [0, 1], E = [0, 1] }
+xcen = [0, 2]
+ycen = [0, 2]
+
+[external-picture]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+vscope = { P = [0, 1], E = [0, 1] }
+
+[file-browser]
+ch = { P = [0, 32], E = [0, 32] }
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+left = { P = [0, 2], E = [0, 2] }
+psta = { P = [0, 1], E = [0, 1] }
+qty = { P = [0, 2147483647], E = [0, 2147483647] }
+sta = { P = [0, 3], E = [0, 3] }
+style = { P = [0, 3], E = [0, 3] }
+vscope = { P = [0, 1], E = [0, 1] }
+xcen = [0, 2]
+
+[file-stream]
+en = { P = [0, 1], E = [0, 1] }
+qty = { P = [0, 2147483647], E = [0, 2147483647] }
+val = { P = [0, 2147483647], E = [0, 2147483647] }
+vscope = { P = [0, 0], E = [0, 0] }
+
+[gauge]
+down = { P = [-32766, 32767], E = [-32766, 32767] }
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+format = { P = [0, 360], E = [0, 360] }
+hig = { P = [0, 100], E = [0, 100] }
+left = [0, 1024]
+sta = { T = [0, 2], K = [0, 2], F = [0, 2], P = [0, 3], E = [0, 3] }
+up = { P = [-32766, 32767], E = [-32766, 32767] }
+val = [0, 360]
+vscope = { P = [0, 1], E = [0, 1] }
+vvs0 = { P = [0, 128], E = [0, 128] }
+vvs1 = { P = [0, 128], E = [0, 128] }
+vvs2 = { P = [0, 128], E = [0, 128] }
+wid = [1, 20]
+
+[gmov]
+dis = { P = [10, 1000], E = [10, 1000] }
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+en = { P = [0, 2], E = [0, 2] }
+vscope = { P = [0, 1], E = [0, 1] }
+
+[hotspot]
+drag = [0, 1]
+effect = [0, 8]
+vscope = { P = [0, 1], E = [0, 1] }
+
+[number]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+format = [0, 2]
+isbr = [0, 1]
+lenth = [0, 15]
+sta = { T = [0, 2], K = [0, 2], F = [0, 2], P = [0, 3], E = [0, 3] }
+style = [0, 3]
+vscope = { P = [0, 1], E = [0, 1] }
+xcen = [0, 2]
+ycen = [0, 2]
+
+[page]
+effect = { P = [0, 10], E = [0, 10] }
+sta = [0, 2]
+vscope = { P = [0, 1], E = [0, 1] }
+
+[picture]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+vscope = { P = [0, 1], E = [0, 1] }
+
+[progress-bar]
+dez = [0, 1]
+dis = [0, 100]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+sta = [0, 1]
+val = [0, 100]
+vscope = { P = [0, 1], E = [0, 1] }
+
+[qr-code]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+sta = [0, 1]
+txt_maxl = { T = [0, 192], K = [0, 192], F = [0, 368], P = [0, 630], E = [0, 630] }
+vscope = [0, 1]
+
+[radio]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+val = [0, 1]
+vscope = { P = [0, 1], E = [0, 1] }
+
+[scrolling-text]
+dir = [0, 3]
+dis = [2, 50]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+en = [0, 1]
+isbr = [0, 1]
+sta = { T = [0, 2], K = [0, 2], F = [0, 2], P = [0, 3], E = [0, 3] }
+style = [0, 3]
+tim = [80, 65534]
+txt_maxl = [0, 65534]
+vscope = [0, 1]
+xcen = [0, 2]
+ycen = [0, 2]
+
+[select]
+ch = { P = [0, 32], E = [0, 32] }
+dis = { P = [0, 1], E = [0, 1] }
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+hig = { P = [16, 255], E = [16, 255] }
+sta = { P = [0, 3], E = [0, 3] }
+style = [0, 1]
+val = { P = [0, 65535], E = [0, 65535] }
+vscope = { P = [0, 1], E = [0, 1] }
+
+[slider]
+ch = { P = [0, 100], E = [0, 100] }
+dis = { P = [0, 100], E = [0, 100] }
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+mode = [0, 1]
+psta = { T = [0, 1], K = [0, 1], F = [0, 1], P = [0, 2], E = [0, 2] }
+sta = [0, 2]
+vscope = { P = [0, 1], E = [0, 1] }
+
+[sliding-text]
+ch = { P = [0, 32], E = [0, 32] }
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+isbr = { P = [0, 1], E = [0, 1] }
+left = { P = [0, 2], E = [0, 2] }
+sta = { P = [0, 3], E = [0, 3] }
+style = { P = [0, 3], E = [0, 3] }
+txt_maxl = { P = [0, 65534], E = [0, 65534] }
+vscope = { P = [0, 1], E = [0, 1] }
+xcen = { P = [0, 2], E = [0, 2] }
+
+[switch]
+dez = { P = [0, 1], E = [0, 1] }
+dis = { P = [0, 100], E = [0, 100] }
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+txt_maxl = { P = [0, 65534], E = [0, 65534] }
+val = { P = [0, 1], E = [0, 1] }
+vscope = { P = [0, 1], E = [0, 1] }
+
+[text]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+isbr = [0, 1]
+sta = { T = [0, 2], K = [0, 2], F = [0, 2], P = [0, 3], E = [0, 3] }
+style = [0, 3]
+txt_maxl = [0, 65534]
+vscope = { P = [0, 1], E = [0, 1] }
+xcen = [0, 2]
+ycen = [0, 2]
+
+[timer]
+en = [0, 1]
+tim = [50, 65534]
+vscope = { P = [0, 1], E = [0, 1] }
+
+[touch-capture]
+vscope = { P = [0, 1], E = [0, 1] }
+
+[variable]
+sta = [0, 1]
+txt_maxl = [0, 65534]
+vscope = { P = [0, 1], E = [0, 1] }
+
+[video]
+dis = { P = [10, 1000], E = [10, 1000] }
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+en = { P = [0, 2], E = [0, 2] }
+vscope = { P = [0, 1], E = [0, 1] }
+
+[waveform]
+ch = [1, 4]
+dir = [0, 2]
+dis = [10, 1000]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+sta = { T = [0, 2], K = [0, 2], F = [0, 2], P = [0, 3], E = [0, 3] }
+vscope = { P = [0, 1], E = [0, 1] }
+
+[xfloat]
+drag = { P = [0, 1], E = [0, 1] }
+effect = { P = [0, 8], E = [0, 8] }
+isbr = [0, 1]
+sta = { T = [0, 2], K = [0, 2], F = [0, 2], P = [0, 3], E = [0, 3] }
+style = [0, 3]
+vscope = { P = [0, 1], E = [0, 1] }
+vvs0 = [0, 10]
+vvs1 = [0, 8]
+xcen = [0, 2]
+ycen = [0, 2]

@@ -550,14 +550,15 @@ class PasteSpecialTest(ComponentsTestCase):
                           % xfloat])
 
     def test_a_value_the_selected_type_cannot_hold(self):
-        # A number and a text share the meaning of style, but a text refuses
-        # style 4, a button's 3D look.
-        number = self.add("number")
-        self.set(number, style="4")
-        self.assertEqual(self.notes(["title"], self.copy(number), "attributes"),
-                         ["Not pasted onto title, because a text can't hold the copied values: "
-                          "style"])
-        self.assertNotIn("style", self.table_of("title"))
+        # A number and a scrolling text share the meaning of vscope, but a
+        # scrolling text refuses a vscope of 2 on every series, where the
+        # Basic series takes it on a number.
+        number, scroller = self.add("number"), self.add("scrolling-text")
+        self.set(number, vscope="2")
+        self.assertEqual(self.notes([scroller], self.copy(number), "attributes"),
+                         ["Not pasted onto %s, because a scrolling-text can't hold the copied "
+                          "values: vscope" % scroller])
+        self.assertNotIn("vscope", self.table_of(scroller))
 
     def test_code_replaces_an_events_and_is_added_for_another(self):
         self.write("pages/page0.nx", self.text("pages/page0.nx")
