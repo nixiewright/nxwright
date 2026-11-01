@@ -232,8 +232,8 @@ def main(arguments=None) -> int:
     commands.add_parser("close-file-dialog", parents=[holding],
                         help="cancel a file dialog left open in the dedicated Editor")
     commands.add_parser("close-message", parents=[holding],
-                        help="close a message left open in the dedicated Editor, printing "
-                        "what it said")
+                        help="close a message left open in the dedicated Editor, and print "
+                        "its text")
     taking = commands.add_parser("hold", help="hold the dedicated Editor across this holder's "
                                  "commands, refusing anyone else's, until release or its time")
     taking.add_argument("name", help="the holder, whose commands give it with --as")
@@ -2017,7 +2017,7 @@ def close_simulator(folder: Path) -> str:
     button does, and says what it found. It starts no Editor."""
     recorded = read_recorded(folder)
     if recorded is None or not still_running(recorded):
-        return "No dedicated Editor runs, so no simulator is open."
+        return "The dedicated Editor is not running, so no simulator is open."
     editor = DedicatedEditor(recorded)
     simulator = _simulator(editor)
     if simulator is None:
@@ -2033,7 +2033,7 @@ def close_file_dialog(folder: Path) -> str:
     starts no Editor."""
     recorded = read_recorded(folder)
     if recorded is None or not still_running(recorded):
-        return "No dedicated Editor runs, so no file dialog is open."
+        return "The dedicated Editor is not running, so no file dialog is open."
     dialogs = _dialogs(DedicatedEditor(recorded).main_window(), _is_file_dialog)
     if not dialogs:
         return "No file dialog is open."
@@ -2050,7 +2050,7 @@ def close_message(folder: Path) -> str:
     Editor."""
     recorded = read_recorded(folder)
     if recorded is None or not still_running(recorded):
-        return "No dedicated Editor runs, so no message is open."
+        return "The dedicated Editor is not running, so no message is open."
     main = DedicatedEditor(recorded).main_window()
     messages = [*_message_forms(main),
                 *_dialogs(main, lambda dialog: not _is_file_dialog(dialog))]

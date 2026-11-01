@@ -533,8 +533,8 @@ class PageAtScreenSizeTest(FolderTestCase):
         self.edit_page(x=10, y=6, w=200, h=240)
         self.assertEqual(self.place_warnings(), [
             (self.PATH, line, WARNING,
-             "page0's %s is %d, but the Nextion Editor compiles every page at its screen's "
-             "place and size, 0, 0, 800 by 480, so the build uses %d" % (key, given, built))
+             "page0's %s is %d, but the Nextion Editor makes every page fill its screen, "
+             "800 by 480 at 0, 0, so the build uses %d" % (key, given, built))
             for line, key, given, built in ((4, "x", 10, 0), (5, "y", 6, 0), (6, "w", 200, 800),
                                             (7, "h", 240, 480))])
 

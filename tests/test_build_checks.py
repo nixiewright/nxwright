@@ -723,9 +723,10 @@ class CommandArgumentTest(_CodeOnFirstTestCase):
             with self.subTest(line=line):
                 self.write_code(line)
                 with self.assertRaisesRegex(
-                        NxwrightError, r"first\.nx line 2: %s: the Nextion Editor takes one text "
-                                       r"or number as the first argument of %s, not arithmetic or "
-                                       r"texts joined"
+                        NxwrightError, r"first\.nx line 2: %s: the Nextion Editor takes only a "
+                                       r"single text or number as the first argument of %s, not "
+                                       r"arithmetic or "
+                                       r"joined texts"
                         % (re.escape(line), line.split()[0])):
                     export_dump(self.source, self.folder / ("refused%d" % number))
 
@@ -2809,8 +2810,8 @@ class TextBytesTest(FirstDownTestCase):
 
     def test_a_half_width_katakana_that_takes_the_closing_quote(self):
         words = (r"the Nextion Editor reads this text in pairs of bytes\. The half-width "
-                 r"katakana ｱ takes the byte after it as its second, so the text no longer ends "
-                 r"at its closing quote")
+                 r"katakana ｱ is a single byte, so it gets paired with the next byte, and the "
+                 r"closing quote ends up inside the text")
         for line in ('t0.txt="aｱ"', 't0.txt="ｱ"', 't0.txt="日ｱ"', 't0.txt="ｱｱｱ"',
                      't0.txt="ｱ日"', 't0.txt="ｱ表"', 't0.txt="ｱ\\""', 'prints "ｱ",0',
                      'print "aｱ"'):
@@ -2821,7 +2822,7 @@ class TextBytesTest(FirstDownTestCase):
     def test_the_katakana_that_takes_the_closing_quote_is_given(self):
         # ｱ and ｲ read as a pair, and 日 as one character, so ｳ is the
         # katakana that takes the quote.
-        self.assert_refused(['t0.txt="ｱｲ日ｳ"'], r".*The half-width katakana ｳ takes")
+        self.assert_refused(['t0.txt="ｱｲ日ｳ"'], r".*The half-width katakana ｳ is a single byte")
 
     def test_a_half_width_katakana_in_another_encoding(self):
         self.use_screen("NX4832K035", encoding="utf-8")

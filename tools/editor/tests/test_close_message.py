@@ -57,7 +57,7 @@ class CloseMessageTest(unittest.TestCase):
 
     def test_no_editor_running(self):
         self.assertEqual(self.close([], [], running=False),
-                         ("No dedicated Editor runs, so no message is open.", []))
+                         ("The dedicated Editor is not running, so no message is open.", []))
 
     def test_a_message_that_stays_up_is_said(self):
         said, _ = self.close([_message(1, "Nextion Editor")], [], stays={1})

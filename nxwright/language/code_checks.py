@@ -946,11 +946,11 @@ def _check_first_argument(code: str, number: int):
     if first is None or is_one_operand(first[0]):
         return
     if _has_minus_before_a_name(first[0]):
-        raise NxwrightError("%s: the Nextion Editor takes one text or number as the first "
-                            "argument of %s, and it refuses a minus before a name there "
+        raise NxwrightError("%s: the Nextion Editor takes only a single text or number as the "
+                            "first argument of %s, and it refuses a minus before a name there "
                             "(\"%s\")" % (code, word, INVALID_VARIABLES), line=number)
-    raise NxwrightError("%s: the Nextion Editor takes one text or number as the first "
-                        "argument of %s, not arithmetic or texts joined" % (code, word),
+    raise NxwrightError("%s: the Nextion Editor takes only a single text or number as the "
+                        "first argument of %s, not arithmetic or joined texts" % (code, word),
                         line=number)
 
 
@@ -987,9 +987,9 @@ def _check_xstr_text(code: str, number: int):
         return
     arguments = command_arguments(code[len("xstr"):].strip())
     if len(arguments) == COMMAND_PARAMETERS["xstr"] and not is_one_operand(arguments[-1]):
-        raise NxwrightError("%s: the text of xstr must be one operand: a text, a txt, a "
-                            "number, or a variable. The Nextion Editor refuses texts "
-                            "joined, arithmetic, or a minus before a name there (\"%s\")"
+        raise NxwrightError("%s: the text of xstr must be a single value: a text, a txt, a "
+                            "number, or a variable. The Nextion Editor refuses joined "
+                            "texts, arithmetic, and a minus before a name here (\"%s\")"
                             % (code, INVALID_VARIABLES), line=number)
 
 
@@ -1113,8 +1113,9 @@ def _check_texts_in_pairs(code: str, codec, number: int):
         if stored is not None and _reading_in_pairs(stored)[-1] != len(stored) - 1:
             katakana = _katakana_read_with_the_next_byte(text, codec)
             raise NxwrightError("%s: the Nextion Editor reads this text in pairs of bytes. The "
-                                "half-width katakana %s takes the byte after it as its second, "
-                                "so the text no longer ends at its closing quote (\"Invalid "
+                                "half-width katakana %s is a single byte, so it gets paired "
+                                "with the next byte, and the closing quote ends up inside the "
+                                "text (\"Invalid "
                                 "Variables\"). Put another character after the katakana, or "
                                 "write the text another way." % (code, katakana), line=number)
 

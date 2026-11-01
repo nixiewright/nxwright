@@ -132,8 +132,8 @@ def _page_places(app: dict, read) -> list:
             if key in table and table[key] != built:
                 found.append(Finding(
                     path, _page_table_line(text, key), WARNING,
-                    "%s's %s is %s, but the Nextion Editor compiles every page at its screen's "
-                    "place and size, 0, 0, %d by %d, so the build uses %d"
+                    "%s's %s is %s, but the Nextion Editor makes every page fill its screen, "
+                    "%d by %d at 0, 0, so the build uses %d"
                     % (page, key, table[key], width, height, built), "page-place"))
     return found
 

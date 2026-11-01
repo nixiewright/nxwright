@@ -43,7 +43,7 @@ The Nextion Editor's panel never shows these attributes, but refuses these value
 
 ### A page's place and size
 
-The build gives every page the place 0, 0 and the size of its screen at its rotation, as the Nextion Editor does when it opens the project. A page file's own `x`, `y`, `w`, and `h` for the page are not used, and a page file may leave them out.
+Every page fills the screen, in the project's rotation. The Nextion Editor resets each page to this when it opens a project, so the build does the same, and ignores any `x`, `y`, `w`, and `h` a page file gives the page. You can leave them out.
 
 - The `page-place` warning shows each of these values that differs from the screen's ([commands.md](commands.md)). `nxwright device` writes the screen's size into each page file.
 - Without screen settings in `app.toml`, the build keeps the page file's values.
@@ -56,7 +56,7 @@ The build gives every page the place 0, 0 and the size of its screen at its rota
 
 A page can have at most 250 components, of any type ("Too many components"). This includes the components nxlang adds to run your code.
 
-Some kinds have limits of their own. The build's message gives the first component past the limit. The limits are the same on every series that has these types:
+Some types also have a limit of their own. If a page has too many, the build's error points to the first component over the limit. The limits are the same on every series that has these types:
 
 - 5 waveforms ("Waveform components exceed maximum in page:5");
 - 16 animations and videos together;
@@ -87,7 +87,7 @@ Values:
 
 - On the P and E series, a slider's `ch` over 100, when the slider has a colour behind its track (`sta` 1). The T series takes up to 255.
 - On the P and E series, a `vscope` other than 0 or 1, on any type. On the T, K, and F series, the build takes any `vscope`, except on a QR code and a scrolling text, where the Nextion Editor refused a `vscope` of 2.
-- On the P and E series, a component's `x` or `y` past 6000, or its `w` or `h` past 2000. On the T, K, and F series, a component must lie on the screen.
+- On the P and E series, a component's `x` or `y` past 6000, or its `w` or `h` past 2000. On the T, K, and F series, a component must fit on the screen.
 - A QR code's `txt_maxl` past 192 on the T and K series, 368 on the F series, and 630 on the P and E series.
 
 The full lists are in `nxwright/project/memory_costs.toml` (`refused` and `refused_values`), in `nxwright/source/series_components.py` (`CHOICES_REFUSED_BY_SERIES`), and in `nxwright/project/attribute_ranges.toml`.
@@ -200,11 +200,15 @@ The first argument of `get`, `print`, `prints`, and `covx` is one text or one nu
 
 Other commands also take a single value in some arguments. The build refuses an expression there, such as `getv sys0+1` or `spstr t0.txt,t0.txt,"a"+"b",0`, and a minus before a name, such as `getv -sys0` or `getv -RED` ("Invalid Variables"). A minus before a number is fine, as in `getv -5`. These arguments are:
 
-- Values the command only reads: `wepo`'s and `crcputs`' value, `delfile`'s path, the text that `strlen`, `substr`, `spstr`, and `btlen` read, and `spstr`'s separator. In nxlang, an expression or a minus before a name in one of these is computed first ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
-- Places where the command puts its result: the destination of `cov`, `covx`, `strlen`, `repo`, and `ucopy`, and `findfile`'s answer.
-- Arguments of commands the vendor does not document: `getv`'s, `fstr`'s first, `strsize`'s third, both of `pa_q`'s, `pa_txt`'s second, `gets`' second, every one of `sets`', the first two of `i`, `nstr`'s first, `zstr`'s fifth, `qrcode`'s eighth, and `piccolor`'s fourth.
+- Arguments the command only reads: the value `wepo` writes, the value `crcputs` sends, the file `delfile` deletes, the text that `strlen`, `substr`, `spstr`, and `btlen` read, and the separator `spstr` splits on. In nxlang, you can write an expression or a minus before a name in these, and nxlang computes it first ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
+- Arguments where the command puts its result: the variable that `cov`, `covx`, `strlen`, `repo`, and `ucopy` write their result to, and the one `findfile` sets.
+- Arguments of commands that Nextion does not document:
+  - every argument of `getv`, `pa_q`, and `sets`;
+  - the first argument of `fstr` and `nstr`, and the first two of `i`;
+  - the second argument of `pa_txt` and `gets`;
+  - the third argument of `strsize`, the fourth of `piccolor`, the fifth of `zstr`, and the eighth of `qrcode`.
 
-The text of `xstr`, its last argument, is one operand too: a text, a `txt`, a number, or a variable. The build refuses texts joined, arithmetic, or a minus before a name there, such as `xstr 0,0,100,30,0,RED,WHITE,0,0,1,"a"+"b"` or `xstr 0,0,100,30,0,RED,WHITE,0,0,1,-sys0` ("Invalid Variables"). In nxlang, such a text is computed first instead, as a first argument is, except in `program.nx`, which has no temporaries.
+The last argument of `xstr`, its text, must also be a single value: a text, a `txt`, a number, or a variable. The build refuses joined texts, arithmetic, and a minus before a name there, such as `xstr 0,0,100,30,0,RED,WHITE,0,0,1,"a"+"b"` or `xstr 0,0,100,30,0,RED,WHITE,0,0,1,-sys0` ("Invalid Variables"). In nxlang, you can write these, and nxlang computes the text first. The exception is `program.nx`, which has no temporaries.
 
 ### Texts and numbers
 
@@ -233,12 +237,12 @@ This applies in nxlang too, except for a text that ends in an escaped backslash,
 
 The Nextion Editor reads a text in code by its bytes, so some texts in these encodings end in the wrong place. The build refuses them:
 
-- A shift-jis text with a half-width katakana, such as ｱ, that takes the closing quote: `t0.txt="aｱ"` ("Invalid Variables").
-  - The Nextion Editor reads every text in pairs of bytes. A half-width katakana is one byte, so it takes the byte after it as its second.
+- A shift-jis text where a half-width katakana, such as ｱ, makes the Nextion Editor read the closing quote as part of the text: `t0.txt="aｱ"` ("Invalid Variables").
+  - The Nextion Editor reads every text in pairs of bytes. A half-width katakana is a single byte, so it gets paired with the next byte.
   - `t0.txt="ｱa"` and `t0.txt="ｱｱ"` compile, as each pair ends before the closing quote.
   - The build refuses the line in nxlang too.
-- A text in a condition, or before a comma in `prints`, `spstr`, `strlen`, `btlen`, or `crcputs`, whose last character ends in the byte 0x5C, a backslash's: `if(t0.txt=="表")` or `prints "日表",0` ("Invalid number of arguments").
-  - Shift-jis's 表, big5's 許, and gb2312's 乗 each end in 0x5C. There the Nextion Editor reads that byte as a backslash that escapes the closing quote.
+- A text in a condition, or before a comma in `prints`, `spstr`, `strlen`, `btlen`, or `crcputs`, whose last byte is 0x5C, the code of a backslash: `if(t0.txt=="表")` or `prints "日表",0` ("Invalid number of arguments").
+  - 表 in shift-jis, 許 in big5, and 乗 in gb2312 each end in that byte. In these places, the Nextion Editor takes it for a backslash, which escapes the closing quote.
   - The same text compiles elsewhere, as in `t0.txt="日表"` or `print "日表"`.
   - In an nxlang event, the build puts such a text into a text temporary first, and the line builds ([nxlang-compiled.md](nxlang-compiled.md)).
 
