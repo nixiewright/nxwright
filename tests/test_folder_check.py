@@ -569,5 +569,70 @@ class EditorLanguagePageAtScreenSizeTest(PageAtScreenSizeTest):
     language = "nextion"
 
 
+class TextCutTest(FolderTestCase):
+    """Where nxlang puts a text holding a component's text into a variable
+    whose room is less than its parts can take, the checks warn that the text
+    may be cut (rule text-cut). Page0 has texts big, of txt_maxl 1000, mid1
+    and mid2, of 200, and full, of 255. The second page has a big of its own."""
+
+    def setUp(self):
+        super().setUp()
+        page0 = self.root / "pages" / "page0.page.toml"
+        for name, limit in (("big", 1000), ("mid1", 200), ("mid2", 200), ("full", 255)):
+            add_component(page0, name, "x", limit)
+        add_component(self.root / "pages" / "second.page.toml", "big", "x", 1000)
+
+    def cuts(self, code: str) -> list:
+        """Returns the text-cut warnings of page0's code `code`."""
+        self.write("pages/page0.nx", code)
+        return [finding for finding in self.findings() if finding.rule == "text-cut"]
+
+    def test_a_join_in_a_condition(self):
+        self.assertEqual(self.cuts('on page0.load:\n  if (title.txt == "a" + big.txt) {\n'
+                                   '    sys0 = 1\n  }\n'), [Finding(
+            "pages/page0.nx", 2, WARNING,
+            "this text can take 1001 bytes, as big.txt keeps up to 1000, but nxlang keeps it "
+            "in a variable of 255 bytes here, so a longer text is cut. To keep it whole, put it "
+            "in a variable component whose txt_maxl is at least 1001", "text-cut")])
+
+    def test_a_local_given_a_components_text(self):
+        self.assertEqual([finding.line for finding in self.cuts(
+            "on page0.load:\n  var s = big.txt\n  title.txt = s\n")], [2])
+
+    def test_two_components_together(self):
+        self.assertEqual([finding.line for finding in self.cuts(
+            "on page0.load:\n  if (title.txt == mid1.txt + mid2.txt) {\n    sys0 = 1\n  }\n")],
+            [2])
+
+    def test_a_component_on_another_page(self):
+        self.assertEqual([finding.line for finding in self.cuts(
+            'on page0.load:\n  if (title.txt == "a" + second.big.txt) {\n    sys0 = 1\n  }\n')],
+            [2])
+
+    def test_none_where_the_room_is_enough(self):
+        # A component of 255 alone fits a variable of 255.
+        self.assertEqual(self.cuts("on page0.load:\n  var s = full.txt\n  title.txt = s\n"), [])
+        # A later statement gives the temporary room enough for both.
+        self.assertEqual(self.cuts(
+            'on page0.load:\n  if (title.txt == "a" + big.txt) {\n    sys0 = 1\n  }\n'
+            '  if (title.txt == "%s" + title.txt) {\n    sys0 = 2\n  }\n' % ("b" * 1100)), [])
+
+    def test_an_addition_counts_the_parts_it_adds(self):
+        # The text the local keeps already is not counted: short texts added
+        # in steps stay at 255 bytes, as the docs say.
+        self.assertEqual([finding.line for finding in self.cuts(
+            'on page0.load:\n  var s = "a"\n  s += mid1.txt\n  s += big.txt\n'
+            '  title.txt = s\n')], [4])
+
+    def test_none_in_a_function_the_page_never_calls(self):
+        self.assertEqual(self.cuts("function unused():\n  var s = big.txt\n  title.txt = s\n\n"
+                                   "on page0.load:\n  sys0 = 1\n"), [])
+
+    def test_the_page_still_builds(self):
+        self.write("pages/page0.nx", "on page0.load:\n  var s = big.txt\n  title.txt = s\n")
+        self.assertEqual([finding for finding in self.findings() if finding.severity == ERROR],
+                         [])
+
+
 if __name__ == "__main__":
     unittest.main()

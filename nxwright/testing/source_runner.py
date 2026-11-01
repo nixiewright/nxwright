@@ -28,15 +28,16 @@ from nxwright.language.nxlang import GENERATED_GLOBAL, GENERATED_NAME, int_start
 from nxwright.language.resource_names import ResourceNames
 from nxwright.project.component_defaults import defaults_from_toml
 from nxwright.project.device_settings import DEFAULT_ENCODING, TextCodec
-from nxwright.project.editor_limits import bounded_attributes, lacked_attributes
+from nxwright.project.editor_limits import lacked_attributes
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.source import source_folder as folders
 from nxwright.source.device_keys import screen_model
 from nxwright.source.macros_source import (MACROS_PATH, callable_macros, compiled_macros,
                                            read_macros_text)
 from nxwright.source.nx_files import event_blocks
-from nxwright.source.page_source import (compile_nxlang_page, file_at_fault, generated_table,
-                                         page_nx_path, page_toml_path, table_types)
+from nxwright.source.page_source import (code_text_limits, compile_nxlang_page, file_at_fault,
+                                         generated_table, page_nx_path, page_toml_path,
+                                         table_limits, table_types)
 from nxwright.testing.editor_machine import EditorMachine
 from nxwright.testing.folder_resources import FolderResources
 from nxwright.testing.pinyin_table import pinyin_table_of
@@ -502,15 +503,11 @@ def _text_limits(tables: FolderPageTables, page: str, generated: list) -> dict:
     text of the app (table_limits), named as the code of `page` names it:
     the page's own alone, another page's after that page's name. `generated`
     holds the page's generated variables, which the build adds to it."""
-    limits = {}
-    for page_name in tables.app["pages"]:
-        own = tables.text_limits[page_name]
-        if page_name == page:
-            own = {**own, **table_limits([generated_table(variable) for variable in generated],
-                                          tables.defaults)}
-        prefix = "" if page_name == page else page_name + "."
-        limits.update((prefix + name, limit) for name, limit in own.items())
-    return limits
+    limits = {page_name: tables.text_limits[page_name] for page_name in tables.app["pages"]}
+    if page in limits:
+        limits[page] = {**limits[page], **table_limits(
+            [generated_table(variable) for variable in generated], tables.defaults)}
+    return code_text_limits(limits, page)
 
 
 def component_start_values(components: list, screen) -> dict:
@@ -528,27 +525,6 @@ def component_start_values(components: list, screen) -> dict:
         start["%s.type" % component.name] = TYPES_BY_NAME.get(
             component.type, int(component.type) if component.type.isdigit() else 0)
     return start
-
-
-def table_limits(toml_tables: list, defaults: dict) -> dict:
-    """Returns {"name.attribute": the most bytes it keeps} of a page file's
-    `toml_tables` that have a name: a `txt`'s `txt_maxl`, and each `X`'s
-    `X_m`, as a `path`'s `path_m` (editor_limits.bounded_attributes). Each
-    limit is the table's own, or else its type's, from `defaults`."""
-    limits = {}
-    for table in toml_tables:
-        if "name" not in table:
-            continue
-        object_type = TYPES_BY_NAME.get(table.get("type"))
-        type_defaults = defaults.get(object_type)
-        stored = dict(type_defaults.attributes) if type_defaults is not None else {}
-        for attribute, bound in bounded_attributes(object_type, {*table, *stored}):
-            limit = table.get(bound)
-            if limit is None and bound in stored:
-                limit = int.from_bytes(stored[bound], "little")
-            if isinstance(limit, int):
-                limits["%s.%s" % (table["name"], attribute)] = limit
-    return limits
 
 
 def _program_start(read) -> dict:

@@ -7,7 +7,9 @@ picture, font, animation, video, or sound exists. Where the build stops at
 the folder's first error, the check reports the first error of each page. An error in app.toml,
 defaults.toml, or program.nx's declarations is reported alone, since every
 page depends on them. The warnings of lint.py come with the errors; those
-about the sounds' files, only when the check is given their bytes.
+about the sounds' files, only when the check is given their bytes. So does
+each text-cut warning the build of a page's nxlang gives: a text that a
+variable nxlang adds may cut (nxlang.compile_page).
 
 Each finding names its file and, when known, its line. An error in a table
 of a page's .page.toml file gets the line of the table's header.
@@ -108,13 +110,14 @@ def check_folder(read, exists, pages: list = None, read_bytes=None) -> FolderChe
     for page_id, page in enumerate(folder.app["pages"]):
         if pages is not None and page not in pages:
             continue
-        chain, page_globals = [], []
+        chain, page_globals, cut_texts = [], [], []
         try:
-            block = folder.build_page(page_id, page_globals, chain)
+            block = folder.build_page(page_id, page_globals, chain, cut_texts)
         except NxwrightError as error:
             result.page_findings[page] = [_finding(error, read)]
             continue
-        result.page_findings[page] = []
+        result.page_findings[page] = [Finding(file, line, WARNING, message, "text-cut")
+                                      for file, line, message in cut_texts]
         memory = measure_page(folder.screen, block) if folder.screen is not None else None
         result.measures[page] = PageMeasures(len(block.objects), chain, len(page_globals), memory)
         globals_used += page_globals

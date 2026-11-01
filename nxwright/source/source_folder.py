@@ -73,10 +73,10 @@ from nxwright.source.macros_source import (MACROS_PATH, block_of_compiled, calla
                                            keep_comfortable_macros,
                                            macros_from_block, macros_to_source,
                                            read_macros_text)
-from nxwright.source.page_source import (PAGE_FILE_SUFFIX, PageSource, editor_code_of_file,
-                                         page_components, page_from_source, page_nx_path,
-                                         page_to_source, page_toml_path, strip_generated,
-                                         table_types)
+from nxwright.source.page_source import (PAGE_FILE_SUFFIX, PageSource, code_text_limits,
+                                         editor_code_of_file, page_components, page_from_source,
+                                         page_nx_path, page_to_source, page_toml_path,
+                                         strip_generated, table_limits, table_types)
 from nxwright.source.editor_code_merge import (check_nxlang_imports, keep_comfortable_events,
                                                merge_nxlang_imports, nxlang_import_changes,
                                                switch_events_to_nxlang)
@@ -969,11 +969,17 @@ class FolderSource:
     # measures. The probe builds such pages on purpose, to see the Editor
     # refuse them, and turns it off.
     refuse_by_table: bool = True
+    # The most bytes of each page's texts, {page: {"name.attribute": bytes}}
+    # (page_source.table_limits); a page's None when its file does not read.
+    text_limits: dict = None
 
-    def build_page(self, page_id: int, globals_used: list, chain: list = None) -> PageBlock:
+    def build_page(self, page_id: int, globals_used: list, chain: list = None,
+                   cut_texts: list = None) -> PageBlock:
         """Returns the page `page_id`, built from its files as page_from_source
         does, adding the program.s globals it uses to `globals_used`, and its
-        longest chain of calls and clicks to `chain` when given. With the
+        longest chain of calls and clicks to `chain` when given. In nxlang, each
+        text a generated variable may cut is added to `cut_texts`, when given,
+        as (file, line, message). With the
         screen known, a component reaching past it is refused where its
         series refuses it (check_component_places); with `refuse_by_table`
         too, its components are checked against what the screen's series
@@ -990,7 +996,8 @@ class FolderSource:
         page = page_from_source(source, page_name, self.names, self.defaults, self.declared,
                                 page_id, globals_used, self.read, self.page_objects,
                                 self.encoding, chain, self.program_variables, self.macros,
-                                self.absent_attributes, self.screen, page_size)
+                                self.absent_attributes, self.screen, page_size,
+                                code_text_limits(self.text_limits or {}, page_name), cut_texts)
         # Not a refusal by the memory table: the memory probe, which turns
         # those off, places every component inside the screen.
         if self.screen is not None:
@@ -1071,11 +1078,13 @@ def read_folder_source(read, skip_broken_pages: bool = False,
         program_variables = _in_file("program.nx", lambda: program_int_variables(program))
     screen = screen_model(app)
     page_objects, page_globals, broken_pages, absent_attributes = {}, {}, {}, {}
+    text_limits = {}
     for page_name in app["pages"]:
         path = page_toml_path(page_name)
         try:
             data = _in_file(path, lambda: parsed_page_toml(read(path), page_name))
             page_objects[page_name] = types_in_page_data(data)
+            text_limits[page_name] = table_limits(_page_data_tables(data), defaults)
             page_globals[page_name] = global_names_in_page_data(data, defaults)
             absent_attributes[page_name] = absent_attributes_in_page_data(data, defaults, screen)
         except NxwrightError as error:
@@ -1083,11 +1092,12 @@ def read_folder_source(read, skip_broken_pages: bool = False,
                 raise
             broken_pages[page_name] = error
             page_objects[page_name] = page_globals[page_name] = absent_attributes[page_name] = None
+            text_limits[page_name] = None
     macros_text = read_macros_text(read)
     return FolderSource(read, app, ResourceNames.of_app(app), defaults, program,
                         declared, page_objects, broken_pages, page_globals, macros_text,
                         callable_macros(macros_text), program_variables, absent_attributes,
-                        screen, refuse_by_table)
+                        screen, refuse_by_table, text_limits)
 
 
 @dataclass

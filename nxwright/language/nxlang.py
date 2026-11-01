@@ -102,7 +102,7 @@ import copy
 from dataclasses import dataclass, field
 import re
 
-from nxwright import NxwrightError
+from nxwright import NxwrightError, listed_in_words
 from nxwright.language.code_checks import (COMPONENT_PLACES, DATA_RECORD_ARGUMENTS,
                                            DATA_RECORD_CALL, NUMBER_PLACES, ONE_OPERAND_FIRST,
                                            READ_ONE_OPERAND_PLACES, SCREEN_ARRAY,
@@ -375,6 +375,24 @@ class CompiledPage:
     # {owner, as "home.load" or "show": {generated variable, as "__g0_3" or
     # "__v1.txt": the local, parameter, or result it holds, by its nxlang name}}
     local_names: dict = field(default_factory=dict)
+    # [(file, line, message)]: each text a generated variable may cut, as its
+    # room is less than the components' texts in it can take (_cut_texts)
+    cut_texts: list = field(default_factory=list)
+
+
+@dataclass
+class _CutCandidate:
+    """A text written into a generated variable that holds a component's
+    text, recorded as it is compiled and judged once the page's rooms are
+    final (_cut_texts): the file and line, the variable, its quoted texts'
+    bytes, the components' texts with their most bytes, and the generated
+    variables among its parts."""
+    file: str
+    line: int
+    target: str
+    quoted: int
+    components: list    # [(text as code names it, such as big.txt, its most bytes)]
+    generated: list     # [generated variable, such as __s1.txt]
 
 
 class NotParsed(NxwrightError):
@@ -1041,9 +1059,22 @@ class _Emitter:
                 and target.startswith((TEMPORARY_PREFIX, SHARED_PREFIX))):
             # += keeps the text the variable has, which counts at its room.
             parts = ([(None, target)] if operator == "+=" else []) + chain
-            room = _room_for(parts, self.codec, self.temporaries.page.text_rooms())
+            page = self.temporaries.page
+            room = _room_for(parts, self.codec, page.text_rooms())
             if room is not None:
-                self.temporaries.page.make_room(target, room)
+                page.make_room(target, room)
+            # The warning counts only what the statement adds. Text that a
+            # variable keeps already may be cut by += whatever its parts.
+            components = [(operand, page.text_limits[operand]) for _, operand in chain
+                          if operand in page.text_limits]
+            if components:
+                page.cut_candidates.append(_CutCandidate(
+                    page.current_file, self.number, target,
+                    sum(_stored_size(operand, self.codec) for _, operand in chain
+                        if operand.startswith('"')),
+                    components,
+                    [operand for _, operand in chain
+                     if operand.startswith((TEMPORARY_PREFIX, SHARED_PREFIX))]))
         if kind == TEXT and operator in ("=", "+="):
             for line in _text_assignment_lines(target, operator, chain):
                 self.emit(line)
@@ -1258,6 +1289,10 @@ class _PageState:
                  object_types: dict = None, codec: TextCodec = None):
         self.page_name, self.page_id = page_name, page_id
         self.codec = codec      # the project's encoding, or None (compile_page)
+        # {text as code names it, such as big.txt or page1.big.txt: its most
+        # bytes}, and the texts that may be cut (compile_page, _cut_texts)
+        self.text_limits, self.cut_candidates = {}, []
+        self.current_file = ""  # the file of the event or function being compiled
         self.component_names = set(component_names)
         # {page: {name: type}}, a page's None while unknown (compile_page)
         self.object_types = object_types or {}
@@ -1336,6 +1371,7 @@ class _PageState:
         other = copy.copy(self)
         other.generated, other.globals, other.counters, other.pools = [], [], {}, {}
         other.next_shared = None
+        other.cut_candidates = []
         return other
 
     def generate(self, prefix: str, kind: str, number: int) -> str:
@@ -1500,7 +1536,7 @@ def is_constant_line(text: str) -> bool:
 def compile_page(page_name: str, component_names, program: ProgramNames, preambles: list,
                  events: dict, functions: dict = None, page_id: int = 0,
                  object_types: dict = None, owners: dict = None,
-                 codec: TextCodec = None) -> CompiledPage:
+                 codec: TextCodec = None, text_limits: dict = None) -> CompiledPage:
     """Compiles a page's code, from its .nx file and the files it includes,
     into lines for the preprocessor. `program` is what program.nx declares.
     `preambles` is [(file, lines)]: each file's constants, the page's own
@@ -1536,6 +1572,7 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
             raise NxwrightError("program.nx constant %s has the name of a component of page %s"
                                 % (name, page_name))
     page = _PageState(page_name, component_names, program, page_id, object_types, codec)
+    page.text_limits = text_limits or {}
     for file, lines in preambles:
         with _naming(file):
             _read_constants(lines, page)
@@ -1579,6 +1616,7 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
         page.start_owner(max((ends[runs] for runs in graph[owner]), default=0))
         if isinstance(owner, tuple):
             file, lines = events[owner]
+            page.current_file = file
             with _naming(file):
                 written = {}
                 if owners.get(owner) is not None:
@@ -1587,6 +1625,7 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
                 results[owner] = compiler.compile(lines)
         else:
             function = page.functions[owner]
+            page.current_file = function.file
             with _naming(function.file):
                 _name_variables(page, function, TEXT)
                 compiler = _EventCompiler(page, page.temporaries(function.depth), function)
@@ -1615,7 +1654,32 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
                                  + compiled.events.get(load, []))
     compiled.generated = page.generated
     compiled.globals = page.globals
+    compiled.cut_texts = _cut_texts(page)
     return compiled
+
+
+def _cut_texts(page: "_PageState") -> list:
+    """Returns (file, line, message) of each text recorded as it was compiled
+    (_CutCandidate) whose variable's final room is less than its parts can
+    take: its quoted texts' bytes, each component's text at its most bytes,
+    and each generated variable at its room. A variable keeps the most any
+    statement gives it, so this is known only once the page is compiled."""
+    rooms = page.text_rooms()
+    found = []
+    for candidate in page.cut_candidates:
+        room = rooms[candidate.target]
+        needed = (candidate.quoted + sum(most for _, most in candidate.components)
+                  + sum(rooms.get(name, TEXT_TEMPORARY_SIZE) for name in candidate.generated))
+        if needed <= room:
+            continue
+        keeps = listed_in_words(["%s keeps up to %d" % component
+                                 for component in candidate.components])
+        found.append((candidate.file, candidate.line,
+                      "this text can take %d bytes, as %s, but nxlang keeps it in a variable of "
+                      "%d bytes here, so a longer text is cut. To keep it whole, put it in a "
+                      "variable component whose txt_maxl is at least %d"
+                      % (needed, keeps, room, needed)))
+    return found
 
 
 def _check_uncalled(page: _PageState, functions: dict, called: set):

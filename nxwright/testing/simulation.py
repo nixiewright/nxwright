@@ -206,8 +206,9 @@ from nxwright.testing.serial_line import (ADDRESSES, BUFFER, DROPPED, INSTRUCTIO
                                           REPARSE_END, SERIAL_BUFFER_SIZE, SerialLine,
                                           Transfer)
 from nxwright.testing.simulation_log import END, LOGGED, SENT, hex_bytes, shown
+from nxwright.source.page_source import table_limits
 from nxwright.testing.source_runner import (FolderPageTables, SourceFolderRunner,
-                                            component_start_values, table_limits)
+                                            component_start_values)
 
 # The commands of "other commands" that hold and resume the serial line, as
 # the machine records them (_take_serial).

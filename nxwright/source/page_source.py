@@ -57,7 +57,7 @@ from nxwright.project.screen_models import ScreenModel
 from nxwright.project.component_defaults import DERIVED_ATTRIBUTES, PLACEMENT_ATTRIBUTES
 from nxwright.project.device_settings import (DEFAULT_ENCODING, TextCodec, encoding_code,
                                               is_password_hash_text)
-from nxwright.project.editor_limits import (LEAST_SIDE, check_component_count,
+from nxwright.project.editor_limits import (LEAST_SIDE, bounded_attributes, check_component_count,
                                              check_page_limits, least_size_words)
 from nxwright.project.page_block import HEADER_SIZE, Attribute, Event, Marker, PageBlock, PageObject
 from nxwright.project.page_header import (NO_LOCK_PASSWORD, SYSTEM_PAGES, PageHeader, header_16,
@@ -191,7 +191,8 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
                      encoding: str = DEFAULT_ENCODING, chain: list = None,
                      program_variables: frozenset = None, macros: frozenset = None,
                      absent_attributes: dict = None, screen: ScreenModel = None,
-                     page_size: tuple = None) -> PageBlock:
+                     page_size: tuple = None, text_limits: dict = None,
+                     cut_texts: list = None) -> PageBlock:
     """Returns the page `page_name` built from its source files. Its stamp, a
     checksum of the page block, is left 0. Its texts, its code, and its header
     are in `encoding`, the project's character encoding (the Editor's
@@ -223,9 +224,12 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
     screen's place and size, whatever its page file says
     (page_table_at_screen).
 
-    In nxlang, the page's longest chain of calls and clicks is added to
-    `chain`, when given: the event first, as "home.load", then each function
-    or event that runs during the one before it.
+    In nxlang, with `text_limits`, the most bytes of the pages' texts as code
+    names them (code_text_limits), each text a generated variable may cut is
+    added to `cut_texts`, when given, as (file, line, message). The page's
+    longest chain of calls and clicks is added to `chain`, when given: the
+    event first, as "home.load", then each function or event that runs during
+    the one before it.
 
     Raises NxwrightError naming the file and the problem. Its `file` is the
     file at fault, the page's .page.toml file unless the code is; for a table of
@@ -235,7 +239,7 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
         return _page_from_source(source, page_name, names, defaults, nxlang_program, page_id,
                                  globals_used, read, page_objects, encoding, chain,
                                  program_variables, macros, absent_attributes, screen,
-                                 page_size)
+                                 page_size, text_limits, cut_texts)
     except NxwrightError as error:
         error.file = error.file or page_toml_path(page_name)
         raise
@@ -246,7 +250,7 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
                       page_objects: dict, encoding: str, chain: list,
                       program_variables: frozenset, macros: frozenset,
                       absent_attributes: dict, screen: ScreenModel,
-                      page_size: tuple) -> PageBlock:
+                      page_size: tuple, text_limits: dict, cut_texts: list) -> PageBlock:
     """Does the work of page_from_source."""
     try:
         data = tomllib.loads(source.toml)
@@ -282,10 +286,13 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
                              [table.get("name") for table in tables], objects,
                              program_variables, macros, screen)
     else:
-        code, generated, used, deepest = _compile_nxlang_events(
+        code, generated, used, deepest, cuts = _compile_nxlang_events(
             source.events, page_name, names, [table.get("name") for table in tables],
             nxlang_program, page_id, read, codec, page_objects,
-            {**(page_objects or {}), page_name: table_types(tables)}, absent_attributes, screen)
+            {**(page_objects or {}), page_name: table_types(tables)}, absent_attributes, screen,
+            text_limits)
+        if cut_texts is not None:
+            cut_texts.extend(cuts)
         if globals_used is not None:
             globals_used.extend(used)
         if chain is not None:
@@ -499,10 +506,14 @@ def _no_includes(path: str) -> str:
 def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, component_names: list,
                            program: ProgramNames, page_id: int, read, codec: TextCodec,
                            page_objects: dict = None, object_types: dict = None,
-                           absent_attributes: dict = None, screen: ScreenModel = None) -> tuple:
+                           absent_attributes: dict = None, screen: ScreenModel = None,
+                           text_limits: dict = None) -> tuple:
     """Returns ({(object name, event): [code line bytes]}, [Generated] for the
     generated variables, [the program.s globals used], the longest chain of
-    calls and clicks) for a page's .nx file in nxlang. With
+    calls and clicks, [(file, line, message)] of the texts a generated
+    variable may cut) for a page's .nx file in nxlang. `text_limits` gives
+    the most bytes of the pages' texts, as code names them
+    (code_text_limits), which those warnings need. With
     `page_objects`, references, calls, and assignments are checked, as
     page_from_source says (ObjectNames), with `absent_attributes` the
     attributes components lack, and with `screen` what its series lacks.
@@ -510,7 +521,7 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
     with, {page: {name: type}} (nxlang.compile_page)."""
     page_files = read_page_files(page_nx_path(page_name), text, read or _no_includes)
     compiled = compile_page_files(page_files, page_name, component_names, program, page_id,
-                                  object_types, codec=codec)
+                                  object_types, codec=codec, text_limits=text_limits)
     code = {}
     objects = None
     if page_objects is not None:
@@ -520,7 +531,7 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
                                           screen=screen, codec=codec).items():
         where = "%s: %s.%s" % (compiled.sources.get(key, page_nx_path(page_name)), *key)
         code[key] = [codec.encode(line, where) for line in lines]
-    return code, compiled.generated, compiled.globals, compiled.deepest_chain
+    return code, compiled.generated, compiled.globals, compiled.deepest_chain, compiled.cut_texts
 
 
 def editor_code_of_file(path: str, page_name: str, events_text: str, names: ResourceNames,
@@ -561,17 +572,19 @@ def editor_code_of_file(path: str, page_name: str, events_text: str, names: Reso
 
 def compile_nxlang_page(text: str, page_name: str, component_names: list, program: ProgramNames,
                         page_id: int = 0, read=None, object_types: dict = None,
-                        own_attributes: bool = True, codec: TextCodec = None):
+                        own_attributes: bool = True, codec: TextCodec = None,
+                        text_limits: dict = None):
     """Returns the CompiledPage of a page's .nx text and the files it
     includes, as compile_page_files compiles them."""
     page_files = read_page_files(page_nx_path(page_name), text, read or _no_includes)
     return compile_page_files(page_files, page_name, component_names, program, page_id,
-                              object_types, own_attributes, codec)
+                              object_types, own_attributes, codec, text_limits)
 
 
 def compile_page_files(page_files: PageFiles, page_name: str, component_names: list,
                        program: ProgramNames, page_id: int = 0, object_types: dict = None,
-                       own_attributes: bool = True, codec: TextCodec = None):
+                       own_attributes: bool = True, codec: TextCodec = None,
+                       text_limits: dict = None):
     """Returns the CompiledPage of a page's .nx files. The compiler sees only
     code lines, so each event's comment is put back at its start, marked as
     the build writes it. `object_types` gives the types of the pages'
@@ -579,8 +592,9 @@ def compile_page_files(page_files: PageFiles, page_name: str, component_names: l
     (nxlang.compile_page). An event of an object among `component_names`,
     the page's objects in ID order, the unnamed included, may name its
     attributes as '&name&'; with `own_attributes` False, none may, as code
-    that runs in no object's event. `codec` is the project's encoding, as
-    nxlang.compile_page takes it."""
+    that runs in no object's event. `codec` is the project's encoding, and
+    `text_limits` the most bytes of the pages' texts, as nxlang.compile_page
+    takes them."""
     events, functions, comments = {}, {}, {}
     for nx_file in page_files.files:
         for key, block in nx_file.blocks.items():
@@ -595,7 +609,7 @@ def compile_page_files(page_files: PageFiles, page_name: str, component_names: l
               if own_attributes else {})
     compiled = compile_page(page_name, [name for name in component_names if name], program,
                             page_files.preambles(), events, functions, page_id, object_types,
-                            owners, codec)
+                            owners, codec, text_limits)
     for key, comment in comments.items():
         compiled.events[key] = comment + compiled.events.get(key, [])
     return compiled
@@ -638,6 +652,41 @@ def file_at_fault(compiled, key, page_name: str, names: ResourceNames,
             except NxwrightError:
                 return function.file
     return page_nx_path(page_name)
+
+
+def table_limits(toml_tables: list, defaults: dict) -> dict:
+    """Returns {"name.attribute": the most bytes it keeps} of a page file's
+    `toml_tables` that have a name: a `txt`'s `txt_maxl`, and each `X`'s
+    `X_m`, as a `path`'s `path_m` (editor_limits.bounded_attributes). Each
+    limit is the table's own, or else its type's, from `defaults`. A table
+    whose type is not text, as a malformed page file may give, has none: the
+    page's build refuses it."""
+    limits = {}
+    for table in toml_tables:
+        if "name" not in table or not isinstance(table.get("type"), str):
+            continue
+        object_type = TYPES_BY_NAME.get(table.get("type"))
+        type_defaults = defaults.get(object_type)
+        stored = dict(type_defaults.attributes) if type_defaults is not None else {}
+        for attribute, bound in bounded_attributes(object_type, {*table, *stored}):
+            limit = table.get(bound)
+            if limit is None and bound in stored:
+                limit = int.from_bytes(stored[bound], "little")
+            if isinstance(limit, int):
+                limits["%s.%s" % (table["name"], attribute)] = limit
+    return limits
+
+
+def code_text_limits(limits: dict, page: str) -> dict:
+    """Returns {text as the code of `page` names it: its most bytes} of
+    `limits`, {page: {"name.attribute": its most bytes}} (table_limits): the
+    page's own texts alone, another page's after that page's name. A page
+    whose limits are None, as a page whose file does not read, adds none."""
+    found = {}
+    for name, own in limits.items():
+        prefix = "" if name == page else name + "."
+        found.update((prefix + text, most) for text, most in (own or {}).items())
+    return found
 
 
 def generated_table(variable) -> dict:
