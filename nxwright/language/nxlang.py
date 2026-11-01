@@ -394,7 +394,7 @@ class _CutCandidate:
     target: str
     quoted: int
     components: list    # [(text as code names it, such as big.txt, its most bytes)]
-    generated: list     # [generated variable, such as __s1.txt]
+    generated: list     # [(generated variable, such as __s1.txt, its use)]
 
 
 class NotParsed(NxwrightError):
@@ -872,14 +872,18 @@ class _Temporaries:
 
     def start_statement(self):
         self.used = {NUMBER: 0, TEXT: 0}
+        self.page.statements += 1
 
     def take(self, kind: str, number: int) -> str:
-        """Returns the next temporary of `kind` that this statement has not used."""
+        """Returns the next temporary of `kind` that this statement has not
+        used, its use the statement (_PageState.uses)."""
         pool = self.pool[kind]
         if self.used[kind] == len(pool):
             pool.append(self.page.variable(TEMPORARY_PREFIX, kind, number))
         self.used[kind] += 1
-        return pool[self.used[kind] - 1]
+        temporary = pool[self.used[kind] - 1]
+        self.page.uses[temporary] = self.page.statements
+        return temporary
 
 
 class _Emitter:
@@ -1062,14 +1066,15 @@ class _Emitter:
             # += keeps the text the variable has, which counts at its room.
             parts = ([(None, target)] if operator == "+=" else []) + chain
             page = self.temporaries.page
-            room = _room_for(parts, self.codec, page.text_rooms())
+            # Each part counts at its room for its use, not the page's.
+            room = _room_for(parts, self.codec, page.use_rooms_now())
             if room is not None:
                 page.make_room(target, room)
             # The warning counts only what the statement adds. Text that a
             # variable keeps already may be cut by += whatever its parts.
             components = [(operand, page.text_limits[operand]) for _, operand in chain
                           if operand in page.text_limits]
-            generated = [operand for _, operand in chain
+            generated = [(operand, page.uses.get(operand)) for _, operand in chain
                          if operand.startswith((TEMPORARY_PREFIX, SHARED_PREFIX))]
             if components or generated:
                 page.cut_candidates.append(_CutCandidate(
@@ -1115,15 +1120,21 @@ class _Emitter:
         function = call.function
         operands = [Literal(self.value(argument), kind_of(argument, self.number))
                     if _count_calls(argument) else argument for argument in call.arguments]
+        uses = self.temporaries.page.uses if self.temporaries is not None else {}
         for (_, kind), variable, operand in zip(function.parameters, function.parameter_variables,
                                                 operands):
             if kind == NUMBER and kind_of(operand, self.number) == TEXT:
                 raise NxwrightError("%s takes a number, not text"
                                     % function.name, line=self.number)
+            # Each call's argument counts toward the room its function reads
+            # for the parameter (_PageState.uses).
+            uses[variable] = function.name
             self.assign(variable, kind, "=", operand)
         # Last: an argument may have called another function of this hotspot.
         self.emit("%s=%d" % (function.which, function.index))
         self.emit("click %s,1" % function.hotspot)
+        if function.result:
+            uses[function.result_variable] = function.name
         return function.result_variable if function.result else ""
 
     def conditional(self, expression: Conditional) -> str:
@@ -1294,6 +1305,13 @@ class _PageState:
         # {text as code names it, such as big.txt or page1.big.txt: its most
         # bytes}, and the texts that may be cut (compile_page, _cut_texts)
         self.text_limits, self.cut_candidates = {}, []
+        # A text variable is shared by events, functions, and statements that
+        # never run at once. Its use is what it stands for where the code is
+        # being compiled: an event or a function, by its label (_owner_label),
+        # or a temporary's statement. {variable, such as __v0.txt: its use},
+        # and {(variable, use): the room that use needs, past 255}.
+        self.uses, self.use_rooms = {}, {}
+        self.statements = 0     # the statements begun, which number their temporaries' uses
         # The file and the label (_owner_label) of the event or function
         # being compiled.
         self.current_file, self.current_owner = "", ""
@@ -1343,7 +1361,9 @@ class _PageState:
             slot, self.next_shared = self.next_shared, self.next_shared + 1
         if slot == made:
             self.generate(SHARED_PREFIX, TEXT, number)
-        return "%s%d.txt" % (SHARED_PREFIX, slot)
+        name = "%s%d.txt" % (SHARED_PREFIX, slot)
+        self.uses[name] = self.current_owner
+        return name
 
     def start_owner(self, first: int):
         """Starts compiling an event or function whose shared text variables
@@ -1376,6 +1396,7 @@ class _PageState:
         other.generated, other.globals, other.counters, other.pools = [], [], {}, {}
         other.next_shared = None
         other.cut_candidates = []
+        other.uses, other.use_rooms = dict(self.uses), dict(self.use_rooms)
         return other
 
     def generate(self, prefix: str, kind: str, number: int) -> str:
@@ -1396,13 +1417,28 @@ class _PageState:
         return {variable.name + ".txt": variable.room for variable in self.generated
                 if variable.kind == TEXT}
 
+    def use_room(self, temporary: str, use=None) -> int:
+        """Returns the room the text variable `temporary`, such as __s0.txt,
+        has for `use`, by default its current use: what the texts written
+        into it there need, or TEXT_TEMPORARY_SIZE."""
+        use = self.uses.get(temporary) if use is None else use
+        return self.use_rooms.get((temporary, use), TEXT_TEMPORARY_SIZE)
+
+    def use_rooms_now(self) -> dict:
+        """Returns {text variable, as code names it: its room for its current
+        use} (use_room), as text_rooms gives the page's."""
+        return {name: self.use_room(name) for name in self.text_rooms()}
+
     def make_room(self, temporary: str, room: int):
         """Gives the text temporary `temporary`, such as __s0.txt, room for
         `room` bytes, when it has less. A temporary serves many statements,
-        so it keeps the most any of them needs."""
+        so it keeps the most any of them needs. Its current use records the
+        room too (use_room)."""
         name = temporary.split(".")[0]
         variable = next(variable for variable in self.generated if variable.name == name)
         variable.room = max(variable.room, room)
+        key = (temporary, self.uses.get(temporary))
+        self.use_rooms[key] = max(self.use_rooms.get(key, 0), room)
 
     def check_new_name(self, name: str, number: int, what: str):
         """Raises NxwrightError when `name` cannot be given to a new `what`:
@@ -1667,32 +1703,32 @@ def _cut_texts(page: "_PageState", local_names: dict) -> list:
     """Returns (file, line, message) of each text recorded as it was compiled
     (_CutCandidate) whose variable's final room is less than its parts can
     take: its quoted texts' bytes, each component's text at its most bytes,
-    and each generated variable at its room. A variable keeps the most any
-    statement gives it, so this is known only once the page is compiled.
+    and each generated variable at its room for its use (use_room). A
+    variable keeps the most any statement gives it, so this is known only
+    once the page is compiled.
 
     A text is judged when a component's text is among its parts, or a
     generated variable of more than TEXT_TEMPORARY_SIZE. Texts joined only
     from shorter variables are not, or almost every join would be warned
     about. `local_names` is CompiledPage.local_names. It gives the nxlang
     name of a local or a parameter for the message."""
-    rooms = page.text_rooms()
-    found = []
+    rooms, found = page.text_rooms(), []
     for candidate in page.cut_candidates:
         room = rooms[candidate.target]
-        long = [name for name in candidate.generated
-                if rooms.get(name, TEXT_TEMPORARY_SIZE) > TEXT_TEMPORARY_SIZE]
+        parts = [(name, page.use_room(name, use)) for name, use in candidate.generated]
+        long = [(name, part_room) for name, part_room in parts if part_room > TEXT_TEMPORARY_SIZE]
         if not candidate.components and not long:
             continue
         needed = (candidate.quoted + sum(most for _, most in candidate.components)
-                  + sum(rooms.get(name, TEXT_TEMPORARY_SIZE) for name in candidate.generated))
+                  + sum(part_room for _, part_room in parts))
         if needed <= room:
             continue
         names = local_names.get(candidate.owner, {})
         keeps = listed_in_words(
             ["%s keeps up to %d" % component for component in candidate.components]
-            + ["%s keeps up to %d" % (names[name], rooms[name]) if name in names
+            + ["%s keeps up to %d" % (names[name], part_room) if name in names
                and names[name] != "(result)" else "a variable nxlang adds keeps up to %d"
-               % rooms[name] for name in long])
+               % part_room for name, part_room in long])
         found.append((candidate.file, candidate.line,
                       "this text can take %d bytes, as %s, but nxlang keeps it in a variable of "
                       "%d bytes here, so a longer text is cut. To keep it whole, put it in a "

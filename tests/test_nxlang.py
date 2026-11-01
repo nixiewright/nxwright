@@ -1082,6 +1082,14 @@ class LongTextLocalTest(unittest.TestCase):
                 'on p.down:\n  show("%s")\n' % self.LONG)
         self.assertEqual(list(self.rooms(page).values()), [400])
 
+    def test_a_copy_counts_only_the_texts_of_its_own_event(self):
+        # The two events share __v0. Only the page's load gives it a long
+        # text, so the copy in the other keeps 255, whichever compiles first.
+        load = 'on p.load:\n  var msg = "%s"\n  t0.txt = msg\n' % self.LONG
+        down = 'on t0.down:\n  var s = "x"\n  var t = s\n  t0.txt = t\n'
+        for page in (load + "\n" + down, down + "\n" + load):
+            self.assertEqual(self.rooms(page), {"__v0": 400, "__v1": 255})
+
     def test_a_parameter_copied_inside_its_function_keeps_255(self):
         # The function is compiled before its caller gives the parameter
         # room, so the copy keeps 255 (the plan's Non-goals).

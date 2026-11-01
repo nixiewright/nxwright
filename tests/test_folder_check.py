@@ -641,6 +641,14 @@ class TextCutTest(FolderTestCase):
             "in a variable of 255 bytes here, so a longer text is cut. To keep it whole, put it "
             "in a variable component whose txt_maxl is at least 400", "text-cut")])
 
+    def test_none_for_a_short_local_sharing_a_long_ones_variable(self):
+        # The two events share a variable, which the page's load gives 400
+        # bytes. The copy in the other copies one letter.
+        load = 'on page0.load:\n  var msg = "%s"\n  title.txt = msg\n' % ("a" * 400)
+        down = 'on title.down:\n  var s = "x"\n  var t = s\n  title.txt = t\n'
+        for code in (load + "\n" + down, down + "\n" + load):
+            self.assertEqual(self.cuts(code), [])
+
     def test_none_for_a_join_of_two_short_locals(self):
         self.assertEqual(self.cuts('on page0.load:\n  var a = "x"\n  var b = "y"\n'
                                    '  var c = a + b\n  title.txt = c\n'), [])
