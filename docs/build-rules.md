@@ -284,7 +284,7 @@ The limit applies in a page's code, in `program.nx`, and in macros.
 - The build does not limit an `int` declaration, or the head of an `if` or a `while` as a whole. In a `for`'s head, the start and the step each count as a line of their own, such as `sys0=0` and `sys0++` in `for(sys0=0;sys0<9;sys0++)`.
 - Each comparison in a condition counts as a line of its own, because the Nextion Editor turns it into one. That line is the comparison's two sides plus 7 bytes. `t0.txt=="…"` with a text of 753 characters makes a line of 768 bytes, too long on the Basic series. A long condition of short comparisons, such as `sys0==1&&sys1==2&&…`, is not refused.
 
-nxlang writes a long text assignment in several lines, so the build does not refuse it ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
+nxlang writes a long text assignment, a long `print` of a text, and a long number assignment in several lines, so the build does not refuse them ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)). A long number assignment in `program.nx` is still refused, as it needs a temporary.
 
 ### What a series lacks
 

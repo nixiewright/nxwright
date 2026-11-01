@@ -846,6 +846,111 @@ class LongTextTest(unittest.TestCase):
         self.assertTrue(all(line.startswith('t0.txt+="') for line in lines))
         self.assert_lines_fit(lines)
 
+    def test_no_cut_where_a_half_width_katakana_misleads_the_reading_in_pairs(self):
+        # In shift-jis the Nextion Editor reads a text in pairs of bytes, and
+        # a half-width katakana takes the byte after it, until an ASCII
+        # character lines the reading up again. So no part ends with a
+        # katakana after its last ASCII character, as in "aｱ" or "ｱ日".
+        # Each part's quoted text fits in LONGEST_LINE less `t0.txt+=`, so
+        # without the rule the first part would end with the tail.
+        room = LONGEST_LINE - len('t0.txt+=""')
+        for tail in ("ｱ", "ｱ日", "ｱｲｳ日"):
+            with self.subTest(tail=tail):
+                text = "a" * (room - len(tail.encode("utf-8"))) + tail + "b" * 200
+                lines = compile_lines('t0.txt = "%s"' % text)
+                self.assert_lines_fit(lines)
+                first = lines[0][len('t0.txt="'):-1]
+                self.assertTrue(first.endswith("a"), first[-5:])
+                self.assertEqual(run('t0.txt = "%s"' % text)["t0.txt"], text)
+        # With no ASCII character to cut after, the text is cut as before,
+        # also when it starts with a katakana: no part is left empty.
+        for text in ("ｱ" * 400, "ｱ" + "日" * 400):
+            with self.subTest(text=text[:2]):
+                lines = compile_lines('t0.txt = "%s"' % text)
+                self.assertEqual(len(lines), 2)
+                self.assert_lines_fit(lines)
+                self.assertEqual(run('t0.txt = "%s"' % text)["t0.txt"], text)
+
+
+class LongPrintAndNumberTest(unittest.TestCase):
+    """A print of a long text and a long number assignment, written in
+    several lines that each fit (nxlang.LONGEST_LINE)."""
+
+    def assert_lines_fit(self, lines: list):
+        for line in lines:
+            self.assertLessEqual(len(line.encode("utf-8")), LONGEST_LINE, line[:20])
+
+    def test_a_long_print_in_parts(self):
+        text = "a" * 2000
+        lines = compile_lines('print "%s"' % text)
+        self.assertEqual(len(lines), 3)
+        self.assert_lines_fit(lines)
+        self.assertTrue(all(line.startswith('print "') for line in lines))
+        self.assertEqual("".join(part for part, _ in run('print "%s"' % text)["sent"]), text)
+        # A print that fits stays one line.
+        fits = "a" * (LONGEST_LINE - len('print ""'))
+        self.assertEqual(compile_lines('print "%s"' % fits), ['print "%s"' % fits])
+
+    def test_a_long_print_cut_where_the_reading_in_pairs_lines_up(self):
+        # Without the rule, the first part would end with ｱ日.
+        text = "a" * (LONGEST_LINE - len('print ""') - len("ｱ日".encode("utf-8"))) + "ｱ日" + "b" * 100
+        lines = compile_lines('print "%s"' % text)
+        self.assert_lines_fit(lines)
+        self.assertTrue(lines[0].endswith('a"'), lines[0][-5:])
+
+    def test_a_long_prints_is_written_as_it_is(self):
+        text = "a" * 800
+        self.assertEqual(compile_lines('prints "%s", 0' % text), ['prints "%s",0' % text])
+
+    def test_a_long_number_assignment_in_steps(self):
+        terms = " + ".join(["a.val * c.val - b.val"] * 60)
+        lines = compile_lines("x.val = " + terms)
+        self.assert_lines_fit(lines)
+        self.assertEqual(run("x.val = " + terms)["x.val"],
+                         eval(terms.replace(".val", ""), {}, {"a": 7, "b": -3, "c": 5}))
+        self.assertTrue(lines[-1].startswith("x.val="))
+
+    def test_a_number_assignment_long_enough_for_three_lines(self):
+        terms = " + ".join(["a.val", "b.val", "c.val", "d.val"] * 120)
+        lines = compile_lines("x.val = " + terms)
+        self.assertGreaterEqual(len(lines), 3)
+        self.assert_lines_fit(lines)
+        self.assertEqual(run("x.val = " + terms)["x.val"], 120 * (7 - 3 + 5 + 2))
+
+    def test_a_long_compound_assignment_as_the_nextion_editor_computes_it(self):
+        # nxlang's x -= a + b means x - (a + b).
+        terms = " + ".join(["a.val", "b.val", "c.val", "d.val"] * 50)
+        lines = compile_lines("x.val -= " + terms)
+        self.assert_lines_fit(lines)
+        self.assertEqual(run("x.val -= " + terms, {"x.val": 1000})["x.val"],
+                         1000 - 50 * (7 - 3 + 5 + 2))
+        # nxlang computes -='s right side first, but writes += as it is, so a
+        # long += is split with the target first.
+        lines = compile_lines("x.val += " + terms)
+        self.assert_lines_fit(lines)
+        self.assertTrue(lines[0].startswith("__g0_0=x.val+"), lines[0][:20])
+        self.assertEqual(run("x.val += " + terms, {"x.val": 1000})["x.val"],
+                         1000 + 50 * (7 - 3 + 5 + 2))
+
+    def test_a_long_for_start(self):
+        # A start of several lines makes the for a start and a while.
+        terms = " + ".join(["a.val", "b.val"] * 200)
+        lines = compile_lines("for (x.val = %s; x.val < 0; x.val++) {\n}" % terms)
+        self.assert_lines_fit(lines)
+        self.assertTrue(any(line.startswith("while(") for line in lines))
+
+    def test_in_program_nx(self):
+        program = "int sys0=0,sys1=0,sys2=0\n"
+        # A long print needs no temporary.
+        lines = compile_program(_numbered(program + 'print "%s"' % ("a" * 2000)),
+                                ProgramNames())
+        self.assertEqual(sum(code.startswith('print "') for _, code in lines), 3)
+        # A long number assignment needs one, which program.nx cannot have.
+        terms = "+".join(["sys1"] * 200)
+        with self.assertRaisesRegex(NxwrightError, "temporary"):
+            compile_program(_numbered(program + "sys0=" + terms),
+                            read_program_names(_numbered(program)))
+
 
 class NxlangFolderTestCase(SourceFolderTestCase):
     """The small project's first page, given the variables a and x and a down event in

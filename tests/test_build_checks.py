@@ -2567,6 +2567,29 @@ class LongLineTest(FirstDownTestCase):
                                                encoding="utf-8", newline="\n")
         self.assert_line_refused(768, 1, r"macros\.nx line 2")
 
+    def test_nxlang_writes_a_long_print_and_number_assignment_in_lines_that_fit(self):
+        # A long prints stays refused, as only print is split.
+        self.use_series("NX4832T035")
+        switch_to_nxlang(self.source)
+        long_sum = " + ".join(["sys0"] * 200)
+        self.write_code('print "%s"' % ("a" * 2000), "sys1 = " + long_sum, "sys1 -= " + long_sum)
+        export_dump(self.source, self.folder / "nxlang")
+        self.write_code('prints "%s", 0' % ("a" * 800))
+        self.assert_line_refused(len('prints "",0') + 800, 0)
+
+    def test_nxlang_cuts_a_long_text_where_shift_jis_reads_it_right(self):
+        # nxlang counts a line in utf-8, where ｱ and 日 take 3 bytes each. So
+        # without its rule, the first part of each would end with ｱ日, which
+        # the Nextion Editor reads in pairs of bytes past the closing quote.
+        self.use_series("NX4832K035", encoding="shift-jis")
+        switch_to_nxlang(self.source)
+        longest = min(LONGEST_LINES.values())
+        tail = "ｱ日"
+        print_text = "a" * (longest - len('print ""') - 6) + tail + "b" * 100
+        assigned = "a" * (longest - len('t0.txt+=""') - 6) + tail + "b" * 100
+        self.write_code('print "%s"' % print_text, 't0.txt = "%s"' % assigned)
+        export_dump(self.source, self.folder / "shift-jis")
+
 
 def _text_comparison(size: int, text: str = "a", width: int = 1) -> str:
     """Returns `t0.txt=="..."`, whose compiled line `i t0.txt,"...",1,0` has

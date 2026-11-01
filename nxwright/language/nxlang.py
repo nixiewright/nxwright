@@ -200,6 +200,9 @@ LONGEST_LINE = min(LONGEST_LINES.values())
 # What a long quoted text is never cut inside (_cut_text): an escape, such
 # as \", or a character.
 _TEXT_PIECE = re.compile(r"\\.|.", re.DOTALL)
+# What a long quoted text is not cut right after, until a plain ASCII
+# character (_lined_up_cut).
+_HALF_WIDTH_KATAKANA = re.compile("[\uff61-\uff9f]")
 STRING_LITERAL = re.compile(r'"(?:\\.|[^"\\])*"')
 _CONST_LINE = re.compile(r"const\b")
 _INCLUDE_LINE = re.compile(r"include\b")
@@ -775,16 +778,40 @@ def _text_assignment_lines(target: str, operator: str, chain: list) -> list:
 def _cut_text(operand: str, room: int) -> list:
     """Returns `operand` as operands of at most `room` bytes in utf-8 each:
     a quoted text cut into quoted texts, never inside an escape
-    (_TEXT_PIECE). Any other operand is returned as it is."""
+    (_TEXT_PIECE), and where the reading in pairs of bytes lines up
+    (_lined_up_cut). Any other operand is returned as it is."""
     if not operand.startswith('"') or _utf8_size(operand) <= room:
         return [operand]
-    texts, current = [], ""
+    texts, pieces = [], []
     for piece in _TEXT_PIECE.findall(operand[1:-1]):
-        if current and _utf8_size('"%s%s"' % (current, piece)) > room:
-            texts.append('"%s"' % current)
-            current = ""
-        current += piece
-    return texts + ['"%s"' % current]
+        while pieces and _utf8_size('"%s%s"' % ("".join(pieces), piece)) > room:
+            kept = _lined_up_cut(pieces)
+            texts.append('"%s"' % "".join(pieces[:kept]))
+            pieces = pieces[kept:]
+        pieces.append(piece)
+    return texts + ['"%s"' % "".join(pieces)]
+
+
+def _lined_up_cut(pieces: list) -> int:
+    """Returns how many of `pieces`, the characters and escapes of a text,
+    to keep in a part before cutting it, at least one. In shift-jis, the
+    Nextion Editor reads a text in pairs of bytes, and a half-width katakana,
+    one byte, takes the byte after it, so the build refuses a text that ends
+    as "aｱ" or "ｱ日" (code_checks._check_texts_in_pairs). A plain ASCII
+    character, not part of an escape, lines the reading up again. So the
+    part ends at the latest place where no katakana comes after its start or
+    its last plain ASCII character. When there is none after its first
+    piece, the part keeps every piece, as it did before. No codec is needed:
+    in another encoding, a part may only come out shorter."""
+    latest, after_katakana = 0, False
+    for count, piece in enumerate(pieces, start=1):
+        if len(piece) == 1 and piece < "\x80":
+            after_katakana = False
+        elif _HALF_WIDTH_KATAKANA.fullmatch(piece):
+            after_katakana = True
+        if not after_katakana:
+            latest = count
+    return latest or len(pieces)
 
 
 class _Temporaries:
@@ -973,19 +1000,45 @@ class _Emitter:
         if len(chain) > 1 and not same_as_editor(operator[:-1], chain, target_kind):
             # The Editor reads `x-=a+b` as `(x-a)+b`: compute `a+b` first.
             temporary = self.temporary(kind)
-            self.emit(temporary + "=" + _render_chain(chain))
+            self.emit_assignment(temporary, kind, "=", chain)
             chain = [(None, temporary)]
         self.emit_assignment(target, target_kind, operator, chain)
 
     def emit_assignment(self, target: str, kind: str, operator: str, chain: list):
         """Emits `target operator chain`, where `target` is of `kind`. A text
-        assignment with `=` or `+=` takes as many lines as the Editor needs
-        (_text_assignment_lines)."""
+        assignment with `=` or `+=`, and a number assignment, take as many
+        lines as the Editor needs (_text_assignment_lines,
+        number_assignment_in_steps)."""
         if kind == TEXT and operator in ("=", "+="):
             for line in _text_assignment_lines(target, operator, chain):
                 self.emit(line)
+        elif kind == NUMBER and _utf8_size(target + operator + _render_chain(chain)) > LONGEST_LINE:
+            self.number_assignment_in_steps(target, operator, chain)
         else:
             self.emit(target + operator + _render_chain(chain))
+
+    def number_assignment_in_steps(self, target: str, operator: str, chain: list):
+        """Emits the number assignment `target operator chain`, which is
+        longer than LONGEST_LINE, in lines that each fit. A number temporary
+        takes as much of the chain's start as fits, then the next part after
+        itself, until the rest fits after `target=`. The Editor computes a
+        chain from left to right, so its start is a value of its own. A
+        compound assignment is split as the Editor reads it, the target first:
+        `x-=a+b` is `x=x-a+b`. In program.nx, which has no temporaries, this
+        raises NxwrightError (temporary)."""
+        if operator != "=":
+            chain = [(None, target), (operator[:-1], chain[0][1])] + chain[1:]
+        temporary = self.temporary(NUMBER)
+        head = temporary + "="
+        while _utf8_size(target + "=" + _render_chain(chain)) > LONGEST_LINE:
+            # Operands are names, numbers, and temporaries, so two always fit.
+            count = 2
+            while (count < len(chain)
+                   and _utf8_size(head + _render_chain(chain[:count + 1])) <= LONGEST_LINE):
+                count += 1
+            self.emit(head + _render_chain(chain[:count]))
+            chain = [(None, temporary)] + chain[count:]
+        self.emit(target + "=" + _render_chain(chain))
 
     def call(self, call: Call) -> str:
         """Emits a call; returns its result variable ("" without a result).
@@ -2327,7 +2380,9 @@ class _EventCompiler:
         being its arguments. The Editor takes its first argument as one text
         or number, so one of more operands is computed into a temporary
         first. Its other numbers, prints' length and covx's length and form,
-        the Editor takes as arithmetic, so they are written as such."""
+        the Editor takes as arithmetic, so they are written as such. A print
+        of a text too long for one line is written as several prints of its
+        parts, which send the same bytes (_cut_text)."""
         arguments = self.arguments(rest, number)
         emitter = self.emitter(indent, number)
         emitter.copy_results = sum(_count_calls(argument) for argument in arguments) > 1
@@ -2337,7 +2392,11 @@ class _EventCompiler:
                     if place == 0 else emitter.value(argument) if _is_atomic(argument)
                     else _render_chain(emitter.chain(argument))
                     for place, argument in enumerate(arguments)]
-        emitter.emit("%s %s" % (word, ",".join(operands)))
+        if word == "print" and len(operands) == 1:
+            for part in _cut_text(operands[0], LONGEST_LINE - _utf8_size("print ")):
+                emitter.emit("print " + part)
+        else:
+            emitter.emit("%s %s" % (word, ",".join(operands)))
         self.put_lines(number, emitter.lines, comment)
 
     def xstr_text_computed(self, number: int, indent: str, code: str, comment: str) -> bool:
