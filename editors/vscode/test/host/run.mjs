@@ -9,11 +9,15 @@
 //
 // Its user settings are written there before it starts. nxwright.command
 // runs this checkout's nxwright, with the Python that NXWRIGHT_TEST_PYTHON
-// names, or `python`, so that the extension finds it at once. Nothing
+// names, or `python`, so that the extension finds it at once. That Python
+// is written by its full path, as this process finds it, because VS Code
+// may give its extensions another PATH than its own. On macOS in CI,
+// `python` there was another Python, without nxwright's packages. Nothing
 // saves files, so that the tests' edits stay unsaved.
 //
 // It opens tests/fixtures/files/app where it lies, and writes nothing
 // there. The language server's picture cache is off (NXWRIGHT_CACHE).
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,11 +39,21 @@ if (!executable || !existsSync(executable)) {
   process.exit(1);
 }
 
+const pythonName = process.env.NXWRIGHT_TEST_PYTHON || "python";
+let python;
+try {
+  python = execFileSync(pythonName, ["-c", "import sys; print(sys.executable)"],
+                        { encoding: "utf-8" }).trim();
+} catch (error) {
+  console.error(`The tests inside VS Code run nxwright with ${pythonName}, which did not run: `
+                + error.message);
+  process.exit(1);
+}
+
 mkdirSync(path.join(userData, "User"), { recursive: true });
 mkdirSync(extensions, { recursive: true });
 writeFileSync(path.join(userData, "User", "settings.json"), JSON.stringify({
-  "nxwright.command": [process.env.NXWRIGHT_TEST_PYTHON || "python",
-                       path.join(nxwright, "run.py")],
+  "nxwright.command": [python, path.join(nxwright, "run.py")],
   "files.autoSave": "off",
   "git.enabled": false,
   "telemetry.telemetryLevel": "off",
