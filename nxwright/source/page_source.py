@@ -219,7 +219,8 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
                      globals_used: list = None, read=None, page_objects: dict = None,
                      encoding: str = DEFAULT_ENCODING, chain: list = None,
                      program_variables: frozenset = None, macros: frozenset = None,
-                     absent_attributes: dict = None, screen: ScreenModel = None) -> PageBlock:
+                     absent_attributes: dict = None, screen: ScreenModel = None,
+                     page_size: tuple = None) -> PageBlock:
     """Returns the page `page_name` built from its source files. Its stamp, a
     checksum of the page block, is left 0. Its texts, its code, and its header
     are in `encoding`, the project's character encoding (the Editor's
@@ -246,7 +247,10 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
     every name itself. With `macros`, the folder's macros' names, a `call`
     must name one of them (macros_source.py). With `screen`, the folder's
     screen model, in either language, no line may use a command or a
-    system variable its series lacks (code_checks.series_lacks).
+    system variable its series lacks (code_checks.series_lacks). With
+    `page_size`, the screen's size at its rotation, the page gets the
+    screen's place and size, whatever its page file says
+    (page_table_at_screen).
 
     In nxlang, the page's longest chain of calls and clicks is added to
     `chain`, when given: the event first, as "home.load", then each function
@@ -259,7 +263,8 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
     try:
         return _page_from_source(source, page_name, names, defaults, nxlang_program, page_id,
                                  globals_used, read, page_objects, encoding, chain,
-                                 program_variables, macros, absent_attributes, screen)
+                                 program_variables, macros, absent_attributes, screen,
+                                 page_size)
     except NxwrightError as error:
         error.file = error.file or page_toml_path(page_name)
         raise
@@ -269,7 +274,8 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
                       nxlang_program: ProgramNames, page_id: int, globals_used: list, read,
                       page_objects: dict, encoding: str, chain: list,
                       program_variables: frozenset, macros: frozenset,
-                      absent_attributes: dict, screen: ScreenModel) -> PageBlock:
+                      absent_attributes: dict, screen: ScreenModel,
+                      page_size: tuple) -> PageBlock:
     """Does the work of page_from_source."""
     try:
         data = tomllib.loads(source.toml)
@@ -282,6 +288,7 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
         raise NxwrightError("%s.page.toml holds only [page] and [[component]] tables" % page_name)
     if page_table.get("name") != page_name:
         raise NxwrightError("%s.page.toml names the page %r" % (page_name, page_table.get("name")))
+    page_table = page_table_at_screen(page_table, page_size, defaults)
     header = _page_header(page_table, components, page_name)
     codec = TextCodec(encoding)
     tables = [page_table] + components
@@ -813,16 +820,43 @@ class Component:
     values: dict        # {attribute: number or string}
 
 
+def page_table_at_screen(table: dict, page_size: tuple, defaults: dict) -> dict:
+    """Returns the page's `table` with the place and size the Nextion Editor
+    compiles every page at: x and y 0, and w and h `page_size`, the
+    screen's size at its rotation. It resets them as it opens the project,
+    whatever the page file says. Only the attributes the page has are set:
+    those its table gives and, unless the table lists every attribute
+    ("defaults = false"), those of the page type in `defaults`, the
+    folder's component defaults. endx and endy are set when the table gives
+    them. Without `page_size`, as when app.toml gives no screen, the table
+    is returned as it is."""
+    if page_size is None or not isinstance(table, dict):
+        return table
+    width, height = page_size
+    place = {"x": 0, "y": 0, "w": width, "h": height}
+    has = set(table)
+    type_defaults = defaults.get(TYPES_BY_NAME["page"])
+    if table.get("defaults") is not False and type_defaults is not None:
+        has |= set(type_defaults.names())
+    values = {key: value for key, value in place.items() if key in has}
+    values.update({key: value for key, value in (("endx", width - 1), ("endy", height - 1))
+                   if key in table})
+    return dict(table, **values)
+
+
 def page_components(text: str, page_name: str, names: ResourceNames, defaults: dict,
-                    encoding: str) -> list:
+                    encoding: str, page_size: tuple = None) -> list:
     """Returns the Components of the page file `text`, the page first, in ID
     order, each table completed by its type's defaults as the build does.
-    Raises NxwrightError, naming the table, as the build does."""
+    With `page_size`, the page has the screen's place and size, as the build
+    gives it (page_table_at_screen). Raises NxwrightError, naming the table,
+    as the build does."""
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
         raise NxwrightError("%s: %s" % (page_toml_path(page_name), error)) from None
-    tables = [data.get("page", {})] + list(data.get("component", []))
+    tables = ([page_table_at_screen(data.get("page", {}), page_size, defaults)]
+              + list(data.get("component", [])))
     codec = TextCodec(encoding)
     components = []
     for index, table in enumerate(tables):

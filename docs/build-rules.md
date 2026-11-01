@@ -40,6 +40,13 @@ The Nextion Editor's panel never shows these attributes, but refuses these value
 - a combo box's `drastate` past 1;
 - a hotspot's `drag` past 1, or its `effect` past 8.
 
+### A page's place and size
+
+The build gives every page the place 0, 0 and the size of its screen at its rotation, as the Nextion Editor does when it opens the project. A page file's own `x`, `y`, `w`, and `h` for the page are not used, and a page file may leave them out.
+
+- The `page-place` warning shows each of these values that differs from the screen's ([commands.md](commands.md)). `nxwright device` writes the screen's size into each page file.
+- Without screen settings in `app.toml`, the build keeps the page file's values.
+
 ### Fonts
 
 - A component whose font is none of the project's fonts, either given or its type's default of 0 ("Invalid Font ID"). The most likely case is a text in a folder that has no fonts.

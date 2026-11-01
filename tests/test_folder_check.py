@@ -3,6 +3,7 @@ build does not give, and each page's measures against its limits."""
 import contextlib
 import io
 from pathlib import Path
+import re
 import tempfile
 import tomllib
 import unittest
@@ -15,9 +16,13 @@ from nxwright.project.device_settings import DeviceSettings
 from nxwright.project.screen_models import model_named
 from nxwright.source.folder_check import check_folder
 from nxwright.source.lint import ERROR, WARNING, Finding
-from nxwright.source.page_source import page_file_text
+from nxwright.project.component_defaults import defaults_from_toml
+from nxwright.source.page_source import page_file_text, page_table_at_screen
 from nxwright.source.project_files import build
-from nxwright.source.source_folder import folder_reader, new_source_folder
+from nxwright.source.device_keys import DEVICE_KEYS
+from nxwright.source.source_folder import (export_dump, folder_reader, new_source_folder,
+                                           page_toml_components, read_page_components,
+                                           read_page_toml)
 from tests.test_build_checks import add_component
 
 
@@ -84,6 +89,17 @@ class FolderTestCase(unittest.TestCase):
     def findings(self) -> list:
         return self.check().findings()
 
+    def use_screen(self, model: str, rotation: int = 0):
+        """Sets app.toml's screen to `model` at `rotation`, and gives each
+        page that screen's size, as `nxwright device` does."""
+        self.write("app.toml", edited_app(self.text("app.toml"), lambda app: app.update(
+            screen=model, rotation=rotation)))
+        width, height = DeviceSettings(model_named(model), rotation, "iso-8859-1").page_size
+        for page in ("page0", "second"):
+            path = "pages/%s.page.toml" % page
+            self.write(path, re.sub(r"(?m)^w = \d+\nh = \d+$", "w = %d\nh = %d" % (width, height),
+                                    self.text(path), count=1))
+
 
 class ErrorPlaceTest(FolderTestCase):
 
@@ -105,8 +121,7 @@ class ErrorPlaceTest(FolderTestCase):
         self.assertTrue(finding.message.startswith("int __bad may not start with '__'"))
 
     def test_a_system_variable_the_series_lacks(self):
-        self.write("app.toml", edited_app(self.text("app.toml"),
-                                          lambda app: app.update(screen="NX4832K035")))
+        self.use_screen("NX4832K035")
         self.write("pages/page0.nx", "on page0.load:\n  sys0 = 1\n  sys0 = volume\n")
         self.assertEqual(self.findings(), [Finding(
             "pages/page0.nx", 3, ERROR, "sys0=volume: the NX4832K035 lacks volume, and the "
@@ -157,8 +172,7 @@ class ErrorPlaceTest(FolderTestCase):
 
     def test_a_type_the_series_refuses(self):
         # At the component's table, as the page's other limits.
-        self.write("app.toml", edited_app(self.text("app.toml"),
-                                          lambda app: app.update(screen="NX4832F035")))
+        self.use_screen("NX4832F035")
         self.write("pages/page0.page.toml", self.text("pages/page0.page.toml")
                    + '\n[[component]]\nname = "gm0"\ntype = "gmov"\nx = 0\ny = 0\nw = 80\n'
                    'h = 60\n')
@@ -453,6 +467,106 @@ class NxlangEventNeverRunsTest(EventNeverRunsTest):
         self.assertEqual([(finding.file, finding.line, finding.rule)
                           for finding in self.findings()],
                          [("pages/lib/events.nx", 1, "event-never-runs")])
+
+
+class PageAtScreenSizeTest(FolderTestCase):
+    """A page whose page file gives another place or size than its screen's,
+    800 by 480 on the NX8048P050. The Nextion Editor 1.68.2 compiled such a
+    page at its screen's place and size, so nxwright builds, simulates, and
+    draws it so, and warns on the page file's line."""
+
+    PATH = "pages/page0.page.toml"
+
+    def setUp(self):
+        super().setUp()
+        self.built = 0
+
+    def edit_page(self, **values):
+        text = self.text(self.PATH)
+        for key, value in values.items():
+            text, count = re.subn(r"(?m)^%s = \d+$" % key, "%s = %d" % (key, value), text, count=1)
+            self.assertEqual(count, 1, key)
+        self.write(self.PATH, text)
+
+    def built_place(self) -> dict:
+        """Returns the built page's x, y, w, h, endx, and endy, from its dump."""
+        self.built += 1
+        dump = Path(self._folder.name) / ("dump%d" % self.built)
+        export_dump(self.root, dump)
+        text = next((dump / "pages").glob("*-page0.txt")).read_text(encoding="utf-8")
+        page = text.split("\nobject 1 ")[0]
+        return {key: int(value) for key, value in
+                re.findall(r"(?m)^  (x|y|w|h|endx|endy) = (-?\d+)$", page)}
+
+    def place_warnings(self) -> list:
+        return [(finding.file, finding.line, finding.severity, finding.message)
+                for finding in self.findings() if finding.rule == "page-place"]
+
+    def test_the_build_takes_the_screens_place_and_size(self):
+        self.edit_page(x=10, y=6, w=200, h=240)
+        self.assertEqual(self.built_place(), {"x": 0, "y": 0, "w": 800, "h": 480,
+                                              "endx": 799, "endy": 479})
+
+    def test_a_page_at_the_screens_place_and_size_is_built_as_its_file_says(self):
+        self.assertEqual(self.built_place(), {"x": 0, "y": 0, "w": 800, "h": 480,
+                                              "endx": 799, "endy": 479})
+        self.assertEqual(self.place_warnings(), [])
+
+    def test_a_key_left_out_takes_the_screens_value(self):
+        # Turned a quarter, the screen is 480 by 800.
+        self.use_screen("NX8048P050", 90)
+        self.write(self.PATH, re.sub(r"(?m)^[wh] = \d+\n", "", self.text(self.PATH), count=2))
+        self.assertEqual(self.built_place(), {"x": 0, "y": 0, "w": 480, "h": 800,
+                                              "endx": 479, "endy": 799})
+        self.assertEqual(self.place_warnings(), [])
+
+    def test_the_simulation_and_the_preview_take_it_too(self):
+        self.edit_page(h=240)
+        read = folder_reader(self.root)
+        for components in (read_page_components(read, "page0")[1],
+                           page_toml_components(read_page_toml(read, "page0"), "page0")):
+            values = components[0].values
+            self.assertEqual((values["x"], values["y"], values["w"], values["h"]),
+                             (0, 0, 800, 480))
+
+    def test_the_warning_on_each_line(self):
+        self.edit_page(x=10, y=6, w=200, h=240)
+        self.assertEqual(self.place_warnings(), [
+            (self.PATH, line, WARNING,
+             "page0's %s is %d, but the Nextion Editor compiles every page at its screen's "
+             "place and size, 0, 0, 800 by 480, so the build uses %d" % (key, given, built))
+            for line, key, given, built in ((4, "x", 10, 0), (5, "y", 6, 0), (6, "w", 200, 800),
+                                            (7, "h", 240, 480))])
+
+    def test_a_page_header_with_a_comment(self):
+        self.write(self.PATH, self.text(self.PATH).replace("[page]", "[page]  # the first page", 1))
+        self.edit_page(h=240)
+        self.assertEqual([line for _, line, _, _ in self.place_warnings()], [7])
+
+    def test_a_table_at_the_screens_place_and_size_is_kept_as_it_is(self):
+        # Nothing of the table changes, so the page is built byte for byte as before.
+        table = tomllib.loads(self.text(self.PATH))["page"]
+        defaults = defaults_from_toml(self.text("defaults.toml"), "defaults.toml")
+        self.assertEqual(page_table_at_screen(table, (800, 480), defaults), table)
+        self.assertEqual(list(page_table_at_screen(table, (800, 480), defaults)), list(table))
+
+    def test_a_value_that_is_no_number(self):
+        # The build uses the screen's value in its place, so it is warned about.
+        self.write(self.PATH, self.text(self.PATH).replace("h = 480", 'h = "tall"', 1))
+        self.assertEqual(self.built_place()["h"], 480)
+        self.assertEqual([line for _, line, _, _ in self.place_warnings()], [7])
+
+    def test_without_a_screen(self):
+        # Without the screen's settings, the page file's values are kept.
+        self.write("app.toml", edited_app(self.text("app.toml"), lambda app: [
+            app.pop(key, None) for key in DEVICE_KEYS]))
+        self.edit_page(h=240)
+        self.assertEqual(self.built_place()["h"], 240)
+        self.assertEqual(self.place_warnings(), [])
+
+
+class EditorLanguagePageAtScreenSizeTest(PageAtScreenSizeTest):
+    language = "nextion"
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ odd8.wav, and list.wav, in tests/fixtures/media/.
 import contextlib
 import io
 from pathlib import Path
+import re
 import struct
 import tempfile
 import tomllib
@@ -273,10 +274,16 @@ class MediaCommandTestCase(unittest.TestCase):
         return (self.source / "app.toml").read_text(encoding="utf-8")
 
     def rotate(self):
+        """Turns the folder's screen 90 degrees, and each page with it, as
+        `nxwright device` does."""
         text = self.app()
         self.assertIn("rotation = 0\n", text)
         (self.source / "app.toml").write_text(text.replace("rotation = 0\n", "rotation = 90\n"),
                                               encoding="utf-8")
+        for page in (self.source / "pages").glob("*.page.toml"):
+            page.write_text(re.sub(r"(?m)^w = (\d+)\nh = (\d+)$", r"w = \2\nh = \1",
+                                   page.read_text(encoding="utf-8"), count=1),
+                            encoding="utf-8", newline="\n")
 
 
 class SoundCommandTest(MediaCommandTestCase):

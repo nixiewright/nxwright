@@ -986,14 +986,14 @@ class FolderSource:
         toml_path, nx_path = page_toml_path(page_name), page_nx_path(page_name)
         source = PageSource(_in_file(toml_path, lambda: self.read(toml_path)),
                             _in_file(nx_path, lambda: self.read(nx_path)))
+        page_size = settings_from_keys(self.app).page_size if self.screen is not None else None
         page = page_from_source(source, page_name, self.names, self.defaults, self.declared,
                                 page_id, globals_used, self.read, self.page_objects,
                                 self.encoding, chain, self.program_variables, self.macros,
-                                self.absent_attributes, self.screen)
+                                self.absent_attributes, self.screen, page_size)
         # Not a refusal by the memory table: the memory probe, which turns
         # those off, places every component inside the screen.
         if self.screen is not None:
-            page_size = settings_from_keys(self.app).page_size
             _in_file(toml_path, lambda: check_component_places(page, self.screen, page_size,
                                                                "%s.page.toml" % page_name))
         if self.refuse_by_table and self.screen is not None:
@@ -1124,8 +1124,17 @@ def page_toml_components(page_toml: PageToml, page_name: str) -> list:
     """Returns the Components of the page `page_name`, from its PageToml.
     Raises NxwrightError naming the page's file at fault."""
     path = page_toml_path(page_name)
+    # The page has the screen's place and size, as the build gives it. An
+    # app.toml whose screen settings are wrong is refused by the build and
+    # the check, so here the page file's values are kept.
+    try:
+        settings = settings_from_keys(page_toml.app)
+    except NxwrightError:
+        settings = None
+    page_size = None if settings is None else settings.page_size
     return _in_file(path, lambda: page_components(
-        page_toml.text, page_name, page_toml.names, page_toml.defaults, page_toml.encoding))
+        page_toml.text, page_name, page_toml.names, page_toml.defaults, page_toml.encoding,
+        page_size))
 
 
 def _in_file(file: str, work):

@@ -28,6 +28,9 @@ but that are likely mistakes. Each has a rule's name:
     keeps its code, but the screen never runs it: the Editor's simulator
     never ran a page's `postinit`. A type's events are those of nxwright's
     own component defaults, not the folder's copy, which can be edited.
+  - page-place, in either language: a page file's x, y, w, or h of its
+    page that is not the screen's place and size, on its line. The build
+    gives the page the screen's instead, as the Nextion Editor compiles it.
 A file the build would refuse gets no warnings: its errors come first.
 
 Three rules find an error the build refuses too, which the checks show
@@ -56,6 +59,7 @@ from nxwright.project.pictures import picture_problem
 from nxwright.project.screen_arithmetic import int32
 from nxwright.source.nx_files import (EVENT_HEADING, FUNCTION_HEADING, event_blocks, read_nx_file,
                                       read_page_files)
+from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.page_source import page_nx_path, page_toml_path
 from nxwright.source.source_folder import (check_picture_file, code_files, line_naming,
                                            picture_file, types_in_page_data,
@@ -94,8 +98,58 @@ def warnings(app: dict, read) -> list:
     and whose files `read(path)` returns."""
     if app["language"] == "nxlang":
         return (_unused_constants(app, read) + _unused_functions(app, read)
-                + _numbers_past_32_bits(app, read) + _events_never_run(app, read))
-    return _left_to_right(app, read) + _events_never_run(app, read)
+                + _numbers_past_32_bits(app, read) + _events_never_run(app, read)
+                + _page_places(app, read))
+    return _left_to_right(app, read) + _events_never_run(app, read) + _page_places(app, read)
+
+
+def _page_places(app: dict, read) -> list:
+    """Returns the page-place warning Findings: each line of a page file's
+    [page] table whose x, y, w, or h is not the screen's place and size.
+    The build gives the page those instead, as the Nextion Editor compiles
+    it (page_source.page_table_at_screen). Without the screen's settings,
+    nothing is warned about, as the build then keeps the file's values."""
+    try:
+        settings = settings_from_keys(app)
+    except NxwrightError:
+        return []   # the check refuses app.toml
+    if settings is None:
+        return []
+    width, height = settings.page_size
+    found = []
+    for page in app["pages"]:
+        path = page_toml_path(page)
+        try:
+            text = read(path)
+            table = tomllib.loads(text).get("page")
+        except (OSError, NxwrightError, tomllib.TOMLDecodeError):
+            continue    # the check reports the file
+        if not isinstance(table, dict):
+            continue
+        for key, built in (("x", 0), ("y", 0), ("w", width), ("h", height)):
+            # Any value but the screen's, even one that is no number, as the
+            # build uses the screen's in its place.
+            if key in table and table[key] != built:
+                found.append(Finding(
+                    path, _page_table_line(text, key), WARNING,
+                    "%s's %s is %s, but the Nextion Editor compiles every page at its screen's "
+                    "place and size, 0, 0, %d by %d, so the build uses %d"
+                    % (page, key, table[key], width, height, built), "page-place"))
+    return found
+
+
+def _page_table_line(text: str, key: str) -> int:
+    """Returns the line, from 1, of the page file `text` that gives `key` in
+    its [page] table, or 0."""
+    in_page = False
+    for number, line in enumerate(text.split("\n"), start=1):
+        stripped = line.strip()
+        if stripped.startswith("["):
+            # A table's header may end with a comment, as in "[page]  # main".
+            in_page = stripped.split("#", 1)[0].strip() == "[page]"
+        elif in_page and stripped.split("=", 1)[0].strip() == key:
+            return number
+    return 0
 
 
 def sound_warnings(app: dict, read, read_bytes) -> list:

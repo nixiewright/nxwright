@@ -1000,7 +1000,9 @@ class LiveCheckTest(CheckFolderTestCase):
         app = self.text("app.toml")
         self.assertIn('screen = "NX8048P050"', app)
         self.change("app.toml", app.replace("NX8048P050", "NX4832T035"), "textDocument/didOpen")
-        self.change("pages/page0.page.toml", self.text("pages/page0.page.toml") + "".join(
+        # The page takes the basic screen's size, as `nxwright device` gives it.
+        page = self.text("pages/page0.page.toml").replace("w = 800\nh = 480", "w = 320\nh = 480", 1)
+        self.change("pages/page0.page.toml", page + "".join(
             '\n[[component]]\nname = "t%d"\ntype = "text"\nx = 0\ny = 0\nw = 100\nh = 30\n'
             'txt_maxl = 1000\n' % number for number in range(4)), "textDocument/didOpen")
         refused = (0, 1, "page0.page.toml: its memory, 16 + 4092 = 4108 bytes, passes the "
