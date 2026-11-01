@@ -483,8 +483,8 @@ def _check_starting_values(code: str, number: int):
 def _refuse_declaration_outside_program(code: str, objects: ObjectNames, number: int):
     """Raises NxwrightError for an int declaration in an event, or in a
     macro, whose code `objects` names: an int is a variable every page
-    shares, which the Nextion Editor takes in program.s alone. Its words
-    differ between the two."""
+    shares, which the Nextion Editor takes in program.s alone. The Nextion
+    Editor's message differs between an event and a macro."""
     where, words = (("a macro", "Global variable definitions must precede all code in the "
                                 "program") if objects.page is None else
                     ("an event", "Global variable definitions must precede all code in the "
