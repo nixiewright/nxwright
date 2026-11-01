@@ -532,7 +532,7 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
     with, {page: {name: type}} (nxlang.compile_page)."""
     page_files = read_page_files(page_nx_path(page_name), text, read or _no_includes)
     compiled = compile_page_files(page_files, page_name, component_names, program, page_id,
-                                  object_types)
+                                  object_types, codec=codec)
     code = {}
     objects = None
     if page_objects is not None:
@@ -547,7 +547,7 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
 
 def editor_code_of_file(path: str, page_name: str, events_text: str, names: ResourceNames,
                         component_names: list, program: ProgramNames, page_id: int, read,
-                        object_types: dict = None) -> list:
+                        object_types: dict = None, codec: TextCodec = None) -> list:
     """Returns [(title, [(line, Editor code line)])] of the events and the
     functions that the .nx file `path` defines, as page `page_name` compiles
     them, its own .nx file's text being `events_text`. A title is as
@@ -557,7 +557,8 @@ def editor_code_of_file(path: str, page_name: str, events_text: str, names: Reso
     only the functions the page calls are compiled; without it, the code is
     in the Editor's own language. `read(path)` returns an included file.
     `object_types` gives the types of the pages' objects nxlang compiles
-    with, {page: {name: type}} (nxlang.compile_page).
+    with, {page: {name: type}}, and `codec` the project's encoding
+    (nxlang.compile_page).
 
     Raises NxwrightError as the build does."""
     if program is None:
@@ -572,7 +573,7 @@ def editor_code_of_file(path: str, page_name: str, events_text: str, names: Reso
                                                                       component_names))))
         return sections
     compiled = compile_nxlang_page(events_text, page_name, component_names, program, page_id,
-                                   read, object_types)
+                                   read, object_types, codec=codec)
     sections = [("on %s.%s" % key, preprocess_with_places(lines, names))
                 for key, lines in compiled.events.items() if compiled.sources.get(key) == path]
     sections += [("function " + name, preprocess_with_places(compiled.bodies[name], names))
@@ -582,17 +583,17 @@ def editor_code_of_file(path: str, page_name: str, events_text: str, names: Reso
 
 def compile_nxlang_page(text: str, page_name: str, component_names: list, program: ProgramNames,
                         page_id: int = 0, read=None, object_types: dict = None,
-                        own_attributes: bool = True):
+                        own_attributes: bool = True, codec: TextCodec = None):
     """Returns the CompiledPage of a page's .nx text and the files it
     includes, as compile_page_files compiles them."""
     page_files = read_page_files(page_nx_path(page_name), text, read or _no_includes)
     return compile_page_files(page_files, page_name, component_names, program, page_id,
-                              object_types, own_attributes)
+                              object_types, own_attributes, codec)
 
 
 def compile_page_files(page_files: PageFiles, page_name: str, component_names: list,
                        program: ProgramNames, page_id: int = 0, object_types: dict = None,
-                       own_attributes: bool = True):
+                       own_attributes: bool = True, codec: TextCodec = None):
     """Returns the CompiledPage of a page's .nx files. The compiler sees only
     code lines, so each event's comment is put back at its start, marked as
     the build writes it. `object_types` gives the types of the pages'
@@ -600,7 +601,8 @@ def compile_page_files(page_files: PageFiles, page_name: str, component_names: l
     (nxlang.compile_page). An event of an object among `component_names`,
     the page's objects in ID order, the unnamed included, may name its
     attributes as '&name&'; with `own_attributes` False, none may, as code
-    that runs in no object's event."""
+    that runs in no object's event. `codec` is the project's encoding, as
+    nxlang.compile_page takes it."""
     events, functions, comments = {}, {}, {}
     for nx_file in page_files.files:
         for key, block in nx_file.blocks.items():
@@ -615,7 +617,7 @@ def compile_page_files(page_files: PageFiles, page_name: str, component_names: l
               if own_attributes else {})
     compiled = compile_page(page_name, [name for name in component_names if name], program,
                             page_files.preambles(), events, functions, page_id, object_types,
-                            owners)
+                            owners, codec)
     for key, comment in comments.items():
         compiled.events[key] = comment + compiled.events.get(key, [])
     return compiled

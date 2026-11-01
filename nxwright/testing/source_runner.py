@@ -353,8 +353,11 @@ def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str
     start = _program_start(read)
     if app["language"] == folders.NXLANG:
         program = folders.program_names(read("program.nx"), read)
+        # Compiled in the project's encoding even when not checked, as the
+        # build compiles it.
         compiled = compile_nxlang_page(events_text, page, in_order[page], program, read=read,
-                                       object_types=page_objects)
+                                       object_types=page_objects,
+                                       codec=TextCodec(_encoding(app)))
         generated = compiled.generated
         objects = None
         if checked:
@@ -473,7 +476,7 @@ def _compile_code(source_folder: Path, tables: FolderPageTables, read,
     program = folders.program_names(read("program.nx"), read)
     # Its code runs in no object's event, so the form '&name&' stays refused.
     compiled = compile_nxlang_page(page_text, _CODE_PAGE, [_CODE_PAGE], program, read=read,
-                                   own_attributes=False)
+                                   own_attributes=False, codec=TextCodec(_encoding(app)))
     names = ResourceNames.of_app(app)
     placed = {key: preprocess_with_places(lines, names) for key, lines in compiled.events.items()}
     places = _nxlang_places(compiled, placed)

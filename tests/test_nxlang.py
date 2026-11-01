@@ -13,6 +13,7 @@ from nxwright.source.nx_files import read_page_files
 from nxwright.source.page_source import compile_nxlang_page
 from nxwright.source.editor_code_merge import nxlang_import_changes
 from nxwright.language.resource_names import ResourceNames
+from nxwright.project.device_settings import TextCodec
 from nxwright.language.editor_code import (editor_equivalent, global_declarations,
                                            keep_editor_meaning, without_global_declarations,
                                            write_expression)
@@ -34,13 +35,15 @@ KEY = ("p", "down")
 
 
 def compile_lines(code: str, program: ProgramNames = None, preamble: str = "",
-                  components=COMPONENTS, object_types: dict = None) -> list:
+                  components=COMPONENTS, object_types: dict = None, codec: TextCodec = None) -> list:
     """Returns the lines of Editor code that `code` compiles to, as the event p.down
     of a page p with the components COMPONENTS, the types of the pages' objects
-    being `object_types`, {page: {name: type}}, as compile_page takes them."""
+    being `object_types`, {page: {name: type}}, as compile_page takes them, and
+    the project's encoding that of `codec`."""
     compiled = compile_page("p", components, program or ProgramNames(),
                             [("p.nx", _numbered(preamble) if preamble else [])],
-                            {KEY: ("p.nx", _numbered(code))}, object_types=object_types)
+                            {KEY: ("p.nx", _numbered(code))}, object_types=object_types,
+                            codec=codec)
     return preprocess(compiled.events[KEY], NO_NAMES)
 
 
@@ -404,8 +407,10 @@ class ConditionTest(unittest.TestCase):
 
 class RefusedFormTest(unittest.TestCase):
     """Forms the Nextion Editor refuses as it compiles, which nxlang writes
-    another way: a condition's text that ends in an escaped backslash, put
-    into a text temporary first; xstr's text of more than one operand,
+    another way: a condition's text that ends in an escaped backslash, or in
+    a character whose last byte is 0x5C, and such a text before a comma in
+    prints and the like, put into a text temporary first; xstr's text of
+    more than one operand,
     computed first; and a for whose head holds a text with a semicolon,
     written as its start and a while."""
 
@@ -445,6 +450,63 @@ class RefusedFormTest(unittest.TestCase):
                 self.assertEqual(run_page(page, {"t0.txt": "a"}).values["r.val"], 1)
                 self.assertEqual(run_page(page, {"t0.txt": "b"}).values["r.val"],
                                  3 if default else 0)
+
+    def test_a_text_whose_0x5c_escapes_its_quote_in_a_condition(self):
+        # In shift-jis, 表 ends in the byte 0x5C. In a condition, the Nextion
+        # Editor reads it as a backslash before the closing quote.
+        codec = TextCodec("shift-jis")
+        code = "\n".join(['if (t0.txt == "表") {', "  r.val = 1", "}"])
+        self.assertEqual(compile_lines(code, codec=codec),
+                         ['__s0.txt="表"', "if(t0.txt==__s0.txt)", "{", "  r.val=1", "}"])
+        self.assertEqual(run(code, {"t0.txt": "表"}, codec=codec)["r.val"], 1)
+        # A case's text too.
+        switch = ('switch (t0.txt) {\n  case "表":\n    r.val = 1\n    break\n'
+                  '  default:\n    r.val = 2\n}')
+        self.assertIn('__s0.txt="表"', compile_lines(switch, codec=codec))
+        # Taken as written: another encoding, a 0x5C that escapes a letter,
+        # and a text outside a condition.
+        for written, line_codec in (('if(t0.txt=="表")', TextCodec("utf-8")),
+                                    ('if(t0.txt=="表")', None),
+                                    ('if(t0.txt=="表a")', codec)):
+            with self.subTest(written=written, codec=line_codec):
+                self.assertEqual(compile_lines(written.replace("==", " == ") + " {\n}",
+                                               codec=line_codec)[0], written)
+        self.assertEqual(compile_lines('t0.txt = "表"', codec=codec), ['t0.txt="表"'])
+
+    def test_a_text_whose_0x5c_escapes_its_quote_before_a_comma(self):
+        # The Nextion Editor reads prints', spstr's, strlen's, btlen's, and
+        # crcputs' texts before a comma byte by byte too.
+        codec = TextCodec("shift-jis")
+        for code, lines in (
+                ('prints "日表", 0', ['__s0.txt="日表"', "prints __s0.txt,0"]),
+                ('spstr t0.txt, t1.txt, "表", 0', ['__s0.txt="表"', "spstr t0.txt,t1.txt,__s0.txt,0"]),
+                ('spstr "表", t1.txt, "a", 0', ['__s0.txt="表"', 'spstr __s0.txt,t1.txt,"a",0']),
+                ('strlen "表", x.val', ['__s0.txt="表"', "strlen __s0.txt,x.val"]),
+                ('btlen "表", x.val', ['__s0.txt="表"', "btlen __s0.txt,x.val"]),
+                ('crcputs "表", 0', ['__s0.txt="表"', "crcputs __s0.txt,0"])):
+            with self.subTest(code=code):
+                self.assertEqual(compile_lines(code, codec=codec), lines)
+        # Taken as written: the last argument, another command, and a text
+        # whose 0x5C escapes a letter.
+        for code in ('print "表"', 'get "表"', 'prints "表a",0', 'covx 1,t0.txt,0,0'):
+            with self.subTest(code=code):
+                self.assertEqual(compile_lines(code, codec=codec), [code])
+        self.assertEqual(compile_lines('prints "日表",0', codec=TextCodec("utf-8")),
+                         ['prints "日表",0'])
+
+    def test_a_misread_text_longer_than_a_temporary_as_written(self):
+        # A text temporary keeps 255 bytes, which would cut the text short.
+        # The line is left as written, and the build refuses it.
+        codec = TextCodec("shift-jis")
+        long_text = '"%s表"' % ("a" * 254)
+        for code, written in (("prints %s,0" % long_text, "prints %s,0" % long_text),
+                              ("if (t0.txt == %s) {\n}" % long_text, "if(t0.txt==%s)" % long_text)):
+            with self.subTest(code=code[:10]):
+                self.assertEqual(compile_lines(code, codec=codec)[0], written)
+        # 253 letters and 表 make 255 bytes, which fit.
+        fitting = '"%s表"' % ("a" * 253)
+        self.assertEqual(compile_lines("prints %s,0" % fitting, codec=codec),
+                         ["__s0.txt=%s" % fitting, "prints __s0.txt,0"])
 
     def test_xstr_s_text_computed_first(self):
         # The build drops the spaces after the commas, as the Editor does.

@@ -10,16 +10,20 @@ import unittest
 import tomli_w
 
 from nxwright import NxwrightError
-from nxwright.language.code_checks import check_line
+from nxwright.language.code_checks import check_line, misread_byte_by_byte
 from nxwright.language.code_lines import first_word
 from nxwright.project.editor_language import (EDITOR_COMMANDS, EDITOR_PROGRAM_DECLARATION,
                                               SERIES_LACKED_COMMANDS)
 from nxwright.project import editor_limits
 from nxwright.project.editor_limits import LONGEST_LINES
+from nxwright.project.device_settings import TextCodec
+from nxwright.project.dumper import ProjectDumper
 from nxwright.project.project_writer import ProjectWriter
 from nxwright.source.device_keys import DEVICE_KEYS
 from nxwright.source.folder_check import check_folder
-from nxwright.source.source_folder import app_text, export_dump, folder_reader, switch_to_nxlang
+from nxwright.source.project_files import build
+from nxwright.source.source_folder import (app_text, export_dump, folder_reader, import_dump,
+                                           switch_to_nxlang)
 from nxwright.testing import SourceFolderRunner
 from tests.test_project_writer import edit_text
 from tests.test_source_folder import SourceFolderTestCase
@@ -2677,10 +2681,45 @@ class TextBytesTest(FirstDownTestCase):
         self.use_screen("NX4832T035", encoding="iso-8859-1")
         self.assert_taken(r'prints "a\\",0', r'spstr "a\\",t0.txt,"b",0', r'prints "a\\b",0')
 
+    def test_only_a_quoted_text_is_misread(self):
+        # nxlang asks about any argument, a name or an expression too.
+        codec = TextCodec("shift-jis")
+        self.assertTrue(misread_byte_by_byte('"表"', codec))
+        for argument in ("t0.txt", "x.val", '"表"+t0.txt', '"a"'):
+            with self.subTest(argument=argument):
+                self.assertFalse(misread_byte_by_byte(argument, codec))
+        self.assertFalse(misread_byte_by_byte('"表"', None))
+
     def test_in_nxlang(self):
-        # Until nxlang writes them another way, its texts are refused alike.
+        # nxlang puts a text whose 0x5C escapes its quote into a text
+        # temporary first. The build takes the line, and an import gives back
+        # the code as written.
         switch_to_nxlang(self.source)
+        code = ('on first.down:\n  if (t0.txt == "表") {\n    sys1 = 1\n  }\n'
+                '  prints "日表", 0\n')
+        nx_file = self.source / "pages" / "first.nx"
+        nx_file.write_text(code, encoding="utf-8", newline="\n")
+        built = self.next_folder("nxlang").with_suffix(".HMI")
+        build(self.source, built)
+        dump = self.next_folder("dump")
+        ProjectDumper(built, dump).dump()
+        page = (dump / "pages" / "00-first.txt").read_text(encoding="utf-8")
+        self.assertIn("| if(t0.txt==__s0.txt)", page)
+        self.assertIn("| prints __s0.txt,0", page)
+        import_dump(dump, self.source)
+        self.assertEqual(nx_file.read_text(encoding="utf-8"), code)
+        # The runtime reads a half-width katakana with the character after
+        # it, so no character added to the text can be taken off again. Its
+        # text stays refused.
         self.assert_refused(['t0.txt="aｱ"'], r"the Nextion Editor reads this text in pairs")
+
+    def test_in_program_nx(self):
+        # program.nx has no temporaries, so the text stays refused.
+        switch_to_nxlang(self.source)
+        edit_text(self.source / "program.nx", "page 0", 'prints "表",0\npage 0')
+        with self.assertRaisesRegex(NxwrightError, r"program\.nx line \d+: prints \"表\",0: "
+                                                   r"表 ends in the byte 0x5C"):
+            export_dump(self.source, self.next_folder("program"))
 
 
 if __name__ == "__main__":

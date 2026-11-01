@@ -1068,7 +1068,7 @@ _BACKSLASH_BYTE, _QUOTE_BYTE = 0x5C, 0x22
 # The commands among whose arguments the Nextion Editor reads a text before
 # a comma byte by byte (_check_texts_byte_by_byte), as it refused `prints
 # "日表",0` in shift-jis. Other commands no probe tried.
-_TEXTS_READ_BYTE_BY_BYTE = frozenset({"prints", "spstr", "strlen", "btlen", "crcputs"})
+TEXTS_READ_BYTE_BY_BYTE = frozenset({"prints", "spstr", "strlen", "btlen", "crcputs"})
 
 
 def _check_texts_in_pairs(code: str, codec, number: int):
@@ -1123,15 +1123,14 @@ def _katakana_read_with_the_next_byte(text: str, codec) -> str:
 
 def _check_texts_byte_by_byte(code: str, codec, number: int):
     """Raises NxwrightError for a quoted text in a condition, or before a
-    comma among the arguments of _TEXTS_READ_BYTE_BY_BYTE's commands, that
+    comma among the arguments of TEXTS_READ_BYTE_BY_BYTE's commands, that
     the Nextion Editor's reading byte by byte ends elsewhere than at its
     closing quote. There each 0x5C byte escapes the byte after it, so a
     character whose last byte is 0x5C, as shift-jis's 表, escapes the
     closing quote. It refused such lines as it compiled ("Invalid number of
     arguments")."""
     for text in _condition_texts(code) + _texts_before_commas(code):
-        stored = _stored_text(text, codec)
-        if stored is None or _end_byte_by_byte(stored) == len(stored) - 1:
+        if not misread_byte_by_byte(text, codec):
             continue
         # The misreading starts at a character of more than one byte that
         # ends in 0x5C: in `"a表\\"`, 表's 0x5C escapes the first backslash,
@@ -1143,6 +1142,18 @@ def _check_texts_byte_by_byte(code: str, codec, number: int):
                             "backslash before the closing quote (\"Invalid number of "
                             "arguments\"). Put the text in a variable first, and use the "
                             "variable here." % (code, escaping), line=number)
+
+
+def misread_byte_by_byte(text: str, codec) -> bool:
+    """Whether the Nextion Editor's reading byte by byte ends the quoted
+    text `text`, its quotes included, elsewhere than at its closing quote,
+    in `codec`'s encoding (_check_texts_byte_by_byte). False without a
+    codec, for a text the encoding cannot store, and for anything but one
+    quoted text, such as a name or an expression."""
+    if codec is None or not STRING.fullmatch(text):
+        return False
+    stored = _stored_text(text, codec)
+    return stored is not None and _end_byte_by_byte(stored) != len(stored) - 1
 
 
 def _end_byte_by_byte(stored: bytes) -> int:
@@ -1175,9 +1186,9 @@ def _condition_texts(code: str) -> list:
 
 def _texts_before_commas(code: str) -> list:
     """Returns the quoted texts given as arguments other than the last to a
-    command of _TEXTS_READ_BYTE_BY_BYTE, as `"日表"` in `prints "日表",0`."""
+    command of TEXTS_READ_BYTE_BY_BYTE, as `"日表"` in `prints "日表",0`."""
     word = command_word(code)
-    if word not in _TEXTS_READ_BYTE_BY_BYTE:
+    if word not in TEXTS_READ_BYTE_BY_BYTE:
         return []
     arguments = [argument.strip() for argument in command_arguments(code[len(word) + 1:])]
     return [argument for argument in arguments[:-1] if STRING.fullmatch(argument)]

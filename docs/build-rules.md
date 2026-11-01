@@ -220,14 +220,16 @@ This applies in nxlang too, except for a text that ends in an escaped backslash,
 
 ### Texts in gb2312, big5, and shift-jis
 
-The Nextion Editor reads a text in code by its bytes, so some texts in these encodings end in the wrong place. The build refuses them, in either language:
+The Nextion Editor reads a text in code by its bytes, so some texts in these encodings end in the wrong place. The build refuses them:
 
 - A shift-jis text with a half-width katakana, such as ｱ, that takes the closing quote: `t0.txt="aｱ"` ("Invalid Variables").
   - The Nextion Editor reads every text in pairs of bytes. A half-width katakana is one byte, so it takes the byte after it as its second.
   - `t0.txt="ｱa"` and `t0.txt="ｱｱ"` compile, as each pair ends before the closing quote.
+  - The build refuses the line in nxlang too.
 - A text in a condition, or before a comma in `prints`, `spstr`, `strlen`, `btlen`, or `crcputs`, whose last character ends in the byte 0x5C, a backslash's: `if(t0.txt=="表")` or `prints "日表",0` ("Invalid number of arguments").
   - Shift-jis's 表, big5's 許, and gb2312's 乗 each end in 0x5C. There the Nextion Editor reads that byte as a backslash that escapes the closing quote.
   - The same text compiles elsewhere, as in `t0.txt="日表"` or `print "日表"`.
+  - In an nxlang event, the build puts such a text of up to 255 bytes into a text temporary first, and the line builds ([nxlang-compiled.md](nxlang-compiled.md)).
 
 ### Attributes a component lacks
 

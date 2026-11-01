@@ -181,7 +181,10 @@ def _keep_existing_code(source_folder: Path, files: dict, names: ResourceNames,
     program = (program_names(old_text, read) if uses_nxlang and old_text is not None
                else ProgramNames())
     pages = []
-    new_pages = parse_app(files["app.toml"].decode("utf-8"))["pages"]
+    new_app = parse_app(files["app.toml"].decode("utf-8"))
+    new_pages = new_app["pages"]
+    # nxlang compiles in the project's encoding, as the build does.
+    codec = TextCodec(new_app.get("encoding", DEFAULT_ENCODING))
     components = {page_name: _page_components(files[page_toml_path(page_name)].decode("utf-8"),
                                                page_name) for page_name in new_pages}
     # nxlang compiles each page with every page's object types, as the build does.
@@ -200,7 +203,7 @@ def _keep_existing_code(source_folder: Path, files: dict, names: ResourceNames,
             page_files = read_page_files(relative, read_text(old), read)
             pages.append(nxlang_import_changes(fresh, page_name, page_files, names, object_names,
                                                program, generated.get(page_name, {}), built_id,
-                                               object_types))
+                                               object_types, codec))
         else:
             kept = keep_comfortable_events(fresh, read_text(old), page_name, names, object_names)
             files[relative] = kept.encode("utf-8")
@@ -675,14 +678,14 @@ def nxlang_switch_files(source_folder: Path) -> dict:
                   for page_name in app["pages"]}
     # nxlang compiles each page with every page's object types, as the build does.
     object_types = {page_name: types for page_name, (_, types) in components.items()}
+    encoding = app.get("encoding", DEFAULT_ENCODING)
+    codec = TextCodec(encoding)
     for page_name in app["pages"]:
         events = read_text(pages / (page_name + ".nx"))
         switched = switch_events_to_nxlang(events, page_name, names, components[page_name][0],
-                                           declared, object_types)
+                                           declared, object_types, codec)
         if switched != events:
             files["pages/%s.nx" % page_name] = switched
-    encoding = app.get("encoding", DEFAULT_ENCODING)
-    codec = TextCodec(encoding)
     expected = "\r\n".join(editor_equivalent(codec.decode(
         _program_from_source(program, names, encoding=encoding), "program.s").split("\r\n")))
     lines = keep_editor_meaning(numbered_lines(program))
@@ -1041,7 +1044,8 @@ class FolderSource:
         return editor_code_of_file(path, page_name, self.read(page_nx_path(page_name)),
                                    self.names, component_names, self.declared,
                                    self.app["pages"].index(page_name), self.read,
-                                   {**self.page_objects, page_name: own_types})
+                                   {**self.page_objects, page_name: own_types},
+                                   TextCodec(self.encoding))
 
 
 def read_folder_source(read, skip_broken_pages: bool = False,

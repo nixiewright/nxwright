@@ -19,6 +19,7 @@ from nxwright.language.editor_code import (editor_equivalent, keep_editor_meanin
                                            without_touch_off)
 from nxwright.language.nxlang import ProgramNames
 from nxwright.language.resource_names import ResourceNames, UnknownNameError
+from nxwright.project.device_settings import TextCodec
 from nxwright.source.nx_files import (EVENT_COMMENT_MARKER, PageFiles, event_blocks,
                                       read_page_files, render, with_end)
 from nxwright.source.page_source import (compile_nxlang_page, compile_page_files,
@@ -100,6 +101,7 @@ class ImportChanges:
     program: ProgramNames
     page_id: int
     object_types: dict                           # the pages' object types nxlang compiles with
+    codec: TextCodec                             # the project's encoding, which nxlang compiles with
     changes: dict = field(default_factory=dict)  # {file: {key: EventBlock, or None to remove it}}
     kept: dict = field(default_factory=dict)     # {file: {keys of events left as they are}}
     editor: dict = field(default_factory=dict)   # {key: the Editor's code of an event it changed}
@@ -108,7 +110,7 @@ class ImportChanges:
 def nxlang_import_changes(fresh_events: str, page_name: str, page_files: PageFiles,
                           names: ResourceNames, component_names: list, program: ProgramNames,
                           generated_events: dict, page_id: int,
-                          object_types: dict = None) -> ImportChanges:
+                          object_types: dict = None, codec: TextCodec = None) -> ImportChanges:
     """Returns what extracting changes in one page's .nx files in nxlang: the
     counterpart of keep_comfortable_events. An event keeps its source when
     that compiles to the Editor's code. An event the Editor changed takes the
@@ -127,11 +129,11 @@ def nxlang_import_changes(fresh_events: str, page_name: str, page_files: PageFil
     """
     page_path = page_nx_path(page_name)
     result = ImportChanges(page_name, page_files, component_names, program, page_id,
-                           object_types)
+                           object_types, codec)
     old_code, compiled = {}, None
     try:
         compiled = compile_page_files(page_files, page_name, component_names, program, page_id,
-                                      object_types)
+                                      object_types, codec=codec)
         old_code = preprocess_compiled(compiled, page_name, names, unknown_as_none=True)
     except UnknownNameError:
         pass    # it names a picture or font the app no longer lists: every event counts as changed
@@ -256,7 +258,8 @@ def check_nxlang_imports(pages: list, texts: dict, read, names: ResourceNames):
         path = page_nx_path(page.page_name)
         page_files = read_page_files(path, read_new(path), read_new)
         compiled = compile_page_files(page_files, page.page_name, page.component_names,
-                                      page.program, page.page_id, page.object_types)
+                                      page.program, page.page_id, page.object_types,
+                                      codec=page.codec)
         _check_compiled(compiled, page.page_name, names, page.editor)
 
 
@@ -273,11 +276,12 @@ def _drop_code_lines(lines: list, count: int) -> list:
 
 def switch_events_to_nxlang(events: str, page_name: str, names: ResourceNames,
                             component_names: list, program: ProgramNames,
-                            object_types: dict = None) -> str:
+                            object_types: dict = None, codec: TextCodec = None) -> str:
     """Returns a page's .nx text for nxlang: each line
     nxlang would read differently rewritten by keep_editor_meaning.
     `object_types` gives the types of the pages' objects nxlang compiles
-    with, {page: {name: type}} (nxlang.compile_page).
+    with, {page: {name: type}}, and `codec` the project's encoding
+    (nxlang.compile_page).
 
     Raises NxwrightError when the result would not build to the same code.
     """
@@ -295,7 +299,7 @@ def switch_events_to_nxlang(events: str, page_name: str, names: ResourceNames,
     else:
         text = with_end("\n".join(block.text() for block in chosen.values()), end)
     compiled = compile_nxlang_page(text, page_name, component_names, program,
-                                   object_types=object_types)
+                                   object_types=object_types, codec=codec)
     _check_compiled(compiled, page_name, names, editor)
     return text
 

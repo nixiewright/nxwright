@@ -106,14 +106,16 @@ from nxwright import NxwrightError
 from nxwright.language.code_checks import (COMPONENT_PLACES, DATA_RECORD_ARGUMENTS,
                                            DATA_RECORD_CALL, NUMBER_PLACES, ONE_OPERAND_FIRST,
                                            READ_ONE_OPERAND_PLACES, SCREEN_ARRAY,
-                                           ends_in_escaped_backslash,
-                                           is_one_operand, method_count_refusal)
+                                           TEXTS_READ_BYTE_BY_BYTE, ends_in_escaped_backslash,
+                                           is_one_operand, method_count_refusal,
+                                           misread_byte_by_byte)
 from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, chain_parts, command_arguments,
                                           command_word,
                                           declared_int_names, goto_label, minus_is_sign,
                                           outside_strings, split_line)
 from nxwright.language.code_preprocessor import with_own_attributes
 from nxwright.language.resource_names import REFERENCE_TEXT
+from nxwright.project.device_settings import TextCodec
 from nxwright.project.editor_language import (EDITOR_COLOURS, EDITOR_PROGRAM_VARIABLES,
                                               EDITOR_SYSTEM_VARIABLES,
                                               UNDECLARED_PROGRAM_VARIABLE)
@@ -644,24 +646,38 @@ def _count_calls(expression) -> int:
     return 0
 
 
-def _plain(expression) -> bool:
-    """True for an operand a condition can hold as it is: nothing to compute first."""
+def _plain(expression, codec: TextCodec) -> bool:
+    """True for an operand a condition can hold as it is: nothing to compute
+    first, in the project's encoding, `codec`."""
     if isinstance(expression, Literal):
-        return not _refused_in_condition(expression)
+        return not _refused_in_condition(expression, codec)
     if isinstance(expression, Local):
         return True
     if isinstance(expression, Reference):
-        return all(index is None or (_is_atomic(index) and _plain(index))
+        return all(index is None or (_is_atomic(index) and _plain(index, codec))
                    for _, index in expression.parts)
     return False
 
 
-def _refused_in_condition(literal: Literal) -> bool:
+def _refused_in_condition(literal: Literal, codec: TextCodec) -> bool:
     """True for a text the Editor refuses in a condition, though it takes it
-    in an assignment: one that ends in an escaped backslash, as `"a\\\\"`
-    (code_checks.ends_in_escaped_backslash). Such a text goes into a text
-    temporary first."""
-    return literal.text.startswith('"') and ends_in_escaped_backslash(literal.text)
+    in an assignment. One kind ends in an escaped backslash, as `"a\\\\"`
+    (code_checks.ends_in_escaped_backslash). The other kind ends in a
+    character whose last byte is 0x5C in the project's encoding, `codec`,
+    as 表 in shift-jis (code_checks.misread_byte_by_byte). Such a text goes
+    into a text temporary first."""
+    return literal.text.startswith('"') and (ends_in_escaped_backslash(literal.text)
+                                             or _misread_and_fits(literal.text, codec))
+
+
+def _misread_and_fits(text: str, codec: TextCodec) -> bool:
+    """True when the Nextion Editor would read the quoted text `text` to
+    another end, by its bytes in `codec`'s encoding
+    (code_checks.misread_byte_by_byte), and the text fits a text temporary.
+    A longer one would be cut short there, so it is left as written, and the
+    build refuses it."""
+    return (misread_byte_by_byte(text, codec)
+            and len(codec.encode(text, "")) - len('""') <= TEXT_TEMPORARY_SIZE)
 
 
 def _last_argument_start(code: str):
@@ -695,13 +711,13 @@ def _holds_semicolon_text(lines: list) -> bool:
     return any(";" in text for line in lines for text in STRING_LITERAL.findall(line))
 
 
-def _needs_computing(condition) -> bool:
+def _needs_computing(condition, codec: TextCodec) -> bool:
     """True when a part of `a && b && ...` (or ||) needs lines of code run
     before it can be tested: it is an inner `&&` or `||`, or it compares
-    something not plain."""
+    something not plain in the project's encoding, `codec`."""
     if condition.operator in _LOGIC:
         return True
-    return not (_plain(condition.left) and _plain(condition.right))
+    return not (_plain(condition.left, codec) and _plain(condition.right, codec))
 
 
 def _render_chain(chain: list) -> str:
@@ -808,13 +824,24 @@ class _Emitter:
                                 "cannot have; split it into simpler steps", line=self.number)
         return self.temporaries.take(kind, self.number)
 
-    def atom(self, expression, in_condition: bool = False) -> str:
+    @property
+    def codec(self):
+        """The project's encoding, or None in program.nx, which has no
+        temporaries to put a text in (compile_page)."""
+        return None if self.temporaries is None else self.temporaries.page.codec
+
+    def atom(self, expression, in_condition: bool = False,
+             read_byte_by_byte: bool = False) -> str:
         """Returns the Editor text of a literal, local, or reference. In a
         condition, which holds no arithmetic, an index with arithmetic is
         computed into a temporary first, and so is a text the Editor
-        refuses there (_refused_in_condition)."""
+        refuses there (_refused_in_condition). With `read_byte_by_byte`, the
+        literal is a command's argument that the Nextion Editor reads byte
+        by byte. A text it would read to another end then goes into a text
+        temporary too, if it fits one (_misread_and_fits)."""
         if isinstance(expression, Literal):
-            if in_condition and _refused_in_condition(expression):
+            if ((in_condition and _refused_in_condition(expression, self.codec))
+                    or (read_byte_by_byte and _misread_and_fits(expression.text, self.codec))):
                 target = self.temporary(TEXT)
                 self.emit_assignment(target, TEXT, "=", [(None, expression.text)])
                 return target
@@ -841,11 +868,13 @@ class _Emitter:
                 parts.append("%s[%s]" % (name, inner))
         return ".".join(parts)
 
-    def value(self, expression, in_condition: bool = False) -> str:
+    def value(self, expression, in_condition: bool = False,
+              read_byte_by_byte: bool = False) -> str:
         """Returns an operand holding the value: the expression itself when it
-        is atomic, else a temporary computed first."""
+        is atomic, else a temporary computed first. `read_byte_by_byte` is
+        as atom takes it."""
         if _is_atomic(expression):
-            return self.atom(expression, in_condition)
+            return self.atom(expression, in_condition, read_byte_by_byte)
         if isinstance(expression, Call):
             kind = kind_of(expression, self.number)
             result = self.call(expression)
@@ -996,7 +1025,7 @@ class _Emitter:
         """Does what condition does, for a condition _normalize has rewritten."""
         if isinstance(expression, Binary) and expression.operator in _LOGIC:
             children = _flatten(expression, expression.operator)
-            if any(_needs_computing(child) for child in children[1:]):
+            if any(_needs_computing(child, self.codec) for child in children[1:]):
                 return self.short_circuit(expression.operator, children) + "==1"
             parts = []
             for child in children:
@@ -1110,8 +1139,9 @@ class _PageState:
     """What every event of a page shares: its names and generated variables."""
 
     def __init__(self, page_name: str, component_names, program: ProgramNames, page_id: int = 0,
-                 object_types: dict = None):
+                 object_types: dict = None, codec: TextCodec = None):
         self.page_name, self.page_id = page_name, page_id
+        self.codec = codec      # the project's encoding, or None (compile_page)
         self.component_names = set(component_names)
         # {page: {name: type}}, a page's None while unknown (compile_page)
         self.object_types = object_types or {}
@@ -1339,7 +1369,8 @@ def is_constant_line(text: str) -> bool:
 
 def compile_page(page_name: str, component_names, program: ProgramNames, preambles: list,
                  events: dict, functions: dict = None, page_id: int = 0,
-                 object_types: dict = None, owners: dict = None) -> CompiledPage:
+                 object_types: dict = None, owners: dict = None,
+                 codec: TextCodec = None) -> CompiledPage:
     """Compiles a page's code, from its .nx file and the files it includes,
     into lines for the preprocessor. `program` is what program.nx declares.
     `preambles` is [(file, lines)]: each file's constants, the page's own
@@ -1357,7 +1388,10 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
     event's owner, {(object, event): Owner}, the object whose event it is:
     its lines have the form '&name&' replaced before they are compiled, as
     the Nextion Editor reads them (_with_owner). An event without one, a
-    function, and a constant refuse the form.
+    function, and a constant refuse the form. `codec` is the project's
+    encoding: a text the Nextion Editor would read to another end, by its
+    bytes in that encoding, goes into a text temporary first
+    (_refused_in_condition, _Emitter.atom). Without it, no text does.
 
     Raises NxwrightError naming the file and line of anything it cannot compile.
     """
@@ -1371,7 +1405,7 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
         if name in component_names:
             raise NxwrightError("program.nx constant %s has the name of a component of page %s"
                                 % (name, page_name))
-    page = _PageState(page_name, component_names, program, page_id, object_types)
+    page = _PageState(page_name, component_names, program, page_id, object_types, codec)
     for file, lines in preambles:
         with _naming(file):
             _read_constants(lines, page)
@@ -2186,7 +2220,8 @@ class _EventCompiler:
         """Returns the test of a case, `value==case_value`. A case's text
         the Editor refuses in a condition (_refused_in_condition) is put
         into a text temporary first, on a line of its own."""
-        if not _refused_in_condition(Literal(case_value, TEXT)):
+        codec = None if self.temporaries is None else self.page.codec
+        if not _refused_in_condition(Literal(case_value, TEXT), codec):
             return "%s==%s" % (value, case_value)
         target = self.emitter(indent, number).temporary(TEXT)
         self.put(number, indent + target + "=" + case_value)
@@ -2284,7 +2319,10 @@ class _EventCompiler:
         arguments = self.arguments(rest, number)
         emitter = self.emitter(indent, number)
         emitter.copy_results = sum(_count_calls(argument) for argument in arguments) > 1
-        operands = [emitter.value(argument) if place == 0 or _is_atomic(argument)
+        # prints reads its text before a comma byte by byte.
+        byte_by_byte = word in TEXTS_READ_BYTE_BY_BYTE and len(arguments) > 1
+        operands = [emitter.value(argument, read_byte_by_byte=byte_by_byte)
+                    if place == 0 else emitter.value(argument) if _is_atomic(argument)
                     else _render_chain(emitter.chain(argument))
                     for place, argument in enumerate(arguments)]
         emitter.emit("%s %s" % (word, ",".join(operands)))
@@ -2624,7 +2662,12 @@ class _EventCompiler:
             if place in number_places and (STRING_LITERAL.fullmatch(text)
                                            or chain_parts(text) is not None):
                 continue
-            if place in read_places and is_one_operand(text):
+            # The Nextion Editor reads the text before a comma of these
+            # commands byte by byte. A literal it would read to another end
+            # goes into a temporary like an expression.
+            byte_by_byte = (word in TEXTS_READ_BYTE_BY_BYTE and place < len(arguments) - 1
+                            and _misread_and_fits(text, self.page.codec))
+            if place in read_places and is_one_operand(text) and not byte_by_byte:
                 continue
             try:
                 expression = Parser(tokenize(text, number), number, self.scope).whole_expression()
@@ -2633,7 +2676,8 @@ class _EventCompiler:
             if word == "wepo" and kind_of(expression, number) == TEXT:
                 continue
             emitter = emitter or self.emitter(indent, number)
-            arguments[place] = arguments[place].replace(text, emitter.value(expression))
+            arguments[place] = arguments[place].replace(
+                text, emitter.value(expression, read_byte_by_byte=byte_by_byte))
         if emitter is None:
             return False
         emitter.emit(self.substitute_command(code[:len(word)] + ",".join(arguments), number))
