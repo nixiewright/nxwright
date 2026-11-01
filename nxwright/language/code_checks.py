@@ -220,11 +220,13 @@ class ObjectNames:
 
 
 def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: frozenset,
-                screen: ScreenModel, number: int, program_pages: dict = None, codec=None):
+                screen: ScreenModel, number: int, program_pages: dict = None, codec=None,
+                program_globals: dict = None):
     """Raises NxwrightError for a line's code part, its resources' names
     resolved, that the Editor refuses as it compiles, as
     code_preprocessor.preprocess says. `program_pages`, for a line of
-    program.nx, holds each page's objects, by page name. `codec`, the
+    program.nx, holds each page's objects, by page name, and
+    `program_globals` each page's components of global scope. `codec`, the
     project's TextCodec, counts the line's bytes for `screen`'s series
     (_check_length)."""
     if _TAB_AFTER_INT.match(code):
@@ -258,6 +260,7 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
         _check_assigned_attribute(code, objects, number)
     if program_pages is not None:
         _check_program_names(code, program_pages, number)
+        _check_program_attributes(code, program_pages, program_globals or {}, number)
     # Before the number of arguments, as the Editor named the series
     # first for `beep 100,2` on a screen whose series lacks beep.
     if screen is not None:
@@ -537,8 +540,7 @@ def _check_program_names(code: str, pages: dict, number: int):
         known = pages.get(page)
         named = "." not in component and known is not None and component in known
     else:
-        named = page in pages or any(known is not None and page in known
-                                     for known in pages.values())
+        named = page in pages or _page_having(page, pages) is not None
     if named:
         raise NxwrightError("%s: program.nx belongs to no page, so %s takes a component's "
                             "number, or a variable that contains it. The Nextion Editor "
@@ -610,6 +612,89 @@ def _check_page_argument(code: str, number: int):
         raise NxwrightError("%s: page takes a page's name without quotes, or its number, and "
                             "the Nextion Editor refuses a text (\"%s\")"
                             % (code, INVALID_PAGE_ID), line=number)
+
+
+def _check_program_attributes(code: str, pages: dict, globals_: dict, number: int):
+    """Raises NxwrightError when a line of program.nx names a component's
+    attribute in a way the Editor refuses. It refuses two kinds:
+      - an attribute named without its page, as `n0.val`;
+      - an attribute of a component of local scope, even with its page's
+        name, as `page0.n0.val`.
+    `pages` holds each page's objects, by page name, as ObjectNames.pages
+    does. `globals_` holds each page's components of global scope. A page's
+    entry is None or missing when its components are unknown.
+
+    program.s belongs to no page. On the T series, the Editor refused
+    `sys0=n0.val` there, with n0 a number of page0 of local scope or of
+    global scope. It also refused `sys0=n1.val`, with n1 a number of page1.
+    It refused `sys0=page0.n0.val` with n0 of local scope, and compiled
+    `sys0=page0.n2.val` with n2 of global scope. Its words are in
+    _program_refusal_words.
+
+    nxlang does not add the page's name itself. program.nx is compiled
+    apart from the pages' components, and a name may belong to several
+    pages."""
+    for part in STRING.split(code)[::2]:
+        for first, second, third in _DOTTED.findall(part):
+            if first in pages:
+                known, reachable = pages[first], globals_.get(first)
+                if (third and known is not None and second in known and reachable is not None
+                        and second not in reachable):
+                    raise NxwrightError("%s.%s.%s: %s is of local scope, and program.nx reaches "
+                                        "only a component of global scope. The Nextion Editor "
+                                        "refuses this line%s"
+                                        % (first, second, third, second,
+                                           _program_refusal_words(code, local=True)),
+                                        line=number)
+                continue
+            page = _page_having(first, pages, globals_)
+            if page is None:
+                continue
+            words = _program_refusal_words(code, local=False)
+            reachable = globals_.get(page)
+            if reachable is not None and first not in reachable:
+                # Its page's name alone would not do: no page has it of
+                # global scope.
+                raise NxwrightError("%s.%s: %s is of local scope, and program.nx reaches only a "
+                                    "component of global scope, with its page's name. The "
+                                    "Nextion Editor refuses this line%s"
+                                    % (first, second, first, words), line=number)
+            raise NxwrightError("%s.%s: in program.nx, a component needs its page's name, as "
+                                "in %s.%s.%s, because program.nx belongs to no page. The "
+                                "Nextion Editor refuses this line%s"
+                                % (first, second, page, first, second, words), line=number)
+
+
+def _program_refusal_words(code: str, local: bool) -> str:
+    """Returns the Editor's words, as ' ("Invalid Variables")', for refusing
+    the line of program.nx `code` that names a component's attribute: of
+    `local` scope with its page's name, or else without its page's name.
+    Returns "" for a line of a form the Editor was not seen to refuse.
+
+    The Editor said "Invalid Variables" for both kinds in an assignment,
+    as `sys0=n0.val`. Without the page's name, it said "Invalid Page ID"
+    for `page n0.val`, and "Invalid Component ID" for `vis n0.val,0` and
+    `tsw n0.val,1`."""
+    if _ASSIGNMENT_LINE.fullmatch(code):
+        return ' ("Invalid Variables")'
+    if local:
+        return ""
+    if code.startswith("page "):
+        return ' ("Invalid Page ID")'
+    if re.match(r"(vis|tsw) ", code):
+        return ' ("Invalid Component ID")'
+    return ""
+
+
+def _page_having(name: str, pages: dict, globals_: dict = None):
+    """Returns the name of a page, in `pages`' order, that has a component
+    named `name`, or None. `pages` holds each page's objects, by page name,
+    None for a page whose objects are unknown. With `globals_`, each page's
+    components of global scope, a page where the component is of global
+    scope comes first, as program.nx reaches it there."""
+    having = [page for page, known in pages.items() if known is not None and name in known]
+    reached = [page for page in having if name in ((globals_ or {}).get(page) or ())]
+    return (reached or having or [None])[0]
 
 
 def _is_component_name(name: str, objects: ObjectNames) -> bool:

@@ -10,6 +10,7 @@ import unittest
 import tomli_w
 
 from nxwright import NxwrightError
+from nxwright.language.code_checks import check_line
 from nxwright.language.code_lines import first_word
 from nxwright.project.editor_language import (EDITOR_COMMANDS, EDITOR_PROGRAM_DECLARATION,
                                               SERIES_LACKED_COMMANDS)
@@ -1301,6 +1302,60 @@ class EditorCommandTest(_CodeOnFirstTestCase):
                     export_dump(self.source, self.folder / ("refused%d" % number))
         program.write_text(written + "vis 1,0\nvis sys0,0\n", encoding="utf-8", newline="\n")
         export_dump(self.source, self.folder / "built")
+
+    def test_a_components_attribute_in_program_nx(self):
+        # program.s belongs to no page. It reaches a component with its
+        # page's name, and of global scope alone. The Editor refused, on a
+        # screen of the T series, a component's attribute named without its
+        # page as an assignment's value, "Invalid Variables", as page's
+        # argument, "Invalid Page ID", and as vis's and tsw's component,
+        # "Invalid Component ID"; and one of local scope named with its page,
+        # "Invalid Variables". n0 is of local scope, n2 of global, and t1 is
+        # on page second.
+        add_component(self.source / "pages" / "second.page.toml", "t1")
+        with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8",
+                  newline="\n") as page:
+            page.write('\n[[component]]\nname = "n2"\ntype = "number"\nx = 0\ny = 160\n'
+                       'w = 200\nh = 100\nvscope = 1\n')
+        program = self.source / "program.nx"
+        text = program.read_text(encoding="utf-8")
+        written = text + ("" if text.endswith("\n") else "\n")
+        line_number = len(written.split("\n"))
+        for number, (line, said) in enumerate((("sys0=n0.val", "Invalid Variables"),
+                                               ("sys0=n2.val", "Invalid Variables"),
+                                               ("sys0=1+t1.txt_maxl", "Invalid Variables"),
+                                               ("page n0.val", "Invalid Page ID"),
+                                               ("vis n0.val,0", "Invalid Component ID"),
+                                               ("tsw n2.val,1", "Invalid Component ID"),
+                                               ("sys0=first.n0.val", "Invalid Variables"))):
+            with self.subTest(line=line):
+                program.write_text(written + line + "\n", encoding="utf-8", newline="\n")
+                with self.assertRaisesRegex(
+                        NxwrightError, r"program\.nx line %d: .*\(\"%s\"\)" % (line_number, said)):
+                    export_dump(self.source, self.folder / ("refused%d" % number))
+        # A component of global scope with its page's name, as the Editor
+        # compiled `sys0=page0.n2.val`; and a text holding such a name, which
+        # is no name.
+        program.write_text(written + 'sys0=first.n2.val\nprint "n0.val"\n', encoding="utf-8",
+                           newline="\n")
+        export_dump(self.source, self.folder / "built")
+
+    def test_program_nx_is_shown_the_page_that_reaches_a_component(self):
+        # n0 is of local scope on page first, and of global on page second,
+        # where program.nx reaches it.
+        pages, globals_ = {"first": {"n0": "number"}, "second": {"n0": "number"}}, \
+            {"first": frozenset(), "second": frozenset({"n0"})}
+        with self.assertRaisesRegex(NxwrightError, r"as in second\.n0\.val, because"):
+            check_line("sys0=n0.val", None, None, None, None, 1, pages, None, globals_)
+        # The Nextion Editor's words for one of local scope were seen in an
+        # assignment alone, so a line of page gives none.
+        with self.assertRaisesRegex(NxwrightError, r"refuses this line$"):
+            check_line("page first.n0.val", None, None, None, None, 1, pages, None, globals_)
+        # Of local scope on every page, no page's name would do.
+        globals_["second"] = frozenset()
+        with self.assertRaisesRegex(NxwrightError, r"n0\.val: n0 is of local scope, and program\.nx "
+                                                   r"reaches only a component of global scope"):
+            check_line("sys0=n0.val", None, None, None, None, 1, pages, None, globals_)
 
     def test_an_int_of_program_nx_named_as_the_editor_refuses(self):
         # The Editor refused an int named as one of its commands, even one

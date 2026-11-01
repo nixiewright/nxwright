@@ -980,7 +980,7 @@ class FolderSource:
         of the globals the pages use. Raises NxwrightError naming program.nx."""
         return _program_from_source(self.program, self.names, self.declared, self.encoding,
                                     self.program_variables, self.macros, self.screen,
-                                    self.page_objects)
+                                    self.page_objects, self.page_globals)
 
     def build_macros(self):
         """Returns the macros' block built from macros.nx (macros_source.py),
@@ -1185,7 +1185,7 @@ def _resource_dump_files(app: dict, source_folder: Path) -> tuple:
     """Returns ({relative path: bytes} of the dump's pictures, animations,
     videos, and sounds, {the dump's file of each picture: the folder's}).
     Raises NxwrightError naming a picture nxwright cannot read, a video
-    made for another rotation, or a sound the Editor refuses to compile
+    made for another rotation, or a sound a screen does not play
     (media_files.sound_form_problem)."""
     def exists(path: str) -> bool:
         return (source_folder / path).is_file()
@@ -1329,20 +1329,22 @@ def read_bytes(path: Path) -> bytes:
 def _program_from_source(text: str, names: ResourceNames, program: ProgramNames = None,
                          encoding: str = DEFAULT_ENCODING, variables: frozenset = None,
                          macros: frozenset = None, screen: ScreenModel = None,
-                         pages: dict = None) -> bytes:
+                         pages: dict = None, page_globals: dict = None) -> bytes:
     """Returns program.s for the text of program.nx: Editor syntax, CRLF line
     endings. With `program` (what program.nx declares), the text is in nxlang
     and is compiled first. With `variables`, its int variables, its names of
     sys0 to sys2 are checked, with `macros`, its calls, with `screen`, what
     its series lacks, and with `pages`, each page's objects by page name,
-    the commands that name a page or a component (preprocess)."""
+    and `page_globals`, each page's components of global scope, the names
+    of pages and components (preprocess)."""
     ends_with_newline = text.endswith("\n")
     try:
         lines = numbered_lines(text)
         if program is not None:
             lines = compile_program(lines, program)
         lines = preprocess(lines, names, variables=variables, macros=macros, screen=screen,
-                           program_pages=pages, codec=TextCodec(encoding))
+                           program_pages=pages, codec=TextCodec(encoding),
+                           program_globals=page_globals)
     except NxwrightError as error:
         if error.file is not None:
             raise   # a refusal at a line of macros.nx, which program.nx calls

@@ -117,6 +117,9 @@ The build stops at the first line that uses something that does not exist:
   - `b[1]` and `p[0].b[1]` are refused in `program.nx` too ("Invalid Component ID"). In nxlang, `vis b[1],0` in `program.nx` is written as `vis 1,0` ([nxlang-compiled.md](nxlang-compiled.md#programnx)).
 - A name alone in a value or a condition, as `abc` in `n0.val=abc+1`, must be an `int` of `program.nx`, a system variable, or a colour in capitals, as `RED`. A component's or a page's name alone is refused.
 - Another page's components need their page's name, whatever their scope.
+- In `program.nx`, which belongs to no page, a component's attribute needs its page's name, as in `sys0=page0.n0.val`. The component must also be of global scope.
+  - Without the page's name, the line is refused. The Nextion Editor's message depends on the line: "Invalid Variables" for `sys0=n0.val`, "Invalid Page ID" for `page n0.val`, and "Invalid Component ID" for `vis n0.val,0`.
+  - If `n0` is of local scope, `sys0=page0.n0.val` is refused too ("Invalid Variables").
 
 Not checked: a component chosen as the code runs, as in `b[3].txt`, and a number in a component's place, as in `tsw 255,0`.
 

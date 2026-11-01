@@ -69,7 +69,7 @@ class Owner:
 def preprocess(lines: list, names: ResourceNames = None, objects: ObjectNames = None,
                variables: frozenset = None, macros: frozenset = None,
                screen: ScreenModel = None, owner: Owner = None,
-               program_pages: dict = None, codec=None) -> list:
+               program_pages: dict = None, codec=None, program_globals: dict = None) -> list:
     """Returns `lines`, a list of (line number, text), as lines of text in
     Editor syntax.
     `names` resolves "@pic(...)" and the other resources' names; without it
@@ -86,10 +86,13 @@ def preprocess(lines: list, names: ResourceNames = None, objects: ObjectNames = 
     in program.s and in macros.
     With `program_pages`, the lines are program.nx's, and it holds each
     page's objects, by page name: a command may not name a page or a
-    component (code_checks.check_line), and an int may not be declared
-    twice, nor after other code (code_checks.check_program_declarations).
-    Without it, with `objects`, the lines are an event's or a macro's, which
-    may not declare an int.
+    component, a component's attribute needs its page's name
+    (code_checks.check_line), and an int may not be declared twice, nor
+    after other code (code_checks.check_program_declarations).
+    `program_globals` then holds each page's components of global scope,
+    by page name, which alone program.nx reaches. Without `program_pages`,
+    with `objects`, the lines are an event's or a macro's, which may not
+    declare an int.
     With `codec`, the project's TextCodec, a line may hold no more bytes
     than the Editor takes on its series (editor_limits.LONGEST_LINES).
 
@@ -97,14 +100,15 @@ def preprocess(lines: list, names: ResourceNames = None, objects: ObjectNames = 
     into Editor syntax.
     """
     return [text for _, text in preprocess_with_places(lines, names, objects, variables, macros,
-                                                       screen, owner, program_pages, codec)]
+                                                       screen, owner, program_pages, codec,
+                                                       program_globals)]
 
 
 def preprocess_with_places(lines: list, names: ResourceNames = None,
                            objects: ObjectNames = None, variables: frozenset = None,
                            macros: frozenset = None, screen: ScreenModel = None,
                            owner: Owner = None, program_pages: dict = None,
-                           codec=None) -> list:
+                           codec=None, program_globals: dict = None) -> list:
     """Returns what preprocess does, each line as (line number, text): the
     number of the line it comes from. An "else" joined to the "}" before it
     keeps the "}"'s line."""
@@ -125,7 +129,8 @@ def preprocess_with_places(lines: list, names: ResourceNames = None,
         else:
             read = with_own_attributes(forms, owner)
         try:
-            check_line(read, objects, variables, macros, screen, number, program_pages, codec)
+            check_line(read, objects, variables, macros, screen, number, program_pages, codec,
+                       program_globals)
         except NxwrightError as error:
             if read == code:
                 raise
