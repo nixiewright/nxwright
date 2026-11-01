@@ -109,6 +109,9 @@ _PCM, _FLOAT, _EXTENSIBLE = 1, 3, 0xFFFE
 _SUBFORMAT_AT = 24
 # The size of the Editor's `hmic` chunk.
 _SOUND_NOTE_SIZE = 504
+# The samples a second at which the Editor keeps a sound as it is, and to
+# which it resamples a sound of any other rate as it compiles.
+EDITOR_SOUND_RATE = 22050
 # Each byte's bits read the other way round (screen_crc).
 _BITS_REVERSED = bytes(int(format(value, "08b")[::-1], 2) for value in range(256))
 # PictureBox's qualities, by the names its list gives them, on the IJG's scale.
@@ -407,6 +410,33 @@ def sound_file_problem(wav: bytes):
     if not note.startswith(b"crc\0\x04\0\0\0") or len(note) < 12 or \
             struct.unpack_from("<I", note, 8)[0] != screen_crc(wav[data_at:data_at + len(samples)]):
         return "its hmic chunk's check value does not match its samples"
+    return None
+
+
+def sound_form_problem(wav: bytes):
+    """Returns what keeps the Editor from compiling a project that plays the
+    sound whose file is `wav`, or None. At 22050 samples a second, the rate
+    it keeps a sound at, it refuses one of other than 16 bits a sample, as
+    its format chunk gives them, whatever the format of its samples, and
+    one of more than two channels. It resamples a sound of any other rate
+    with ffmpeg, whatever its bits and channels, and takes it. The problem
+    ends with what to change in the file. A file that is not a WAV file has
+    no such problem to report."""
+    try:
+        form, _ = _wav_format_and_samples(wav)
+    except NxwrightError:
+        return None
+    _, channels, rate, _, _, bits = struct.unpack("<HHIIHH", form[:16])
+    if rate != EDITOR_SOUND_RATE:
+        return None
+    if bits != 16:
+        return ('has %d bits a sample at %d samples a second, which the Nextion Editor refuses '
+                'to compile ("Data bits exceed the valid range (only 16 bits are supported)"): '
+                'make its samples 16-bit, or give it another rate' % (bits, rate))
+    if channels not in (1, 2):
+        return ('has %d channels at %d samples a second, which the Nextion Editor refuses to '
+                'compile ("Vocal Track Number Out of Effective Range (1/2)"): make it mono or '
+                'stereo, or give it another rate' % (channels, rate))
     return None
 
 

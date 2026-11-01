@@ -311,6 +311,7 @@ The source folder keeps each animation, video, and sound in the Nextion Editor's
 - A **sound** is a WAV file in the form the Nextion Editor stores: its samples as they were given, with a chunk of the Nextion Editor's own, `hmic`, which contains a check value of the samples and the sound's name ([format.md, Animations, videos, and sounds](format.md#animations-videos-and-sounds)).
   - `nxwright sound` adds one, from a WAV file or any other sound file ([commands.md](commands.md#sound)).
   - The checks warn of a sound's file that is not in that form ([commands.md](commands.md#warnings)).
+  - The Nextion Editor refuses to compile a sound of 22050 samples a second of other than 16 bits a sample, or of more than two channels, and so does the build. `nxwright check` and the live checks show it as an error on its line of `app.toml`. `nxwright sound` makes such a file 16-bit, and `--mono` makes it mono.
 
 ## Extracting into an existing folder
 

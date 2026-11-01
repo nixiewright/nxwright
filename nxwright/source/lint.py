@@ -28,13 +28,15 @@ but that are likely mistakes. Each has a rule's name:
     own component defaults, not the folder's copy, which can be edited.
 A file the build would refuse gets no warnings: its errors come first.
 
-Two rules find an error the build refuses too, which the checks show
+Three rules find an error the build refuses too, which the checks show
 without building, each on app.toml's line naming the file's resource:
 video-rotation, a video made for another rotation than the folder's
 screen, which the Editor refuses to compile
-(source_folder.video_rotation_problem); and picture-unreadable, a picture
-nxwright cannot read, found by opening its file without decoding its pixels
-(pictures.picture_problem).
+(source_folder.video_rotation_problem); sound-form, a sound the Editor
+refuses to compile, at 22050 samples a second
+(media_files.sound_form_problem);
+and picture-unreadable, a picture nxwright cannot read, found by opening
+its file without decoding its pixels (pictures.picture_problem).
 """
 from dataclasses import dataclass, field
 import tomllib
@@ -44,7 +46,7 @@ from nxwright.language.code_lines import split_line
 from nxwright.language.editor_code import hex_written_0x, keep_editor_meaning
 from nxwright.language.nxlang import editor_number, is_constant_line, token_spans
 from nxwright.project.component_defaults import nxwright_defaults
-from nxwright.project.media_files import VIDEO_HEAD_SIZE, sound_file_problem
+from nxwright.project.media_files import VIDEO_HEAD_SIZE, sound_file_problem, sound_form_problem
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.pictures import picture_problem
 from nxwright.source.nx_files import (EVENT_HEADING, FUNCTION_HEADING, event_blocks, read_nx_file,
@@ -125,6 +127,24 @@ def video_rotation_errors(app: dict, read, read_bytes) -> list:
         if problem:
             found.append(Finding("app.toml", line_naming(read("app.toml"), name), ERROR,
                                  "%s %s" % (path, problem), "video-rotation"))
+    return found
+
+
+def sound_errors(app: dict, read, read_bytes) -> list:
+    """Returns the sound-form error Findings of the folder whose settings
+    are `app`, whose files' text `read(path)` returns, and their bytes
+    `read_bytes(path)`: a sound the Editor refuses to compile
+    (media_files.sound_form_problem)."""
+    found = []
+    for name in app["sounds"]:
+        path = "sounds/%s.wav" % name
+        try:
+            problem = sound_form_problem(read_bytes(path))
+        except OSError:
+            continue    # the check reports a missing file
+        if problem:
+            found.append(Finding("app.toml", line_naming(read("app.toml"), name), ERROR,
+                                 "%s %s" % (path, problem), "sound-form"))
     return found
 
 

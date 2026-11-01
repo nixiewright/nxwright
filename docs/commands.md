@@ -98,6 +98,7 @@ pages/home.nx line 12: error: unknown name speed
 - An error in a page's `.page.toml` file is placed at its table's header line.
 - The check opens each picture's file, without decoding its pixels, as the build reads it. A file nxwright cannot read is an error on the line of `app.toml` that gives the picture: `pictures/logo.png: not a picture nxwright reads: no kind of picture Pillow knows`. A picture whose pixels alone are damaged opens fine. Only the build finds it, and gives its file the same way.
 - A page whose memory the Nextion Editor's compile would refuse is an error on its `.page.toml` file ([Memory](build-rules.md#memory)).
+- A sound the Nextion Editor refuses to compile, of 22050 samples a second and other than 16 bits a sample or more than two channels, is an error on the line of `app.toml` that gives the sound ([source-folder.md](source-folder.md#animations-videos-and-sounds)).
 
 The [VS Code extension](../editors/vscode/README.md) runs the same checks as you type. It offers a quick fix for an error that has one sure fix, such as a command written in capitals.
 
@@ -370,10 +371,10 @@ nxwright sound app alarm.mp3 --rate 16000 --mono
 Adds a sound after the folder's other sounds.
 
 - `--name`: the sound's name. By default, the file's.
-- A WAV file of PCM samples, 8 or 16 bits, mono or stereo, is taken as it is.
+- A WAV file of PCM samples, 8 or 16 bits, mono or stereo, is taken as it is, but for one of 8 bits at 22050 samples a second. The Nextion Editor refuses to compile that one, so it goes through ffmpeg too.
 - Any other sound file goes through ffmpeg, which makes its samples 16-bit. So does any file given `--rate` or `--mono`. Without ffmpeg, the command fails.
 - `--rate`: the samples a second to convert to, from 8,000 to 48,000.
-- `--mono`: converts to one channel.
+- `--mono`: converts to one channel. A sound of more than two channels at 22050 samples a second needs it, or another `--rate`, since the Nextion Editor refuses to compile it.
 - `--ffmpeg`: the ffmpeg program to use. By default, the one on the PATH.
 
 ## sd-picture

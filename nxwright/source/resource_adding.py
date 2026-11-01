@@ -19,7 +19,8 @@ from nxwright.project.ffmpeg import find_ffmpeg, sound_as_wav, video_as_pngs
 from nxwright.project.font_drawing import code_points_of, draw_font_block, font_warning
 from nxwright.project.media_files import (CARD_PICTURE_QUALITIES, animation_files,
                                           card_picture_file, check_video_rate, gmovmaker_frames,
-                                          sound_file, video_file, video_frame)
+                                          sound_file, sound_form_problem, video_file,
+                                          video_frame)
 from nxwright.project.pictures import (picture_problem, picture_size, read_picture,
                                        still_picture_size)
 from nxwright.project.resources import PICTURE_SUFFIXES
@@ -420,13 +421,16 @@ def add_sound(source_folder: Path, sound: Path, name: str = None, rate: int = No
     file's. Returns the name.
 
     A WAV file of PCM samples of 8 or 16 bits, mono or stereo, is taken as
-    it is. Any other sound file, and any to be made `rate` samples a second
-    or `mono`, goes through ffmpeg, the program `ffmpeg` names or the PATH
-    finds, which makes its samples 16-bit. Raises NxwrightError, before
-    writing anything, for a rate outside 8,000 to 48,000, the rates the
-    Editor was seen to take, a file neither nxwright nor ffmpeg reads, a
-    name the folder has or may not have, or a file already where the sound
-    would go."""
+    it is, but one the Editor refuses to compile, of 8 bits at 22050
+    samples a second (media_files.sound_form_problem). Any other sound
+    file, and any to be made `rate` samples a second or `mono`, goes
+    through ffmpeg, the program `ffmpeg` names or the PATH finds, which
+    makes its samples 16-bit. Raises NxwrightError, before writing
+    anything, for a rate outside 8,000 to 48,000, the rates the Editor was
+    seen to take, a file neither nxwright nor ffmpeg reads, a sound the
+    Editor still refuses to compile once ffmpeg has made it 16-bit, of more
+    than two channels at 22050 samples a second, a name the folder has or
+    may not have, or a file already where the sound would go."""
     source_folder, sound = Path(source_folder), Path(sound)
     app = parse_app(read_text(source_folder / "app.toml"))
     if rate is not None and rate not in SOUND_RATES:
@@ -443,12 +447,24 @@ def add_sound(source_folder: Path, sound: Path, name: str = None, rate: int = No
         except NxwrightError as error:
             content, why = None, "%s: %s: nxwright converts others through ffmpeg" % (
                 sound.name, error)
+        else:
+            # The Editor's Audio panel keeps such a sound, but its compile
+            # refuses it, as of 8 bits at 22050 samples a second.
+            problem = sound_form_problem(content)
+            if problem:
+                content, why = None, "%s %s: nxwright converts it through ffmpeg" % (
+                    sound.name, problem)
     else:
         content, why = None, "converting %s needs ffmpeg" % sound.name
     if content is None:
         found = _needed_ffmpeg(ffmpeg, why)
         with tempfile.TemporaryDirectory() as converted:
-            content = sound_file(sound_as_wav(found, sound, Path(converted), rate, mono), stored)
+            wav = sound_as_wav(found, sound, Path(converted), rate, mono)
+        # ffmpeg makes the samples 16-bit, but keeps more than two channels.
+        problem = sound_form_problem(wav)
+        if problem:
+            raise NxwrightError("%s %s, with --mono or --rate" % (sound.name, problem))
+        content = sound_file(wav, stored)
     _add_resource(source_folder, app, "sounds", name, zip(paths, [content]))
     return name
 

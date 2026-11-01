@@ -25,8 +25,9 @@ from nxwright import NxwrightError
 from nxwright.cli import main
 from nxwright.project import ffmpeg
 from nxwright.project.media_files import (animation_frames, screen_crc, sound_file,
-                                          sound_file_problem, sound_length, turned_video,
-                                          video_file, video_frame, video_frames, video_rotation)
+                                          sound_file_problem, sound_form_problem, sound_length,
+                                          turned_video, video_file, video_frame, video_frames,
+                                          video_rotation)
 from nxwright.project.pictures import read_picture, write_png
 from nxwright.project.stamp import CRC_START, word_crc
 from nxwright.source.folder_check import check_folder
@@ -148,6 +149,44 @@ class SoundFileTest(unittest.TestCase):
         self.assertTrue(sound_file(wav(1, 2, 8000, bytes(40)), "x" * 484))
 
 
+class SoundFormTest(unittest.TestCase):
+    """The forms of sound the Nextion Editor refuses to compile: at 22050
+    samples a second, one of other than 16 bits a sample, or of more than
+    two channels. It resamples a sound of any other rate, and takes it."""
+
+    def test_other_bits_at_22050(self):
+        for width, form in ((1, 1), (3, 1), (4, 1), (4, 3)):
+            with self.subTest(bits=8 * width, form=form):
+                self.assertIn('the Nextion Editor refuses to compile ("Data bits exceed the '
+                              'valid range (only 16 bits are supported)")',
+                              sound_form_problem(wav(1, width, 22050, bytes(8 * width), form)))
+        self.assertTrue(sound_form_problem(wav(1, 1, 22050, bytes(8))).startswith(
+            "has 8 bits a sample at 22050 samples a second"))
+        # 16-bit samples whose format chunk says 12 bits: the Editor reads
+        # the chunk's bits, and refused them.
+        twelve = bytearray(wav(1, 2, 22050, bytes(16)))
+        twelve[34:36] = struct.pack("<H", 12)
+        self.assertTrue(sound_form_problem(bytes(twelve)).startswith(
+            "has 12 bits a sample at 22050 samples a second"))
+
+    def test_more_than_two_channels_at_22050(self):
+        for channels in (3, 4):
+            with self.subTest(channels=channels):
+                self.assertEqual(sound_form_problem(wav(channels, 2, 22050, bytes(8 * channels))),
+                                 'has %d channels at 22050 samples a second, which the Nextion '
+                                 'Editor refuses to compile ("Vocal Track Number Out of Effective '
+                                 'Range (1/2)"): make it mono or stereo, or give it another rate'
+                                 % channels)
+
+    def test_the_forms_it_compiles(self):
+        for channels, width, rate in ((1, 2, 22050), (2, 2, 22050), (1, 1, 11025),
+                                      (2, 1, 8000), (1, 3, 44100), (6, 2, 44100)):
+            with self.subTest((channels, width, rate)):
+                self.assertIsNone(sound_form_problem(wav(channels, width, rate, bytes(48))))
+        # A file that is not a WAV file is left to other checks.
+        self.assertIsNone(sound_form_problem(b"ID3 an mp3"))
+
+
 class VideoFileTest(unittest.TestCase):
 
     def test_videoboxs_files_are_made_byte_for_byte_from_their_frames(self):
@@ -249,12 +288,13 @@ class SoundCommandTest(MediaCommandTestCase):
 
     def test_the_editor_names_it_after_its_file(self):
         # A name in a subfolder is the file's name, which hmic keeps.
-        add_sound(self.source, SOURCES / "odd8.wav", "alarms/odd8")
-        self.assertEqual((self.source / "sounds" / "alarms" / "odd8.wav").read_bytes(),
-                         (FIXTURES / "odd8.wav").read_bytes())
+        add_sound(self.source, SOURCES / "short11k-stereo8.wav", "alarms/short11k-stereo8")
+        self.assertEqual(
+            (self.source / "sounds" / "alarms" / "short11k-stereo8.wav").read_bytes(),
+            (FIXTURES / "chirp.wav").read_bytes())
 
     def test_a_name_the_folder_has_is_refused_before_writing(self):
-        add_sound(self.source, SOURCES / "odd8.wav", "beep")
+        add_sound(self.source, SOURCES / "short11k-stereo8.wav", "beep")
         before = self.app()
         with self.assertRaisesRegex(NxwrightError, "has a sound named beep"):
             add_sound(self.source, SOURCES / "list.wav", "Beep")
@@ -288,6 +328,56 @@ class SoundCommandTest(MediaCommandTestCase):
                 add_sound(self.source, SOURCES / "short22k.wav", mono=True)
         self.assertFalse((self.source / "sounds").exists())
 
+    def test_an_8_bit_sound_at_22050_goes_through_ffmpeg(self):
+        # The Editor's Audio panel keeps it as it is, but its compile refuses
+        # it, so nxwright makes it 16-bit, at its own rate and channels.
+        converted = wav(1, 2, 22050, bytes(range(200)))
+
+        def ffmpeg_writes(command, **_):
+            Path(command[-1]).write_bytes(converted)
+            return mock.Mock(returncode=0, stdout=b"", stderr=b"")
+        with mock.patch("nxwright.project.ffmpeg.shutil.which", return_value="ffmpeg"), \
+                mock.patch("nxwright.project.ffmpeg.subprocess.run",
+                           side_effect=ffmpeg_writes) as run:
+            add_sound(self.source, SOURCES / "odd8.wav")
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("-acodec") + 1], "pcm_s16le")
+        self.assertNotIn("-ar", command)
+        self.assertNotIn("-ac", command)
+        self.assertEqual((self.source / "sounds" / "odd8.wav").read_bytes(),
+                         sound_file(converted, "odd8"))
+
+    def test_without_ffmpeg_an_8_bit_sound_at_22050_is_refused(self):
+        with mock.patch("nxwright.project.ffmpeg.shutil.which", return_value=None):
+            with self.assertRaisesRegex(NxwrightError, "odd8.wav has 8 bits a sample at 22050 "
+                                                       "samples a second, which the Nextion "
+                                                       "Editor refuses to compile .*: nxwright "
+                                                       "converts it through ffmpeg, which is "
+                                                       "not on the PATH"):
+                add_sound(self.source, SOURCES / "odd8.wav")
+        self.assertFalse((self.source / "sounds").exists())
+
+    def test_more_than_two_channels_at_22050_are_refused_unless_mono(self):
+        # ffmpeg makes the samples 16-bit and keeps the channels.
+        source = self.folder / "surround.wav"
+        source.write_bytes(wav(4, 2, 22050, bytes(64)))
+
+        def ffmpeg_writes(command, **_):
+            Path(command[-1]).write_bytes(
+                wav(1, 2, 22050, bytes(16)) if "-ac" in command else wav(4, 2, 22050, bytes(64)))
+            return mock.Mock(returncode=0, stdout=b"", stderr=b"")
+        with mock.patch("nxwright.project.ffmpeg.shutil.which", return_value="ffmpeg"), \
+                mock.patch("nxwright.project.ffmpeg.subprocess.run", side_effect=ffmpeg_writes):
+            with self.assertRaisesRegex(NxwrightError, "surround.wav has 4 channels at 22050 "
+                                                       "samples a second, which the Nextion "
+                                                       "Editor refuses to compile .*: make it "
+                                                       "mono or stereo, or give it another "
+                                                       "rate, with --mono or --rate"):
+                add_sound(self.source, source)
+            self.assertFalse((self.source / "sounds").exists())
+            add_sound(self.source, source, mono=True)
+        self.assertEqual(tomllib.loads(self.app())["sounds"], ["surround"])
+
     def test_a_rate_the_editor_was_not_seen_to_take_is_refused(self):
         for rate in (7999, 48001):
             with self.assertRaisesRegex(NxwrightError, "from 8,000 to 48,000"):
@@ -302,7 +392,7 @@ class SoundCommandTest(MediaCommandTestCase):
         self.assertEqual(tomllib.loads(self.app())["sounds"], ["chime"])
 
     def test_a_folder_with_a_made_sound_builds_and_extracts_back(self):
-        add_sound(self.source, SOURCES / "odd8.wav")
+        add_sound(self.source, SOURCES / "short11k-stereo8.wav")
         before = folder_files(self.source)
         build(self.source, self.folder / "made.HMI")
         extract(self.folder / "made.HMI", self.source)
@@ -452,7 +542,7 @@ class SoundWarningTest(MediaCommandTestCase):
 
     def test_a_sound_without_hmic_is_warned_of_on_its_line(self):
         add_sound(self.source, SOURCES / "short22k.wav", "plain")
-        add_sound(self.source, SOURCES / "odd8.wav")
+        add_sound(self.source, SOURCES / "short11k-stereo8.wav")
         (self.source / "sounds" / "plain.wav").write_bytes((SOURCES / "short22k.wav").read_bytes())
         findings = self.check()
         self.assertEqual([(found.file, found.severity, found.rule) for found in findings],
@@ -465,18 +555,68 @@ class SoundWarningTest(MediaCommandTestCase):
         self.assertEqual(self.check(read_bytes=False), [])
 
     def test_a_missing_sound_is_the_checks_error_alone(self):
-        add_sound(self.source, SOURCES / "odd8.wav")
-        (self.source / "sounds" / "odd8.wav").unlink()
+        add_sound(self.source, SOURCES / "short11k-stereo8.wav")
+        (self.source / "sounds" / "short11k-stereo8.wav").unlink()
         self.assertEqual([(found.severity, found.message) for found in self.check()],
-                         [("error", "sounds/odd8.wav is missing")])
+                         [("error", "sounds/short11k-stereo8.wav is missing")])
 
     def test_nxwright_check_shows_it(self):
-        add_sound(self.source, SOURCES / "odd8.wav")
-        (self.source / "sounds" / "odd8.wav").write_bytes((SOURCES / "odd8.wav").read_bytes())
+        add_sound(self.source, SOURCES / "short11k-stereo8.wav")
+        (self.source / "sounds" / "short11k-stereo8.wav").write_bytes(
+            (SOURCES / "short11k-stereo8.wav").read_bytes())
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             self.assertEqual(main(["check", str(self.source)]), 0)
-        self.assertIn("warning: sounds/odd8.wav: it has no hmic chunk", output.getvalue())
+        self.assertIn("warning: sounds/short11k-stereo8.wav: it has no hmic chunk",
+                      output.getvalue())
+
+
+class SoundFormRefusedTest(MediaCommandTestCase):
+    """A sound the Nextion Editor refuses to compile, put in the folder by
+    hand: the build refuses it, and the checks show it as an error."""
+
+    def put_sound(self, name: str, data: bytes):
+        (self.source / "sounds").mkdir()
+        (self.source / "sounds" / (name + ".wav")).write_bytes(data)
+        with open(self.source / "app.toml", "a", encoding="utf-8") as app:
+            app.write('sounds = ["%s"]\n' % name)
+
+    def check(self) -> list:
+        return check_folder(folder_reader(self.source), lambda path: (self.source / path).is_file(),
+                            read_bytes=folder_byte_reader(self.source)).findings()
+
+    def test_the_build_refuses_one_of_other_bits(self):
+        # The Editor's Audio panel's own file of an 8-bit sound at 22050.
+        self.put_sound("odd8", (FIXTURES / "odd8.wav").read_bytes())
+        with self.assertRaises(NxwrightError) as refused:
+            build(self.source, self.folder / "made.HMI")
+        self.assertEqual(str(refused.exception),
+                         'sounds/odd8.wav has 8 bits a sample at 22050 samples a second, which '
+                         'the Nextion Editor refuses to compile ("Data bits exceed the valid '
+                         'range (only 16 bits are supported)"): make its samples 16-bit, or '
+                         'give it another rate')
+        self.assertFalse((self.folder / "made.HMI").exists())
+
+    def test_the_build_refuses_one_of_more_than_two_channels(self):
+        made = sound_file(wav(1, 2, 22050, bytes(16)), "surround")
+        self.put_sound("surround", made.replace(struct.pack("<HHI", 1, 1, 22050),
+                                                struct.pack("<HHI", 1, 3, 22050), 1))
+        with self.assertRaisesRegex(NxwrightError, "sounds/surround.wav has 3 channels at 22050 "
+                                                   "samples a second"):
+            build(self.source, self.folder / "made.HMI")
+
+    def test_the_checks_show_it_as_an_error_on_its_line(self):
+        self.put_sound("odd8", (FIXTURES / "odd8.wav").read_bytes())
+        findings = self.check()
+        self.assertEqual([(found.file, found.severity, found.rule) for found in findings],
+                         [("app.toml", "error", "sound-form")])
+        self.assertIn('"odd8"', self.app().split("\n")[findings[0].line - 1])
+        self.assertIn("make its samples 16-bit, or give it another rate", findings[0].message)
+
+    def test_a_sound_of_another_rate_builds(self):
+        self.put_sound("chirp", (FIXTURES / "chirp.wav").read_bytes())
+        build(self.source, self.folder / "made.HMI")
+        self.assertEqual(self.check(), [])
 
 
 class FfmpegCommandTest(unittest.TestCase):

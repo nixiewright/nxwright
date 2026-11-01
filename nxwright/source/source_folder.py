@@ -50,7 +50,7 @@ from nxwright.project.editor_limits import NAME_LIMIT, check_component_places, l
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.page_memory import measure_page, project_memory
 from nxwright.project.font_drawing import draw_font_block, drawn_codes, lacking_words
-from nxwright.project.media_files import video_rotation
+from nxwright.project.media_files import sound_form_problem, video_rotation
 from nxwright.project.pictures import picture_problem
 from nxwright.project.truetype import NOTO_SANS, noto_sans
 from nxwright.project.zi_font import UTF8
@@ -1184,8 +1184,9 @@ def _dump_files_from_source(source_folder: Path, refuse_by_table: bool) -> tuple
 def _resource_dump_files(app: dict, source_folder: Path) -> tuple:
     """Returns ({relative path: bytes} of the dump's pictures, animations,
     videos, and sounds, {the dump's file of each picture: the folder's}).
-    Raises NxwrightError naming a picture nxwright cannot read, or a video
-    made for another rotation."""
+    Raises NxwrightError naming a picture nxwright cannot read, a video
+    made for another rotation, or a sound the Editor refuses to compile
+    (media_files.sound_form_problem)."""
     def exists(path: str) -> bool:
         return (source_folder / path).is_file()
     files, pictures = {}, {}
@@ -1204,8 +1205,9 @@ def _resource_dump_files(app: dict, source_folder: Path) -> tuple:
             for suffix in kind.suffixes:
                 path = "%s/%s%s" % (kind.folder, name, suffix)
                 content = read_bytes(source_folder / path)
-                problem = video_rotation_problem(app, content) if kind.folder == LISTS[VIDEO] \
-                    else None
+                problem = (video_rotation_problem(app, content) if kind.folder == LISTS[VIDEO]
+                           else sound_form_problem(content) if kind.folder == LISTS[SOUND]
+                           else None)
                 if problem:
                     raise NxwrightError("%s %s" % (path, problem))
                 files["%s/%s" % (kind.folder, copied_file_name(resource_id, suffix))] = content

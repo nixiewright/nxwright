@@ -30,7 +30,7 @@ from nxwright import NxwrightError
 from nxwright.project.page_memory import measure_page, project_memory
 from nxwright.project.screen_models import ScreenModel
 from nxwright.source.lint import (ERROR, WARNING, Finding, line_naming, picture_errors,
-                                 sound_warnings, video_rotation_errors, warnings)
+                                 sound_errors, sound_warnings, video_rotation_errors, warnings)
 from nxwright.source.page_source import page_toml_path
 from nxwright.source.source_folder import (RESOURCE_FILES, check_globals_count, memory_refusal,
                                            program_ints, read_folder_source, resource_problems)
@@ -88,8 +88,9 @@ def check_folder(read, exists, pages: list = None, read_bytes=None) -> FolderChe
     first `size` (source_folder.folder_byte_reader), the pictures' and the
     media's files are read too: the pictures', each opened without its pixels
     decoded, to find one nxwright cannot read (lint.picture_errors); the
-    sounds', to warn of one not in the Editor's form (lint.sound_warnings);
-    and the start of the videos', to find one made for another rotation
+    sounds', to warn of one not in the Editor's form (lint.sound_warnings),
+    and to find one the Editor refuses to compile (lint.sound_errors); and
+    the start of the videos', to find one made for another rotation
     (lint.video_rotation_errors)."""
     result = FolderCheck()
     try:
@@ -134,6 +135,7 @@ def check_folder(read, exists, pages: list = None, read_bytes=None) -> FolderChe
     if read_bytes is not None:
         result.folder_findings += (picture_errors(folder.app, read, read_bytes, exists)
                                    + video_rotation_errors(folder.app, read, read_bytes)
+                                   + sound_errors(folder.app, read, read_bytes)
                                    + sound_warnings(folder.app, read, read_bytes))
     return result
 
