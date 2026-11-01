@@ -152,7 +152,7 @@ In strict Nextion syntax, the build refuses a line the Nextion Editor cannot rea
 - A value that is not operands joined by operators, such as `n0.val=2+`, `n0.val=+2`, or `n0.val=(1+2)` ("Invalid Variables"). After an operator, a minus can start a number, as in `n0.val=2*-16`, but not a name: `n0.val=2*-n1.val` is refused.
 - An assignment with no value: `n0.val=` ("Invalid command").
 - Where a command takes a number ([Texts and numbers](#texts-and-numbers)), an operand the Nextion Editor does not read, as in `cls 5a`, `cls 1_000`, `cls RED+*1`, or `cls -n0.val` ("Invalid Variables").
-  - The build refuses these in nxlang too, with one exception. In a page's code, nxlang computes a value it reads first, such as a minus before a name, so `cls -n0.val` builds ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
+  - The build refuses these in nxlang too, with one exception. In a page's code, nxlang computes an operand it can read, such as a minus before a name, into a temporary beforehand. So `cls -n0.val` builds ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 - An `if`, `else if`, `while`, or `for` whose condition does not end with `)`.
 - A `for` whose head contains a text with a semicolon, in any of its parts, such as `for(n0.val=0;t0.txt!="a;b";n0.val++)` ("SYNTAX ERROR:for"). A `while` or an `if` takes such a text. nxlang writes such a `for` as its start and a `while` loop instead ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 
