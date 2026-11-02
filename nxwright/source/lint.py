@@ -57,8 +57,8 @@ from nxwright.project.media_files import VIDEO_HEAD_SIZE, sound_file_problem, so
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.pictures import picture_problem
 from nxwright.project.screen_arithmetic import int32
-from nxwright.source.nx_files import (EVENT_HEADING, FUNCTION_HEADING, event_blocks, read_nx_file,
-                                      read_page_files)
+from nxwright.source.nx_files import (FUNCTION_HEADING, event_blocks, read_event_heading,
+                                      read_nx_file, read_page_files)
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.page_source import page_nx_path, page_toml_path
 from nxwright.source.source_folder import (check_picture_file, check_picture_source, code_files,
@@ -311,7 +311,7 @@ def _names_used(path: str, text: str) -> list:
     file uses, leaving out the names a heading or a `const` line defines."""
     used = []
     for number, line in enumerate(text.split("\n"), start=1):
-        if EVENT_HEADING.fullmatch(line) or FUNCTION_HEADING.fullmatch(line):
+        if read_event_heading(line) or FUNCTION_HEADING.fullmatch(line):
             continue
         try:
             code = split_line(line, number)[1]

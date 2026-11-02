@@ -22,7 +22,7 @@ from nxwright.project.page_text import is_string_attribute
 from nxwright.project.attribute_descriptions import SHOWN, VALUE_ONLY, describe
 from nxwright.source.keyboards import CHINESE_INPUT, KEYBOARD_PAGES
 from nxwright.source.keyboard_adding import chinese_keyboard_fonts, keyboard_page
-from nxwright.source.nx_files import with_code_added
+from nxwright.source.nx_files import event_heading, with_code_added
 from nxwright.source.page_edits import ComponentTable
 from nxwright.source.page_source import (COLOUR_ATTRIBUTES, RAW_KEY, attribute_value,
                                          page_nx_path, reference_kind)
@@ -159,7 +159,7 @@ def default_event(index, read, page: str, name: str, event: str = None) -> dict 
                 "edit": None}
     path = page_nx_path(page)
     text = "\n".join(index.lines(path) or [""])
-    new_text = with_code_added(text, "on %s.%s:\n" % (name, event))
+    new_text = with_code_added(text, event_heading(name, event) + "\n")
     return {"path": path, "line": new_text.count("\n"), "character": 0,
             "edit": _code_added_edit(text, new_text)}
 

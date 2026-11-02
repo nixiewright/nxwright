@@ -154,6 +154,7 @@ pco = "#ffffff"
 ```
 
 - Each table has `name`, `type`, a readable name such as `"text"` or `"button"`, and `events`, the events the object has, with or without code. Then come its attributes, by their names in the Nextion Editor.
+  - A component's `name` may be any name the Nextion Editor keeps, such as `b)0` or `b 0`, but not one with a double quote or a control character. As in the Nextion Editor, code cannot name a component whose name is not made of letters, digits, and `_`, but its events run.
 - Only what differs from a newly added component of the same type is written ([Component defaults](#component-defaults)).
   - `x`, `y`, `w`, and `h` are always written for components that have a place on the screen.
   - `events` is left out when it is the type's default.
@@ -189,6 +190,8 @@ on save.up:
     sys1 = 0
   }
 ```
+
+A heading puts a component's name in double quotes when the name is not made of letters, digits, and `_` alone: `on "b 0".up:`. Any name may be quoted, so `on "save".up:` is the same heading as `on save.up:`.
 
 ### Comments
 

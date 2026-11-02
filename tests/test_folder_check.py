@@ -155,8 +155,8 @@ class ErrorPlaceTest(FolderTestCase):
         lines = self.text("pages/second.page.toml").split("\n")
         header = len(lines) - lines[::-1].index("[[component]]")
         self.assertEqual((finding.file, finding.line), ("pages/second.page.toml", header))
-        self.assertIn("name must be a plain name", finding.message)
-        with self.assertRaisesRegex(NxwrightError, "name must be a plain name"):
+        self.assertIn("name must be a text", finding.message)
+        with self.assertRaisesRegex(NxwrightError, "name must be a text"):
             build(self.root, Path(self._folder.name) / "out.HMI")
 
     def test_a_name_longer_than_the_editor_keeps(self):

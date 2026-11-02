@@ -39,14 +39,59 @@ CODE_INDENT = "  "
 # How the build writes an event comment's `//` inside the event, so that
 # extracting can tell the comment from the code's own comments.
 EVENT_COMMENT_MARKER = "// ###"
-# The heading of an event: `on save.up:` gives the object and the event.
-EVENT_HEADING = re.compile(r"on ([A-Za-z0-9_]+)\.([a-z]+):")
+# An object's name a heading gives as it is. Any other name is quoted,
+# such as `"b 0"`, which the Nextion Editor allows too. A quoted name has no
+# escapes: the Editor refuses a quote in a name, and a heading, a line of
+# text, cannot hold a control character, so page_source.py refuses both.
+_PLAIN_OBJECT_NAME = re.compile(r"[A-Za-z0-9_]+")
+# An event's label, `on save.up`, or `on "b 0".up`: the object and the event.
+_EVENT_LABEL = re.compile(r'on (?:([A-Za-z0-9_]+)|"([^"\x00-\x1f]*)")\.([a-z]+)')
 # The heading of a function in nxlang; nxlang.py reads the rest of the line.
 FUNCTION_HEADING = re.compile(r"function\s+([A-Za-z_][A-Za-z0-9_]*)\b.*")
 # The heading of a macro, in macros.nx; macros_source.py checks the name.
 MACRO_HEADING = re.compile(r"macro (.+):")
 # The code of an include line, which gives the path as written.
 INCLUDE = re.compile(r'include\s+"([^"]*)"')
+
+
+@dataclass(frozen=True)
+class EventLabel:
+    """An event's heading or label as read: the object's name, unquoted,
+    the event, and where the name lies in the line, without its quotes."""
+    name: str
+    event: str
+    name_start: int
+    name_end: int
+
+
+def event_label(name: str, event: str) -> str:
+    """Returns the label of the object `name`'s event `event`, as messages
+    and the outline give it: `on save.up`, or `on "b 0".up` for a name that
+    is not plain."""
+    return "on %s.%s" % (name if _PLAIN_OBJECT_NAME.fullmatch(name) else '"%s"' % name, event)
+
+
+def event_heading(name: str, event: str) -> str:
+    """Returns the heading of the object `name`'s event `event` in a .nx
+    file: its label, then a colon, `on save.up:`."""
+    return event_label(name, event) + ":"
+
+
+def read_event_heading(line: str):
+    """Returns the EventLabel of a heading line, `on save.up:` or
+    `on "b 0".up:`, or None for any other line. A quoted plain name reads as
+    the plain one."""
+    return read_event_label(line[:-1]) if line.endswith(":") else None
+
+
+def read_event_label(text: str):
+    """Returns the EventLabel of an event's label, `on save.up` or
+    `on "b 0".up`, or None for any other text."""
+    found = _EVENT_LABEL.fullmatch(text)
+    if found is None:
+        return None
+    group = 1 if found[1] is not None else 2
+    return EventLabel(found[group], found[3], found.start(group), found.end(group))
 
 
 @dataclass
@@ -89,9 +134,10 @@ def event_blocks(text: str, file_name: str, preamble: list = None, end: list = N
     above no heading, is added to `end`, if given: what writes the file
     again from its blocks needs it."""
     def heading_of(line: str):
-        event = EVENT_HEADING.fullmatch(line)
+        event = read_event_heading(line)
         if event:
-            return event.groups(), "%s.%s" % event.groups()
+            # As errors name it, `save.up`, without the label's "on ".
+            return (event.name, event.event), event_label(event.name, event.event)[3:]
         function = FUNCTION_HEADING.fullmatch(line) if preamble is not None else None
         if function:
             return (None, function[1]), "function " + function[1]
@@ -256,7 +302,7 @@ def read_page_files(page_path: str, page_text: str, read) -> PageFiles:
         files.append(nx_file)
         for key in nx_file.blocks:
             if key in homes:
-                what = "function " + key[1] if key[0] is None else "%s.%s" % key
+                what = "function " + key[1] if key[0] is None else event_label(*key)[3:]
                 raise NxwrightError("%s is also defined in %s" % (what, homes[key].path),
                                     file=nx_file.path, line=nx_file.blocks[key].number)
             homes[key] = nx_file

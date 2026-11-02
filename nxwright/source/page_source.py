@@ -63,7 +63,8 @@ from nxwright.project.page_block import HEADER_SIZE, Attribute, Event, Marker, P
 from nxwright.project.page_header import (NO_LOCK_PASSWORD, SYSTEM_PAGES, PageHeader, header_16,
                                          header_40, page_header_of)
 from nxwright.source.nx_files import (CODE_INDENT, EVENT_COMMENT_MARKER, EventBlock, PageFiles,
-                                      blank_lines_dropped, event_blocks, read_page_files)
+                                      blank_lines_dropped, event_blocks, event_heading,
+                                      event_label, read_page_files)
 from nxwright.project.page_text import expected_width, is_string_attribute, text_form_number
 from nxwright.project.attribute_values import number_from_bytes, number_to_bytes
 from nxwright.project.attribute_descriptions import describe
@@ -102,10 +103,14 @@ _DERIVED = ("id", "objname", "endx", "endy")
 # defaults, has none. So a table may give it on a type that has drag, and
 # the build puts it after drag.
 _DISUP, _DRAG = "disup", "drag"
-# Names are plain ASCII, checked once decoded: Latin-1 decodes any byte, so a
-# name that is not reaches that check rather than a decoding error.
+# Names are decoded as Latin-1, which decodes any byte, so a name always
+# reaches the check below, and builds back byte for byte.
 _NAME_ENCODING = "latin-1"
-_NAME = re.compile(r"[A-Za-z0-9_]+")
+# The names a source folder keeps: any but an empty one, or one with a
+# double quote or a control character. An event's heading quotes a name that
+# is not plain, and a quoted name has no escapes, on one line
+# (nx_files.event_heading). The Nextion Editor allows none of them.
+_KEPT_NAME = re.compile(r'[^"\x00-\x1f]+')
 _VARIABLE = TYPES_BY_NAME["variable"]
 _HOTSPOT = TYPES_BY_NAME["hotspot"]
 # Object IDs are one byte.
@@ -399,8 +404,11 @@ class _ObjectContent:
                 "h" in names and names[names.index("h") + 1:names.index("h") + 3] != ["endx", "endy"]):
             raise NxwrightError("%s: endx and endy do not follow h" % where)
         objname = attributes[2].value.decode(_NAME_ENCODING)
-        if not _NAME.fullmatch(objname):
-            raise NxwrightError("%s: name %r is not a plain name" % (where, objname))
+        if not objname:
+            raise NxwrightError("%s: name '' is empty" % where)
+        if not _KEPT_NAME.fullmatch(objname):
+            raise NxwrightError("%s: name %r has a double quote or a control character, which "
+                                "a source folder cannot keep" % (where, objname))
         values = {attribute.name: attribute.value for attribute in attributes}
         derived = _derived_values(index, objname, values)
         kept = [attribute for attribute in attributes[1:]
@@ -477,7 +485,7 @@ def _event_to_text(name: str, event: Event, where: str, codec: TextCodec) -> tup
     while start < len(texts) and texts[start].startswith(EVENT_COMMENT_MARKER):
         start += 1
     lines = (["//" + text[len(EVENT_COMMENT_MARKER):] for text in texts[:start]]
-             + ["on %s.%s:" % (name, event.name)] + [CODE_INDENT + text for text in texts[start:]])
+             + [event_heading(name, event.name)] + [CODE_INDENT + text for text in texts[start:]])
     return "\n".join(lines) + "\n", dropped
 
 
@@ -597,14 +605,14 @@ def editor_code_of_file(path: str, page_name: str, events_text: str, names: Reso
         for key, block in event_blocks(text, path).items():
             comment = [(number, marked) for (number, _), marked
                        in zip(block.comment, block.marked_comment())]
-            sections.append(("on %s.%s" % key,
+            sections.append((event_label(*key),
                              preprocess_with_places(comment + block.code_lines(), names,
                                                     owner=Owner.among(key[0],
                                                                       component_names))))
         return sections
     compiled = compile_nxlang_page(events_text, page_name, component_names, program, page_id,
                                    read, object_types, codec=codec)
-    sections = [("on %s.%s" % key, preprocess_with_places(lines, names))
+    sections = [(event_label(*key), preprocess_with_places(lines, names))
                 for key, lines in compiled.events.items() if compiled.sources.get(key) == path]
     sections += [("function " + name, preprocess_with_places(compiled.bodies[name], names))
                  for name, function in compiled.functions.items() if function.file == path]
@@ -1043,8 +1051,17 @@ def _table_header(table: dict, where: str) -> tuple:
     """Returns (name, type number, events or None, whether the table is marked
     defaults = false) of a <page>.page.toml table, after checking them."""
     name = table.get("name")
-    if not isinstance(name, str) or not _NAME.fullmatch(name):
-        raise NxwrightError("%s: name must be a plain name" % where)
+    if not isinstance(name, str):
+        raise NxwrightError("%s: name must be a text" % where)
+    # The Nextion Editor refuses an empty name, and a name is stored in
+    # Latin-1 (_NAME_ENCODING).
+    if not name:
+        raise NxwrightError("%s: name '' is empty" % where)
+    if any(ord(character) > 0xff for character in name):
+        raise NxwrightError("%s: name %r has a character Latin-1 lacks" % (where, name))
+    if not _KEPT_NAME.fullmatch(name):
+        raise NxwrightError("%s: name %r has a double quote or a control character, which an "
+                            "event's heading cannot hold" % (where, name))
     type_value = table.get("type")
     object_type = TYPES_BY_NAME.get(type_value, type_value) if isinstance(type_value, str) \
         else type_value

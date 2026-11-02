@@ -21,8 +21,8 @@
   ],
   "repository": {
     "heading": {
-      "comment": "An event heading in a .nx file: on <object>.<event>:",
-      "match": "^(on)\\s+([A-Za-z0-9_]+)(\\.)([a-z]+)(:)$",
+      "comment": "An event heading in a .nx file: on <object>.<event>:, the object's name quoted when it is not plain, as on \"b 0\".up:",
+      "match": "^(on)\\s+([A-Za-z0-9_]+|\"[^\"\\x00-\\x1f]*\")(\\.)([a-z]+)(:)$",
       "captures": {
         "1": { "name": "keyword.other.event.nxwright" },
         "2": { "name": "entity.name.type.object.nxwright" },

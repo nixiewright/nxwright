@@ -68,3 +68,10 @@ test("an event's heading, with nothing after its colon, as the build takes it", 
   assert.equal(rule("heading").exec("on b0.down:")?.[2], "b0");
   assert.equal(rule("heading").exec("on b0.down:  "), null);
 });
+
+test("an event's heading quotes a name that is not plain, as the Editor allows", () => {
+  assert.equal(rule("heading").exec('on "b 0".up:')?.[2], '"b 0"');
+  assert.equal(rule("heading").exec('on "b)0".up:')?.[4], "up");
+  // A quoted name holds no quote.
+  assert.equal(rule("heading").exec('on "b"0".up:'), null);
+});

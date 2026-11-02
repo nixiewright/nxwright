@@ -9,6 +9,7 @@ The search finds pages, components, functions, macros, and constants.
 from dataclasses import dataclass, field
 
 from nxwright.source.folder_index import FolderIndex, Place, page_of
+from nxwright.source.nx_files import event_label
 
 # The protocol's numbers for kinds of symbol.
 CLASS, FIELD, FUNCTION, VARIABLE, CONSTANT, EVENT = 5, 8, 12, 13, 14, 24
@@ -42,7 +43,7 @@ def file_symbols(index: FolderIndex, path: str) -> list:
         elif block.is_macro:
             name = "macro " + block.name
         else:
-            name = "on %s.%s" % (block.name, block.event)
+            name = event_label(block.name, block.event)
         symbols.append(Symbol(name, FUNCTION if block.is_function or block.is_macro else EVENT,
                               block.place, block.place.line, block.end_line))
     return sorted(symbols, key=lambda symbol: symbol.first_line)

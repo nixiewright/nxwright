@@ -125,7 +125,7 @@ from nxwright.project.component_defaults import NAME_PREFIXES
 from nxwright.source.component_groups import NO_GROUP, group_of, new_groupid0
 from nxwright.source.device_keys import screen_model, settings_from_keys
 from nxwright.source.folder_check import check_folder
-from nxwright.source.nx_files import EVENT_HEADING, with_code_added
+from nxwright.source.nx_files import event_heading, read_event_heading, with_code_added
 from nxwright.source.page_source import (KEY_LINE, attribute_value, component_properties,
                                          page_nx_path, page_toml_path)
 from nxwright.source.source_folder import read_page_toml
@@ -429,9 +429,9 @@ def _pasted_code(index, read, exists, page: str, names: list, types: dict, copie
     NxwrightError for code to replace in a file other pages include too."""
     events = []     # [(event, its code)]
     for block in code:
-        heading = next(filter(None, map(EVENT_HEADING.fullmatch, block.split("\n"))), None)
-        if heading and heading[1] == copied_name:
-            events.append((heading[2], block))
+        heading = next(filter(None, map(read_event_heading, block.split("\n"))), None)
+        if heading and heading.name == copied_name:
+            events.append((heading.event, block))
     replaced, added = {}, []    # replaced: {path: [(its lines, new code)]}
     for name in names:
         type_events = _type_defaults(page_toml, types[name]).events
@@ -483,7 +483,7 @@ def _with_own_name(block: str, old: str, new: str) -> str:
     quoted texts and comments, and not after a page's name or a dot."""
     lines = block.split("\n")
     for number, line in enumerate(lines):
-        if EVENT_HEADING.fullmatch(line):
+        if read_event_heading(line):
             continue
         tokens = line_tokens(line)
         starts = [start for at, (kind, text, start, _) in enumerate(tokens)
@@ -719,9 +719,9 @@ def _with_new_headings(block: str, renamed: dict) -> str:
     """Returns an event's code, its heading naming its component's new name."""
     lines = block.split("\n")
     for number, line in enumerate(lines):
-        heading = EVENT_HEADING.fullmatch(line)
-        if heading and heading[1] in renamed:
-            lines[number] = "on %s.%s:" % (renamed[heading[1]], heading[2])
+        heading = read_event_heading(line)
+        if heading and heading.name in renamed:
+            lines[number] = event_heading(renamed[heading.name], heading.event)
     return "\n".join(lines)
 
 

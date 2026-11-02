@@ -23,8 +23,8 @@ from nxwright.language.resource_names import LISTS
 from nxwright.project.resources import PICTURE_SUFFIXES
 from nxwright.project.screen_models import model_named
 from nxwright.source.macros_source import MACROS_PATH
-from nxwright.source.nx_files import (EVENT_HEADING, FUNCTION_HEADING, INCLUDE, MACRO_HEADING,
-                                      resolve)
+from nxwright.source.nx_files import (FUNCTION_HEADING, INCLUDE, MACRO_HEADING,
+                                      read_event_heading, resolve)
 from nxwright.source.page_source import KEY_LINE, page_nx_path, page_toml_path
 from nxwright.source.source_folder import NXLANG, picture_file
 
@@ -388,16 +388,19 @@ def _read_nx_file(path: str, lines: list) -> NxFileNames:
     block = None
     is_macros = path == MACROS_PATH
     for number, line in enumerate(lines):
-        heading = (MACRO_HEADING.fullmatch(line) if is_macros
-                   else EVENT_HEADING.fullmatch(line) or FUNCTION_HEADING.fullmatch(line))
-        if heading:
+        event = None if is_macros else read_event_heading(line)
+        other = None if event else (MACRO_HEADING.fullmatch(line) if is_macros
+                                    else FUNCTION_HEADING.fullmatch(line))
+        if event or other:
             if block is not None:
                 block.end_line = number - 1
-            is_function = not is_macros and line.startswith("function")
-            block = Block(heading[1], Place(path, number, heading.start(1), heading.end(1)),
-                          is_function=is_function,
-                          event="" if is_function or is_macros else heading[2],
-                          is_macro=is_macros)
+            is_function = other is not None and not is_macros
+            if event:
+                block = Block(event.name, Place(path, number, event.name_start, event.name_end),
+                              is_function=False, event=event.event)
+            else:
+                block = Block(other[1], Place(path, number, other.start(1), other.end(1)),
+                              is_function=is_function, event="", is_macro=is_macros)
             if block.is_function:
                 block.parameters = _parameters(path, number, line)
             names.blocks.append(block)

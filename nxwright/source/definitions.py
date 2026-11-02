@@ -34,7 +34,7 @@ from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.source.folder_index import (APP_FILE, FolderIndex, file_start, line_tokens,
                                           page_of)
 from nxwright.source.macros_source import MACROS_PATH
-from nxwright.source.nx_files import EVENT_HEADING
+from nxwright.source.nx_files import read_event_heading
 from nxwright.source.page_source import page_nx_path, page_toml_path, reference_kind
 
 # A page file's line `key = "value"`.
@@ -92,10 +92,10 @@ def _in_code(index: FolderIndex, path: str, line: int, column: int) -> list:
     if nx_file is None or line >= len(nx_file.lines):
         return []
     text = nx_file.lines[line]
-    heading = EVENT_HEADING.fullmatch(text)
+    heading = read_event_heading(text)
     if heading:
-        if heading.start(1) <= column <= heading.end(1):
-            return index.objects_named(heading[1], index.pages_using(path))
+        if heading.name_start <= column <= heading.name_end:
+            return index.objects_named(heading.name, index.pages_using(path))
         return []
     block = nx_file.block_at(line)
     if block is not None and block.place.line == line:

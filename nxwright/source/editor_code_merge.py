@@ -21,7 +21,7 @@ from nxwright.language.nxlang import ProgramNames
 from nxwright.language.resource_names import ResourceNames, UnknownNameError
 from nxwright.project.device_settings import TextCodec
 from nxwright.source.nx_files import (EVENT_COMMENT_MARKER, PageFiles, event_blocks,
-                                      read_page_files, render, with_end)
+                                      event_heading, read_page_files, render, with_end)
 from nxwright.source.page_source import (compile_nxlang_page, compile_page_files,
                                          editor_code_of_block, page_nx_path, preprocess_compiled)
 
@@ -47,7 +47,7 @@ def keep_comfortable_events(fresh_events: str, old_events: str, page_name: str,
     return keep_comfortable_blocks(event_blocks(fresh_events, path), old,
                                    lambda key, block: editor_code_of_block(
                                        block, page_name, names, Owner.among(key[0], object_names)),
-                                   lambda key: "on %s.%s:" % key, old_end)
+                                   lambda key: event_heading(*key), old_end)
 
 
 def keep_comfortable_blocks(fresh: dict, old: dict, editor_code, heading, old_end: list) -> str:

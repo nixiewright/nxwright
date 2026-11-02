@@ -35,6 +35,7 @@ from nxwright.language.resource_names import (FONT, LISTS, NOUNS, PICTURE, SOUND
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.source.folder_index import (APP_FILE, PROGRAM_FILE, FolderIndex,
                                           text_on_disk)
+from nxwright.source.nx_files import read_event_label
 from nxwright.source.references import references
 from nxwright.source.folder_check import check_folder
 from nxwright.source.macros_source import MACROS_PATH
@@ -202,8 +203,8 @@ def _uses_in_code(folder, index: FolderIndex, kind: str, ids: range) -> list:
         for path in index.page_files[page]:
             for title, lines in folder.editor_code(page, path):
                 # An event's own attributes, as '&pic&', read as the Editor reads them.
-                owner = Owner.among(title[3:].split(".")[0], object_names) \
-                    if title.startswith("on ") else None
+                label = read_event_label(title)
+                owner = Owner.among(label.name, object_names) if label else None
                 for number, code in lines:
                     read = with_own_attributes(code, owner) if owner else code
                     places.setdefault((path, number), []).append((page, read))

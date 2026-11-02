@@ -41,7 +41,12 @@ Code and attributes refer to pages, pictures, fonts, animations, videos, and sou
 
 ### Pages
 
-A page block is a header, a table of objects, then the objects. Object 0 is the page itself. The others are its **components**: text fields, buttons, variables, timers, and so on. An object is a run of **records**:
+A page block is a header, a table of objects, then the objects. Object 0 is the page itself. The others are its **components**: text fields, buttons, variables, timers, and so on. Each object's name is its `objname` attribute.
+
+- The Nextion Editor 1.68.2 refuses a component's name of more than 14 bytes, one that starts with a digit or a space, and one another component of the page has. It also refuses one with any of `" % & ' * + , - . / = [ \ ]`.
+- It takes other punctuation, such as `(`, `)`, or `:`, and a space inside the name, as in `b 0`. Code cannot then name the component, but its events run.
+
+An object is a run of **records**:
 
 - a record of 16 bytes or more is an **attribute**: a name, then a value, such as `w` (the width) or `txt`;
 - a shorter one is a **marker**, such as `att-39`, which gives the component's class, or `codesdown-3`, which says the next three records are the lines of the component's Touch Press event.
