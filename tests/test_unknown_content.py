@@ -35,8 +35,8 @@ class BlocksTest(unittest.TestCase):
 
     def test_a_block_of_another_kind_may_be_lost(self):
         blocks = {"main.HMI": b"", "Program.s": b"", "0.pa": b"", "comcode.sn": b"",
-                  "0.is": b"", "0.gmovs": b"", "2.ib": b"?"}
-        self.assertEqual(sorts(unknown_in_blocks(blocks)), [("block 2.ib", MAY_BE_LOST)])
+                  "0.is": b"", "0.gmovs": b"", "2.xb": b"?"}
+        self.assertEqual(sorts(unknown_in_blocks(blocks)), [("block 2.xb", MAY_BE_LOST)])
 
 
 class ManifestTest(unittest.TestCase):

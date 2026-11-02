@@ -25,6 +25,7 @@ A project file is a container of named **blocks**. A **directory** at the start 
 | `N.pa` | A page and its components. | `page_block.py`, `page_text.py` |
 | `N.is` | A picture's file, as the Nextion Editor shows it. | `resources.py` |
 | `N.i` | The same picture as compiled into the screen: its **screen copy**. | `screen_copy.py` |
+| `N.ib` | A resized picture's **source**: the file it had before (see Pictures, below). The manifest does not list it. | `resources.py` |
 | `N.zi` | A font, as the Nextion Editor's font generator made it. | `zi_font.py` |
 | `N.gmovs` | An animation, as GmovMaker, the Nextion Editor's animation tool, wrote it. | `resources.py` |
 | `N.gmov` | The same animation in the form the screen shows, which the Nextion Editor made of it. | `resources.py` |
@@ -70,12 +71,13 @@ The Nextion Editor can export one page to a `.page` file, and import one into an
 
 ### Pictures
 
-Each picture is two blocks with the same number: its file (`N.is`), and its screen copy (`N.i`).
+Each picture is two blocks with the same number: its file (`N.is`), and its screen copy (`N.i`). A picture resized in the Nextion Editor has a third, its source (below).
 
 - **The file is kept as it is given**: a PNG, a JPEG, a BMP, or a GIF, whatever its suffix says. The Picture panel offers `.png`, `.jpg`, and `.bmp` files, and takes a `.jpeg` or `.gif` file typed in.
 - **The record's header ends with the suffix the file had**, in lower case: `png`, `jpg`, `jpeg`. The header's size grows with it.
 - **The two blocks must agree.** The Nextion Editor checks them, and reports a damaged resource when they do not.
 - **The screen copy is made from the file's pixels**, without applying an orientation a JPEG's EXIF data gives.
+- **A picture resized in the Nextion Editor's picture viewer has a third block, its source (`N.ib`).** The viewer opens on a double-click in the Picture panel, and sets a new width and height. The Nextion Editor then writes a PNG of the new size as the picture's file, and keeps the file the picture had before as its source, in the layout of an `N.is` block, its header giving that file's own width and height. The viewer's "Restore to source size" goes back to it. The compile does not use the source: a project compiles to the same TFT file with it or without it.
 - **A PNG of 16 bits a channel, keyed on one colour by its `tRNS` chunk**, has that colour transparent in the Nextion Editor's copy, matched on all 16 bits. A colour sharing only the key's high bytes stays opaque.
   - A grey PNG of this kind works the same way in nxwright.
   - A colour one is refused. Pillow, the library nxwright reads pictures with, gives each channel at only 8 bits. At 8 bits, the key cannot be told apart from a colour that shares only its high bytes.

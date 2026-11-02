@@ -98,7 +98,7 @@ class SmallProjectTest(unittest.TestCase):
 
     def test_refuses_unknown_block_kind(self):
         with tempfile.TemporaryDirectory() as folder:
-            project = write_project(Path(folder), "main", [("2.ib", b"?", 0)])
+            project = write_project(Path(folder), "main", [("2.xb", b"?", 0)])
             with self.assertRaises(NxwrightError):
                 ProjectDumper(project, Path(folder) / "dump").dump()
 

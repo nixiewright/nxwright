@@ -1,5 +1,5 @@
 """Writes a project file that contains a block nxwright does not handle, for
-extract.host.cjs: the demo's project, built, with a block 2.ib added, which
+extract.host.cjs: the demo's project, built, with a block 2.xb added, which
 the next build may lose.
 
   python write_unknown_project.py <project.HMI>
@@ -22,7 +22,7 @@ def main(output: Path):
         built = Path(work) / "demo.HMI"
         build(DEMO, built)
         blocks = dict(HmiContainer.from_file(built).blocks)
-    blocks["2.ib"] = b"\x0a\x64\x01\x01" + bytes(12)
+    blocks["2.xb"] = b"\x0a\x64\x01\x01" + bytes(12)
     output.write_bytes(build_project([(name, data, 0) for name, data in blocks.items()]))
 
 

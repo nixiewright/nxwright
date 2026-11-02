@@ -7,11 +7,13 @@ from pathlib import Path
 
 from nxwright import NxwrightError
 from nxwright.project.device_settings import ENCODINGS, HEADER_SIZE, read_device_settings
-from nxwright.project.resources import PICTURE_SUFFIXES, CopiedKind
+from nxwright.project.pictures import picture_data_size
+from nxwright.project.resources import (PICTURE_SUFFIXES, SOURCE_SUFFIX, CopiedKind, ImageSource,
+                                        encode_image_source)
 
 # First line of project.txt. It changes whenever the dump's layout does, so that
 # a dump written by another version of nxwright is refused rather than misread.
-DUMP_FORMAT_LINE = "dump format        3"
+DUMP_FORMAT_LINE = "dump format        4"
 # A project's macros: the block holding them, which a project without
 # macros lacks, and the dump's file of its bytes (format.md).
 MACROS_BLOCK = "comcode.sn"
@@ -128,6 +130,40 @@ def dump_pictures(dump_folder: Path) -> list:
     check_ids_without_gaps(found, "picture")
     return [("images/" + found[picture_id].name, found[picture_id].read_bytes(),
              found[picture_id].suffix.lower()) for picture_id in range(len(found))]
+
+
+def dump_picture_sources(dump_folder: Path, picture_count: int) -> dict:
+    """Returns the sources of the dump's resized pictures, {picture ID: (its
+    file's path within the dump, its bytes, its suffix)}: the files named
+    images/<ID>.source with one of a picture's suffixes, such as
+    images/0002.source.png. A picture never resized has none. Raises
+    NxwrightError when one picture has two, or one is of a picture ID past
+    the dump's `picture_count` pictures."""
+    found = {}
+    for suffix in PICTURE_SUFFIXES:
+        for picture_id, path in numbered_files(dump_folder / "images",
+                                               SOURCE_SUFFIX + suffix).items():
+            if picture_id in found:
+                raise NxwrightError("images/%s and images/%s are there; a picture has one "
+                                    "source file" % (found[picture_id].name, path.name))
+            if picture_id >= picture_count:
+                raise NxwrightError("images/%s is there, but no picture %d; a source file goes "
+                                    "with its picture" % (path.name, picture_id))
+            found[picture_id] = path
+    return {picture_id: ("images/" + path.name, path.read_bytes(),
+                         path.suffix.lower()) for picture_id, path in found.items()}
+
+
+def picture_source_block(path: str, data: bytes, suffix: str) -> bytes:
+    """Returns the block of a resized picture's source (".ib") for the
+    dump's file `data`, of `suffix`, at `path` within the dump. Its record
+    gives the file's own width and height, as the Editor's does. Raises
+    NxwrightError, naming `path`, for a file nxwright cannot read."""
+    try:
+        width, height = picture_data_size(data)
+    except NxwrightError as error:
+        raise NxwrightError("%s: %s" % (path, error)) from None
+    return encode_image_source(ImageSource(width, height, data, suffix))
 
 
 def copied_file_name(resource_id: int, suffix: str) -> str:

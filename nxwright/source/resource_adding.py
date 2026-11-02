@@ -30,7 +30,8 @@ from nxwright.project.zi_font import (GRID_ENCODINGS, UTF8, decode_font, decodes
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.keyboards import noto_sans_covers
 from nxwright.source.source_folder import (RESOURCE_FILES, app_text, drawn_font_name, name_part,
-                                           parse_app, picture_paths, read_bytes, read_text)
+                                           parse_app, picture_paths, picture_source_paths,
+                                           read_bytes, read_text)
 
 # How long a frame of an animation's pictures shows when no duration is
 # chosen, in milliseconds, as GmovMaker's default.
@@ -83,8 +84,10 @@ def add_pictures(source_folder: Path, files: list) -> list:
     names = [name_part(file.stem) for file in given.values()]
     pictures = app["pictures"] + names
     check_names(pictures, "pictures")
-    # A picture has one file, so a file of its name under any suffix is in the way.
-    for relative in (path for name in names for path in picture_paths(name)):
+    # A picture has one file, so a file of its name under any suffix is in
+    # the way, and so is a source file left from a picture removed by hand.
+    for relative in (path for name in names
+                     for path in picture_paths(name) + picture_source_paths(name)):
         if (source_folder / relative).exists():
             raise NxwrightError("%s is already there, though app.toml does not list it"
                                 % (source_folder / relative))

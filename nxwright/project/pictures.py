@@ -52,6 +52,14 @@ def picture_problem(data: bytes):
     return None
 
 
+def picture_data_size(data: bytes) -> tuple:
+    """Returns the (width, height) of the picture file `data`, from opening
+    it alone, without decoding its pixels. Raises NxwrightError as
+    picture_problem finds a problem."""
+    with _opened(data) as opened:
+        return opened.size
+
+
 def _opened(data: bytes) -> Image.Image:
     """Opens the picture file `data` with Pillow, reading what comes before
     its pixels. Raises NxwrightError for one Pillow refuses as it opens it,

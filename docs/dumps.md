@@ -27,6 +27,7 @@ Pages, pictures, fonts, animations, videos, and sounds are numbered by their IDs
 | `images/index.txt` | Per picture: ID, block, size, and a SHA-256 of the screen copy. |
 | `images/NNNN.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | The picture's file the Nextion Editor shows, as the project keeps it, with the suffix its record gives. |
 | `images/NNNN.i` | The screen copy, as stored. Output only: nxwright never reads these files back. |
+| `images/NNNN.source.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | The source of a picture resized in the Nextion Editor: the file it had before (`format.md`, Pictures). Only a resized picture has one. |
 | `fonts/index.txt` | Per font: ID, block, block size, height, and character range. |
 | `fonts/NN.zi` | The font block, as stored. |
 | `animations/index.txt`, `videos/index.txt`, `sounds/index.txt` | Per animation, video, or sound: ID, and each of its blocks with its size. |
@@ -113,6 +114,7 @@ What the dump can change:
   - Each is `NNNN.png`, `.jpg`, `.jpeg`, `.bmp`, or `.gif`, one file for each ID, kept as it is.
   - Pictures are matched to the project by their files' bytes and suffixes. So an edited picture, or one given another suffix, counts as a new one replacing the old one.
   - nxwright makes each new picture's screen copy. The `.i` files of the dump are ignored.
+  - A picture's source file goes with its ID: add, replace, or delete it, and the project's source block follows. Delete it when you replace the picture's file, unless the new file is a resized form of it.
 - **Fonts:** add, remove, or reorder the font files, keeping the IDs without gaps. Fonts are matched to the project by their bytes; take new fonts from another dump, or from the Nextion Editor's font generator.
 - **Animations, videos, and sounds:** add, remove, or reorder their files, keeping the IDs without gaps, an animation's two files together. They are matched to the project by their bytes; take new ones from another dump.
 - **`program.s`.**

@@ -1,5 +1,5 @@
-"""The manifest ("main.HMI"), image records ("N.is", "N.i"), and the kinds
-of resource stored as files byte for byte. A font's header ("N.zi") is
+"""The manifest ("main.HMI"), image records ("N.is", "N.i", "N.ib"), and the
+kinds of resource stored as files byte for byte. A font's header ("N.zi") is
 zi_font.py's.
 
 All numbers are little-endian.
@@ -30,6 +30,11 @@ screen copy, described in screen_copy.py):
   added, lower-cased: "png", "jpg", "jpeg". The Editor keeps the file as it
   is given, a PNG, a JPEG, a BMP, or a GIF, whatever its suffix says of it
   (seen in Editor 1.68.2, tests/test_picture_files.py).
+
+A picture resized in the Editor's picture viewer has a third block, ".ib",
+its source: the file it had before, in the layout of an ".is" block. The
+manifest does not list it, and the compile does not use it; the viewer's
+"Restore to source size" goes back to it (seen in Editor 1.68.2).
 """
 from dataclasses import dataclass
 import struct
@@ -42,6 +47,10 @@ from nxwright.project.container import numbered_block
 # and those it takes when typed (.jpeg, .gif). A dump and a source folder
 # name a picture's file with the suffix its record gives: "0003.jpg".
 PICTURE_SUFFIXES = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
+# The block of a resized picture's source, and what comes before the
+# suffix of its file in a dump and a source folder: "0003.source.png".
+SOURCE_EXTENSION = "ib"
+SOURCE_SUFFIX = ".source"
 # A picture record's header, before its suffix.
 _IMAGE_SOURCE_HEADER = struct.Struct("<4sIIHHII")
 

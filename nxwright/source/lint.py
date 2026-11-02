@@ -61,9 +61,9 @@ from nxwright.source.nx_files import (EVENT_HEADING, FUNCTION_HEADING, event_blo
                                       read_page_files)
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.page_source import page_nx_path, page_toml_path
-from nxwright.source.source_folder import (check_picture_file, code_files, line_naming,
-                                           picture_file, types_in_page_data,
-                                           video_rotation_problem)
+from nxwright.source.source_folder import (check_picture_file, check_picture_source, code_files,
+                                           line_naming, picture_file, picture_source_file,
+                                           types_in_page_data, video_rotation_problem)
 
 ERROR, WARNING = "error", "warning"
 
@@ -212,20 +212,30 @@ def picture_errors(app: dict, read, read_bytes, exists) -> list:
     """Returns the error Findings of the pictures nxwright cannot read, of
     the folder whose settings are `app`, whose files' text `read(path)`
     returns, and their bytes `read_bytes(path)`: each opened without its
-    pixels decoded, as the build would refuse it (pictures.picture_problem).
-    A picture with no file, or more than one, which the checks report
-    already (source_folder.check_picture_file), is not read."""
+    pixels decoded, as the build would refuse it (pictures.picture_problem),
+    and so for a resized picture's source file. A picture with no file, or
+    more than one, or more than one source file, which the checks report
+    already (source_folder.resource_problems), is not read."""
     found = []
     for name in app["pictures"]:
-        try:
-            check_picture_file(name, exists)
-            path = picture_file(name, exists)
-            problem = picture_problem(read_bytes(path))
-        except (OSError, NxwrightError):
-            continue    # the check reports a missing file
-        if problem:
-            found.append(Finding("app.toml", line_naming(read("app.toml"), name), ERROR,
-                                 "%s: %s" % (path, problem), "picture-unreadable"))
+        paths = []
+        for check, path_of in ((check_picture_file, picture_file),
+                               (check_picture_source, picture_source_file)):
+            try:
+                check(name, exists)
+            except NxwrightError:
+                continue    # the check reports it
+            path = path_of(name, exists)
+            if path is not None:
+                paths.append(path)
+        for path in paths:
+            try:
+                problem = picture_problem(read_bytes(path))
+            except OSError:
+                continue    # the check reports a missing file
+            if problem:
+                found.append(Finding("app.toml", line_naming(read("app.toml"), name), ERROR,
+                                     "%s: %s" % (path, problem), "picture-unreadable"))
     return found
 
 

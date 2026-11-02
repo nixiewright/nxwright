@@ -45,6 +45,7 @@ This page describes the folder's files. [commands.md](commands.md) describes eac
 | `pages/<page>.page.toml` | The page and its components, in ID order. The `.page.toml` ending marks a page file, so VS Code opens it in the page preview. |
 | `pages/<page>.nx` | The page's event code. |
 | `pictures/<name>.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | A picture. `nxwright picture` adds one ([commands.md](commands.md#picture)). |
+| `pictures/<name>.source.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | The file a picture had before you resized it in the Nextion Editor's picture viewer. Only a resized picture has one. |
 | `fonts/<name>.zi` | A font. `nxwright font` draws one from a typeface file, such as a `.ttf` file, or adds a ready-made font file ([commands.md](commands.md#font)). |
 | `animations/<name>.gmov`, `animations/<name>.screen.gmov` | An animation: its frames, and the form the screen shows. `nxwright animation` makes both from picture files, or from GmovMaker's file ([Animations, videos, and sounds](#animations-videos-and-sounds)). |
 | `videos/<name>.video` | A video. `nxwright video` makes one. |
@@ -64,6 +65,8 @@ About picture files:
 - Each picture has one file. Two files for the same picture name, such as `pictures/logo.png` and `pictures/logo.jpg`, are refused, since nxwright cannot tell which one is to be used.
 - The suffix is in lower case, as extracting writes it. A camera's `IMG_0001.JPG` is found on Windows alone, so rename it `IMG_0001.jpg`.
 - A `/` in a name makes a subfolder: `pictures/icons/back.png`.
+- When you resize a picture in the Nextion Editor's picture viewer, the Nextion Editor keeps the file the picture had before, so that its "Restore to source size" can go back to it. Extracting writes that file beside the picture's, as its source file, such as `pictures/logo.source.png`, and the build gives it back to the project. A picture has one source file at most.
+- When you replace a picture's file, delete its source file too. Otherwise the Nextion Editor's "Restore to source size" brings back the old picture.
 
 ## app.toml
 

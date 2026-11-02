@@ -1,4 +1,4 @@
-dump format        3
+dump format        4
 file               objects.HMI
 size               7399713 bytes
 directory entries  12

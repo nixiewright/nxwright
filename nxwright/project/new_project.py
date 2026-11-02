@@ -6,7 +6,8 @@ The file is laid out the same for every screen model:
   0x380000   four 0xff bytes
   0x6ffff8   the text "ver21234"
   0x700000   the blocks, back to back: Program.s, the pages, the pictures
-             (each one's file, then its screen copy), the fonts, the
+             (each one's file, then its screen copy, then the source of
+             one resized in the Editor), the fonts, the
              animations (each one's GmovMaker file, then the screen's form),
              the videos, the sounds, and last the manifest
 Every other byte before 0x700000 is zero. The manifest lists the pictures,
@@ -24,8 +25,9 @@ from nxwright.project.container import (DIRECTORY_COPY_OFFSET, ENTRY_SIZE, Direc
                                         HmiContainer, encode_directory, name_field)
 from nxwright.project.device_settings import DeviceSettings, encoding_code, manifest_header
 from nxwright.project.dump_folder import (MACROS_BLOCK, MACROS_FILE, check_dump_format,
-                                          check_ids_without_gaps, copied_contents, dump_pictures,
-                                          page_text_files)
+                                          check_ids_without_gaps, copied_contents,
+                                          dump_picture_sources, dump_pictures, page_text_files,
+                                          picture_source_block)
 from nxwright.project.page_block import encode_page, parse_page
 from nxwright.project.page_header import header_40
 from nxwright.project.page_text import page_from_text
@@ -50,8 +52,10 @@ def write_new_project(dump_folder: Path, settings: DeviceSettings, output: Path)
     Raises NxwrightError when `output` exists, the dump is not one this
     version reads or has no program.s, its pages, pictures, fonts,
     animations, videos, or sounds are not numbered from 0 without gaps, an
-    animation lacks one of its two files, or a picture cannot be stored on
-    the screen model (such as a 1-by-1 picture on a compressed screen).
+    animation lacks one of its two files, a picture cannot be stored on
+    the screen model (such as a 1-by-1 picture on a compressed screen), or
+    a picture's source file is one nxwright cannot read, or of no picture
+    (dump_folder.dump_picture_sources).
     """
     dump_folder, output = Path(dump_folder), Path(output)
     if output.exists():
@@ -62,9 +66,9 @@ def write_new_project(dump_folder: Path, settings: DeviceSettings, output: Path)
     pages = _page_blocks(dump_folder, settings)
     pictures = _picture_blocks(dump_folder, settings)
     copied = {kind: copied_contents(dump_folder, kind) for kind in COPIED_KINDS}
-    # Each picture's blocks come in pairs, its file then its screen copy.
-    # COPIED_KINDS runs in the Editor's order too.
-    resources = ([("i", name) for name, _ in pictures[1::2]]
+    # The manifest lists each picture by its screen copy. COPIED_KINDS runs in
+    # the Editor's order too.
+    resources = ([("i", name) for name, _ in pictures if name.endswith(".i")]
                  + [(kind.listed, "%d.%s" % (resource_id, kind.listed))
                     for kind in COPIED_KINDS for resource_id in range(len(copied[kind]))]
                  + [("pa", name) for name, _ in pages])
@@ -108,8 +112,10 @@ def _page_blocks(dump_folder: Path, settings: DeviceSettings) -> list:
 
 def _picture_blocks(dump_folder: Path, settings: DeviceSettings) -> list:
     """Returns [(block name, block)] for the dump's pictures in ID order: each
-    one's file (".is"), then its screen copy (".i")."""
+    one's file (".is"), then its screen copy (".i"), then, for a picture
+    resized in the Editor, its source (".ib", dump_folder.picture_source_block)."""
     files = dump_pictures(dump_folder)
+    sources = dump_picture_sources(dump_folder, len(files))
     kind, rotation = settings.screen_copy_layout
     blocks = []
     if not files:
@@ -131,6 +137,8 @@ def _picture_blocks(dump_folder: Path, settings: DeviceSettings) -> list:
                            encode_image_source(ImageSource(made.width, made.height, data,
                                                            suffix))))
             blocks.append(("%d.i" % picture_id, made.block))
+            if picture_id in sources:
+                blocks.append(("%d.ib" % picture_id, picture_source_block(*sources[picture_id])))
     return blocks
 
 

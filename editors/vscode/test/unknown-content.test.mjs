@@ -21,24 +21,24 @@ test("content kept exactly is extracted, the command noting it", () => {
 });
 
 test("content that may be lost makes the user choose first, listing each", () => {
-  const listed = [line("a block of a kind nxwright does not handle", "block 2.ib", "may be lost"),
+  const listed = [line("a block of a kind nxwright does not handle", "block 2.xb", "may be lost"),
     line("a manifest header byte the build writes as 79", "manifest header, byte 14",
       "may be lost")].join("\n");
   const choice = extractChoice(listed);
   assert.equal(choice.kind, "ask");
-  assert.match(choice.message, /a block of a kind nxwright does not handle \(block 2\.ib\)/);
+  assert.match(choice.message, /a block of a kind nxwright does not handle \(block 2\.xb\)/);
   assert.match(choice.message, /\(manifest header, byte 14\)/);
   assert.match(choice.message, /nxwright report/);
 });
 
 test("content that cannot be kept is refused, whatever else there is", () => {
-  const listed = [line("a block of a kind nxwright does not handle", "block 2.ib", "may be lost"),
+  const listed = [line("a block of a kind nxwright does not handle", "block 2.xb", "may be lost"),
     line("an attribute nxwright does not know, newattr, on a page",
       "block 0.pa, object 0, attribute newattr", "cannot be kept")].join("\n");
   const choice = extractChoice(listed);
   assert.equal(choice.kind, "refuse");
   assert.match(choice.message, /newattr/);
-  assert.doesNotMatch(choice.message, /2\.ib/);
+  assert.doesNotMatch(choice.message, /2\.xb/);
 });
 
 test("a list that cannot be read is refused", () => {

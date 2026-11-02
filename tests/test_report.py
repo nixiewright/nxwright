@@ -18,11 +18,11 @@ from tests.test_extract_unknown import PatchedDemoTestCase, with_new_attribute
 class ReportTest(PatchedDemoTestCase):
 
     def test_it_names_each_unknown_content_with_its_place_and_bytes(self):
-        project = self.patched("report.HMI", blocks={"2.ib": b"secret?"}, header={14: 0x50})
+        project = self.patched("report.HMI", blocks={"2.xb": b"secret?"}, header={14: 0x50})
         text = report_text(project)
         # The column of "kept exactly", "may be lost", or "cannot be kept".
         self.assertIn("| What | Where | Kept by nxwright | Bytes | First bytes |", text)
-        self.assertIn("| a block of a kind nxwright does not handle | block 2.ib | may be lost "
+        self.assertIn("| a block of a kind nxwright does not handle | block 2.xb | may be lost "
                       "| 7 | 73 65 63 72 65 74 3f |", text)
         self.assertIn("| manifest header, byte 14 | may be lost | 1 | 50 |", text)
 
@@ -37,7 +37,7 @@ class ReportTest(PatchedDemoTestCase):
     def test_it_leaves_out_the_project_s_own_content(self):
         # The demo's page and component names, its texts, and its code, as
         # its dump gives them; and its blocks' names and sizes are there.
-        project = self.patched("private.HMI", blocks={"2.ib": b"?"})
+        project = self.patched("private.HMI", blocks={"2.xb": b"?"})
         text = report_text(project)
         dump = self.folder / "private-dump"
         ProjectDumper(self.demo, dump).dump()

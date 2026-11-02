@@ -14,6 +14,9 @@ Layout:
   pages/<page>.nx          their event code
   pictures/<name>.png      or .jpg, the picture's file as the project keeps it;
                            a "/" in a name makes a subfolder (resource_names.py)
+  pictures/<name>.source.png   or .jpg, the file a picture resized in the
+                           Editor had before, which the Editor keeps as its
+                           source; a picture never resized has none
   fonts/<name>.zi
   animations/<name>.gmov          GmovMaker's file
   animations/<name>.screen.gmov   the form the Editor made of it, which the
@@ -62,8 +65,9 @@ from nxwright.project.component_defaults import DEFAULTS_FILE, defaults_from_tom
 from nxwright.project.dump_folder import (DUMP_FORMAT_LINE, MACROS_FILE, check_dump_format,
                                           check_ids_without_gaps, copied_contents,
                                           copied_file_name, dump_device_settings, dump_encoding,
-                                          dump_header_bytes, dump_pictures, page_text_files)
-from nxwright.project.resources import COPIED_KINDS, FONTS, MEDIA, PICTURE_SUFFIXES
+                                          dump_header_bytes, dump_picture_sources, dump_pictures,
+                                          page_text_files)
+from nxwright.project.resources import COPIED_KINDS, FONTS, MEDIA, PICTURE_SUFFIXES, SOURCE_SUFFIX
 from nxwright.project.device_settings import DEFAULT_ENCODING, ENCODINGS, DeviceSettings, TextCodec
 from nxwright.source.device_keys import DEVICE_KEYS, device_keys, screen_model, settings_from_keys
 from nxwright.source.unknown_content import (MAY_BE_LOST, UNKNOWN_MODEL_PLACE, checked,
@@ -485,6 +489,31 @@ def picture_paths(name: str) -> list:
     return ["pictures/%s%s" % (name, suffix) for suffix in RESOURCE_FILES["pictures"]]
 
 
+def picture_source_paths(name: str) -> list:
+    """The paths the source file of the picture `name` may have, in
+    PICTURE_SUFFIXES' order: pictures/<name>.source.png, and so on. The
+    Nextion Editor keeps a picture's source when the picture is resized in
+    its picture viewer: the file the picture had before (resources.py)."""
+    return ["pictures/%s%s%s" % (name, SOURCE_SUFFIX, suffix)
+            for suffix in RESOURCE_FILES["pictures"]]
+
+
+def picture_source_file(name: str, exists):
+    """Returns the path, within the folder, of the picture `name`'s source
+    file, as `exists(path)` finds it, or None when it has none. With
+    several, it is the first in their order, which the build and the checks
+    refuse (check_picture_source)."""
+    return next((path for path in picture_source_paths(name) if exists(path)), None)
+
+
+def check_picture_source(name: str, exists):
+    """Raises NxwrightError when the picture `name` has more than one source
+    file, as `exists(path)` finds them."""
+    found = [path for path in picture_source_paths(name) if exists(path)]
+    if len(found) > 1:
+        raise NxwrightError("%s are there; a picture has one source file" % " and ".join(found))
+
+
 def resource_paths(kind: str, name: str, exists) -> list:
     """Returns the paths, within the folder, of the files of the resource
     `name` that app.toml lists in `kind`: a picture's one file
@@ -498,13 +527,16 @@ def resource_paths(kind: str, name: str, exists) -> list:
 def resource_problems(kind: str, name: str, exists) -> list:
     """Returns what keeps the resource `name`, of app.toml's list `kind`,
     from being built, a sentence each: a picture with no file or more than
-    one (check_picture_file), or a missing file of another resource."""
+    one (check_picture_file), or more than one source file
+    (check_picture_source); or a missing file of another resource."""
     if kind == "pictures":
-        try:
-            check_picture_file(name, exists)
-        except NxwrightError as error:
-            return [str(error)]
-        return []
+        problems = []
+        for check in (check_picture_file, check_picture_source):
+            try:
+                check(name, exists)
+            except NxwrightError as error:
+                problems.append(str(error))
+        return problems
     return ["%s is missing" % path for path in resource_paths(kind, name, exists)
             if not exists(path)]
 
@@ -518,6 +550,7 @@ def _layout_files(app: dict) -> list:
         listed += [page_toml_path(page_name), "pages/%s.nx" % page_name]
     for kind, suffixes in RESOURCE_FILES.items():
         listed += ["%s/%s%s" % (kind, name, suffix) for name in app[kind] for suffix in suffixes]
+    listed += [path for name in app["pictures"] for path in picture_source_paths(name)]
     return listed
 
 
@@ -818,6 +851,11 @@ def _source_files_from_dump(dump_folder: Path, source_folder: Path, old_app,
             suffixes = [pictures[number][2]] if kind == "pictures" else RESOURCE_FILES[kind]
             for suffix, content in zip(suffixes, parts):
                 files["%s/%s%s" % (kind, name, suffix)] = content
+    # A resized picture's source follows the name chosen for the picture.
+    for picture_id, (_, content, suffix) in dump_picture_sources(dump_folder,
+                                                                 len(pictures)).items():
+        files["pictures/%s%s%s" % (chosen["pictures"][picture_id], SOURCE_SUFFIX, suffix)] = \
+            content
     uses_nxlang = old_app is not None and old_app["language"] == NXLANG
     settings = dump_device_settings(dump_folder)
     # The encoding does not depend on the screen model, so a project of a
@@ -1284,6 +1322,15 @@ def _resource_dump_files(app: dict, source_folder: Path) -> tuple:
         dump_path = "images/%04d%s" % (picture_id, Path(path).suffix)
         files[dump_path] = content
         pictures[dump_path] = path
+        check_picture_source(name, exists)
+        source_path = picture_source_file(name, exists)
+        if source_path is not None:
+            source = read_bytes(source_folder / source_path)
+            problem = picture_problem(source)
+            if problem:
+                raise NxwrightError("%s: %s" % (source_path, problem))
+            files["images/%04d%s%s" % (picture_id, SOURCE_SUFFIX, Path(source_path).suffix)] = \
+                source
     for kind in COPIED_KINDS:
         for resource_id, name in enumerate(app[kind.folder]):
             for suffix in kind.suffixes:

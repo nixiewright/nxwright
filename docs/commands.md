@@ -120,7 +120,7 @@ pages/home.nx line 12: error: unknown name speed
 - The build stops at the first error. The check reports the first error of each page.
 - If `app.toml`, `defaults.toml`, or the declarations of `program.nx` have an error, the check reports only that error, since every page depends on these files.
 - The check also finds:
-  - a picture file nxwright cannot read, reported as `pictures/logo.png: not a picture nxwright reads: no kind of picture Pillow knows`. The check does not decode the pixels, so only the build finds a picture whose pixels are damaged;
+  - a picture file, or a picture's source file, that nxwright cannot read, reported as `pictures/logo.png: not a picture nxwright reads: no kind of picture Pillow knows`. The check does not decode the pixels, so only the build finds a picture whose pixels are damaged;
   - a page that takes more memory than the Nextion Editor's compile allows ([Memory](build-rules.md#memory));
   - a sound the Nextion Editor refuses to compile ([source-folder.md](source-folder.md#animations-videos-and-sounds)).
 
@@ -230,7 +230,7 @@ nxwright picture app "My Icon.jpg" logo.png
 Copies picture files into the folder's `pictures/`, and lists them after its other pictures, in the order given. It takes `.png`, `.jpg`, `.jpeg`, `.bmp`, and `.gif` files.
 
 - Each picture is named after its file, keeping only letters, digits, `_`, and `-`: `My Icon.jpg` gives `MyIcon`.
-- These are refused, and nothing is written: a file nxwright cannot read as a picture; a name the folder has, in any letter case; and two files that give the same name.
+- These are refused, and nothing is written: a file nxwright cannot read as a picture; a name the folder has, in any letter case; a name whose file, or source file, is in `pictures/` already, though `app.toml` does not list it; and two files that give the same name.
 
 ## font
 
@@ -425,7 +425,7 @@ Writes, for each picture, the file an external picture shows from the screen's S
 nxwright remove app picture icons/back
 ```
 
-Removes a picture, font, animation, video, or sound: its files, and its name in `app.toml`.
+Removes a picture, font, animation, video, or sound: its files, a picture's source file among them, and its name in `app.toml`.
 
 Every later one of its kind then gets an ID one lower. Code that uses a resource by its name follows the change, but a number does not, and would then point to another one. So the command refuses to remove a resource while the folder uses it, either by its name, or by a number from its ID to the last ID of its kind. Each place found is listed:
 

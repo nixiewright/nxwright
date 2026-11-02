@@ -15,6 +15,9 @@ picture plus a removed one, and so for the others. The manifest is rebuilt
 when the order or the set of any of them changed.
 
 A new picture gets two blocks: its file, and a screen copy generated from it.
+A picture resized in the Editor has a third, its source (".ib"), which the
+dump gives as images/<ID>.source with a picture's suffix; the writer adds,
+replaces, or removes it to match.
 The dump's own screen copy files are output only and never read. Screen
 copies are generated in the format and pixel order the project's own pictures
 confirm (see screen_copy.py); a project whose pictures confirm none is refused.
@@ -39,15 +42,16 @@ from nxwright.project.container import (DIRECTORY_COPY_OFFSET, ENTRY_SIZE, Direc
                                         HmiContainer, encode_directory, name_field, numbered_block)
 from nxwright.project.device_settings import read_device_settings
 from nxwright.project.dump_folder import (MACROS_BLOCK, MACROS_FILE, check_dump_format,
-                                          check_ids_without_gaps, copied_contents, dump_pictures,
-                                          page_text_files)
+                                          check_ids_without_gaps, copied_contents,
+                                          dump_picture_sources, dump_pictures, page_text_files,
+                                          picture_source_block)
 from nxwright.project.editor_limits import check_page_limits, page_count_refusal
 from nxwright.project.page_block import encode_page, parse_page
 from nxwright.project.page_text import page_from_text
 from nxwright.project.picture_cache import make_screen_copy, opened_cache
 from nxwright.project.pictures import read_picture
 from nxwright.project.replacing import held_by_the_nextion_editor, is_project_file, written_beside
-from nxwright.project.resources import (COPIED_KINDS, CopiedKind, ImageSource,
+from nxwright.project.resources import (COPIED_KINDS, SOURCE_EXTENSION, CopiedKind, ImageSource,
                                         check_manifest_matches_blocks, encode_image_source,
                                         encode_manifest, parse_image_source, parse_manifest,
                                         partner_name, with_kind_in_order)
@@ -70,6 +74,9 @@ class WritePlan:
     # (".i" block name, (its file's bytes, its suffix)) in ID order.
     pictures: list = field(default_factory=list)
     new_screen_copies: dict = field(default_factory=dict)  # ".i" block name -> ScreenPixels
+    # Each picture's source block, as the dump asks for it, in ID order:
+    # (".ib" block name, its bytes, or None for a picture without one).
+    picture_sources: list = field(default_factory=list)
     # Screen copies taken from the picture cache: ".i" block name -> the block.
     # They have no pixels to decode back to, so the written block is compared.
     cached_screen_copies: dict = field(default_factory=dict)
@@ -221,13 +228,38 @@ def _plan_pictures(plan: WritePlan, container: HmiContainer, manifest, dump_fold
     for block_name in sorted((name for names in unmatched.values() for name in names),
                              key=lambda name: numbered_block(name, "i")):
         plan.removed += [block_name, block_name + "s"]
+        # A resized picture's source goes with it.
+        if partner_name(block_name, SOURCE_EXTENSION) in container.blocks:
+            plan.removed.append(partner_name(block_name, SOURCE_EXTENSION))
         plan.changes.append("Removed picture block %s" % block_name)
+    _plan_picture_sources(plan, container, dump_folder)
     if added:
         plan.screen_copy_format, plan.screen_copy_rotation = _screen_copy_layout(container,
                                                                                  manifest)
         with opened_cache() as cache:
             for picture_id, file_name, block_name, data, suffix in added:
                 _plan_new_picture(plan, picture_id, file_name, block_name, data, suffix, cache)
+
+
+def _plan_picture_sources(plan: WritePlan, container: HmiContainer, dump_folder: Path):
+    """Writes, replaces, or removes each picture's source block (".ib") to
+    match the dump's source files (dump_folder.dump_picture_sources), once
+    plan.pictures gives each picture's block."""
+    sources = dump_picture_sources(dump_folder, len(plan.pictures))
+    for picture_id, (block_name, _) in enumerate(plan.pictures):
+        name = partner_name(block_name, SOURCE_EXTENSION)
+        block = picture_source_block(*sources[picture_id]) if picture_id in sources else None
+        plan.picture_sources.append((name, block))
+        old = container.blocks.get(name)
+        if block == old:
+            continue
+        if block is None:
+            plan.removed.append(name)
+            plan.changes.append("Removed the source of picture %d (block %s)" % (picture_id, name))
+        else:
+            plan.blocks[name] = block
+            plan.changes.append("%s the source of picture %d as block %s"
+                                % ("Replaced" if old is not None else "Added", picture_id, name))
 
 
 def _plan_new_picture(plan: WritePlan, picture_id: int, file_name: str, block_name: str,
@@ -469,6 +501,10 @@ def _check_written(data: bytes, plan: WritePlan):
     pictures = [(name, (source.data, source.suffix)) for name, source in sources]
     if pictures != plan.pictures:
         raise NxwrightError("self-check failed: the pictures differ from the dump")
+    for name, block in plan.picture_sources:
+        if container.blocks.get(name) != block:
+            raise NxwrightError("self-check failed: the source block %s differs from the dump"
+                                % name)
     for block_name, pixels in plan.new_screen_copies.items():
         if decode_screen_copy(container.blocks[block_name], plan.screen_copy_rotation) != pixels:
             raise NxwrightError("self-check failed: the screen copy %s does not decode back to "

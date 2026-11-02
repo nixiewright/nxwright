@@ -1,9 +1,9 @@
 """Finds the things in a project that nxwright does not know: a block of
 another kind, a manifest entry or header byte it does not expect, a
-picture's header the build would write otherwise, a screen model or a
-character encoding it has no entry for, and a component type or an
-attribute its tables do not name. A newer Nextion Editor may write any of
-them.
+picture's header the build would write otherwise, a resized picture's
+source it cannot keep, a screen model or a character encoding it has no
+entry for, and a component type or an attribute its tables do not name. A
+newer Nextion Editor may write any of them.
 
 Each is sorted one of three ways, by what the source folder does with it:
   - kept exactly: the source folder keeps it, and the build writes it back
@@ -24,12 +24,13 @@ from nxwright import NxwrightError
 from nxwright.project.container import HmiContainer, numbered_block
 from nxwright.project.device_settings import ENCODINGS, HEADER_SIZE
 from nxwright.project.dump_folder import dump_header_bytes, dump_manifest_header, page_text_files
-from nxwright.project.dumper import handles_block
+from nxwright.project.dumper import handles_block, kept_picture_sources
 from nxwright.project.object_types import TYPE_NAMES
 from nxwright.project.page_block import Attribute, parse_page
 from nxwright.project.page_text import expected_width, is_string_attribute, page_from_text
-from nxwright.project.resources import (LISTED_IN_ORDER, encode_image_source,
-                                        parse_image_source, parse_manifest)
+from nxwright.project.pictures import picture_data_size
+from nxwright.project.resources import (LISTED_IN_ORDER, SOURCE_EXTENSION, ImageSource,
+                                        encode_image_source, parse_image_source, parse_manifest)
 from nxwright.project.screen_models import model_with_id
 from nxwright.source.page_source import reference_kind
 
@@ -79,7 +80,7 @@ def unknown_in_project(blocks: dict, manifest, pages: dict) -> list:
     header = blocks["main.HMI"][:manifest.header_size]
     return (unknown_in_blocks(blocks) + unknown_in_manifest_entries(manifest)
             + unknown_in_manifest_header(header) + unknown_in_picture_headers(blocks)
-            + unknown_in_pages(pages))
+            + unknown_in_picture_sources(blocks, manifest) + unknown_in_pages(pages))
 
 
 def unknown_in_blocks(blocks: dict) -> list:
@@ -146,6 +147,31 @@ def unknown_in_picture_headers(blocks: dict) -> list:
         source = parse_image_source(block)
         size = len(block) - len(source.data)
         if block[:size] != encode_image_source(source)[:size]:
+            found.append(UnknownContent("a picture's header that differs from the build's",
+                                        "block %s" % name, block[:size], MAY_BE_LOST))
+    return found
+
+
+def unknown_in_picture_sources(blocks: dict, manifest) -> list:
+    """Returns, of the sources of resized pictures (".ib" blocks), each the
+    dump leaves out, as kept_picture_sources does not keep it: its picture
+    is not listed, or nxwright cannot read it. And each kept whose header
+    differs from the one the build writes for it, from its file's own width
+    and height, which the build would write instead."""
+    kept = {name: source for name, source in kept_picture_sources(blocks, manifest).values()}
+    found = []
+    for name, block in blocks.items():
+        if numbered_block(name, SOURCE_EXTENSION) is None:
+            continue
+        source = kept.get(name)
+        if source is None:
+            found.append(UnknownContent("a picture's source the build leaves out",
+                                        "block %s" % name, block, MAY_BE_LOST))
+            continue
+        size = len(block) - len(source.data)
+        built = encode_image_source(ImageSource(*picture_data_size(source.data), source.data,
+                                                source.suffix))
+        if block[:size] != built[:size]:
             found.append(UnknownContent("a picture's header that differs from the build's",
                                         "block %s" % name, block[:size], MAY_BE_LOST))
     return found

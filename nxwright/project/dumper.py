@@ -14,26 +14,53 @@ from nxwright.project.dump_folder import (DUMP_FORMAT_LINE, MACROS_BLOCK, MACROS
                                           copied_file_name)
 from nxwright.project.page_block import encode_page, parse_page
 from nxwright.project.page_text import page_from_text, page_to_text
-from nxwright.project.resources import (FONTS, MEDIA, CopiedKind, check_manifest_matches_blocks,
+from nxwright.project.pictures import picture_problem
+from nxwright.project.resources import (FONTS, MEDIA, SOURCE_EXTENSION, SOURCE_SUFFIX,
+                                        CopiedKind, check_manifest_matches_blocks,
                                         parse_image_source, parse_manifest, partner_name)
 from nxwright.project.zi_font import parse_font_header
 
 # The block kinds this tool handles: the manifest and the program, which
 # every project has, the macros, which a project may have, and numbered
-# pages (pa), pictures' files (is), screen copies (i), fonts (zi), animations
-# (gmovs and gmov), videos (v), and sounds (wav).
+# pages (pa), pictures' files (is), screen copies (i), the sources of
+# resized pictures (ib), fonts (zi), animations (gmovs and gmov), videos
+# (v), and sounds (wav). Of the sources, only those kept_picture_sources
+# gives are dumped.
 _KNOWN_SINGLE_BLOCKS = ("main.HMI", "Program.s")
-_KNOWN_EXTENSIONS = ("pa", "is", "i", "zi", "gmovs", "gmov", "v", "wav")
+_KNOWN_EXTENSIONS = ("pa", "is", "i", SOURCE_EXTENSION, "zi", "gmovs", "gmov", "v", "wav")
 _SAFE_FILE_NAME = re.compile(r"[A-Za-z0-9_]+")
 
 
 def handles_block(name: str) -> bool:
-    """Whether the dumper handles the block named `name`: the two every
-    project has, the macros, or one named by a number and one of
-    _KNOWN_EXTENSIONS. The finder of unknown content uses it too
-    (source/unknown_content.py), so the two agree."""
+    """Whether the dumper handles the block named `name`, by its name alone:
+    the two every project has, the macros, or one named by a number and one
+    of _KNOWN_EXTENSIONS. The finder of unknown content uses it too
+    (source/unknown_content.py), so the two agree. Which pictures' sources
+    it keeps takes the manifest too (kept_picture_sources)."""
     return name in _KNOWN_SINGLE_BLOCKS or name == MACROS_BLOCK or any(
         numbered_block(name, extension) is not None for extension in _KNOWN_EXTENSIONS)
+
+
+def kept_picture_sources(blocks: dict, manifest) -> dict:
+    """Returns the pictures' sources the dump keeps, {picture ID: (the
+    block's name, its ImageSource)}: each N.ib block of the live `blocks`
+    whose picture N.i the parsed `manifest` lists, and which nxwright reads
+    as a picture's file. The Nextion Editor writes one when a picture is
+    resized in its picture viewer, keeping the file the picture had before.
+    The finder of unknown content reports the other N.ib blocks
+    (source/unknown_content.py), so the two agree."""
+    kept = {}
+    for picture_id, name in enumerate(manifest.block_names("i")):
+        source_name = partner_name(name, SOURCE_EXTENSION)
+        if source_name not in blocks:
+            continue
+        try:
+            source = parse_image_source(blocks[source_name])
+        except NxwrightError:
+            continue
+        if picture_problem(source.data) is None:
+            kept[picture_id] = (source_name, source)
+    return kept
 
 
 class ProjectDumper:
@@ -48,6 +75,7 @@ class ProjectDumper:
         self._output = Path(output)
         self._container = None
         self._manifest = None
+        self._sources = {}
 
     def dump(self):
         """Writes the whole dump.
@@ -62,6 +90,8 @@ class ProjectDumper:
         self._check_block_kinds()
         self._manifest = parse_manifest(self._container.blocks["main.HMI"])
         check_manifest_matches_blocks(self._manifest, self._container.blocks)
+        self._sources = kept_picture_sources(self._container.blocks, self._manifest)
+        self._check_picture_sources()
         self._output.mkdir(parents=True, exist_ok=True)
         try:
             self._write_project_summary()
@@ -85,6 +115,18 @@ class ProjectDumper:
         for name in self._container.blocks:
             if not handles_block(name) and not self._leave_out_unknown_blocks:
                 raise NxwrightError("block %s is of a kind this tool does not handle" % name)
+
+    def _check_picture_sources(self):
+        """Stops on a picture's source the dump would leave out: one whose
+        picture the manifest does not list, or that nxwright cannot read
+        (kept_picture_sources), unless such blocks are left out."""
+        if self._leave_out_unknown_blocks:
+            return
+        kept = {name for name, _ in self._sources.values()}
+        for name in self._container.blocks:
+            if numbered_block(name, SOURCE_EXTENSION) is not None and name not in kept:
+                raise NxwrightError("block %s is a picture's source this tool cannot keep"
+                                    % name)
 
     def _write_project_summary(self):
         """Writes project.txt: the dump format line, block counts, and the manifest."""
@@ -139,6 +181,10 @@ class ProjectDumper:
             source = parse_image_source(self._container.blocks[block_name + "s"])
             (folder / ("%04d%s" % (picture_id, source.suffix))).write_bytes(source.data)
             (folder / ("%04d.i" % picture_id)).write_bytes(screen_copy)
+            if picture_id in self._sources:
+                resized = self._sources[picture_id][1]
+                (folder / ("%04d%s%s" % (picture_id, SOURCE_SUFFIX, resized.suffix))).write_bytes(
+                    resized.data)
             index.append("%04d   %-6s %-9s  %s" % (
                 picture_id, block_name[:-2], "%dx%d" % (source.width, source.height),
                 hashlib.sha256(screen_copy).hexdigest()))

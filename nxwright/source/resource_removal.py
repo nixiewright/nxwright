@@ -40,7 +40,7 @@ from nxwright.source.folder_check import check_folder
 from nxwright.source.macros_source import MACROS_PATH
 from nxwright.source.page_source import page_toml_path, reference_kind
 from nxwright.source.source_folder import (RESOURCE_FILES, app_text, folder_reader, number_in_table,
-                                           read_app, read_folder_source)
+                                           picture_source_paths, read_app, read_folder_source)
 
 # The kinds the command takes, by the word it takes them as: "picture".
 KINDS = {noun: kind for kind, noun in NOUNS.items()}
@@ -110,7 +110,8 @@ def remove_resource(source_folder: Path, kind: str, name: str) -> tuple:
 def remove_resource_files(source_folder: Path, listed: str, name: str) -> tuple:
     """Takes the resource `name` out of app.toml's list `listed`, then
     deletes each of its files: those of its name with one of its kind's
-    suffixes (RESOURCE_FILES), each by its own path; no folder. Returns (the
+    suffixes (RESOURCE_FILES), and a picture's source file, each by its own
+    path; no folder. Returns (the
     paths deleted, those that could not be, a sentence each), within the
     folder. app.toml goes first, so that a file left behind is one no list
     names, never a name whose file is gone. It checks no use of the
@@ -119,8 +120,10 @@ def remove_resource_files(source_folder: Path, listed: str, name: str) -> tuple:
     app[listed] = [listed_name for listed_name in app[listed] if listed_name != name]
     (source_folder / "app.toml").write_text(app_text(app), encoding="utf-8", newline="\n")
     removed, left = [], []
-    for suffix in RESOURCE_FILES[listed]:
-        relative = "%s/%s%s" % (listed, name, suffix)
+    paths = ["%s/%s%s" % (listed, name, suffix) for suffix in RESOURCE_FILES[listed]]
+    if listed == "pictures":
+        paths += picture_source_paths(name)
+    for relative in paths:
         path = source_folder / relative
         if not path.is_file():
             continue

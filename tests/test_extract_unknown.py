@@ -93,16 +93,16 @@ class PatchedDemoTestCase(unittest.TestCase):
 class ExtractUnknownTest(PatchedDemoTestCase):
 
     def test_a_block_of_another_kind_stops_extract_unless_told_to_go_on(self):
-        project = self.patched("block.HMI", blocks={"2.ib": b"?"})
+        project = self.patched("block.HMI", blocks={"2.xb": b"?"})
         with self.assertRaises(UnknownContentError) as raised:
             extract(project, self.target("block"))
-        self.assertIn("block 2.ib", str(raised.exception))
+        self.assertIn("block 2.xb", str(raised.exception))
         self.assertIn("nxwright report", str(raised.exception))
         self.assertFalse(self.target("block").exists())
         messages = extract(project, self.target("block"), continue_with_unknown=True)
-        self.assertTrue(any("block 2.ib" in message for message in messages))
+        self.assertTrue(any("block 2.xb" in message for message in messages))
         build(self.target("block"), self.folder / "block-again.HMI")
-        self.assertNotIn("2.ib", HmiContainer.from_file(self.folder / "block-again.HMI").blocks)
+        self.assertNotIn("2.xb", HmiContainer.from_file(self.folder / "block-again.HMI").blocks)
 
     def test_a_header_byte_of_another_value_may_be_lost(self):
         project = self.patched("header.HMI", header={14: 0x50})
@@ -264,7 +264,7 @@ class ExtractUnknownTest(PatchedDemoTestCase):
         extract(self.demo, target)
         before = {path: path.read_bytes() for path in target.rglob("*") if path.is_file()}
         with self.assertRaises(UnknownContentError):
-            extract(self.patched("existing.HMI", blocks={"2.ib": b"?"}), target)
+            extract(self.patched("existing.HMI", blocks={"2.xb": b"?"}), target)
         after = {path: path.read_bytes() for path in target.rglob("*") if path.is_file()}
         self.assertEqual(after, before)
 
@@ -288,15 +288,15 @@ class ExtractCommandTest(PatchedDemoTestCase):
         return code, printed.getvalue(), said.getvalue()
 
     def test_with_nobody_to_ask_it_stops_with_its_own_exit_code(self):
-        project = self.patched("command.HMI", blocks={"2.ib": b"?"})
+        project = self.patched("command.HMI", blocks={"2.xb": b"?"})
         code, _, said = self.run_extract(project, self.target("command"))
         self.assertEqual(code, NO_ANSWER_EXIT_CODE)
-        self.assertIn("block 2.ib", said)
+        self.assertIn("block 2.xb", said)
         self.assertIn("--continue-with-unknown", said)
         self.assertFalse(self.target("command").exists())
 
     def test_the_option_goes_on(self):
-        project = self.patched("option.HMI", blocks={"2.ib": b"?"})
+        project = self.patched("option.HMI", blocks={"2.xb": b"?"})
         code, _, said = self.run_extract(project, self.target("option"),
                                          "--continue-with-unknown")
         self.assertEqual(code, 0)
@@ -305,7 +305,7 @@ class ExtractCommandTest(PatchedDemoTestCase):
         self.assertTrue((self.target("option") / "app.toml").is_file())
 
     def test_the_answer_at_the_terminal(self):
-        project = self.patched("asked.HMI", blocks={"2.ib": b"?"})
+        project = self.patched("asked.HMI", blocks={"2.xb": b"?"})
         ask, questions = answering("n")
         code, _, said = self.run_extract(project, self.target("asked-no"), ask=ask)
         self.assertEqual(code, 1)
@@ -326,11 +326,11 @@ class ExtractCommandTest(PatchedDemoTestCase):
         return code, printed.getvalue(), said.getvalue()
 
     def test_dump_warns_and_never_asks(self):
-        project = self.patched("dumped.HMI", blocks={"2.ib": b"?"}, header={14: 0x50})
+        project = self.patched("dumped.HMI", blocks={"2.xb": b"?"}, header={14: 0x50})
         code, _, said = self.run_command("dump", project, self.folder / "dumped")
         self.assertEqual(code, 0)
         self.assertIn("nxwright dump: warning: a block of a kind nxwright does not handle "
-                      "(block 2.ib)", said)
+                      "(block 2.xb)", said)
         self.assertIn("(manifest header, byte 14)", said)
         self.assertIn("nxwright report", said.splitlines()[-1])
         self.assertTrue((self.folder / "dumped" / "project.txt").is_file())
@@ -350,12 +350,12 @@ class ExtractCommandTest(PatchedDemoTestCase):
         self.assertTrue((self.target("imported") / "app.toml").is_file())
 
     def test_list_unknown_prints_each_as_json_and_writes_nothing(self):
-        project = self.patched("listed.HMI", blocks={"2.ib": b"?"}, header={14: 0x50})
+        project = self.patched("listed.HMI", blocks={"2.xb": b"?"}, header={14: 0x50})
         code, printed, _ = self.run_extract("--list-unknown", project)
         self.assertEqual(code, 0)
         lines = [json.loads(line) for line in printed.splitlines()]
         self.assertEqual([(line["where"], line["sort"]) for line in lines],
-                         [("block 2.ib", "may be lost"), ("manifest header, byte 14",
+                         [("block 2.xb", "may be lost"), ("manifest header, byte 14",
                                                           "may be lost")])
         self.assertEqual((lines[0]["size"], lines[0]["first_bytes"]), (1, "3f"))
         self.assertFalse(any(self.folder.glob("source-listed*")))
@@ -363,7 +363,7 @@ class ExtractCommandTest(PatchedDemoTestCase):
     def test_list_unknown_gives_a_large_content_s_first_bytes_alone(self):
         # As the report does, so that the list stays short whatever the
         # content's size: the extension reads it into a buffer of 1 MB.
-        project = self.patched("large.HMI", blocks={"2.ib": bytes(range(256)) * 4096})
+        project = self.patched("large.HMI", blocks={"2.xb": bytes(range(256)) * 4096})
         code, printed, _ = self.run_extract("--list-unknown", project)
         self.assertEqual(code, 0)
         line = json.loads(printed.splitlines()[0])
