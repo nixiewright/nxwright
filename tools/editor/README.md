@@ -274,9 +274,32 @@ python tools/editor/release_pass.py round-trip --old <old program> --new <new pr
 - `report.md` in the output folder lists what the old Editor's save changes, then what the new Editor alone changes, which are the findings. A run of the Nextion Editor 1.68.2 against itself lists nothing.
 - The Nextion Editor comes to the front during each `open` and `simulate`, so the run is best left to itself.
 
+### The catalogs of two Editors
+
+`tools/editor/release_pass.py catalog` shows how the Attribute panel of a new Nextion Editor differs from the old one's. Run it with nxwright's own Python, from nxwright's folder, giving each Editor's program:
+
+```
+python tools/editor/release_pass.py catalog --old <old program> --new <new program> <output folder>
+```
+
+- The script runs `catalog_variants.py` under each Editor in turn, under the Editor names `release-old` and `release-new` ([Every attribute of every type](#every-attribute-of-every-type)). Each run takes about two hours.
+- Each Editor's catalogs, and the log of its run, are written to `old` and `new` in the output folder.
+- `report.md` in the output folder lists the component types and the attributes added or removed. For an attribute both Editors show, it also lists a changed hint, a changed list of choices, and a name that changed colour. A green name means code may change the attribute. A run of the Nextion Editor 1.68.2 against itself lists nothing.
+
+### The files of two releases
+
+`tools/editor/release_pass.py files` lists the files that differ between the folders of two releases, each unpacked from its zip. Run it with nxwright's own Python:
+
+```
+python tools/editor/release_pass.py files --old <old folder> --new <new folder> <report.md>
+```
+
+- Each file added, removed, or changed is listed by its path in the folder. Two files differ when their SHA-256 digests differ.
+- A changed `model0.sa` or `model1.sa` points at a change to the list of screen models. Between 1.60.1 and 1.63.3, for example, both changed, and the keyboards gained a fourth page for each screen size.
+
 ## Its tests
 
-The tests of the tool's records, its lock, the logic of its catalog and memory probe, its release check, the round trip's comparisons, and how it finds a Nextion Editor window need neither the Nextion Editor nor pywinauto. These tests run with nxwright's own Python, on Windows. The tests of the `open` and `tft` commands import the tool itself and run against stand-ins for the Nextion Editor's windows, so they also need the tool's packages from `requirements.txt`:
+The tests of the tool's records, its lock, the logic of its catalog and memory probe, its release check, the comparisons of a release pass, and how it finds a Nextion Editor window need neither the Nextion Editor nor pywinauto. These tests run with nxwright's own Python, on Windows. The tests of the `open` and `tft` commands import the tool itself and run against stand-ins for the Nextion Editor's windows, so they also need the tool's packages from `requirements.txt`:
 
 ```
 python -m unittest discover -s tools/editor/tests -t .

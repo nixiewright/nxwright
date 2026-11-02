@@ -1,19 +1,26 @@
-"""The round trip of a release pass: how a new Nextion Editor treats the
-projects nxwright builds, beside how the old one, the Editor nxwright is
-tested with, treats them.
+"""The comparisons of a release pass, between the old Nextion Editor, the one
+nxwright is tested with, and a new one.
 
     python tools/editor/release_pass.py round-trip --old <program> --new <program> <output>
+    python tools/editor/release_pass.py catalog --old <program> --new <program> <output>
+    python tools/editor/release_pass.py files --old <folder> --new <folder> <report.md>
+
+The round trip shows how the new Editor treats the projects nxwright builds,
+beside how the old one treats them. The catalog comparison shows how the
+new Editor's Attribute panel differs from the old one's. The file comparison
+shows what changed between the folders of the two releases' unpacked zips.
 
 Run it with nxwright's own Python, from nxwright's folder. Each program is a
 Nextion Editor's, such as NextionEditor.exe in the folder of its release's
 unpacked zip. The script drives each Editor through the Editor tool, run
-with the tool's Python, under an Editor name of its own (EDITOR_NAMES). It
-writes everything into <output>, a folder it creates, and the findings in
-<output>/report.md.
+with the tool's Python, under an Editor name of its own (EDITOR_NAMES). The
+round trip and the catalog comparison write everything into <output>, a
+folder they create, and the findings in <output>/report.md. The file
+comparison writes only its report.
 
-For each project (round_trip_projects), with each Editor in turn, it builds
-the project with nxwright, has the Editor open it, compile it in its
-simulator, and save it, then writes `nxwright report` of the saved file,
+For each project (round_trip_projects), with each Editor in turn, the round
+trip builds the project with nxwright, has the Editor open it, compile it in
+its simulator, and save it, then writes `nxwright report` of the saved file,
 extracts the saved file into a copy of the project's source folder, and
 compares the copy with the built file extracted alike, and the built file
 with the saved file.
@@ -25,9 +32,16 @@ where it starts, with the bytes on each side. The directory of a project
 file is left aside, as each save adds to it. The differences the old Editor
 makes are what any save changes; those the new Editor alone makes are the
 findings (new_editor_only).
+
+The catalog comparison runs catalog_variants.py under each Editor in turn,
+which takes about two hours each, and compares the two merged catalogs
+(compare_catalogs). The file comparison compares the two folders by each
+file's SHA-256 (compare_files).
 """
 import argparse
 from dataclasses import dataclass, field
+import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -49,7 +63,7 @@ from nxwright.source.report import write_report  # noqa: E402
 from nxwright.source.resource_adding import (add_animation, add_font, add_pictures,  # noqa: E402
                                              add_sound, add_video)
 from nxwright.source.source_folder import new_source_folder  # noqa: E402
-from tools.editor.catalog import with_values  # noqa: E402
+from tools.editor.catalog import choices_of, with_values  # noqa: E402
 
 # The round trip's own pictures and sound, which no other part of nxwright
 # uses, so that the demo and the tests' fixtures stay free to change.
@@ -57,6 +71,9 @@ RESOURCES = Path(__file__).resolve().with_name("round_trip")
 # The Editor tool, and the Python it runs with (README.md, Setting it up).
 EDITOR_SCRIPT = Path(__file__).resolve().with_name("editor.py")
 TOOL_PYTHON = Path(__file__).resolve().parent / "build" / "venv" / "Scripts" / "python.exe"
+# The script that catalogs every attribute the Editor shows, which runs with
+# the tool's Python too.
+CATALOG_SCRIPT = Path(__file__).resolve().with_name("catalog_variants.py")
 # The Editor name each side runs under, so that the two never share a
 # dedicated Editor, even when both are the same program.
 EDITOR_NAMES = {"old": "release-old", "new": "release-new"}
@@ -262,8 +279,7 @@ def run_side(name: str, source: Path, built: Path, baseline: Path, side: str, pr
     result = Side()
     output.mkdir(parents=True)
     saved = output / (name + ".HMI")
-    environment = dict(os.environ, NXWRIGHT_EDITOR=str(program),
-                       NXWRIGHT_EDITOR_NAME=EDITOR_NAMES[side])
+    environment = _environment(side, program)
     stopped = _saved_by_the_editor(built, saved, output, environment)
     if stopped is not None:
         # A file the first try saved before a later step stopped would make
@@ -317,6 +333,12 @@ def _saved_by_the_editor(built: Path, saved: Path, output: Path, environment: di
         return None
     finally:
         _editor(environment, "release", holder)
+
+
+def _environment(side: str, program: Path) -> dict:
+    """Returns the environment that has the Editor tool drive the Editor
+    `program` under the `side` one's Editor name."""
+    return dict(os.environ, NXWRIGHT_EDITOR=str(program), NXWRIGHT_EDITOR_NAME=EDITOR_NAMES[side])
 
 
 def _editor(environment: dict, *command: str) -> subprocess.CompletedProcess:
@@ -416,23 +438,204 @@ def _listed(found: list, what: str) -> list:
     return lines
 
 
+# The kinds of difference between two catalogs. A choice list changes with
+# its hint, and is given apart, as it decides the values a page file may
+# give. A name shows green when code may change the attribute, and black
+# when it may not.
+TYPE_ADDED, TYPE_REMOVED = "type added", "type removed"
+ATTRIBUTE_ADDED, ATTRIBUTE_REMOVED = "attribute added", "attribute removed"
+HINT_CHANGED, CHOICES_CHANGED, COLOUR_CHANGED = "hint changed", "choices changed", "colour changed"
+
+
+@dataclass(frozen=True)
+class CatalogDifference:
+    """A component type, or a type's attribute, `where`, that differs
+    between two merged catalogs, by `kind`; for a change, the old Editor's
+    `old` and the new Editor's `new`."""
+    where: str
+    kind: str
+    old: str = None
+    new: str = None
+
+
+def compare_catalogs(old: dict, new: dict) -> list:
+    """Returns the CatalogDifferences of the merged catalog `new` from the
+    merged catalog `old`, each as catalog_variants.py writes it to
+    merged.json: {type name: {attribute: {"hint", "green", "black",
+    "values"}}}. Under which variants a name showed does not count, only in
+    which colours."""
+    found = []
+    for name in sorted(set(old) | set(new)):
+        if name not in old:
+            found.append(CatalogDifference(name, TYPE_ADDED))
+        elif name not in new:
+            found.append(CatalogDifference(name, TYPE_REMOVED))
+        else:
+            found += _attribute_differences(name, old[name], new[name])
+    return found
+
+
+def _attribute_differences(type_name: str, old: dict, new: dict) -> list:
+    """Returns the CatalogDifferences of the attributes of one type, `new`
+    from `old`."""
+    found = []
+    for attribute in sorted(set(old) | set(new)):
+        where = "%s, %s" % (type_name, attribute)
+        if attribute not in old:
+            found.append(CatalogDifference(where, ATTRIBUTE_ADDED))
+            continue
+        if attribute not in new:
+            found.append(CatalogDifference(where, ATTRIBUTE_REMOVED))
+            continue
+        before, after = old[attribute], new[attribute]
+        if before["hint"] != after["hint"]:
+            found.append(CatalogDifference(where, HINT_CHANGED, before["hint"], after["hint"]))
+        choices = [_choices_text(choices_of(each["hint"])) for each in (before, after)]
+        if choices[0] != choices[1]:
+            found.append(CatalogDifference(where, CHOICES_CHANGED, *choices))
+        colours = [_colours(each) for each in (before, after)]
+        if colours[0] != colours[1]:
+            found.append(CatalogDifference(where, COLOUR_CHANGED, *colours))
+    return found
+
+
+def _choices_text(choices: dict) -> str:
+    """Returns the choices {number: label} as a hint lists them, such as
+    "0-crop image;1-solid color"."""
+    return ";".join("%d-%s" % (number, label) for number, label in sorted(choices.items()))
+
+
+def _colours(seen: dict) -> str:
+    """Returns the colours an attribute's name showed in: "green", "black",
+    or "green and black"."""
+    return " and ".join(colour for colour in ("green", "black") if seen[colour])
+
+
+def catalog(old: Path, new: Path, output: Path) -> str:
+    """Runs catalog_variants.py under the Editors `old` and `new` in turn,
+    each into its own folder of `output`, a folder it creates, and returns
+    the report's text, which it also writes to `output`/report.md. Each
+    run's output goes to catalog_variants.log in its folder. When the old
+    Editor's catalog is not written, the new Editor's run is left out, as
+    there is nothing to compare it with."""
+    output.mkdir(parents=True)
+    merged, stopped = {}, []
+    for side, program in (("old", old), ("new", new)):
+        folder = output / side
+        folder.mkdir()
+        environment = _environment(side, program)
+        with open(folder / "catalog_variants.log", "w", encoding="utf-8") as log:
+            done = subprocess.run([str(TOOL_PYTHON), str(CATALOG_SCRIPT), str(folder)],
+                                  cwd=NXWRIGHT_FOLDER, env=environment,
+                                  stdout=log, stderr=subprocess.STDOUT)
+        # Closed, so that it does not run beside the next Editor for hours.
+        _editor(environment, "quit")
+        # The script exits with 1 also when it wrote its catalog, for a
+        # description of nxwright's that equals a hint, so the catalog
+        # itself tells whether the run finished.
+        if (folder / "merged.json").is_file():
+            merged[side] = json.loads((folder / "merged.json").read_text(encoding="utf-8"))
+        else:
+            stopped.append("The %s Editor's catalog was not written: catalog_variants.py exited "
+                           "with %d (%s/catalog_variants.log)." % (side, done.returncode, side))
+            break
+    found = compare_catalogs(merged["old"], merged["new"]) if not stopped else None
+    text = catalog_report(old, new, found, stopped)
+    (output / "report.md").write_text(text, encoding="utf-8", newline="\n")
+    return text
+
+
+def catalog_report(old: Path, new: Path, found: list, stopped: list) -> str:
+    """Returns the report of the catalog comparison of the Editors `old` and
+    `new`: the CatalogDifferences `found`, or, when a catalog was not
+    written, what `stopped` says of it."""
+    lines = ["# The catalogs of two Nextion Editors", "", "The old Editor: %s" % old, "",
+             "The new Editor: %s" % new, ""]
+    if stopped:
+        return "\n".join(lines + stopped) + "\n"
+    if not found:
+        lines.append("Nothing differs.")
+    for each in found:
+        line = "- `%s`: %s" % (each.where, each.kind)
+        if each.old is not None or each.new is not None:
+            line += ", from \"%s\" to \"%s\"" % (each.old, each.new)
+        lines.append(line)
+    return "\n".join(lines) + "\n"
+
+
+def compare_files(old: Path, new: Path) -> list:
+    """Returns the Differences of the folder `new` from the folder `old`,
+    file by file, by each file's path from its folder, written with /. Two
+    files differ when their SHA-256 does, and a changed one comes without
+    runs."""
+    digests = [{path.relative_to(folder).as_posix(): _sha256(path) for path in folder.rglob("*")
+                if path.is_file()} for folder in (old, new)]
+    return [Difference(each.where, each.kind) for each in _compared(*digests)]
+
+
+def _sha256(path: Path) -> bytes:
+    """Returns the SHA-256 of the file `path`, read a megabyte at a time."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as file:
+        for chunk in iter(lambda: file.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.digest()
+
+
+def files_report(old: Path, new: Path, found: list) -> str:
+    """Returns the report of the file comparison of the release folders
+    `old` and `new`: each Difference of `found`."""
+    lines = ["# The files of two Nextion Editor releases", "", "The old release: %s" % old, "",
+             "The new release: %s" % new, ""]
+    lines += ["- `%s`: %s" % (each.where, each.kind) for each in found] or ["Nothing differs."]
+    return "\n".join(lines) + "\n"
+
+
+def _with_editors(command, help_text: str):
+    """Adds the options of a comparison that drives the old and the new
+    Editor to the subcommand parser `command`."""
+    command.add_argument("--old", type=Path, required=True, help="the old Editor's program")
+    command.add_argument("--new", type=Path, required=True, help="the new Editor's program")
+    command.add_argument("output", type=Path, help=help_text)
+
+
 def main(arguments: list = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
-    trip = commands.add_parser("round-trip", help="how a new Nextion Editor treats nxwright's "
-                               "projects, beside the old one")
-    trip.add_argument("--old", type=Path, required=True, help="the old Editor's program")
-    trip.add_argument("--new", type=Path, required=True, help="the new Editor's program")
-    trip.add_argument("output", type=Path, help="the folder to write, which must not exist")
+    _with_editors(commands.add_parser("round-trip", help="how a new Nextion Editor treats "
+                                      "nxwright's projects, beside the old one"),
+                  "the folder to write, which must not exist")
+    _with_editors(commands.add_parser("catalog", help="how a new Nextion Editor's Attribute "
+                                      "panel differs from the old one's"),
+                  "the folder to write, which must not exist")
+    files = commands.add_parser("files", help="the files that differ between the folders of two "
+                                "releases' unpacked zips")
+    files.add_argument("--old", type=Path, required=True, help="the old release's folder")
+    files.add_argument("--new", type=Path, required=True, help="the new release's folder")
+    files.add_argument("output", type=Path, help="the report to write, which must not exist")
     options = parser.parse_args(arguments)
     if options.output.exists():
         print("%s exists already; nothing was written" % options.output, file=sys.stderr)
         return 1
+    if options.command == "files":
+        for folder in (options.old, options.new):
+            if not folder.is_dir():
+                print("%s is not a folder; nothing was written" % folder, file=sys.stderr)
+                return 1
+        found = compare_files(options.old, options.new)
+        options.output.parent.mkdir(parents=True, exist_ok=True)
+        with open(options.output, "x", encoding="utf-8", newline="\n") as report:
+            report.write(files_report(options.old, options.new, found))
+        print("Wrote %s" % options.output)
+        return 0
     if not TOOL_PYTHON.is_file():
         print("the Editor tool's Python is missing, at %s; make it with tools/editor/bootstrap.py "
               "(README.md)" % TOOL_PYTHON, file=sys.stderr)
         return 1
-    round_trip(options.old, options.new, options.output)
+    if options.command == "catalog":
+        catalog(options.old, options.new, options.output)
+    else:
+        round_trip(options.old, options.new, options.output)
     print("Wrote %s" % (options.output / "report.md"))
     return 0
 

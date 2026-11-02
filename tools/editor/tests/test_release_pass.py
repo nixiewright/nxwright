@@ -1,10 +1,15 @@
-"""The comparisons of the round trip (tools/editor/release_pass.py): of two
-folders file by file, of two projects' live blocks, and of the differences
-the new Nextion Editor alone makes. They run on small inputs written for
-the tests, and need neither the Nextion Editor nor pywinauto."""
+"""The comparisons of a release pass (tools/editor/release_pass.py). The
+round trip's: of two folders file by file, of two projects' live blocks, and
+of the differences the new Nextion Editor alone makes. Then of two Editors'
+catalogs of attributes, and of the files of two releases. They run on small
+inputs written for the tests, and need neither the Nextion Editor nor
+pywinauto."""
+import json
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from tools.editor import release_pass
 from tools.editor.release_pass import Difference
@@ -108,6 +113,140 @@ class SectionTest(unittest.TestCase):
         alone = text[text.index("What the new Editor alone changes"):]
         self.assertIn("`9.x`", alone)
         self.assertNotIn("`0.pa`", alone)
+
+
+def seen(hint: str, green=("defaults",), black=()) -> dict:
+    """Returns an attribute as a merged catalog (merged.json) gives it."""
+    return {"hint": hint, "green": list(green), "black": list(black), "values": []}
+
+
+class CatalogsTest(unittest.TestCase):
+
+    def changes(self, old: dict, new: dict) -> list:
+        return [(each.where, each.kind) for each in release_pass.compare_catalogs(old, new)]
+
+    def test_the_same_catalogs_give_nothing(self):
+        catalog = {"text": {"aph": seen("Opaqueness(0-127)")}}
+        self.assertEqual(release_pass.compare_catalogs(catalog, catalog), [])
+
+    def test_a_type_added_or_removed(self):
+        old = {"text": {}, "gauge": {}}
+        new = {"text": {}, "chart": {}}
+        self.assertEqual(self.changes(old, new), [("chart", release_pass.TYPE_ADDED),
+                                                  ("gauge", release_pass.TYPE_REMOVED)])
+
+    def test_an_attribute_added_or_removed(self):
+        old = {"text": {"aph": seen("Opaqueness(0-127)"), "old": seen("Gone")}}
+        new = {"text": {"aph": seen("Opaqueness(0-127)"), "neu": seen("New")}}
+        self.assertEqual(self.changes(old, new), [("text, neu", release_pass.ATTRIBUTE_ADDED),
+                                                  ("text, old", release_pass.ATTRIBUTE_REMOVED)])
+
+    def test_a_hint_changed_gives_both_hints(self):
+        old = {"text": {"aph": seen("Opaqueness(0-127)")}}
+        new = {"text": {"aph": seen("Opacity(0-127)")}}
+        [change] = release_pass.compare_catalogs(old, new)
+        self.assertEqual((change.where, change.kind, change.old, change.new),
+                         ("text, aph", release_pass.HINT_CHANGED, "Opaqueness(0-127)",
+                          "Opacity(0-127)"))
+
+    def test_a_choice_added_changes_the_choices_too(self):
+        old = {"text": {"sta": seen("Background fill:0-crop image;1-solid color")}}
+        new = {"text": {"sta": seen("Background fill:0-crop image;1-solid color;2-image")}}
+        found = release_pass.compare_catalogs(old, new)
+        self.assertEqual([each.kind for each in found],
+                         [release_pass.HINT_CHANGED, release_pass.CHOICES_CHANGED])
+        self.assertEqual((found[1].old, found[1].new),
+                         ("0-crop image;1-solid color", "0-crop image;1-solid color;2-image"))
+
+    def test_a_name_s_colour_changed(self):
+        # Green when code may change the attribute, black when it may not.
+        old = {"text": {"pco": seen("Font color", green=["defaults"])}}
+        new = {"text": {"pco": seen("Font color", green=[], black=["defaults"])}}
+        [change] = release_pass.compare_catalogs(old, new)
+        self.assertEqual((change.where, change.kind, change.old, change.new),
+                         ("text, pco", release_pass.COLOUR_CHANGED, "green", "black"))
+
+    def test_the_variants_a_colour_showed_under_do_not_count(self):
+        old = {"text": {"pco": seen("Font color", green=["defaults", "choice 0"])}}
+        new = {"text": {"pco": seen("Font color", green=["defaults"])}}
+        self.assertEqual(release_pass.compare_catalogs(old, new), [])
+
+
+class CatalogRunTest(unittest.TestCase):
+    """The catalog comparison's run, with catalog_variants.py and the Editor
+    tool stood in for."""
+
+    def setUp(self):
+        self.output = Path(tempfile.mkdtemp()) / "catalog"
+
+    def run_catalog(self, catalogs: dict) -> tuple:
+        """Runs the comparison, each side's catalog_variants.py writing
+        `catalogs`[side] as its merged.json, or nothing for a side not
+        given. Returns (the report, the sides run, the Editor commands)."""
+        sides, commands = [], []
+
+        def catalog_variants(command, env, **_):
+            side = Path(command[2]).name
+            sides.append((side, env["NXWRIGHT_EDITOR_NAME"]))
+            if side in catalogs:
+                (Path(command[2]) / "merged.json").write_text(json.dumps(catalogs[side]),
+                                                             encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0 if side in catalogs else 1)
+
+        with mock.patch.object(release_pass.subprocess, "run", side_effect=catalog_variants), \
+                mock.patch.object(release_pass, "_editor",
+                                  side_effect=lambda env, *command: commands.append(command)):
+            text = release_pass.catalog(Path("old.exe"), Path("new.exe"), self.output)
+        return text, sides, commands
+
+    def test_both_catalogs_are_compared(self):
+        text, sides, commands = self.run_catalog({"old": {"text": {}}, "new": {"chart": {}}})
+        self.assertEqual(sides, [("old", "release-old"), ("new", "release-new")])
+        self.assertEqual(commands, [("quit",), ("quit",)])
+        self.assertIn("- `chart`: type added", text)
+        self.assertEqual((self.output / "report.md").read_text(encoding="utf-8"), text)
+
+    def test_without_the_old_catalog_the_new_editor_is_not_run(self):
+        text, sides, _ = self.run_catalog({"new": {"chart": {}}})
+        self.assertEqual(sides, [("old", "release-old")])
+        self.assertIn("The old Editor's catalog was not written", text)
+        self.assertNotIn("chart", text)
+
+
+class ReleaseFilesTest(unittest.TestCase):
+
+    def setUp(self):
+        self.old, self.new = (Path(tempfile.mkdtemp()) for _ in range(2))
+
+    def write(self, folder: Path, name: str, data: bytes):
+        path = folder / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    def test_each_file_added_removed_or_changed_without_runs(self):
+        self.write(self.old, "NextionEditor.exe", b"old program")
+        self.write(self.new, "NextionEditor.exe", b"new program")
+        self.write(self.old, "model0.sa", b"same")
+        self.write(self.new, "model0.sa", b"same")
+        self.write(self.old, "lib/old.dll", b"dll")
+        self.write(self.new, "lib/new.dll", b"dll")
+        self.assertEqual(release_pass.compare_files(self.old, self.new), [
+            Difference("NextionEditor.exe", release_pass.CHANGED),
+            Difference("lib/new.dll", release_pass.ADDED),
+            Difference("lib/old.dll", release_pass.REMOVED)])
+
+    def test_the_report_lists_each_file(self):
+        found = [Difference("model0.sa", release_pass.CHANGED)]
+        text = release_pass.files_report(self.old, self.new, found)
+        self.assertIn("- `model0.sa`: changed", text)
+        self.assertIn("Nothing differs.", release_pass.files_report(self.old, self.new, []))
+
+    def test_the_report_s_folder_is_created(self):
+        report = Path(tempfile.mkdtemp()) / "pass" / "files.md"
+        with mock.patch("sys.stdout"):
+            self.assertEqual(release_pass.main(["files", "--old", str(self.old), "--new",
+                                                str(self.new), str(report)]), 0)
+        self.assertIn("Nothing differs.", report.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
