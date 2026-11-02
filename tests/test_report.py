@@ -20,6 +20,8 @@ class ReportTest(PatchedDemoTestCase):
     def test_it_names_each_unknown_content_with_its_place_and_bytes(self):
         project = self.patched("report.HMI", blocks={"2.ib": b"secret?"}, header={14: 0x50})
         text = report_text(project)
+        # The column of "kept exactly", "may be lost", or "cannot be kept".
+        self.assertIn("| What | Where | Kept by nxwright | Bytes | First bytes |", text)
         self.assertIn("| a block of a kind nxwright does not handle | block 2.ib | may be lost "
                       "| 7 | 73 65 63 72 65 74 3f |", text)
         self.assertIn("| manifest header, byte 14 | may be lost | 1 | 50 |", text)
@@ -61,6 +63,7 @@ class ReportTest(PatchedDemoTestCase):
         text = report_text(project)
         self.assertNotIn("a1 b2 c3 d4", text)
         self.assertIn("-- -- -- --", text)
+        self.assertIn("`--` marks the bytes of the password's hash, which are left out.", text)
         self.assertIn("Password: yes", text)
         # Whether there is one is said of a model nxwright does not know too.
         unknown = self.patched("password-model.HMI", header={20: 0xA1, 16: 0xEE, 17: 0xEE})

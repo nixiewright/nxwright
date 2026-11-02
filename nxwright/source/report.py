@@ -81,7 +81,7 @@ def report_text(project: Path) -> str:
         "",
     ]
     if found:
-        lines += ["| What | Where | Sorted | Bytes | First bytes |",
+        lines += ["| What | Where | Kept by nxwright | Bytes | First bytes |",
                   "| --- | --- | --- | --- | --- |"]
         lines += ["| %s | %s | %s | %d | %s |" % (each.what, each.where, each.sort,
                                                   len(each.data), _hex(each.data[:SHOWN_BYTES]))
@@ -90,7 +90,8 @@ def report_text(project: Path) -> str:
         lines.append("nxwright knows everything in this project.")
     lines += ["", "## The project file's blocks", "", "| Block | Bytes |", "| --- | --- |"]
     lines += ["| %s | %d |" % (name, len(block)) for name, block in blocks.items()]
-    lines += ["", "## The manifest header", "", "```", _blanked_hex(header), "```", ""]
+    lines += ["", "## The manifest header", "", "```", _blanked_hex(header), "```", "",
+              "`--` marks the bytes of the password's hash, which are left out.", ""]
     lines += _settings_lines(header)
     return "\n".join(lines) + "\n"
 
