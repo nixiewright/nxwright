@@ -1,6 +1,7 @@
 """The dedicated Editor's records (tools/editor/dedicated.py): the state file,
 the process told apart from a later one with its ID, and the lock. They need
 neither the Editor nor pywinauto, only Windows, as the tool does."""
+import contextlib
 import ctypes
 from ctypes import wintypes
 import os
@@ -71,12 +72,17 @@ class DedicatedTest(unittest.TestCase):
 
     def test_the_recorded_program_is_told_from_another(self):
         # Windows' paths ignore letter case, and a path may be given relative.
-        folder = Path(tempfile.mkdtemp())
-        program = folder / "Nextion Editor.exe"
-        recorded = Recorded(1234, 100, str(program))
-        self.assertTrue(runs_program(recorded, Path(str(program).upper())))
-        self.assertTrue(runs_program(recorded, Path(os.path.relpath(program))))
-        self.assertFalse(runs_program(recorded, folder / "1.63.3" / "NextionEditor.exe"))
+        # The relative path is given from the program's own folder. Windows
+        # has no relative path from one drive to another, and the tests may
+        # run on another drive than the temporary folder's, as on GitHub.
+        with tempfile.TemporaryDirectory() as work:
+            folder = Path(work)
+            program = folder / "Nextion Editor.exe"
+            recorded = Recorded(1234, 100, str(program))
+            self.assertTrue(runs_program(recorded, Path(str(program).upper())))
+            with contextlib.chdir(folder):
+                self.assertTrue(runs_program(recorded, Path(program.name)))
+            self.assertFalse(runs_program(recorded, folder / "1.63.3" / "NextionEditor.exe"))
 
     def test_an_ended_process_is_not_running_while_a_handle_to_it_stays_open(self):
         # Windows keeps an ended process's record, its start included, while
