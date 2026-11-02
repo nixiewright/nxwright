@@ -54,7 +54,7 @@ npm run compile
 
 `npm test` compiles the client, then runs its tests (`test/`) with Node's own test runner. It needs the Node.js versions jsdom supports: 22.22.2 or later in version 22, 24.15.0 or later in version 24, or 26 and later.
 
-`npm run test:host` compiles the client, then runs the tests that need VS Code itself (`test/host/`): the extension activating on a source folder, its commands registered, the language server's errors as code is typed, the page preview opening, and an agent driving a simulation through the agent channel, `nxwright mcp`'s own client included.
+`npm run test:host` compiles the client, then runs the tests that need VS Code itself (`test/host/`): the extension activating on a source folder, its commands registered, the language server's errors as code is typed, the page preview opening, Extract going on past content nxwright does not know or stopping, and an agent driving a simulation through the agent channel, `nxwright mcp`'s own client included.
 
 - The tests run in a separate copy of VS Code, not the one you use. `@vscode/test-electron` starts it, but does not download it for you. On Linux and macOS, the CI workflow downloads it first (`.github/workflows/tests.yml`).
 - To set one up:

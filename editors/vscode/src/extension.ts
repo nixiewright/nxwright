@@ -142,7 +142,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }),
     vscode.commands.registerCommand("nxwright.build", () => build(context)),
-    vscode.commands.registerCommand("nxwright.extract", () => extract(context)),
+    vscode.commands.registerCommand("nxwright.extract",
+      (given?: ExtractArguments) => extract(context, given)),
     vscode.commands.registerCommand("nxwright.changeScreen", () => changeDevice("screen")),
     vscode.commands.registerCommand("nxwright.changeRotation", () => changeDevice("rotation")),
     vscode.commands.registerCommand("nxwright.changeEncoding", () => changeDevice("encoding")),
@@ -355,18 +356,38 @@ async function build(context: vscode.ExtensionContext): Promise<void> {
   }
 }
 
-async function extract(context: vscode.ExtensionContext): Promise<void> {
-  const folder = await activeSourceFolder();
-  if (!folder) {
-    return;
+// What a caller, such as the extension's tests, may give the Extract command
+// in place of the user's choices: the source folder, the project file, and
+// whether to go on past content the next build may lose. Given these, the
+// command asks nothing.
+interface ExtractArguments {
+  folder: string;
+  project: string;
+  goOnPastUnknown: boolean;
+}
+
+// Extracts a project file into a source folder: those `given`, or else the
+// current project's, after asking the user. Returns the extract's exit
+// code, or undefined when it did not run.
+async function extract(context: vscode.ExtensionContext,
+                       given?: ExtractArguments): Promise<number | undefined> {
+  const folder = given ? vscode.Uri.file(given.folder) : await activeSourceFolder();
+  if (!folder || refusedForUnsaved(folder, "extracting")) {
+    return undefined;
   }
-  if (refusedForUnsaved(folder, "extracting")) {
-    return;
+  const project = given ? vscode.Uri.file(given.project)
+    : await projectFile(context, folder, "extract");
+  if (!project || (!given && !await extractConfirmed(project, folder))) {
+    return undefined;
   }
-  const project = await projectFile(context, folder, "extract");
-  if (!project) {
-    return;
-  }
+  const unknown = await unknownContentArguments(project.fsPath, given?.goOnPastUnknown);
+  return unknown === undefined ? undefined
+    : runSubcommand("extract", ["extract", project.fsPath, folder.fsPath, ...unknown]);
+}
+
+// Says what extracting `project` into `folder` does, and returns whether the
+// user chose to go on.
+async function extractConfirmed(project: vscode.Uri, folder: vscode.Uri): Promise<boolean> {
   // Extracting replaces source code with the project file's, which the user
   // may not expect, so it says what it does and asks first.
   const paragraphs = [
@@ -392,13 +413,7 @@ async function extract(context: vscode.ExtensionContext): Promise<void> {
     { modal: true, detail: paragraphs.join("\n\n") },
     "Extract",
   );
-  if (answer !== "Extract") {
-    return;
-  }
-  const unknown = await unknownContentArguments(project.fsPath);
-  if (unknown !== undefined) {
-    await runSubcommand("extract", ["extract", project.fsPath, folder.fsPath, ...unknown]);
-  }
+  return answer === "Extract";
 }
 
 async function chooseProjectFile(context: vscode.ExtensionContext): Promise<void> {
@@ -891,10 +906,12 @@ async function askProjectFile(
 // returns the arguments that extract takes besides its own: none, or
 // --continue-with-unknown once the user chose to go on past content the
 // next build may lose. Returns undefined when extract is not to run:
-// refused, or the user chose not to go on (unknownContent.ts). The extract
-// task cannot hand back what the command printed, so this list comes first.
+// refused, or the user chose not to go on (unknownContent.ts). When `goOn`
+// is given, it is the choice, and the user is not asked. The extract task
+// cannot hand back what the command printed, so this list comes first.
 // When the list cannot be had, the extract task itself prints the error.
-async function unknownContentArguments(project: string): Promise<string[] | undefined> {
+async function unknownContentArguments(project: string,
+                                       goOn?: boolean): Promise<string[] | undefined> {
   const command = await commandToRun();
   if (command === undefined) {
     return undefined;
@@ -913,9 +930,9 @@ async function unknownContentArguments(project: string): Promise<string[] | unde
     return undefined;
   }
   if (choice.kind === "ask") {
-    const answer = await vscode.window.showWarningMessage(
-      "Go on extracting?", { modal: true, detail: choice.message }, "Go on");
-    return answer === "Go on" ? ["--continue-with-unknown"] : undefined;
+    const goingOn = goOn ?? (await vscode.window.showWarningMessage(
+      "Go on extracting?", { modal: true, detail: choice.message }, "Go on")) === "Go on";
+    return goingOn ? ["--continue-with-unknown"] : undefined;
   }
   return [];
 }
