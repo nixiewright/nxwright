@@ -256,14 +256,27 @@ The script builds probe projects with nxwright, compiles each one in the dedicat
 python tools/editor/latest_release.py
 ```
 
-- The script sends Nextion's server the same request that the Nextion Editor sends when it checks for a newer version, without the identifier of your computer.
-- It prints the version Nextion offers, and the release notes of a new one.
-- It exits with 0 when Nextion offers the version tested with, and with 1 when it offers another. It exits with 2 when the server cannot be reached, or its answer is not in the form the script reads.
+- Nextion's server gets the same request that the Nextion Editor sends when it checks for a newer version, without the identifier of your computer.
+- The script prints the version Nextion offers, with the release notes of a new one. It exits with 0 when Nextion offers the version tested with, and with 1 when it offers another. It exits with 2 when the server cannot be reached, or its answer is not in the form the script reads.
 - A GitHub workflow runs `latest_release.py` every Monday (`.github/workflows/release-check.yml`). The run fails when the script exits with 1 or 2, and its log shows what the script printed.
+
+### The round trip
+
+`tools/editor/release_pass.py round-trip` shows how a new Nextion Editor treats the projects nxwright builds, beside the Nextion Editor nxwright is tested with. Run it with nxwright's own Python, from nxwright's folder, giving each Editor's program:
+
+```
+python tools/editor/release_pass.py round-trip --old <old program> --new <new program> <output folder>
+```
+
+- The projects are the demo, a fixture of the tests, a project of one component of each type, and one small project for each screen series. `tools/editor/round_trip/` contains their pictures and sound, which nothing else uses.
+- Each Editor opens each project, compiles it in its simulator, and saves it, under an Editor name of its own, `release-old` or `release-new`. A step that fails is tried once more, in a fresh Nextion Editor.
+- The script then extracts each saved project, and compares it with the project as nxwright built it: the source folders file by file, and the project files block by block.
+- `report.md` in the output folder lists what the old Editor's save changes, then what the new Editor alone changes, which are the findings. A run of the Nextion Editor 1.68.2 against itself lists nothing.
+- The Nextion Editor comes to the front during each `open` and `simulate`, so the run is best left to itself.
 
 ## Its tests
 
-The tests of the tool's records, its lock, the logic of its catalog and memory probe, its release check, and how it finds a Nextion Editor window need neither the Nextion Editor nor pywinauto. These tests run with nxwright's own Python, on Windows. The tests of the `open` and `tft` commands import the tool itself and run against stand-ins for the Nextion Editor's windows, so they also need the tool's packages from `requirements.txt`:
+The tests of the tool's records, its lock, the logic of its catalog and memory probe, its release check, the round trip's comparisons, and how it finds a Nextion Editor window need neither the Nextion Editor nor pywinauto. These tests run with nxwright's own Python, on Windows. The tests of the `open` and `tft` commands import the tool itself and run against stand-ins for the Nextion Editor's windows, so they also need the tool's packages from `requirements.txt`:
 
 ```
 python -m unittest discover -s tools/editor/tests -t .
