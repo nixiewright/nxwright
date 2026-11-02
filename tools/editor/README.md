@@ -271,6 +271,8 @@ python tools/editor/latest_release.py
 - The script prints the version Nextion offers, with the release notes of a new one. It exits with 0 when Nextion offers the version tested with, and with 1 when it offers another. It exits with 2 when the server cannot be reached, or its answer is not in the form the script reads.
 - A GitHub workflow runs `latest_release.py` every Monday (`.github/workflows/release-check.yml`). The run fails when the script exits with 1 or 2, and its log shows what the script printed.
 
+The comparisons below show how a new release differs from the one nxwright is tested with. [RELEASES.md](RELEASES.md) gives the steps of moving nxwright to a new release, from the check to the version recorded.
+
 ### The round trip
 
 `tools/editor/release_pass.py round-trip` shows how a new Nextion Editor treats the projects nxwright builds, beside the Nextion Editor nxwright is tested with. Run it with nxwright's own Python, from nxwright's folder, giving each Editor's program:
