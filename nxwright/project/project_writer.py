@@ -52,7 +52,7 @@ from nxwright.project.resources import (COPIED_KINDS, CopiedKind, ImageSource,
                                         encode_manifest, parse_image_source, parse_manifest,
                                         partner_name, with_kind_in_order)
 from nxwright.project.screen_copy import (FORMAT_RAW, FORMAT_RAW_WITH_HEADER, ROTATIONS,
-                                          UndecodedScreenCopyError, decode_screen_copy,
+                                          decode_screen_copy, is_compressed_format_3,
                                           matches_within_editor_rounding, screen_copy_format)
 from nxwright.project.stamp import block_stamp, manifest_stamp, with_manifest_stamp, with_stamp
 
@@ -264,7 +264,8 @@ def _screen_copy_layout(container: HmiContainer, manifest) -> tuple:
     (_settings_layout): no picture can disagree with them.
 
     Format 3 ignores the rotation. One of its uncompressed pictures confirms the
-    format. Its compressed ones are not decoded, so they confirm nothing.
+    format. Its compressed ones are left out: they tell nothing more, and
+    nxwright writes none.
     """
     names = manifest.block_names("i")
     if not names:
@@ -286,8 +287,10 @@ def _screen_copy_layout(container: HmiContainer, manifest) -> tuple:
                             "format; this one has formats %s" % formats)
     for name, kind, source in pictures:
         block = container.blocks[name]
-        # Only format 3 has a variant that is not decoded.
-        if kind != formats[0] or kind == FORMAT_RAW_WITH_HEADER and _is_undecoded(block):
+        # A compressed format 3 picture is left out: format 3 always takes
+        # the 0-degree order, so it tells nothing the format's other
+        # pictures do not.
+        if kind != formats[0] or is_compressed_format_3(block):
             continue
         try:
             image = read_picture(source.data)
@@ -301,8 +304,8 @@ def _screen_copy_layout(container: HmiContainer, manifest) -> tuple:
             raise NxwrightError("picture block %s does not match its picture in any screen rotation"
                                 % name)
     if formats[0] == FORMAT_RAW_WITH_HEADER:
-        raise NxwrightError("the project's format 3 pictures are all compressed, which is not "
-                            "decoded, so none confirms the format of new ones")
+        raise NxwrightError("the project's format 3 pictures are all compressed, which nxwright "
+                            "does not write, so none confirms the format of new ones")
     raise NxwrightError("every picture in the project looks the same in more than one screen "
                         "rotation, so none confirms the pixel order of new ones")
 
@@ -320,18 +323,6 @@ def _settings_layout(container: HmiContainer) -> tuple:
                             "pixel order of new ones; add one in the Nextion Editor first"
                             % header[16:20].hex())
     return settings.screen_copy_layout
-
-
-def _is_undecoded(block: bytes) -> bool:
-    """Returns whether `block` is a screen copy that screen_copy.py recognises
-    but cannot decode: a compressed format 3 picture."""
-    try:
-        decode_screen_copy(block, 0)
-    except UndecodedScreenCopyError:
-        return True
-    except NxwrightError:
-        pass
-    return False
 
 
 def _decodes_to(block: bytes, image, kind: int, rotation: int) -> bool:

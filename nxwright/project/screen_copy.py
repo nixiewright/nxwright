@@ -17,9 +17,19 @@ Editor blends each pixel against white.
 
 Raw format with a second header (3, FORMAT_RAW_WITH_HEADER): 20 bytes, then
 the pixels. When the second header's first u32 is 0, all 20 bytes are zero and
-the pixels are as in the raw format. When it is 1, the pixels are compressed in
-a scheme this module does not decode. Pixels are always stored in the 0-degree
-order, whatever the screen rotation.
+the pixels are as in the raw format. When it is 1, the pixels are compressed:
+the second header holds 1, the place of a row index, counted from the end of
+the header, and three 0 u32. Colour blocks follow it, up to the row index,
+each a u32 control word and 8 RGB565 words. Each 4-bit field of the control
+word, lowest first, is how many pixels repeat the matching word, from 0 to 15.
+A lowest field of 15 is the one exception: each of the 8 words is then one
+pixel, as in every such block seen, whose other fields all hold 1. Each row's
+pixels start a block of their own. The row index then gives, for each row,
+the place of its first block and the place of a 2-byte value of the row's,
+both counted from the end of the header, and those 2-byte values follow it.
+Decoding needs neither the row index nor those values. The variant has no
+alpha. Pixels are always stored in the 0-degree order, whatever the screen
+rotation.
 
 Compressed format (4, FORMAT_COMPRESSED): a second header of 20 bytes holding
 1, width, height, 0, 0 as u32 (width and height swapped at a 90 or 270 degree
@@ -71,6 +81,11 @@ _SECOND_HEADER_SIZE = 20
 _COMPRESSED_PREFIX = struct.Struct("<5I")
 _CONTROL = struct.Struct("<I")
 _EIGHT_WORDS = struct.Struct("<8H")
+# The compressed variant of format 3: the first word of its second header, its
+# colour blocks' size, and the lowest field that makes a block 8 single pixels.
+_COMPRESSED_FORMAT_3_FLAG = struct.pack("<I", 1)
+_FORMAT_3_BLOCK_SIZE = _CONTROL.size + _EIGHT_WORDS.size
+_FORMAT_3_SINGLES = 15
 _SHORT_RUN_MAX = 13
 _LONG_RUN, _LITERALS = 14, 15
 # Long runs are whole multiples of 8 pixels, as in every screen copy the
@@ -81,11 +96,6 @@ _LONG_RUN_MIN = 8 * _SHORT_RUN_MAX + 1
 # pixels than this.
 _SHORT_BLOCK_MIN_PIXELS = 10
 _ALPHA_COUNT_MAX = 255
-
-
-class UndecodedScreenCopyError(NxwrightError):
-    """Raised for a screen copy in a known variant this module cannot decode:
-    a compressed FORMAT_RAW_WITH_HEADER picture."""
 
 
 @dataclass
@@ -109,25 +119,31 @@ def screen_copy_format(block: bytes) -> int:
     return block[3]
 
 
+def is_compressed_format_3(block: bytes) -> bool:
+    """Returns whether `block` is a FORMAT_RAW_WITH_HEADER screen copy in its
+    compressed variant, whose second header starts with 1."""
+    return (screen_copy_format(block) == FORMAT_RAW_WITH_HEADER
+            and block[_HEADER.size:_HEADER.size + 4] == _COMPRESSED_FORMAT_3_FLAG)
+
+
 def decode_screen_copy(block: bytes, rotation: int) -> ScreenPixels:
     """Decodes a screen copy whose pixels are stored in the order of `rotation`
     (FORMAT_RAW_WITH_HEADER always uses the 0-degree order).
 
-    Raises UndecodedScreenCopyError for a compressed FORMAT_RAW_WITH_HEADER
-    picture, and NxwrightError when the block is malformed or does not fit
-    the rotation.
+    Raises NxwrightError when the block is malformed or does not fit the
+    rotation.
     """
     kind = screen_copy_format(block)
     if kind == FORMAT_RAW_WITH_HEADER:
-        if block[_HEADER.size:_HEADER.size + 4] == b"\x01\x00\x00\x00":
-            raise UndecodedScreenCopyError("compressed pictures in screen copy format 3 are not "
-                                           "decoded yet")
         rotation = 0
     _, _, header_size, width, height, size, alpha_at = _HEADER.unpack_from(block, 0)
     if header_size != _HEADER.size or size != len(block) - _HEADER.size:
         raise NxwrightError("screen copy header does not match its size")
     count = width * height
-    if kind == FORMAT_COMPRESSED:
+    if is_compressed_format_3(block):
+        stored_colours = _compressed_format_3_colours(block, count)
+        stored_alphas = [OPAQUE] * count
+    elif kind == FORMAT_COMPRESSED:
         stored_colours, stored_alphas = _CompressedReader(block, width, height, alpha_at,
                                                           rotation).read()
     else:
@@ -140,6 +156,35 @@ def decode_screen_copy(block: bytes, rotation: int) -> ScreenPixels:
     for stored, pixel in enumerate(stored_order(width, height, rotation)):
         colours[pixel], alphas[pixel] = stored_colours[stored], stored_alphas[stored]
     return ScreenPixels(width, height, colours, alphas)
+
+
+def _compressed_format_3_colours(block: bytes, count: int) -> list:
+    """Returns the `count` colours of `block`, a FORMAT_RAW_WITH_HEADER screen
+    copy in its compressed variant, from its colour blocks (the module's
+    docstring). Raises NxwrightError when its second header or its blocks do
+    not cover the picture exactly."""
+    if len(block) < _HEADER.size + _COMPRESSED_PREFIX.size:
+        raise NxwrightError("compressed format 3 screen copy ends inside its second header")
+    _, index_at, *rest = _COMPRESSED_PREFIX.unpack_from(block, _HEADER.size)
+    end = _HEADER.size + index_at
+    start = _HEADER.size + _COMPRESSED_PREFIX.size
+    if any(rest) or not start <= end <= len(block) or (end - start) % _FORMAT_3_BLOCK_SIZE:
+        raise NxwrightError("compressed format 3 screen copy has a second header that does "
+                            "not fit its blocks")
+    colours = []
+    for at in range(start, end, _FORMAT_3_BLOCK_SIZE):
+        control, = _CONTROL.unpack_from(block, at)
+        words = _EIGHT_WORDS.unpack_from(block, at + _CONTROL.size)
+        if control & 15 == _FORMAT_3_SINGLES:
+            colours += words
+        else:
+            for index, word in enumerate(words):
+                colours += [word] * (control >> 4 * index & 15)
+        if len(colours) > count:
+            break
+    if len(colours) != count:
+        raise NxwrightError("screen copy colour blocks do not cover the picture exactly")
+    return colours
 
 
 def stored_order(width: int, height: int, rotation: int) -> list:

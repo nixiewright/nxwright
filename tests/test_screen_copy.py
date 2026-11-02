@@ -6,8 +6,8 @@ import unittest
 from nxwright import NxwrightError
 from nxwright.project.pictures import read_picture
 from nxwright.project.screen_copy import (FORMAT_COMPRESSED, FORMAT_RAW, FORMAT_RAW_WITH_HEADER,
-                                          OPAQUE, ROTATIONS, ScreenPixels, UndecodedScreenCopyError,
-                                          decode_screen_copy, encode_screen_copy,
+                                          OPAQUE, ROTATIONS, ScreenPixels, decode_screen_copy,
+                                          encode_screen_copy, is_compressed_format_3,
                                           matches_within_editor_rounding, screen_copy_format,
                                           stored_pixels)
 from tests.pictures import rgba_image
@@ -76,6 +76,62 @@ class DecodeTest(unittest.TestCase):
                     decode_screen_copy(data, 180)
 
 
+def _compressed_format_3(width: int, height: int, rows: list) -> bytes:
+    """Returns a format 3 screen copy in its compressed variant of `width` by
+    `height` pixels, each row's colour blocks given in `rows` as [(control
+    word, [8 colours])] (screen_copy.py's docstring): the header, the second
+    header, the blocks, and the row index, whose 2-byte values are zeros."""
+    places, blocks = [], b""
+    for row in rows:
+        places.append(20 + len(blocks))
+        blocks += b"".join(struct.pack("<I8H", control, *words) for control, words in row)
+    index_at = 20 + len(blocks)
+    index = b"".join(struct.pack("<II", place, index_at + 8 * len(rows) + 2 * number)
+                     for number, place in enumerate(places)) + bytes(2 * len(rows))
+    body = struct.pack("<5I", 1, index_at, 0, 0, 0) + blocks + index
+    return b"\x0a\x64\x01\x03" + struct.pack("<IIHHII", 0, 24, width, height, len(body), 0) + body
+
+
+class CompressedFormat3Test(unittest.TestCase):
+
+    def test_each_row_s_runs_and_single_pixels(self):
+        # A row of 9 pixels: a block whose lowest field is 15, which makes its
+        # 8 colours one pixel each, then a block of one colour once. A row of
+        # 9 pixels of one colour in one block, as 4 and 5 of the same colour.
+        singles = list(range(1, 9))
+        block = _compressed_format_3(9, 2, [
+            [(0x1111111F, singles), (0x1, [9] + [0] * 7)],
+            [(0x54, [7, 7, 0, 0, 0, 0, 0, 0])]])
+        self.assertTrue(is_compressed_format_3(block))
+        for rotation in ROTATIONS:
+            with self.subTest(rotation=rotation):
+                self.assertEqual(decode_screen_copy(block, rotation),
+                                 ScreenPixels(9, 2, singles + [9] + [7] * 9, [OPAQUE] * 18))
+
+    def test_a_raw_format_3_or_a_format_4_is_not_the_variant(self):
+        block = encode_screen_copy(ScreenPixels(2, 1, [1, 2], [OPAQUE, OPAQUE]),
+                                   FORMAT_RAW_WITH_HEADER, 0)
+        self.assertFalse(is_compressed_format_3(block))
+        self.assertFalse(is_compressed_format_3(encode_screen_copy(
+            ScreenPixels(2, 1, [1, 2], [OPAQUE, OPAQUE]), FORMAT_COMPRESSED, 0)))
+
+    def test_malformed_variants_are_refused(self):
+        # Blocks of one pixel too few or too many, a second header whose row
+        # index is not where the blocks end, and one cut short, its header's
+        # size field giving the bytes that are left.
+        too_few = _compressed_format_3(3, 1, [[(0x2, [5] + [0] * 7)]])
+        too_many = _compressed_format_3(3, 1, [[(0x4, [5] + [0] * 7)]])
+        misplaced = bytearray(_compressed_format_3(3, 1, [[(0x3, [5] + [0] * 7)]]))
+        struct.pack_into("<I", misplaced, 28, 30)
+        cut = bytearray(too_few[:30])
+        struct.pack_into("<I", cut, 16, len(cut) - 24)
+        for case, data in (("too few", too_few), ("too many", too_many),
+                           ("misplaced index", bytes(misplaced)), ("cut short", bytes(cut))):
+            with self.subTest(case=case):
+                with self.assertRaises(NxwrightError):
+                    decode_screen_copy(data, 0)
+
+
 class EncodeTest(unittest.TestCase):
 
     def assert_round_trip(self, pixels: ScreenPixels):
@@ -111,11 +167,6 @@ class EncodeTest(unittest.TestCase):
             encode_screen_copy(ScreenPixels(1, 1, [0], [OPAQUE]), FORMAT_COMPRESSED, 180)
 
 
-def is_compressed_format_3(block: bytes) -> bool:
-    """True for a format 3 screen copy in its compressed variant, which is not decoded."""
-    return screen_copy_format(block) == FORMAT_RAW_WITH_HEADER and block[24] == 1
-
-
 class ModelFixtureTest(unittest.TestCase):
     """The Editor's screen copies for one screen model of each format, at each rotation."""
 
@@ -137,10 +188,6 @@ class ModelFixtureTest(unittest.TestCase):
                     one_pixel = image.width * image.height == 1
                     expected_kind = FORMAT_RAW if one_pixel and kind == FORMAT_COMPRESSED else kind
                     self.assertEqual(screen_copy_format(block), expected_kind)
-                    if is_compressed_format_3(block):
-                        with self.assertRaises(UndecodedScreenCopyError):
-                            decode_screen_copy(block, rotation)
-                        continue
                     self.assertTrue(matches_within_editor_rounding(
                         decode_screen_copy(block, rotation), image, expected_kind))
 

@@ -86,7 +86,7 @@ The screen copy's format depends on the **screen model's series**, and its pixel
 | Format | Series | Pixels |
 | --- | --- | --- |
 | 0, raw | T (Basic) and K (Enhanced) | one 16-bit colour per pixel, transparency blended against white |
-| 3, raw with a second header | F (Discovery) | as raw, after a 20-byte second header; a compressed variant exists but is not decoded |
+| 3, raw with a second header | F (Discovery) | as raw, after a 20-byte second header; or, in a compressed variant, rows of runs of colours |
 | 4, compressed | P (Intelligent) and E (Edge) | runs of colours, then the transparency |
 
 The rotation decides the order the pixels are stored in, and a marker in the screen copy's first byte records it. `screen_copy.py` describes all three formats and the four orders.
@@ -475,7 +475,7 @@ nxwright keeps what the probe measured in `nxwright/project/memory_costs.toml`, 
 
 - The purpose of some header bytes of pages and of the manifest. They are kept as they are, and a dump shows them as numbers.
 - Whether the screen checks a sound's check value.
-- The compressed variant of format 3 screen copies. Such pictures are kept, moved, and removed, but not decoded, and new format 3 pictures are written uncompressed.
+- The 2-byte value that the compressed variant of format 3 keeps for each row of a picture. Decoding does not need it, and new format 3 pictures are written uncompressed.
 - The exact rule for the colour of partly transparent pixels.
 - How the Nextion Editor takes a GIF of several frames.
 - The compiled screen file (`.tft`) that the Nextion Editor makes from a project. nxwright stops at the project file; the Nextion Editor compiles it.
