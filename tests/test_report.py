@@ -1,4 +1,4 @@
-"""nxwright report: what a project holds that nxwright does not know, for its
+"""nxwright report: the things in a project that nxwright does not know, for its
 maintainers to look into, with none of the project's own content
 (source/report.py)."""
 from contextlib import redirect_stderr, redirect_stdout
@@ -30,9 +30,9 @@ class ReportTest(PatchedDemoTestCase):
         self.assertIn("block 0.pa, object 0, attribute newattr", text)
 
     def test_a_project_without_unknown_content_says_so(self):
-        self.assertIn("nxwright knows everything this project holds.", report_text(self.demo))
+        self.assertIn("nxwright knows everything in this project.", report_text(self.demo))
 
-    def test_it_holds_none_of_the_project_s_own_content(self):
+    def test_it_leaves_out_the_project_s_own_content(self):
         # The demo's page and component names, its texts, and its code, as
         # its dump gives them; and its blocks' names and sizes are there.
         project = self.patched("private.HMI", blocks={"2.ib": b"?"})

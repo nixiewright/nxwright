@@ -32,7 +32,7 @@ from nxwright.source.folder_check import check_folder
 from nxwright.source.formatting import format_folder
 from nxwright.source.lint import ERROR
 from nxwright.source.project_files import build, extract, write_defaults
-from nxwright.source.report import write_report
+from nxwright.source.report import SHOWN_BYTES, write_report
 from nxwright.source.unknown_content import (UnknownContentError, report_hint,
                                              unknown_in_project_file)
 from nxwright.source.keyboards import KEYBOARD_PAGES
@@ -89,9 +89,9 @@ def refuse_unless_replacing(output: Path, ask, kind: str = "project file",
 # The kinds of file a command replaces, and how each is told from another file.
 _REPLACEABLE = {"project file": is_project_file, "page file": is_page_file}
 # The exit code of extract or import stopped at content nxwright does not
-# know and the next build may lose, because nobody was there to ask whether
-# to go on, and --continue-with-unknown was not given. A script tells it
-# from another refusal.
+# know and the next build may lose, because there was no terminal to prompt
+# at, and --continue-with-unknown was not given. A script can then tell this
+# stop from another refusal.
 NO_ANSWER_EXIT_CODE = 3
 
 
@@ -116,8 +116,8 @@ def go_on_past(error: UnknownContentError, ask, command: str):
         if answer in ("", "n", "no"):
             raise NxwrightError("stopped; nothing was written")
         print("Not one of the choices: y, n")
-    raise _NoAnswer("nobody was there to ask whether to go on; nothing was written. Pass "
-                    "--continue-with-unknown to go on past it.")
+    raise _NoAnswer("there was no terminal to prompt at, so nothing was written. Pass "
+                    "--continue-with-unknown to go on past this content.")
 
 
 def _terminal_asker():
@@ -321,9 +321,12 @@ def _run_new_page(arguments) -> str:
 
 def _run_extract(arguments) -> str:
     if arguments.list_unknown:
+        # Each content's size and first bytes alone, as the report gives
+        # them, so that a line stays short whatever the content's size.
         for each in unknown_in_project_file(arguments.project):
             print(json.dumps({"what": each.what, "where": each.where, "sort": each.sort,
-                              "bytes": each.data.hex()}))
+                              "size": len(each.data),
+                              "first_bytes": each.data[:SHOWN_BYTES].hex()}))
         return ""
     if arguments.source_folder is None:
         raise NxwrightError("give the source folder to extract into")
@@ -340,7 +343,7 @@ def _run_extract(arguments) -> str:
 
 def _run_dump(arguments) -> str:
     # The dump is how to look inside a project nxwright does not fully know,
-    # so it warns of what it does not know and never asks.
+    # so it warns of what it does not know and never prompts.
     found = unknown_in_project_file(arguments.project)
     for each in found:
         print("nxwright dump: warning: %s (%s)" % (each.what, each.where), file=sys.stderr)
@@ -684,7 +687,7 @@ _SUBCOMMANDS = [
                          "help": "the source folder to update or create"}),
       ("--continue-with-unknown", {"action": "store_true",
                                    "help": "go on past content nxwright does not know and the "
-                                   "next build may lose, without asking"}),
+                                   "next build may lose, without prompting"}),
       ("--list-unknown", {"action": "store_true",
                           "help": "print the content nxwright does not know, one JSON object "
                           "a line, and write nothing"})]),
@@ -693,12 +696,12 @@ _SUBCOMMANDS = [
      "Nothing is ever deleted; clear an old dump yourself.",
      [("project", {"type": Path, "help": "the project file (.HMI)"}),
       ("output_folder", {"type": Path, "help": "the dump folder to write"})]),
-    ("report", _run_report, "write a report of what a project file holds that nxwright does "
-     "not know",
-     "The report holds none of the project's code, texts, names, pictures, fonts, or sounds, "
-     "nor its password. Of each thing nxwright does not know, it gives at most its first 16 "
-     "bytes, which may hold a text of the project's: read it before you send it. The project "
-     "file is only read, and the report is written only to a new file.",
+    ("report", _run_report, "write a report on the things in a project file that nxwright "
+     "does not know",
+     "The report leaves out the project's code, texts, names, pictures, fonts, sounds, and "
+     "password. For each thing nxwright does not know, the report gives at most its first 16 "
+     "bytes, which may contain a text of the project's, so read the report before you send "
+     "it. The project file is only read, and the report is written only to a new file.",
      [("project", {"type": Path, "help": "the project file (.HMI)"}),
       ("output", {"type": Path, "help": "the report to write, a Markdown file that does not "
                   "exist yet"})]),
@@ -710,7 +713,7 @@ _SUBCOMMANDS = [
       ("source_folder", {"type": Path, "help": "the source folder to update or create"}),
       ("--continue-with-unknown", {"action": "store_true",
                                    "help": "go on past content nxwright does not know and the "
-                                   "next build may lose, without asking"})]),
+                                   "next build may lose, without prompting"})]),
     ("write", _run_write, "write a project file from a project and an edited dump of it",
      "Pages, pictures, and fonts may have been edited, added, removed, or renumbered in the "
      "dump, and program.s edited. The rest of the project is copied unchanged. An existing "

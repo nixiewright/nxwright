@@ -181,7 +181,7 @@ def import_dump(dump_folder: Path, source_folder: Path, name: str = None,
         name = None
     files, names, generated, warnings = _source_files_from_dump(dump_folder, source_folder,
                                                                 old_app, name)
-    # A dump that shows no header, as one written from a source folder, says
+    # A dump that shows no header, as one written from a source folder, gives
     # nothing of the model.
     if (updating and dump_header_bytes(dump_folder) is not None
             and dump_device_settings(dump_folder) is None

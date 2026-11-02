@@ -7,7 +7,7 @@ about: nxwright warned of, or refused, something in a project file that it does 
 
 Run `nxwright report <your project.HMI> report.md`, read `report.md`, and paste it here.
 
-The report holds none of your project's code, texts, names, pictures, fonts, or sounds, nor its password. Of each thing nxwright does not know, it gives at most its first 16 bytes, which may hold a text of yours: check them before you paste.
+The report leaves out your project's code, texts, names, pictures, fonts, sounds, and password. For each thing nxwright does not know, the report gives at most its first 16 bytes. Those bytes may contain a text of yours, so check them before you paste.
 
 ## The Nextion Editor
 

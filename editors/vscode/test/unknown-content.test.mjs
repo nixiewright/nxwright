@@ -1,13 +1,13 @@
-// What extract does with a project holding what nxwright does not know, from
-// the lines `nxwright extract --list-unknown` prints: it extracts, asks
-// first, or refuses (src/unknownContent.ts, compiled to out/ before the tests
-// run).
+// What extract does with a project that contains things nxwright does not
+// know, from the lines `nxwright extract --list-unknown` prints: it extracts,
+// asks the user first, or refuses (src/unknownContent.ts, compiled to out/
+// before the tests run).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { extractChoice } from "../out/unknownContent.js";
 
 function line(what, where, sort) {
-  return JSON.stringify({ what, where, sort, bytes: "00" });
+  return JSON.stringify({ what, where, sort, size: 1, first_bytes: "00" });
 }
 
 test("a project without unknown content is extracted", () => {
@@ -20,7 +20,7 @@ test("content kept exactly is extracted, the command noting it", () => {
   assert.deepEqual(extractChoice(listed + "\n"), { kind: "extract" });
 });
 
-test("content that may be lost asks first, naming each", () => {
+test("content that may be lost makes the user choose first, listing each", () => {
   const listed = [line("a block of a kind nxwright does not handle", "block 2.ib", "may be lost"),
     line("a manifest header byte the build writes as 79", "manifest header, byte 14",
       "may be lost")].join("\n");

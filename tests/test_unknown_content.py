@@ -1,4 +1,4 @@
-"""The finder of what a project holds that nxwright does not know, and how it
+"""The finder of the things in a project that nxwright does not know, and how it
 sorts each: kept exactly, may be lost, or cannot be kept
 (source/unknown_content.py)."""
 from types import SimpleNamespace
@@ -111,11 +111,11 @@ class PagesTest(unittest.TestCase):
         self.assertIn("does not know", found[0].what)
 
     def test_a_picture_attribute_s_bytes_keep_its_id(self):
-        # A text's pic in 1 byte, where nxwright knows 2: its bytes keep the
+        # A text's pic in 1 byte, where nxwright knows 2: its bytes give the
         # picture's ID, not its name.
         found = unknown_in_pages({"block 0.pa": page([("type", bytes([116])), ("pic", b"\1")])})
         self.assertEqual(sorts(found), [("block 0.pa, object 0, attribute pic", KEPT)])
-        self.assertIn("keep a resource's ID", found[0].what)
+        self.assertIn("give a resource's ID", found[0].what)
 
     def test_a_known_attribute_at_another_width_is_kept_exactly(self):
         found = unknown_in_pages({"block 0.pa": page([("type", bytes([116])), ("aph", b"\x7f\0")])})

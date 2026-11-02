@@ -1,4 +1,4 @@
-"""Finds what a project holds that nxwright does not know: a block of
+"""Finds the things in a project that nxwright does not know: a block of
 another kind, a manifest entry or header byte it does not expect, a
 picture's header the build would write otherwise, a screen model or a
 character encoding it has no entry for, and a component type or an
@@ -6,14 +6,14 @@ attribute its tables do not name. A newer Nextion Editor may write any of
 them.
 
 Each is sorted one of three ways, by what the source folder does with it:
-  - kept exactly: the source folder holds it, and the build writes it back
+  - kept exactly: the source folder keeps it, and the build writes it back
     unchanged, as a component type nxwright does not know;
-  - may be lost: the source folder does not hold it, so the build leaves it
+  - may be lost: the source folder does not keep it, so the build leaves it
     out or writes the value nxwright knows instead;
-  - cannot be kept: the source folder cannot hold the project around it
+  - cannot be kept: the source folder cannot keep the project around it
     without guessing.
 
-Extract, the dump command, and the report all ask this module, so they
+Extract, the dump command, and the report all use this module, so they
 agree. Its checks of a page's attributes are the tests the page files'
 conversion makes (page_source.py), so the two cannot disagree either.
 """
@@ -34,16 +34,17 @@ from nxwright.project.screen_models import model_with_id
 from nxwright.source.page_source import reference_kind
 
 KEPT, MAY_BE_LOST, CANNOT_BE_KEPT = "kept exactly", "may be lost", "cannot be kept"
-# Where an unknown screen model is, by which extract tells it from the rest.
+# Where an unknown screen model is, which extract uses to find it among the
+# rest.
 UNKNOWN_MODEL_PLACE = "manifest header, bytes 16 to 19"
 
 # The manifest header's bytes the build writes as constants
 # (device_settings.manifest_header), by place, in the current form. The
-# older form, which projects saved by an older Nextion Editor hold, has
-# other values at three of them; the build turns it into the current one.
+# older form, in projects saved by an older Nextion Editor, has other values
+# at three of them; the build turns it into the current one.
 _CURRENT_FORM = {8: 0x01, 9: 0x44, 10: 0x21, 14: 0x4f, 36: 2, 65: 3}
 _OLDER_FORM = {**_CURRENT_FORM, 9: 0x43, 36: 1, 65: 2}
-# The places of the bytes that hold the device settings, the header's own
+# The places of the bytes that contain the device settings, the header's own
 # size and the table's place, the resource count, and the stamp. Every other
 # byte, but the constants above, the build writes as 0.
 _SETTINGS_BYTES = frozenset(list(range(0, 8)) + [11, 12, 13, 15] + list(range(16, 36))
@@ -52,7 +53,7 @@ _SETTINGS_BYTES = frozenset(list(range(0, 8)) + [11, 12, 13, 15] + list(range(16
 
 @dataclass(frozen=True)
 class UnknownContent:
-    """One thing a project holds that nxwright does not know: what it is,
+    """One thing in a project that nxwright does not know: what it is,
     in a few words; where it is, by a block's name, or a page's block and
     an object's index, never by a name of the user's; its bytes; and how it
     is sorted, KEPT, MAY_BE_LOST, or CANNOT_BE_KEPT."""
@@ -100,11 +101,11 @@ def unknown_in_manifest_entries(manifest) -> list:
 
 
 def unknown_in_manifest_header(header: bytes) -> list:
-    """Returns what the manifest header `header` holds that nxwright does
-    not know: a header of another size, or a character encoding it does not
-    know, which it cannot keep; a screen model it does not know; and bytes
-    the build writes as constants that hold other values, unless the header
-    is the older form as a whole. Those last two may be lost."""
+    """Returns the things in the manifest header `header` that nxwright
+    does not know. A header of another size, or a character encoding
+    nxwright does not know, cannot be kept. A screen model it does not know,
+    and bytes the build writes as constants that have other values, may be
+    lost, unless the header is the older form as a whole."""
     if len(header) != HEADER_SIZE:
         return [UnknownContent("a manifest header of %d bytes, not %d" % (len(header), HEADER_SIZE),
                                "manifest header", header[:16], CANNOT_BE_KEPT)]
@@ -129,7 +130,7 @@ def unknown_in_manifest_header(header: bytes) -> list:
 
 
 def _is_form(header: bytes, form: dict) -> bool:
-    """Whether every byte the build writes as a constant holds `form`'s
+    """Whether every byte the build writes as a constant has `form`'s
     value, or 0 where `form` gives none."""
     return all(header[place] == form.get(place, 0) for place in range(HEADER_SIZE)
                if place not in _SETTINGS_BYTES)
@@ -182,15 +183,14 @@ def _unknown_attribute(attribute: Attribute, object_type: int, where: str) -> li
     # The page file keeps either as its stored bytes, in its raw form
     # (page_source.RAW_KEY).
     if width is None:
-        return [UnknownContent("an attribute nxwright does not know, %s, on a %s, kept as its "
-                               "stored bytes" % (attribute.name, type_name), where,
-                               attribute.value, KEPT)]
+        return [UnknownContent("an attribute nxwright does not know, %s, on a %s"
+                               % (attribute.name, type_name), where, attribute.value, KEPT)]
     if width != len(attribute.value):
-        # Its bytes keep a picture's or a font's ID, not its name.
-        by_id = (", which keep a resource's ID, right only while the resources keep their order"
-                 if reference_kind(object_type, attribute.name) else "")
+        # Its bytes give a picture's or a font's ID, not its name.
+        by_id = (", whose bytes give a resource's ID, which is right only while the resources "
+                 "keep their order" if reference_kind(object_type, attribute.name) else "")
         return [UnknownContent("an attribute stored in %d bytes, where nxwright knows %d, "
-                               "%s, on a %s, kept as its stored bytes%s"
+                               "%s, on a %s%s"
                                % (len(attribute.value), width, attribute.name, type_name,
                                   by_id), where, attribute.value, KEPT)]
     return []
@@ -199,22 +199,22 @@ def _unknown_attribute(attribute: Attribute, object_type: int, where: str) -> li
 class UnknownContentError(NxwrightError):
     """Content that nxwright does not know and that the next build may lose,
     `found`, a list of UnknownContent, which nobody chose to go on past. It
-    is told apart from other refusals so that a command can ask the user
+    is told apart from other refusals so that a command can prompt the user
     whether to go on."""
 
     def __init__(self, origin: Path, found: list, project: Path = None,
                  removed_settings: Path = None):
-        """`origin` is the project file or the dump that holds `found`, and
+        """`origin` is the project file or the dump that contains `found`, and
         `project` the project file, when known, which `nxwright report`
         reads. `removed_settings` is the source folder whose app.toml's
         screen settings going on would remove, as the project's screen
         model is one nxwright does not know, or None."""
         self.found = found
         removal = ("" if removed_settings is None else
-                   "Going on removes the screen settings of %s.\n"
+                   "Going on will remove the screen settings of %s.\n"
                    % (Path(removed_settings) / "app.toml"))
         super().__init__(
-            "%s holds what nxwright does not know, which the next build may lose:\n%s\n%s"
+            "%s contains things nxwright does not know, which the next build may lose:\n%s\n%s"
             "The project may then miss parameters the Nextion Editor needs, and may not come "
             "back the same from the Nextion Editor. %s"
             % (origin, listed(found), removal, report_hint(project)))
@@ -224,8 +224,8 @@ def report_hint(project: Path = None) -> str:
     """Returns the sentence that points the user at `nxwright report`, for
     the project file `project` when it is known."""
     named = "the project file" if project is None else str(project)
-    return ("`nxwright report` with %s writes a report of it to send to nxwright's "
-            "maintainers." % named)
+    return ("`nxwright report` writes a report on %s to send to nxwright's maintainers."
+            % named)
 
 
 def listed(found: list) -> str:
@@ -242,20 +242,21 @@ def checked(origin: Path, found: list, continue_with_unknown: bool, project: Pat
     each gone past. `project` and `removed_settings` are UnknownContentError's."""
     cannot = [each for each in found if each.sort == CANNOT_BE_KEPT]
     if cannot:
-        raise NxwrightError("%s holds what nxwright cannot keep:\n%s\nA newer Nextion Editor "
-                            "may have added it. %s" % (origin, listed(cannot),
+        raise NxwrightError("%s contains things nxwright cannot keep:\n%s\nA newer Nextion "
+                            "Editor may have added it. %s" % (origin, listed(cannot),
                                                        report_hint(project)))
     lost = [each for each in found if each.sort == MAY_BE_LOST]
     if lost and not continue_with_unknown:
         raise UnknownContentError(origin, lost, project, removed_settings)
     notes = ["%s (%s), which the source folder keeps exactly" % (each.what, each.where)
              for each in found if each.sort == KEPT]
+    notes += ["went on past %s (%s), which the next build may lose"
+              % (each.what, each.where) for each in lost]
     if notes:
-        # Content kept exactly is still to be supported properly later, so
-        # the user is pointed at the report to send.
+        # nxwright is still to support this content properly, so the user is
+        # pointed at the report to send.
         notes.append(report_hint(project))
-    return notes + ["went on past %s (%s), which the next build may lose"
-                    % (each.what, each.where) for each in lost]
+    return notes
 
 
 def unknown_in_dump(dump_folder: Path) -> list:

@@ -30,7 +30,7 @@ _SAFE_FILE_NAME = re.compile(r"[A-Za-z0-9_]+")
 def handles_block(name: str) -> bool:
     """Whether the dumper handles the block named `name`: the two every
     project has, the macros, or one named by a number and one of
-    _KNOWN_EXTENSIONS. The finder of unknown content asks it too
+    _KNOWN_EXTENSIONS. The finder of unknown content uses it too
     (source/unknown_content.py), so the two agree."""
     return name in _KNOWN_SINGLE_BLOCKS or name == MACROS_BLOCK or any(
         numbered_block(name, extension) is not None for extension in _KNOWN_EXTENSIONS)

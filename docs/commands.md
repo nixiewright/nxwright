@@ -4,7 +4,9 @@ nxwright's commands work on a source folder: your project as files ([source-fold
 
 ```
 nxwright new <source-folder>
-nxwright extract <project.HMI> <source-folder>
+nxwright extract <project.HMI> <source-folder> [--continue-with-unknown]
+nxwright extract --list-unknown <project.HMI>
+nxwright report <project.HMI> <report.md>
 nxwright build <source-folder> <output.HMI>
 nxwright check <source-folder>
 nxwright format <source-folder> [--check]
@@ -61,13 +63,13 @@ Brings a project file into a source folder. Use it to start from a project made 
 - Into an existing source folder, it updates it, and keeps the app's name. Your code, names, and comfortable syntax stay wherever the project did not change them ([Extracting into an existing folder](source-folder.md#extracting-into-an-existing-folder)).
 - The Nextion Editor locks a project it has open. If the project is open there, the command fails with "Permission denied", and advises you to close the project in the Nextion Editor first.
 - Blank lines in the project's code are dropped, as the build would drop them. A warning gives each event, macro, or `program.s` that had any. The Nextion Editor compiles them to nothing.
-- A project may hold what nxwright does not know, as one saved by a newer Nextion Editor may. Before writing anything, extract sorts each such thing three ways:
-  - What the source folder keeps exactly, such as a component type nxwright does not know, or an attribute it does not know, kept as its stored bytes ([source-folder.md](source-folder.md#page-files)), gets a warning that says so.
-  - What the next build may lose, such as a block of another kind, or a screen model nxwright does not know, is listed. Extract warns that the project may then miss parameters the Nextion Editor needs, and asks whether to go on. With nobody to answer, as in a script, it stops with exit code 3. `--continue-with-unknown` goes on without asking.
-  - What the source folder cannot keep, such as a character encoding nxwright does not know, is refused.
+- A project saved by a newer Nextion Editor may contain things nxwright does not know. Before writing anything, extract sorts each such thing three ways:
+  - **Kept exactly**, such as a component type nxwright does not know, or an attribute it does not know. A page file keeps such an attribute as its stored bytes ([source-folder.md](source-folder.md#page-files)). A warning gives each thing kept.
+  - **May be lost** by the next build, such as a block of another kind, or a screen model nxwright does not know. Extract lists each one, and warns that the project may then miss parameters the Nextion Editor needs. Then it prompts you to choose whether to go on. If there is no terminal to answer at, as in a script, extract stops with exit code 3. `--continue-with-unknown` goes on without prompting.
+  - **Cannot be kept**, such as a character encoding nxwright does not know. Extract refuses the project.
 
-  Each warning and refusal ends by naming `nxwright report`, which writes a report of it to send to nxwright's maintainers ([report](#report)).
-- `nxwright extract --list-unknown thermostat.HMI` prints what the project holds that nxwright does not know, one JSON object a line, and writes nothing.
+  The warnings and the refusal end with a pointer to `nxwright report`, which writes a report to send to nxwright's maintainers ([report](#report)).
+- `nxwright extract --list-unknown thermostat.HMI` prints each thing in the project that nxwright does not know, one JSON object a line, and writes nothing. An object gives what the thing is, where it is, its sort, its size, and its first 16 bytes in hexadecimal.
 
 `extract` goes through a dump in a temporary folder. `nxwright dump`, then `nxwright import`, do the same in two steps ([dumps.md](dumps.md)).
 
@@ -77,13 +79,13 @@ Brings a project file into a source folder. Use it to start from a project made 
 nxwright report thermostat.HMI report.md
 ```
 
-Writes a report of what a project file holds that nxwright does not know, for nxwright's maintainers to look into. Paste it into an issue, with the issue template "A project nxwright does not understand".
+Writes a report on the things in a project file that nxwright does not know, for nxwright's maintainers to look into. Paste the report into an issue, with the issue template "A project nxwright does not understand".
 
 - The report gives nxwright's, Python's, and Windows' versions, the project file's blocks by name and size, its manifest header, and the device settings nxwright reads from it.
-- Of each thing nxwright does not know, it gives what it is, where it is, by a block's name, an object's number, or an attribute's name, and at most its first 16 bytes.
-- It holds none of the project's code, texts, names of pages or components, pictures, fonts, animations, videos, or sounds. The password's hash is blanked; the report says only whether there is a password.
-- Those first 16 bytes may hold a text of yours. Read the report before you send it.
-- It leaves you two blanks to fill in: the Nextion Editor's version, and what you did in it before you saved the project.
+- Each thing nxwright does not know comes with what it is, where it is, and at most its first 16 bytes. Where it is goes by a block's name, an object's number, or an attribute's name.
+- The project's code, texts, names of pages or components, pictures, fonts, animations, videos, and sounds are left out. The password's hash is blanked, and the report gives only whether there is a password.
+- Those first 16 bytes may contain a text of yours. Read the report before you send it.
+- Two blanks are left for you to fill in: the Nextion Editor's version, and what you did in it before you saved the project.
 - The project file is only read. The report is written only to a new file.
 
 ## build

@@ -887,14 +887,13 @@ async function askProjectFile(
   return chosen;
 }
 
-// Asks `nxwright extract --list-unknown` what the project file `project`
-// holds that nxwright does not know, and returns the arguments that extract
-// takes besides its own: none, or --continue-with-unknown once the user
-// chose to go on past content the next build may lose. Returns undefined
-// when extract is not to run: refused, or the user chose not to go on
-// (unknownContent.ts). The extract task cannot hand back what the command
-// printed, so it asks first. When the list cannot be had, the extract
-// itself says why.
+// Runs `nxwright extract --list-unknown` on the project file `project`, and
+// returns the arguments that extract takes besides its own: none, or
+// --continue-with-unknown once the user chose to go on past content the
+// next build may lose. Returns undefined when extract is not to run:
+// refused, or the user chose not to go on (unknownContent.ts). The extract
+// task cannot hand back what the command printed, so this list comes first.
+// When the list cannot be had, the extract task itself prints the error.
 async function unknownContentArguments(project: string): Promise<string[] | undefined> {
   const command = await commandToRun();
   if (command === undefined) {

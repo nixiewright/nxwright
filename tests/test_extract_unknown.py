@@ -180,7 +180,7 @@ class ExtractUnknownTest(PatchedDemoTestCase):
 
     def utf8_project(self) -> Path:
         """Returns a project of a model nxwright knows, in utf-8, whose text
-        holds a character beyond ASCII."""
+        contains a character beyond ASCII."""
         source = self.folder / "utf8-app"
         if not source.exists():
             new_source_folder(source, DeviceSettings(model_named("NX4832T035"), 0, "utf-8"),
@@ -201,28 +201,28 @@ class ExtractUnknownTest(PatchedDemoTestCase):
         extract(project, self.target("model"), continue_with_unknown=True)
         page = (self.target("model") / "pages" / "page0.page.toml").read_text(encoding="utf-8")
         self.assertIn('txt = "é"', page)
-        # app.toml holds no screen settings, as documented: the encoding
+        # app.toml has no screen settings, as documented: the encoding
         # alone is not a setting app.toml may give.
         app = (self.target("model") / "app.toml").read_text(encoding="utf-8")
         self.assertNotIn("screen", app)
 
-    def test_an_unknown_model_names_the_screen_settings_it_removes(self):
+    def test_an_unknown_model_warns_that_its_screen_settings_will_be_removed(self):
         target = self.target("model-update")
         extract(self.utf8_project(), target)
         self.assertIn("screen", (target / "app.toml").read_text(encoding="utf-8"))
         project = self.patched("model-update.HMI", header={16: 0xEE, 17: 0xEE},
                                base=self.utf8_project())
-        # The question says so before anything is written.
+        # The error, before anything is written, warns that they will be removed.
         with self.assertRaises(UnknownContentError) as raised:
             extract(project, target)
-        self.assertIn("removes the screen settings", str(raised.exception))
+        self.assertIn("will remove the screen settings", str(raised.exception))
         messages = extract(project, target, continue_with_unknown=True)
         self.assertTrue(any("screen settings" in message and "removed" in message
                             for message in messages), messages)
 
     def test_an_unknown_type_and_event_are_kept_exactly_with_a_note(self):
         # Object 1 of the first page, a text, given a type nxwright does not
-        # know, and an event of a name it has no list to tell from another.
+        # know, and an event whose name nxwright does not know.
         def edit(text: str) -> str:
             head, start, rest = text.partition("object 1 ")
             rest = rest.replace("\n  type = 116\n", "\n  type = 200\n", 1)
@@ -301,6 +301,7 @@ class ExtractCommandTest(PatchedDemoTestCase):
                                          "--continue-with-unknown")
         self.assertEqual(code, 0)
         self.assertIn("nxwright extract: warning: went on past a block", said)
+        self.assertIn("`nxwright report` writes a report on %s" % project, said)
         self.assertTrue((self.target("option") / "app.toml").is_file())
 
     def test_the_answer_at_the_terminal(self):
@@ -356,8 +357,19 @@ class ExtractCommandTest(PatchedDemoTestCase):
         self.assertEqual([(line["where"], line["sort"]) for line in lines],
                          [("block 2.ib", "may be lost"), ("manifest header, byte 14",
                                                           "may be lost")])
-        self.assertEqual(lines[0]["bytes"], "3f")
+        self.assertEqual((lines[0]["size"], lines[0]["first_bytes"]), (1, "3f"))
         self.assertFalse(any(self.folder.glob("source-listed*")))
+
+    def test_list_unknown_gives_a_large_content_s_first_bytes_alone(self):
+        # As the report does, so that the list stays short whatever the
+        # content's size: the extension reads it into a buffer of 1 MB.
+        project = self.patched("large.HMI", blocks={"2.ib": bytes(range(256)) * 4096})
+        code, printed, _ = self.run_extract("--list-unknown", project)
+        self.assertEqual(code, 0)
+        line = json.loads(printed.splitlines()[0])
+        self.assertEqual((line["size"], line["first_bytes"]),
+                         (1048576, bytes(range(16)).hex()))
+        self.assertLess(len(printed), 1000)
 
 
 if __name__ == "__main__":

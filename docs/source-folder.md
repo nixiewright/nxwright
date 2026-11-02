@@ -115,7 +115,7 @@ nxwright writes its TOML files with tomli-w, which lays out each list with one n
   | `ignore_image_resources` | "Ignore image resources at compile time" | `true` or `false` (the default) |
   | `password_hash` | The hash of the project's password | the hash that `nxwright password-hash` prints ([commands.md](commands.md#password-hash)), so that the password itself stays out of the folder |
 
-  A project of a screen model nxwright does not know gets none of the device settings, and the build refuses the folder until nxwright knows the model. Its texts and code are still read in its own character encoding. Extract asks before it goes on with such a project, and, updating a folder that has device settings, says that they will be removed ([commands.md](commands.md#extract)).
+  A project of a screen model nxwright does not know gets none of the device settings, and the build refuses the folder until nxwright knows the model. Its texts and code are still read in its own character encoding. Extract prompts you to choose whether to go on with such a project ([commands.md](commands.md#extract)). If the folder it updates has device settings, the prompt warns that they will be removed.
 - `pictures`, `fonts`, `animations`, `videos`, and `sounds` list the project's resources by name. A folder with none of a kind leaves its list out, as extracting does.
 - The order of `pages`, `pictures`, `fonts`, `animations`, `videos`, and `sounds` is their order in the project, and so it sets their IDs. To reorder, reorder these lists.
   - Do this with care. A name follows the change, but a number keeps pointing at whatever now has that ID. Code that uses a number in place of a name will then reach another page or resource: `page 2`, `p0.pic=3`, or the page array `p[2]`.

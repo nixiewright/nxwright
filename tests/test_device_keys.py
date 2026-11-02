@@ -73,7 +73,7 @@ class SourceFolderDeviceTest(SourceFolderTestCase):
 
     def test_a_project_of_an_unknown_model_has_none(self):
         # A header of a model nxwright knows, given a device ID it does not.
-        # Import asks before going on past it (unknown_content.py), so the
+        # Import prompts before going on past it (unknown_content.py), so the
         # test goes on.
         header = bytearray(manifest_of("NX8048P050")[:96])
         header[16:20] = b"\xee\xee\xee\xee"
