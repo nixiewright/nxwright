@@ -11,6 +11,7 @@ and a command that stops, say which.
     python tools/editor/editor.py compile
     python tools/editor/editor.py tft <folder>
     python tools/editor/editor.py catalog <file.json> [--variant <name>] [--known <file.json>]
+    python tools/editor/editor.py models <file.json>
     python tools/editor/editor.py save <file.HMI>
     python tools/editor/editor.py quit
     python tools/editor/editor.py status
@@ -85,6 +86,7 @@ from tools.editor.editor_windows import (DIALOG_CLASS, MESSAGE_FORM,  # noqa: E4
                                          windows_matching, windows_over_simulator)
 from tools.editor import watchdog  # noqa: E402
 from tools.editor.instructions import InstructionError, typed_lines  # noqa: E402
+from tools.editor.model_list import SERIES_BUTTONS, listed_model  # noqa: E402
 from tools.editor.touches import (Picture, Press, Release, StepError, Wait,  # noqa: E402
                                   parse_steps)
 
@@ -116,6 +118,12 @@ _OUTPUT_PANEL = ("dockSite4", "bar3", "panelDockContainer7", "textbianyi")
 # The Attribute panel, and the Page panel.
 _ATTRIBUTE_PANEL = ("dockSite2", "bar4", "panelDockContainer6", "objatt2")
 _PAGE_PANEL = ("dockSite2", "bar8", "panelDockContainer2", "pageadmin1")
+# The toolbar of the Device button, which opens the device settings.
+_DEVICE_TOOLBAR = ("dockSite7", "gongju3")
+# The device settings' window, the panel of its series buttons, the panel of
+# the shown series' tiles, and its Cancel button, by their automation IDs.
+_DEVICE_SETTINGS, _SERIES_PANEL, _TILE_PANEL = "appset", "itemPanel1", "itemPanel2"
+_DEVICE_SETTINGS_CANCEL = "buttonX1"
 # How long a wait pauses between two looks, in seconds.
 _LOOK_PAUSE = 0.1
 # How long the crash check waits for a button to answer, in seconds. The
@@ -232,6 +240,11 @@ def main(arguments=None) -> int:
                          help="the name the catalog goes by once merged with others")
     listing.add_argument("--known", type=Path, metavar="CATALOG",
                          help="an earlier catalog: the rows whose hint it holds are not clicked")
+    modelling = commands.add_parser("models", parents=[holding],
+                                    help="the screen models the device settings offer, with "
+                                    "their series, sizes, and memory, as JSON; a project must "
+                                    "be open")
+    modelling.add_argument("file", type=Path)
     saving = commands.add_parser("save", parents=[holding],
                                  help="save the project shown, a copy this tool opened, "
                                  "through File > Save as, close the dedicated Editor, and copy "
@@ -394,6 +407,11 @@ def _run_command(options, editor: "DedicatedEditor", folder: Path):
         options.file.parent.mkdir(parents=True, exist_ok=True)
         options.file.write_text(json.dumps(found, ensure_ascii=False, indent=2),
                                 encoding="utf-8")
+        print("Saved %s" % options.file)
+    elif options.command == "models":
+        found = screen_models(editor)
+        options.file.parent.mkdir(parents=True, exist_ok=True)
+        options.file.write_text(json.dumps(found, indent=2), encoding="utf-8")
         print("Saved %s" % options.file)
     elif options.command == "compile":
         # Page names may be in any language, which Windows' console may not encode.
@@ -1661,6 +1679,74 @@ def _wait_for_change(read, before, seconds: float):
         if latest != value:
             value, settled = latest, time.monotonic() + _SETTLE
     return value
+
+
+def screen_models(editor: DedicatedEditor) -> dict:
+    """Reads the screen models the device settings offer, series by series,
+    and returns them with the Editor program's version (model_list.py). The
+    toolbar's Device button opens the settings, which are cancelled after,
+    so that the project keeps its model. Raises EditorError when no project
+    is open, as the button is greyed out then."""
+    editor.stop_on_crash()
+    main = editor.main_window()
+    _stop_on_dialog(main, "before opening the device settings")
+    if "(" not in main.window_text():
+        raise EditorError("no project is open; open one first")
+    device = _required(_only_match(editor.control(_DEVICE_TOOLBAR, anywhere=False), "children",
+                                   name="Device", control_type="Button"), name="Device")
+    pressing_failed = _press_in_background(device)
+
+    def shown():
+        info = window_with_id(shown_windows(editor.recorded.pid), _DEVICE_SETTINGS,
+                              UIAElementInfo)
+        return UIAWrapper(info) if info is not None else None
+    settings = _wait_for(shown, DIALOG_WAIT, "the device settings" + (
+        "; pressing Device failed: %r" % pressing_failed[0] if pressing_failed else ""))
+    try:
+        found = _models_shown(settings)
+    finally:
+        _cancel_device_settings(settings)
+    _wait_for(lambda: not _shown(settings.handle), DIALOG_WAIT, "the device settings to close")
+    return {"editor_version": program_version(editor.recorded.program), "models": found}
+
+
+def _models_shown(settings) -> list:
+    """Shows each series of the device settings `settings` in turn, by its
+    button, and returns the models of its tiles (model_list.listed_model)."""
+    buttons = _required(_only_match(settings, "descendants", automation_id=_SERIES_PANEL),
+                        auto_id=_SERIES_PANEL).children()
+    if len(buttons) != len(SERIES_BUTTONS):
+        raise EditorError("the device settings show %d series, where the tool knows %d: %s"
+                          % (len(buttons), len(SERIES_BUTTONS), ", ".join(SERIES_BUTTONS)))
+    tiles = _required(_only_match(settings, "descendants", automation_id=_TILE_PANEL),
+                      auto_id=_TILE_PANEL)
+
+    def read():
+        return [tile.element_info.name for tile in tiles.descendants(control_type="Button")]
+    found = []
+    texts = read()
+    for series, button in zip(SERIES_BUTTONS, buttons):
+        button.invoke()
+        # Pressing the series already shown does not change the tiles, and
+        # so costs the whole wait.
+        texts = _wait_for_change(read, texts, DIALOG_WAIT)
+        try:
+            found += [listed_model(series, text) for text in texts]
+        except ValueError as error:
+            raise EditorError(str(error)) from None
+    return found
+
+
+def _cancel_device_settings(settings):
+    """Closes the device settings `settings` as their Cancel button does. A
+    window already gone is let be: the error that stopped the reading is
+    the one to say."""
+    try:
+        cancel = _only_match(settings, "descendants", automation_id=_DEVICE_SETTINGS_CANCEL)
+        if cancel is not None:
+            cancel.invoke()
+    except (ElementNotFoundError, COMError):
+        pass
 
 
 def simulate(editor: DedicatedEditor, folder: Path, file: Path, instruction: str = None,

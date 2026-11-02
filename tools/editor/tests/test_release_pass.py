@@ -1,9 +1,9 @@
 """The comparisons of a release pass (tools/editor/release_pass.py). The
 round trip's: of two folders file by file, of two projects' live blocks, and
 of the differences the new Nextion Editor alone makes. Then of two Editors'
-catalogs of attributes, and of the files of two releases. They run on small
-inputs written for the tests, and need neither the Nextion Editor nor
-pywinauto."""
+catalogs of attributes, of their lists of screen models with nxwright's
+table, and of the files of two releases. They run on small inputs written
+for the tests, and need neither the Nextion Editor nor pywinauto."""
 import json
 from pathlib import Path
 import subprocess
@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from nxwright.project.screen_models import MODELS, ScreenModel
 from tools.editor import release_pass
 from tools.editor.release_pass import Difference
 
@@ -211,6 +212,93 @@ class CatalogRunTest(unittest.TestCase):
         self.assertEqual(sides, [("old", "release-old")])
         self.assertIn("The old Editor's catalog was not written", text)
         self.assertNotIn("chart", text)
+
+
+def listed(series: str, inch: float, width: int, height: int) -> dict:
+    """Returns a model as `editor.py models` lists it."""
+    return {"series": series, "inch": inch, "width": width, "height": height,
+            "flash": "128M", "ram": "524288B", "frequency": "200M"}
+
+
+# A table of screen models, as nxwright's: two models of 7 inches on P.
+TABLE = (ScreenModel("NX4827P043", b"\xda\x69\x11\x18", 0, 480, 272),
+         ScreenModel("NX8048P070", b"\xa7\xba\x27\xda", 0, 800, 480),
+         ScreenModel("NX1060P070", b"\xc2\x73\x34\xc4", 0, 1024, 600))
+
+
+class ModelsTest(unittest.TestCase):
+
+    def changes(self, models: list) -> list:
+        return [(each.where, each.kind, each.old, each.new)
+                for each in release_pass.compare_models(models, TABLE)]
+
+    def test_the_table_s_models_give_nothing(self):
+        self.assertEqual(self.changes([listed("P", 4.3, 480, 272), listed("P", 7.0, 800, 480),
+                                       listed("P", 7.0, 1024, 600)]), [])
+
+    def test_a_model_added_or_removed(self):
+        self.assertEqual(self.changes([listed("P", 4.3, 480, 272), listed("P", 7.0, 800, 480),
+                                       listed("E", 2.1, 480, 480)]), [
+            ("NX1060P070", release_pass.MODEL_REMOVED, None, None),
+            ("E, 2.1 inches, 480x480", release_pass.MODEL_ADDED, None, None)])
+
+    def test_a_model_resized(self):
+        # A model of the table's series and inches, alone of them at
+        # another size, is taken for the table's model resized.
+        self.assertEqual(self.changes([listed("P", 4.3, 800, 480), listed("P", 7.0, 800, 480),
+                                       listed("P", 7.0, 1024, 600)]), [
+            ("NX4827P043", release_pass.MODEL_RESIZED, "480x272", "800x480")])
+
+
+class ModelsRunTest(unittest.TestCase):
+    """The models comparison's run, with the Editor tool stood in for."""
+
+    def setUp(self):
+        self.output = Path(tempfile.mkdtemp()) / "models"
+
+    def run_models(self, lists: dict) -> tuple:
+        """Runs the comparison, each side's `editor.py models` writing
+        `lists`[side] as its list, or stopping for a side not given.
+        Returns (the report, the commands, each with its Editor name)."""
+        commands = []
+
+        def editor(environment, *command):
+            side = {name: side for side, name in release_pass.EDITOR_NAMES.items()}[
+                environment["NXWRIGHT_EDITOR_NAME"]]
+            commands.append((side, command[0]))
+            if command[0] == "models":
+                if side not in lists:
+                    return subprocess.CompletedProcess(command, 1, "", "Stopped: a time-out")
+                Path(command[1]).write_text(json.dumps({"editor_version": "1.68.2.3035",
+                                                        "models": lists[side]}),
+                                            encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with mock.patch.object(release_pass, "_editor", side_effect=editor):
+            text = release_pass.models(Path("old.exe"), Path("new.exe"), self.output)
+        return text, commands
+
+    def test_each_editor_s_list_is_compared_with_the_table(self):
+        table = [listed(model.series, int(model.name[7:10]) / 10, model.width, model.height)
+                 for model in MODELS]
+        text, commands = self.run_models({"old": table,
+                                          "new": table + [listed("E", 5.0, 480, 854)]})
+        self.assertEqual(commands, [(side, step) for side in ("old", "new")
+                                    for step in ("open", "models", "quit")])
+        old, new = text.split("## The new Editor")
+        self.assertIn("Nothing differs.", old)
+        self.assertIn("- `E, 5.0 inches, 480x854`: model added", new)
+        self.assertEqual((self.output / "report.md").read_text(encoding="utf-8"), text)
+
+    def test_a_side_that_stops_leaves_the_other_s_list(self):
+        # Each list is compared with the table, not with the other.
+        text, commands = self.run_models({"new": [listed("E", 5.0, 480, 854)]})
+        self.assertEqual(commands, [("old", "open"), ("old", "models"), ("old", "close-message"),
+                                    ("old", "quit"), ("new", "open"), ("new", "models"),
+                                    ("new", "quit")])
+        old, new = text.split("## The new Editor")
+        self.assertIn("`editor.py models` stopped: Stopped: a time-out", old)
+        self.assertIn("- `E, 5.0 inches, 480x854`: model added", new)
 
 
 class ReleaseFilesTest(unittest.TestCase):

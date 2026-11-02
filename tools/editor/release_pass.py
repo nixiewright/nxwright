@@ -3,20 +3,24 @@ nxwright is tested with, and a new one.
 
     python tools/editor/release_pass.py round-trip --old <program> --new <program> <output>
     python tools/editor/release_pass.py catalog --old <program> --new <program> <output>
+    python tools/editor/release_pass.py models --old <program> --new <program> <output>
     python tools/editor/release_pass.py files --old <folder> --new <folder> <report.md>
 
 The round trip shows how the new Editor treats the projects nxwright builds,
 beside how the old one treats them. The catalog comparison shows how the
-new Editor's Attribute panel differs from the old one's. The file comparison
-shows what changed between the folders of the two releases' unpacked zips.
+new Editor's Attribute panel differs from the old one's. The model
+comparison shows how each Editor's list of screen models differs from
+nxwright's table of them. The file comparison shows what changed between the
+folders of the two releases' unpacked zips.
 
 Run it with nxwright's own Python, from nxwright's folder. Each program is a
-Nextion Editor's, such as NextionEditor.exe in the folder of its release's
-unpacked zip. The script drives each Editor through the Editor tool, run
-with the tool's Python, under an Editor name of its own (EDITOR_NAMES). The
-round trip and the catalog comparison write everything into <output>, a
-folder they create, and the findings in <output>/report.md. The file
-comparison writes only its report.
+Nextion Editor's, such as "Nextion Editor.exe" in the folder of its release's
+unpacked zip. The zips of 1.68.1 and 1.68.2 name it so, and older zips
+NextionEditor.exe. The script drives each Editor through the Editor tool,
+run with the tool's Python, under an Editor name of its own (EDITOR_NAMES).
+The round trip and the catalog and model comparisons write everything into
+<output>, a folder they create, and the findings in <output>/report.md. The
+file comparison writes only its report.
 
 For each project (round_trip_projects), with each Editor in turn, the round
 trip builds the project with nxwright, has the Editor open it, compile it in
@@ -35,7 +39,9 @@ findings (new_editor_only).
 
 The catalog comparison runs catalog_variants.py under each Editor in turn,
 which takes about two hours each, and compares the two merged catalogs
-(compare_catalogs). The file comparison compares the two folders by each
+(compare_catalogs). The model comparison has each Editor list its screen
+models with `editor.py models`, and compares each list with nxwright's table
+(compare_models). The file comparison compares the two folders by each
 file's SHA-256 (compare_files).
 """
 import argparse
@@ -56,7 +62,7 @@ from nxwright import NxwrightError  # noqa: E402
 from nxwright.project.container import HmiContainer  # noqa: E402
 from nxwright.project.device_settings import DeviceSettings  # noqa: E402
 from nxwright.project.new_project import write_new_project  # noqa: E402
-from nxwright.project.screen_models import model_named  # noqa: E402
+from nxwright.project.screen_models import MODELS, model_named  # noqa: E402
 from nxwright.project.truetype import NOTO_SANS  # noqa: E402
 from nxwright.source.project_files import build, extract  # noqa: E402
 from nxwright.source.report import write_report  # noqa: E402
@@ -448,10 +454,11 @@ HINT_CHANGED, CHOICES_CHANGED, COLOUR_CHANGED = "hint changed", "choices changed
 
 
 @dataclass(frozen=True)
-class CatalogDifference:
-    """A component type, or a type's attribute, `where`, that differs
-    between two merged catalogs, by `kind`; for a change, the old Editor's
-    `old` and the new Editor's `new`."""
+class ListedDifference:
+    """A thing an Editor lists, `where`, that differs by `kind` between two
+    lists: two Editors' catalogs, or an Editor's screen models and
+    nxwright's table of them. For a change, the first list's `old` and the
+    second's `new`."""
     where: str
     kind: str
     old: str = None
@@ -459,7 +466,7 @@ class CatalogDifference:
 
 
 def compare_catalogs(old: dict, new: dict) -> list:
-    """Returns the CatalogDifferences of the merged catalog `new` from the
+    """Returns the ListedDifferences of the merged catalog `new` from the
     merged catalog `old`, each as catalog_variants.py writes it to
     merged.json: {type name: {attribute: {"hint", "green", "black",
     "values"}}}. Under which variants a name showed does not count, only in
@@ -467,35 +474,35 @@ def compare_catalogs(old: dict, new: dict) -> list:
     found = []
     for name in sorted(set(old) | set(new)):
         if name not in old:
-            found.append(CatalogDifference(name, TYPE_ADDED))
+            found.append(ListedDifference(name, TYPE_ADDED))
         elif name not in new:
-            found.append(CatalogDifference(name, TYPE_REMOVED))
+            found.append(ListedDifference(name, TYPE_REMOVED))
         else:
             found += _attribute_differences(name, old[name], new[name])
     return found
 
 
 def _attribute_differences(type_name: str, old: dict, new: dict) -> list:
-    """Returns the CatalogDifferences of the attributes of one type, `new`
+    """Returns the ListedDifferences of the attributes of one type, `new`
     from `old`."""
     found = []
     for attribute in sorted(set(old) | set(new)):
         where = "%s, %s" % (type_name, attribute)
         if attribute not in old:
-            found.append(CatalogDifference(where, ATTRIBUTE_ADDED))
+            found.append(ListedDifference(where, ATTRIBUTE_ADDED))
             continue
         if attribute not in new:
-            found.append(CatalogDifference(where, ATTRIBUTE_REMOVED))
+            found.append(ListedDifference(where, ATTRIBUTE_REMOVED))
             continue
         before, after = old[attribute], new[attribute]
         if before["hint"] != after["hint"]:
-            found.append(CatalogDifference(where, HINT_CHANGED, before["hint"], after["hint"]))
+            found.append(ListedDifference(where, HINT_CHANGED, before["hint"], after["hint"]))
         choices = [_choices_text(choices_of(each["hint"])) for each in (before, after)]
         if choices[0] != choices[1]:
-            found.append(CatalogDifference(where, CHOICES_CHANGED, *choices))
+            found.append(ListedDifference(where, CHOICES_CHANGED, *choices))
         colours = [_colours(each) for each in (before, after)]
         if colours[0] != colours[1]:
-            found.append(CatalogDifference(where, COLOUR_CHANGED, *colours))
+            found.append(ListedDifference(where, COLOUR_CHANGED, *colours))
     return found
 
 
@@ -547,20 +554,117 @@ def catalog(old: Path, new: Path, output: Path) -> str:
 
 def catalog_report(old: Path, new: Path, found: list, stopped: list) -> str:
     """Returns the report of the catalog comparison of the Editors `old` and
-    `new`: the CatalogDifferences `found`, or, when a catalog was not
+    `new`: the ListedDifferences `found`, or, when a catalog was not
     written, what `stopped` says of it."""
     lines = ["# The catalogs of two Nextion Editors", "", "The old Editor: %s" % old, "",
              "The new Editor: %s" % new, ""]
-    if stopped:
-        return "\n".join(lines + stopped) + "\n"
-    if not found:
-        lines.append("Nothing differs.")
+    return "\n".join(lines + (stopped or _difference_lines(found))) + "\n"
+
+
+def _difference_lines(found: list) -> list:
+    """Returns a report's lines of the ListedDifferences `found`, or that
+    nothing differs."""
+    lines = []
     for each in found:
         line = "- `%s`: %s" % (each.where, each.kind)
         if each.old is not None or each.new is not None:
             line += ", from \"%s\" to \"%s\"" % (each.old, each.new)
         lines.append(line)
-    return "\n".join(lines) + "\n"
+    return lines or ["Nothing differs."]
+
+
+# The kinds of difference between an Editor's list of screen models and
+# nxwright's table of them.
+MODEL_ADDED, MODEL_REMOVED, MODEL_RESIZED = "model added", "model removed", "model resized"
+
+
+def compare_models(listed: list, table=MODELS) -> list:
+    """Returns the ListedDifferences of the screen models `listed`, as
+    `editor.py models` lists them (model_list.py), from nxwright's table of
+    screen models `table`. The list does not name its models, so a model is
+    told by its series, inches, and size. A model of the table that the
+    list lacks is taken for resized when the list has one other model of
+    its series and inches alone."""
+    unmatched = list(listed)
+    missing = []
+    for model in table:
+        same = next((each for each in unmatched
+                     if _told_by(each) == (model.series, _inches(model), model.width,
+                                           model.height)), None)
+        if same is None:
+            missing.append(model)
+        else:
+            unmatched.remove(same)
+    found = []
+    for model in missing:
+        others = [each for each in unmatched
+                  if _told_by(each)[:2] == (model.series, _inches(model))]
+        if len(others) == 1:
+            unmatched.remove(others[0])
+            found.append(ListedDifference(model.name, MODEL_RESIZED,
+                                          "%dx%d" % (model.width, model.height),
+                                          "%dx%d" % (others[0]["width"], others[0]["height"])))
+        else:
+            found.append(ListedDifference(model.name, MODEL_REMOVED))
+    found += [ListedDifference("%s, %.1f inches, %dx%d" % _told_by(each), MODEL_ADDED)
+              for each in unmatched]
+    return found
+
+
+def _told_by(listed: dict) -> tuple:
+    """Returns what tells the model `listed` from the others: its series,
+    inches, width, and height."""
+    return listed["series"], round(listed["inch"], 1), listed["width"], listed["height"]
+
+
+def _inches(model) -> float:
+    """Returns the diagonal of the screen model `model` in inches, from its
+    name: NX4827P043 is 4.3 inches."""
+    return round(int(model.name[7:10]) / 10, 1)
+
+
+def models(old: Path, new: Path, output: Path) -> str:
+    """Has the Editors `old` and `new` in turn list the screen models of
+    their device settings (`editor.py models`), compares each list with
+    nxwright's table of screen models, and returns the report's text, which
+    it also writes to `output`/report.md. `output` is a folder it creates.
+    Each list is compared with the table alone, so the other side runs even
+    when one stops."""
+    output.mkdir(parents=True)
+    # The Editor shows its device settings only with a project open.
+    source = output / "project"
+    new_source_folder(source, DeviceSettings(model_named(SERIES_MODELS["T"]), 0, "iso-8859-1"),
+                      "nxlang")
+    project = output / "project.HMI"
+    build(source, project)
+    sections = []
+    for side, program in (("old", old), ("new", new)):
+        listed = output / (side + ".json")
+        stopped = _listed_by_the_editor(project, listed, _environment(side, program))
+        lines = ([stopped] if stopped is not None else _difference_lines(
+            compare_models(json.loads(listed.read_text(encoding="utf-8"))["models"])))
+        sections.append("## The %s Editor: %s\n\n%s\n" % (side, program, "\n".join(lines)))
+    text = ("# The screen models of two Nextion Editors\n\nEach Editor's list of screen "
+            "models, beside nxwright's table of them.\n\n" + "\n".join(sections))
+    (output / "report.md").write_text(text, encoding="utf-8", newline="\n")
+    return text
+
+
+def _listed_by_the_editor(project: Path, listed: Path, environment: dict):
+    """Has the Editor that `environment` names open `project` and write its
+    list of screen models to `listed`. Returns None, or what stopped a step,
+    once the Editor is closed."""
+    try:
+        for step in (("open", str(project)), ("models", str(listed))):
+            done = _editor(environment, *step)
+            if done.returncode != 0:
+                # A message the step left up would stop `quit`.
+                _editor(environment, "close-message")
+                return "`editor.py %s` stopped: %s" % (step[0],
+                                                       (done.stderr or done.stdout).strip())
+        return None
+    finally:
+        _editor(environment, "quit")
 
 
 def compare_files(old: Path, new: Path) -> list:
@@ -608,6 +712,9 @@ def main(arguments: list = None) -> int:
     _with_editors(commands.add_parser("catalog", help="how a new Nextion Editor's Attribute "
                                       "panel differs from the old one's"),
                   "the folder to write, which must not exist")
+    _with_editors(commands.add_parser("models", help="each Nextion Editor's list of screen "
+                                      "models, beside nxwright's table of them"),
+                  "the folder to write, which must not exist")
     files = commands.add_parser("files", help="the files that differ between the folders of two "
                                 "releases' unpacked zips")
     files.add_argument("--old", type=Path, required=True, help="the old release's folder")
@@ -634,6 +741,8 @@ def main(arguments: list = None) -> int:
         return 1
     if options.command == "catalog":
         catalog(options.old, options.new, options.output)
+    elif options.command == "models":
+        models(options.old, options.new, options.output)
     else:
         round_trip(options.old, options.new, options.output)
     print("Wrote %s" % (options.output / "report.md"))

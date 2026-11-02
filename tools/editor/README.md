@@ -80,6 +80,7 @@ python tools/editor/editor.py attributes home title
 python tools/editor/editor.py simulate schedule.png --send "page schedule"
 python tools/editor/editor.py simulate after.png --touch "press 200,150; release"
 python tools/editor/editor.py catalog tools/editor/build/catalog.json
+python tools/editor/editor.py models tools/editor/build/models.json
 python tools/editor/editor.py compile
 python tools/editor/editor.py tft tools/editor/build/tft
 python tools/editor/editor.py save tools/editor/build/saved.HMI
@@ -152,6 +153,15 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 - `--known` takes an earlier catalog. Rows whose hint that catalog already has for the same type are not clicked, and get no hint.
 - Keep catalogs under `tools/editor/build/`, which git ignores, because they contain the Nextion Editor's hints, and those are not nxwright's to publish.
 - Cataloguing a project of 32 objects takes about 12 minutes, and nearly as long with `--known`, which saves only the clicks for hints.
+
+### `models <file.json>`
+
+`models` reads the screen models that the Nextion Editor's device settings offer, and writes them as JSON: `{"editor_version", "models": [{"series", "inch", "width", "height", "flash", "ram", "frequency"}]}`. The command opens the settings with the toolbar's Device button, and cancels them once it has read them, so the project keeps its model.
+
+- A project must be open, since the Device button is greyed out otherwise.
+- UI Automation does not give a model's name, only the text of its tile. So each model is given by its series, its diagonal in inches, and its size in pixels, along with its memory and frequency. The Nextion Editor 1.68.2 lists NX3224T024 as series `T`, 2.4 inches, 240 by 320.
+- The settings' series buttons show only pictures, so the command takes the series from their order: Basic (T), Discovery (F), Enhanced (K), Intelligent (P), and Edge (E). If the settings show another number of series, or a tile whose text the tool does not read, the command stops, and its error gives that number or text.
+- The device settings of the Nextion Editor 1.63.3 are laid out otherwise, and the command stops on them.
 
 ### `compile`
 
@@ -286,6 +296,19 @@ python tools/editor/release_pass.py catalog --old <old program> --new <new progr
 - Each Editor's catalogs, and the log of its run, are written to `old` and `new` in the output folder.
 - `report.md` in the output folder lists the component types and the attributes added or removed. For an attribute both Editors show, it also lists a changed hint, a changed list of choices, and a name that changed colour. A green name means code may change the attribute. A run of the Nextion Editor 1.68.2 against itself lists nothing.
 
+### The screen models of two Editors
+
+`tools/editor/release_pass.py models` compares each Nextion Editor's list of screen models with nxwright's table of them, `nxwright/project/screen_models.py`. Run it with nxwright's own Python, from nxwright's folder, giving each Editor's program:
+
+```
+python tools/editor/release_pass.py models --old <old program> --new <new program> <output folder>
+```
+
+- Each Editor opens a small project, under the Editor names `release-old` and `release-new`, and lists its models with the tool's `models` command. The lists are written to `old.json` and `new.json` in the output folder.
+- `report.md` in the output folder lists, for each Editor, the models it adds to nxwright's table, and the table's models it lacks. If the Editor lacks a model of the table, but lists one other model of the same series and inches at another size, that model is listed as resized.
+- If one Editor's list cannot be read, the report gives the error, and the other Editor's list is still compared.
+- A run of the Nextion Editor 1.68.2 against itself lists nothing.
+
 ### The files of two releases
 
 `tools/editor/release_pass.py files` lists the files that differ between the folders of two releases, each unpacked from its zip. Run it with nxwright's own Python:
@@ -299,7 +322,7 @@ python tools/editor/release_pass.py files --old <old folder> --new <new folder> 
 
 ## Its tests
 
-The tests of the tool's records, its lock, the logic of its catalog and memory probe, its release check, the comparisons of a release pass, and how it finds a Nextion Editor window need neither the Nextion Editor nor pywinauto. These tests run with nxwright's own Python, on Windows. The tests of the `open` and `tft` commands import the tool itself and run against stand-ins for the Nextion Editor's windows, so they also need the tool's packages from `requirements.txt`:
+The tests of the tool's records, its lock, the logic of its catalog, list of screen models, and memory probe, its release check, the comparisons of a release pass, and how it finds a Nextion Editor window need neither the Nextion Editor nor pywinauto. These tests run with nxwright's own Python, on Windows. The tests of the `open` and `tft` commands import the tool itself and run against stand-ins for the Nextion Editor's windows, so they also need the tool's packages from `requirements.txt`:
 
 ```
 python -m unittest discover -s tools/editor/tests -t .
