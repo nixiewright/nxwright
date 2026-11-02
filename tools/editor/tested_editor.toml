@@ -1,0 +1,6 @@
+# The release of the Nextion Editor that nxwright is tested with, as the
+# Editor's program and Nextion's download page name it. nxwright's README
+# and the Editor tool's README name the same version, which a test of the
+# Editor tool checks (tests/test_latest_release.py). latest_release.py asks
+# Nextion whether it offers another.
+version = "1.68.2"

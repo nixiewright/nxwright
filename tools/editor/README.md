@@ -2,7 +2,7 @@
 
 The Editor tool is an optional script that drives the Nextion Editor for you, so that you can see what the Nextion Editor does without clicking through it by hand. The tool opens projects, compiles them, writes their TFT files, takes screenshots of the Nextion Editor's windows, and reports what the Nextion Editor shows. The tool is for contributors who have the Nextion Editor: nxwright itself never runs the tool, and neither do nxwright's tests.
 
-You need Windows and the Nextion Editor 1.68.2.
+You need Windows and the Nextion Editor 1.68.2, the version nxwright is tested with.
 
 ## Its rules
 
@@ -248,9 +248,21 @@ The script builds probe projects with nxwright, compiles each one in the dedicat
 - If the script's process is killed, the script cannot release its hold. Release the hold yourself with `editor.py release memory-probe-<process ID>`, using the name `status` shows.
 - Because the script opens many projects, `open` may restart the Nextion Editor along the way, once it passes 1.1 GB.
 
+## New Nextion Editor releases
+
+`tools/editor/tested_editor.toml` records the Nextion Editor release that nxwright is tested with. `tools/editor/latest_release.py` asks Nextion's server whether it offers another. Run the script with nxwright's own Python:
+
+```
+python tools/editor/latest_release.py
+```
+
+- The script sends Nextion's server the same request that the Nextion Editor sends when it checks for a newer version, without the identifier of your computer.
+- It prints the version Nextion offers, and the release notes of a new one.
+- It exits with 0 when Nextion offers the version tested with, and with 1 when it offers another. It exits with 2 when the server cannot be reached, or its answer is not in the form the script reads.
+
 ## Its tests
 
-The tests of the tool's records, its lock, the logic of its catalog and memory probe, and how it finds a Nextion Editor window need neither the Nextion Editor nor pywinauto. These tests run with nxwright's own Python, on Windows. The tests of the `open` and `tft` commands import the tool itself and run against stand-ins for the Nextion Editor's windows, so they also need the tool's packages from `requirements.txt`:
+The tests of the tool's records, its lock, the logic of its catalog and memory probe, its release check, and how it finds a Nextion Editor window need neither the Nextion Editor nor pywinauto. These tests run with nxwright's own Python, on Windows. The tests of the `open` and `tft` commands import the tool itself and run against stand-ins for the Nextion Editor's windows, so they also need the tool's packages from `requirements.txt`:
 
 ```
 python -m unittest discover -s tools/editor/tests -t .
