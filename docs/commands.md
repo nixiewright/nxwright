@@ -66,10 +66,25 @@ Brings a project file into a source folder. Use it to start from a project made 
   - What the next build may lose, such as a block of another kind, or a screen model nxwright does not know, is listed. Extract warns that the project may then miss parameters the Nextion Editor needs, and asks whether to go on. With nobody to answer, as in a script, it stops with exit code 3. `--continue-with-unknown` goes on without asking.
   - What the source folder cannot keep, such as a character encoding nxwright does not know, is refused.
 
-  Each warning and refusal ends by naming `nxwright report`, which writes a report of it to send to nxwright's maintainers.
+  Each warning and refusal ends by naming `nxwright report`, which writes a report of it to send to nxwright's maintainers ([report](#report)).
 - `nxwright extract --list-unknown thermostat.HMI` prints what the project holds that nxwright does not know, one JSON object a line, and writes nothing.
 
 `extract` goes through a dump in a temporary folder. `nxwright dump`, then `nxwright import`, do the same in two steps ([dumps.md](dumps.md)).
+
+## report
+
+```
+nxwright report thermostat.HMI report.md
+```
+
+Writes a report of what a project file holds that nxwright does not know, for nxwright's maintainers to look into. Paste it into an issue, with the issue template "A project nxwright does not understand".
+
+- The report gives nxwright's, Python's, and Windows' versions, the project file's blocks by name and size, its manifest header, and the device settings nxwright reads from it.
+- Of each thing nxwright does not know, it gives what it is, where it is, by a block's name, an object's number, or an attribute's name, and at most its first 16 bytes.
+- It holds none of the project's code, texts, names of pages or components, pictures, fonts, animations, videos, or sounds. The password's hash is blanked; the report says only whether there is a password.
+- Those first 16 bytes may hold a text of yours. Read the report before you send it.
+- It leaves you two blanks to fill in: the Nextion Editor's version, and what you did in it before you saved the project.
+- The project file is only read. The report is written only to a new file.
 
 ## build
 

@@ -32,6 +32,7 @@ from nxwright.source.folder_check import check_folder
 from nxwright.source.formatting import format_folder
 from nxwright.source.lint import ERROR
 from nxwright.source.project_files import build, extract, write_defaults
+from nxwright.source.report import write_report
 from nxwright.source.unknown_content import (UnknownContentError, report_hint,
                                              unknown_in_project_file)
 from nxwright.source.keyboards import KEYBOARD_PAGES
@@ -348,6 +349,11 @@ def _run_dump(arguments) -> str:
     ProjectDumper(arguments.project, arguments.output_folder,
                   leave_out_unknown_blocks=True).dump()
     return "Wrote %s" % arguments.output_folder
+
+
+def _run_report(arguments) -> str:
+    write_report(arguments.project, arguments.output)
+    return "Wrote %s" % arguments.output
 
 
 def _run_import(arguments) -> str:
@@ -687,6 +693,15 @@ _SUBCOMMANDS = [
      "Nothing is ever deleted; clear an old dump yourself.",
      [("project", {"type": Path, "help": "the project file (.HMI)"}),
       ("output_folder", {"type": Path, "help": "the dump folder to write"})]),
+    ("report", _run_report, "write a report of what a project file holds that nxwright does "
+     "not know",
+     "The report holds none of the project's code, texts, names, pictures, fonts, or sounds, "
+     "nor its password. Of each thing nxwright does not know, it gives at most its first 16 "
+     "bytes, which may hold a text of the project's: read it before you send it. The project "
+     "file is only read, and the report is written only to a new file.",
+     [("project", {"type": Path, "help": "the project file (.HMI)"}),
+      ("output", {"type": Path, "help": "the report to write, a Markdown file that does not "
+                  "exist yet"})]),
     ("import", _run_import, "turn a dump folder into a source folder, or update one",
      "A new or empty source folder gets a fresh import. A source folder that already has "
      "an app.toml is updated, keeping its code wherever the dump has the same code. Any "

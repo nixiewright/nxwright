@@ -400,6 +400,8 @@ See [editors/vscode/README.md](https://github.com/nixiewright/nxwright/blob/main
 
 To install nxwright, follow [Quick install](#tldr-quick-install). Then `nxwright --help` lists its commands. nxwright is tested with projects of Nextion Editor 1.68.2.
 
+A project saved by a newer Nextion Editor may hold what nxwright does not know. Extract then says so, and asks before going on wherever the next build may lose something. `nxwright report` writes a report of it to send, without your project's own content ([commands.md](docs/commands.md#report)).
+
 **Start a new project:**
 
 ```
