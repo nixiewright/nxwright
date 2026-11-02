@@ -1,0 +1,26 @@
+name: release check
+
+# Asks Nextion once a week whether it offers another Nextion Editor than the
+# one nxwright is tested with (tools/editor/latest_release.py). The run fails
+# when Nextion offers another, and when its answer cannot be read, so that
+# it shows as failed in the repository's Actions tab. The run's log says
+# which, with the release notes of a new release.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  latest-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      # The check needs only Python's standard library.
+      - name: Ask Nextion for its newest Nextion Editor
+        run: python tools/editor/latest_release.py

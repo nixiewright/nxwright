@@ -259,6 +259,7 @@ python tools/editor/latest_release.py
 - The script sends Nextion's server the same request that the Nextion Editor sends when it checks for a newer version, without the identifier of your computer.
 - It prints the version Nextion offers, and the release notes of a new one.
 - It exits with 0 when Nextion offers the version tested with, and with 1 when it offers another. It exits with 2 when the server cannot be reached, or its answer is not in the form the script reads.
+- A GitHub workflow runs `latest_release.py` every Monday (`.github/workflows/release-check.yml`). The run fails when the script exits with 1 or 2, and its log shows what the script printed.
 
 ## Its tests
 
