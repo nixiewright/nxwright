@@ -264,8 +264,8 @@ def _screen_copy_layout(container: HmiContainer, manifest) -> tuple:
     (_settings_layout): no picture can disagree with them.
 
     Format 3 ignores the rotation. One of its uncompressed pictures confirms the
-    format. Its compressed ones are left out: they tell nothing more, and
-    nxwright writes none.
+    format. Its compressed ones are skipped. They show nothing more, and
+    nxwright never writes one.
     """
     names = manifest.block_names("i")
     if not names:
@@ -287,9 +287,9 @@ def _screen_copy_layout(container: HmiContainer, manifest) -> tuple:
                             "format; this one has formats %s" % formats)
     for name, kind, source in pictures:
         block = container.blocks[name]
-        # A compressed format 3 picture is left out: format 3 always takes
-        # the 0-degree order, so it tells nothing the format's other
-        # pictures do not.
+        # A compressed format 3 picture is skipped. Format 3 always uses the
+        # 0-degree order, so the picture shows nothing that the format's
+        # other pictures do not.
         if kind != formats[0] or is_compressed_format_3(block):
             continue
         try:

@@ -17,17 +17,20 @@ Editor blends each pixel against white.
 
 Raw format with a second header (3, FORMAT_RAW_WITH_HEADER): 20 bytes, then
 the pixels. When the second header's first u32 is 0, all 20 bytes are zero and
-the pixels are as in the raw format. When it is 1, the pixels are compressed:
-the second header holds 1, the place of a row index, counted from the end of
-the header, and three 0 u32. Colour blocks follow it, up to the row index,
-each a u32 control word and 8 RGB565 words. Each 4-bit field of the control
-word, lowest first, is how many pixels repeat the matching word, from 0 to 15.
-A lowest field of 15 is the one exception: each of the 8 words is then one
-pixel, as in every such block seen, whose other fields all hold 1. Each row's
-pixels start a block of their own. The row index then gives, for each row,
-the place of its first block and the place of a 2-byte value of the row's,
-both counted from the end of the header, and those 2-byte values follow it.
-Decoding needs neither the row index nor those values. The variant has no
+the pixels are as in the raw format. When it is 1, the pixels are compressed.
+This compressed variant has four parts, in this order. Places in it are
+counted from the end of the header.
+  second header  five u32: 1, the place of the row index, then three 0.
+  colour blocks  each a u32 control word and 8 RGB565 words. Each 4-bit
+                 field of the control word, lowest first, is how many pixels
+                 repeat the matching word, from 0 to 15. The exception is a
+                 lowest field of 15: each of the 8 words is then one pixel.
+                 In every such block seen, the other fields are all 1. Each
+                 row's pixels start a new block.
+  row index      for each row, the place of its first block, and the place
+                 of a 2-byte value for the row.
+  row values     those 2-byte values.
+Decoding needs neither the row index nor the row values. The variant has no
 alpha. Pixels are always stored in the 0-degree order, whatever the screen
 rotation.
 

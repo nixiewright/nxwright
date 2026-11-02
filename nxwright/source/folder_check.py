@@ -7,9 +7,9 @@ picture, font, animation, video, or sound exists. Where the build stops at
 the folder's first error, the check reports the first error of each page. An error in app.toml,
 defaults.toml, or program.nx's declarations is reported alone, since every
 page depends on them. The warnings of lint.py come with the errors; those
-about the sounds' files, only when the check is given their bytes. So does
-each text-cut warning the build of a page's nxlang gives: a text that a
-variable nxlang adds may cut (nxlang.compile_page).
+about the sounds' files, only when the check is given their bytes. The
+text-cut warnings from compiling a page's nxlang come with them too
+(nxlang.compile_page).
 
 Each finding names its file and, when known, its line. An error in a table
 of a page's .page.toml file gets the line of the table's header.

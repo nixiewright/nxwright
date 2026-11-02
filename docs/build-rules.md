@@ -43,7 +43,7 @@ The Nextion Editor's panel never shows these attributes, but refuses these value
 
 ### Values outside an attribute's choices
 
-Many attributes take only a few values, each with a meaning, which the Nextion Editor's Attribute panel offers as a list. For example, a `vscope` is 0, local, or 1, global. The build refuses any other value, on every series. So `vscope = 2` stops the build with "vscope must be one of its choices: 0, local, or 1, global". In the VS Code extension, hovering over an attribute shows its choices.
+Many attributes take only a few values, and the Nextion Editor's Attribute panel offers them as a list. For example, `vscope` is 0 for local or 1 for global. The build refuses any other value, on every series, so `vscope = 2` stops the build with "vscope must be 0 (local) or 1 (global)". In the VS Code extension, hovering over an attribute shows its choices.
 
 ### A page's place and size
 

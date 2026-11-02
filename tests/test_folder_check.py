@@ -144,8 +144,7 @@ class ErrorPlaceTest(FolderTestCase):
         [finding] = self.findings()
         header = self.text("pages/second.page.toml").split("\n").index("[[component]]") + 1
         self.assertEqual((finding.file, finding.line), ("pages/second.page.toml", header))
-        self.assertIn("vscope must be one of its choices: 0, local, or 1, global",
-                      finding.message)
+        self.assertIn("vscope must be 0 (local) or 1 (global)", finding.message)
 
     def test_a_table_whose_name_is_a_list(self):
         # As a table being typed may hold: the table's own error, at its
@@ -602,9 +601,10 @@ class TextCutTest(FolderTestCase):
         self.assertEqual(self.cuts('on page0.load:\n  if (title.txt == "a" + big.txt) {\n'
                                    '    sys0 = 1\n  }\n'), [Finding(
             "pages/page0.nx", 2, WARNING,
-            "this text can take 1001 bytes, as big.txt keeps up to 1000, but nxlang keeps it "
-            "in a variable of 255 bytes here, so a longer text is cut. To keep it whole, put it "
-            "in a variable component whose txt_maxl is at least 1001", "text-cut")])
+            "this text can be up to 1001 bytes long, since big.txt has room for 1000 bytes. "
+            "nxlang keeps it in a variable with room for 255 bytes here, so it may be cut. To "
+            "keep it whole, put it in a variable component whose txt_maxl is at least 1001",
+            "text-cut")])
 
     def test_a_local_given_a_components_text(self):
         self.assertEqual([finding.line for finding in self.cuts(
@@ -642,18 +642,20 @@ class TextCutTest(FolderTestCase):
             '  title.txt = s\n')], [4])
 
     def test_a_copy_of_a_long_parameter(self):
-        # The function is compiled before its caller gives words its room.
+        # The function is compiled before its caller gives the parameter
+        # `words` its room.
         self.assertEqual(self.cuts(
             'function show(words: text):\n  var copy = words\n  title.txt = copy\n\n'
             'on page0.load:\n  show("%s")\n' % ("a" * 400)), [Finding(
             "pages/page0.nx", 2, WARNING,
-            "this text can take 400 bytes, as words keeps up to 400, but nxlang keeps it "
-            "in a variable of 255 bytes here, so a longer text is cut. To keep it whole, put it "
-            "in a variable component whose txt_maxl is at least 400", "text-cut")])
+            "this text can be up to 400 bytes long, since words has room for 400 bytes. "
+            "nxlang keeps it in a variable with room for 255 bytes here, so it may be cut. To "
+            "keep it whole, put it in a variable component whose txt_maxl is at least 400",
+            "text-cut")])
 
     def test_none_for_a_short_local_sharing_a_long_ones_variable(self):
         # The two events share a variable, which the page's load gives 400
-        # bytes. The copy in the other copies one letter.
+        # bytes. The other event copies only one letter through it.
         load = 'on page0.load:\n  var msg = "%s"\n  title.txt = msg\n' % ("a" * 400)
         down = 'on title.down:\n  var s = "x"\n  var t = s\n  title.txt = t\n'
         for code in (load + "\n" + down, down + "\n" + load):

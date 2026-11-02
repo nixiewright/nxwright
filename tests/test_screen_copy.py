@@ -95,9 +95,10 @@ def _compressed_format_3(width: int, height: int, rows: list) -> bytes:
 class CompressedFormat3Test(unittest.TestCase):
 
     def test_each_row_s_runs_and_single_pixels(self):
-        # A row of 9 pixels: a block whose lowest field is 15, which makes its
-        # 8 colours one pixel each, then a block of one colour once. A row of
-        # 9 pixels of one colour in one block, as 4 and 5 of the same colour.
+        # Two rows of 9 pixels. The first row is a block whose lowest field
+        # is 15, which makes its 8 colours one pixel each, then a block that
+        # gives one colour once. The second row is one block that gives the
+        # same colour 4 times, then 5 times.
         singles = list(range(1, 9))
         block = _compressed_format_3(9, 2, [
             [(0x1111111F, singles), (0x1, [9] + [0] * 7)],
@@ -116,9 +117,10 @@ class CompressedFormat3Test(unittest.TestCase):
             ScreenPixels(2, 1, [1, 2], [OPAQUE, OPAQUE]), FORMAT_COMPRESSED, 0)))
 
     def test_malformed_variants_are_refused(self):
-        # Blocks of one pixel too few or too many, a second header whose row
-        # index is not where the blocks end, and one cut short, its header's
-        # size field giving the bytes that are left.
+        # Blocks that give one pixel too few or too many, a second header
+        # whose row index is not where the blocks end, and a copy cut short.
+        # The cut copy's header gives its new size, so that the size check
+        # does not catch it first.
         too_few = _compressed_format_3(3, 1, [[(0x2, [5] + [0] * 7)]])
         too_many = _compressed_format_3(3, 1, [[(0x4, [5] + [0] * 7)]])
         misplaced = bytearray(_compressed_format_3(3, 1, [[(0x3, [5] + [0] * 7)]]))

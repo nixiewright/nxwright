@@ -6,7 +6,7 @@ the editor has them:
   - the first time, or after a change to app.toml, defaults.toml, or the
     files of program.nx, every page;
   - after a change to a page's .page.toml file, that page, and each page
-    whose code names it, as `second.t0.txt` names `second`
+    whose code refers to it, as `second.t0.txt` refers to `second`
     (FolderIndex.pages_naming);
   - after a change to a .nx file, each page whose code includes it, or is it;
   - after any other change, such as a picture, no page: the folder's own
@@ -129,7 +129,8 @@ class LiveChecks:
         pages = set()
         for path in paths:
             if page_of(path):
-                # Code naming the page uses what its file gives, as its components.
+                # Code that refers to the page depends on the page's file, for
+                # example for its components.
                 pages.add(page_of(path))
                 pages.update(index.pages_naming(page_of(path)))
             elif path.endswith(".nx"):

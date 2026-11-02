@@ -970,7 +970,7 @@ class FolderSource:
     # refuse them, and turns it off.
     refuse_by_table: bool = True
     # The most bytes of each page's texts, {page: {"name.attribute": bytes}}
-    # (page_source.table_limits); a page's None when its file does not read.
+    # (page_source.table_limits), or None for a page whose file cannot be read.
     text_limits: dict = None
 
     def build_page(self, page_id: int, globals_used: list, chain: list = None,
@@ -978,9 +978,9 @@ class FolderSource:
         """Returns the page `page_id`, built from its files as page_from_source
         does, adding the program.s globals it uses to `globals_used`, and its
         longest chain of calls and clicks to `chain` when given. In nxlang, each
-        text a generated variable may cut is added to `cut_texts`, when given,
-        as (file, line, message). With the
-        screen known, a component reaching past it is refused where its
+        text that a generated variable may cut is added to `cut_texts`, when
+        given, as (file, line, message). With the screen known, a component
+        reaching past it is refused where its
         series refuses it (check_component_places); with `refuse_by_table`
         too, its components are checked against what the screen's series
         refuses (check_series_components).

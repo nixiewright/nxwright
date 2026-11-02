@@ -2343,20 +2343,20 @@ class SeriesTest(FirstDownTestCase):
 
     def test_values_outside_their_choices(self):
         # A value outside an attribute's choices has no meaning, and the
-        # Nextion Editor's panel cannot give it, so the build refuses it on
-        # every series, though the Basic series compiled some of them, such as
-        # a vscope of 2 on a text.
+        # Nextion Editor's panel cannot set it. So the build refuses it on
+        # every series, though the Basic series compiled some of them, for
+        # example a vscope of 2 on a text.
         page_file = self.source / "pages" / "first.page.toml"
         page = page_file.read_bytes()
         for number, (model, values, refusal) in enumerate((
-                ("NX4832T035", {"vscope": 2}, "vscope must be one of its choices: 0, local, or "
-                                              "1, global"),
-                ("NX4848E040", {"vscope": 2}, "vscope must be one of its choices: 0, local, or "
-                                              "1, global"),
-                ("NX4832T035", {"drag": 2}, "drag must be one of its choices: 0, no, or 1, yes"),
-                ("NX4832K035", {"effect": 9}, "effect must be one of its choices: 0, at once, "),
-                ("NX4832F035", {"sendkey": 4}, "sendkey must be one of its choices: 0, none, "),
-                ("NX8048P050", {"sendkey": 4}, "sendkey must be one of its choices: 0, none, "))):
+                ("NX4832T035", {"vscope": 2}, r"vscope must be 0 \(local\) or 1 \(global\)$"),
+                ("NX4848E040", {"vscope": 2}, r"vscope must be 0 \(local\) or 1 \(global\)$"),
+                ("NX4832T035", {"drag": 2}, r"drag must be 0 \(no\) or 1 \(yes\)$"),
+                ("NX4832K035", {"effect": 9}, r"effect must be 0 \(at once\), 1 \(from the "
+                                              r"top\), "),
+                ("NX4832F035", {"sendkey": 4}, r"sendkey must be 0 \(none\), 1 \(release\), 2 "
+                                               r"\(press\), or 3 \(both\)$"),
+                ("NX8048P050", {"sendkey": 4}, r"sendkey must be 0 \(none\), "))):
             with self.subTest(model=model, values=values):
                 self.use_screen(model)
                 self.add("c0", "text", **values)

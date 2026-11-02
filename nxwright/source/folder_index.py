@@ -133,7 +133,8 @@ def line_tokens(line: str) -> list:
 
 
 def _names_page(lines: list, page: str) -> bool:
-    """Whether a line of `lines` names the page `page` (FolderIndex.pages_naming)."""
+    """Returns whether a line of `lines` refers to the page `page`
+    (FolderIndex.pages_naming)."""
     for line in lines:
         tokens = line_tokens(line)
         for place, (kind, text, _, _) in enumerate(tokens):
@@ -259,10 +260,11 @@ class FolderIndex:
         return [page for page, files in self.page_files.items() if path in files]
 
     def pages_naming(self, page: str) -> list:
-        """Returns the pages whose code names the page `page`, as
-        `second.t0.txt` names `second`: a name token `page` followed by a
-        dot. Comments and quoted texts do not count, nor does a name after a
-        dot, as in `x.second.y`, which belongs to something else."""
+        """Returns the pages whose code refers to the page `page`, as
+        `second.t0.txt` refers to `second`. A reference is the name `page`
+        followed by a dot. Comments and quoted texts do not count. Neither
+        does a name after a dot, as in `x.second.y`, where `second` belongs
+        to `x`."""
         naming = []
         for found, files in self.page_files.items():
             if any(_names_page(self.lines(path) or [], page) for path in files):

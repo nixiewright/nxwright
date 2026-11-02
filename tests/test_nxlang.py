@@ -1092,7 +1092,7 @@ class LongTextLocalTest(unittest.TestCase):
 
     def test_a_parameter_copied_inside_its_function_keeps_255(self):
         # The function is compiled before its caller gives the parameter
-        # room, so the copy keeps 255 (the plan's Non-goals).
+        # room, so the copy keeps 255.
         page = ('function show(words: text):\n  var copy = words\n  t0.txt = copy\n\n'
                 'on p.down:\n  show("%s")\n' % self.LONG)
         self.assertEqual(sorted(self.rooms(page).values()), [255, 400])

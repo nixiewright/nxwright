@@ -9,10 +9,10 @@
 //
 // Its user settings are written there before it starts. nxwright.command
 // runs this checkout's nxwright, with the Python that NXWRIGHT_TEST_PYTHON
-// names, or `python`, so that the extension finds it at once. That Python
-// is written by its full path, as this process finds it, because VS Code
-// may give its extensions another PATH than its own. On macOS in CI,
-// `python` there was another Python, without nxwright's packages. Nothing
+// names, or `python`, so that the extension finds it at once. The setting
+// gives that Python's full path, as this process finds it, because VS Code
+// may give its extensions a different PATH. On macOS in CI, `python` on
+// that PATH was another Python, without nxwright's packages. Nothing
 // saves files, so that the tests' edits stay unsaved.
 //
 // It opens tests/fixtures/files/app where it lies, and writes nothing

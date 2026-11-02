@@ -167,8 +167,8 @@ def page_to_source(page: PageBlock, names: ResourceNames, defaults: dict,
         type_defaults = defaults.get(content.type)
         stored = [item.name for item in page_object.items
                   if isinstance(item, Attribute) and item.name not in DERIVED_ATTRIBUTES]
-        # Only a component with exactly its type's attributes can be shortened,
-        # or with them and a disup after its drag, which is then written.
+        # Only a component with exactly its type's attributes can be shortened.
+        # A disup after its drag is allowed too, and is then written.
         with_disup = None if type_defaults is None else _with_disup(type_defaults.attributes, b"")
         shortened = type_defaults is not None and (
             stored == type_defaults.names()
@@ -234,9 +234,10 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
     screen's place and size, whatever its page file says
     (page_table_at_screen).
 
-    In nxlang, with `text_limits`, the most bytes of the pages' texts as code
-    names them (code_text_limits), each text a generated variable may cut is
-    added to `cut_texts`, when given, as (file, line, message). The page's
+    In nxlang, each text that a generated variable may cut is added to
+    `cut_texts`, when given, as (file, line, message). This needs
+    `text_limits`, the most bytes of the pages' texts, keyed as the code
+    writes them (code_text_limits). The page's
     longest chain of calls and clicks is added to `chain`, when given: the
     event first, as "home.load", then each function or event that runs during
     the one before it.
@@ -522,7 +523,7 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
     generated variables, [the program.s globals used], the longest chain of
     calls and clicks, [(file, line, message)] of the texts a generated
     variable may cut) for a page's .nx file in nxlang. `text_limits` gives
-    the most bytes of the pages' texts, as code names them
+    the most bytes of the pages' texts, keyed as the code writes them
     (code_text_limits), which those warnings need. With
     `page_objects`, references, calls, and assignments are checked, as
     page_from_source says (ObjectNames), with `absent_attributes` the
@@ -669,8 +670,8 @@ def table_limits(toml_tables: list, defaults: dict) -> dict:
     `toml_tables` that have a name: a `txt`'s `txt_maxl`, and each `X`'s
     `X_m`, as a `path`'s `path_m` (editor_limits.bounded_attributes). Each
     limit is the table's own, or else its type's, from `defaults`. A table
-    whose type is not a string, as a malformed page file may give, has none:
-    the page's build refuses it."""
+    whose type is not a string, as in a malformed page file, gives no limits.
+    The page's build refuses it."""
     limits = {}
     for table in toml_tables:
         if "name" not in table or not isinstance(table.get("type"), str):
@@ -688,10 +689,11 @@ def table_limits(toml_tables: list, defaults: dict) -> dict:
 
 
 def code_text_limits(limits: dict, page: str) -> dict:
-    """Returns {text as the code of `page` names it: its most bytes} of
-    `limits`, {page: {"name.attribute": its most bytes}} (table_limits): the
-    page's own texts alone, another page's after that page's name. A page
-    whose limits are None, as a page whose file does not read, adds none."""
+    """Returns {text as the code of `page` writes it: its most bytes}, from
+    `limits`, which is {page: {"name.attribute": its most bytes}}
+    (table_limits). The page's own texts are written alone, as `t0.txt`, and
+    another page's after that page's name, as `second.t0.txt`. A page whose
+    limits are None, such as a page whose file cannot be read, adds nothing."""
     found = {}
     for name, own in limits.items():
         prefix = "" if name == page else name + "."
@@ -1064,13 +1066,14 @@ def _value_to_bytes(key: str, value, object_type: int, names: ResourceNames, cod
     except OverflowError:
         raise NxwrightError("%s: %s does not fit in %d bytes" % (where, key, width)) from None
     # A value outside the attribute's choices has no meaning, and the
-    # Nextion Editor's panel cannot give it, though the Nextion Editor's
-    # compile takes some.
+    # Nextion Editor's panel cannot set it. The Nextion Editor's compile
+    # still takes some such values.
     described = describe(TYPE_NAMES.get(object_type, ""), key)
     if described is not None and described.choices and value not in described.choices:
-        chosen = ["%d, %s" % item for item in sorted(described.choices.items())]
-        raise NxwrightError("%s: %s must be one of its choices: %s, or %s"
-                            % (where, key, ", ".join(chosen[:-1]), chosen[-1]))
+        chosen = ["%d (%s)" % item for item in sorted(described.choices.items())]
+        listed = (" or ".join(chosen) if len(chosen) < 3
+                  else "%s, or %s" % (", ".join(chosen[:-1]), chosen[-1]))
+        raise NxwrightError("%s: %s must be %s" % (where, key, listed))
     return stored
 
 

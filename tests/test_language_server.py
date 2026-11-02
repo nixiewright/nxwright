@@ -1044,9 +1044,9 @@ class LiveCheckTest(CheckFolderTestCase):
         self.assertEqual(list(self.published()), [self.uri("pages/page0.nx")])
 
     def test_a_page_naming_another_is_checked_with_its_file(self):
-        # page0's code names a component the second page lacks. Once the
-        # second page's file gains it, page0's error goes, though only that
-        # file changed.
+        # page0's code refers to a component that the second page does not
+        # have. Once the second page's file adds it, page0's error goes away,
+        # though only that file changed.
         self.change("pages/page0.nx", 'on page0.load:\n  second.extra.txt = "a"\n',
                     "textDocument/didOpen")
         [(_, severity, _)] = self.published()[self.uri("pages/page0.nx")]

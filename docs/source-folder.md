@@ -155,7 +155,7 @@ pco = "#ffffff"
   - `x`, `y`, `w`, and `h` are always written for components that have a place on the screen.
   - `events` is left out when it is the type's default.
 - The build fills in the rest from the defaults, which also give the component's list of attributes, in order.
-  - An object whose type has `drag` may also have `disup`, an attribute of the Nextion Editors 1.60.1 and 1.63.3, which they set to 0 or 1. When the table gives it, the build writes it right after `drag`, where those Editors read it. The Nextion Editor 1.68.2 has no `disup`, and its compile ignores it.
+  - A component whose type has `drag` can also have `disup`. The Nextion Editors 1.60.1 and 1.63.3 have this attribute, and set it to 0 or 1. When the table gives a `disup`, the build writes it right after `drag`, where those versions read it. The Nextion Editor 1.68.2 has no `disup`, and its compile ignores it.
 - Attributes that can be worked out are left out: `id`, `objname`, `endx`, and `endy`.
 - Colours are written as `"#rrggbb"`.
 - A 4-byte number is written negative when its top bit is set, as the Nextion Editor's attribute panel shows it: a number's `val` of -42, and a file browser's `val` of -1. Its unsigned spelling, 4294967254 or 4294967295, is read too. `defaults.toml` writes them the same way.
