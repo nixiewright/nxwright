@@ -2,7 +2,7 @@
 read from the text of its tile in the device settings."""
 import unittest
 
-from tools.editor.model_list import listed_model
+from tools.editor.model_list import listed_model, models_of
 
 
 class ListedModelTest(unittest.TestCase):
@@ -19,6 +19,24 @@ class ListedModelTest(unittest.TestCase):
     def test_a_text_of_another_form_is_refused(self):
         with self.assertRaisesRegex(ValueError, "Frequency 48M"):
             listed_model("T", "inch:2.4 Frequency 48M")
+
+
+T_TILE = "inch:2.4(240X320) Flash:4M RAM:3584B Frequency:48M"
+F_TILE = "inch:2.4(240X320) Flash:4M RAM:3584B Frequency:64M"
+
+
+class ModelsOfTest(unittest.TestCase):
+
+    def test_each_series_gives_its_tiles_models(self):
+        self.assertEqual([(model["series"], model["frequency"])
+                          for model in models_of([("T", [T_TILE]), ("F", [F_TILE])])],
+                         [("T", "48M"), ("F", "64M")])
+
+    def test_a_series_showing_the_tiles_of_the_one_before_is_refused(self):
+        # As when its button's press did not take: the series before would
+        # be counted twice, under two letters.
+        with self.assertRaisesRegex(ValueError, "F series' button left the T series' tiles"):
+            models_of([("T", [T_TILE]), ("F", [T_TILE])])
 
 
 if __name__ == "__main__":

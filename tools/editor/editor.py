@@ -86,7 +86,7 @@ from tools.editor.editor_windows import (DIALOG_CLASS, MESSAGE_FORM,  # noqa: E4
                                          windows_matching, windows_over_simulator)
 from tools.editor import watchdog  # noqa: E402
 from tools.editor.instructions import InstructionError, typed_lines  # noqa: E402
-from tools.editor.model_list import SERIES_BUTTONS, listed_model  # noqa: E402
+from tools.editor.model_list import SERIES_BUTTONS, models_of  # noqa: E402
 from tools.editor.touches import (Picture, Press, Release, StepError, Wait,  # noqa: E402
                                   parse_steps)
 
@@ -1712,7 +1712,7 @@ def screen_models(editor: DedicatedEditor) -> dict:
 
 def _models_shown(settings) -> list:
     """Shows each series of the device settings `settings` in turn, by its
-    button, and returns the models of its tiles (model_list.listed_model)."""
+    button, and returns the models of its tiles (model_list.models_of)."""
     buttons = _required(_only_match(settings, "descendants", automation_id=_SERIES_PANEL),
                         auto_id=_SERIES_PANEL).children()
     if len(buttons) != len(SERIES_BUTTONS):
@@ -1723,18 +1723,18 @@ def _models_shown(settings) -> list:
 
     def read():
         return [tile.element_info.name for tile in tiles.descendants(control_type="Button")]
-    found = []
+    shown = []
     texts = read()
     for series, button in zip(SERIES_BUTTONS, buttons):
         button.invoke()
         # Pressing the series already shown does not change the tiles, and
         # so costs the whole wait.
         texts = _wait_for_change(read, texts, DIALOG_WAIT)
-        try:
-            found += [listed_model(series, text) for text in texts]
-        except ValueError as error:
-            raise EditorError(str(error)) from None
-    return found
+        shown.append((series, texts))
+    try:
+        return models_of(shown)
+    except ValueError as error:
+        raise EditorError(str(error)) from None
 
 
 def _cancel_device_settings(settings):

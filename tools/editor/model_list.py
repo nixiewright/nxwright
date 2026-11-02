@@ -32,3 +32,20 @@ def listed_model(series: str, text: str) -> dict:
     inch, width, height, flash, ram, frequency = found.groups()
     return {"series": series, "inch": float(inch), "width": int(width), "height": int(height),
             "flash": flash, "ram": ram, "frequency": frequency}
+
+
+def models_of(shown: list) -> list:
+    """Returns the models of `shown`, [(series, the texts of its tiles)], in
+    the order the series were shown (listed_model). Raises ValueError when a
+    series shows the tiles of the series shown before it, as when its
+    button's press did not take: the tiles of the series before would be
+    given under two series. In the Nextion Editor 1.68.2, no series has the
+    tiles of the one before it. Raises ValueError too for a tile's text of
+    another form."""
+    found = []
+    for number, (series, texts) in enumerate(shown):
+        if number > 0 and texts == shown[number - 1][1]:
+            raise ValueError("pressing the %s series' button left the %s series' tiles"
+                             % (series, shown[number - 1][0]))
+        found += [listed_model(series, text) for text in texts]
+    return found
