@@ -126,14 +126,57 @@ class ExtractUnknownTest(PatchedDemoTestCase):
         self.assertIn("character encoding", str(raised.exception))
         self.assertFalse(self.target("encoding").exists())
 
-    def test_an_unknown_attribute_cannot_be_kept(self):
+    def test_an_unknown_attribute_is_kept_as_its_bytes(self):
+        # The page's table lists every attribute, the unknown one as its
+        # stored bytes, in place; the build writes the same page back.
         project = self.edited("attribute.HMI", with_new_attribute)
+        messages = extract(project, self.target("attribute"))
+        self.assertEqual(len(messages), 2, messages)
+        self.assertIn("attribute newattr", messages[0])
+        self.assertIn("nxwright report", messages[1])
+        page = (self.target("attribute") / "pages" / "home.page.toml").read_text(encoding="utf-8")
+        self.assertIn('vscope = 0\nnewattr = { bytes = "01" }\n', page)
+        self.assertIn("defaults = false", page.split("[[component]]")[0])
+        self.assert_same_page_again(project, "attribute")
+
+    def test_a_known_attribute_at_another_width_is_kept_as_its_bytes(self):
+        def edit(text: str) -> str:
+            head, start, rest = text.partition("object 0 ")
+            return head + start + rest.replace("\n  vscope = 0\n", "\n  vscope:u16 = 0\n", 1)
+        project = self.edited("width.HMI", edit)
+        messages = extract(project, self.target("width"))
+        self.assertIn("attribute vscope", messages[0])
+        page = (self.target("width") / "pages" / "home.page.toml").read_text(encoding="utf-8")
+        self.assertIn('vscope = { bytes = "0000" }\n', page)
+        self.assert_same_page_again(project, "width")
+
+    def test_a_new_type_with_a_new_attribute_is_kept(self):
+        def edit(text: str) -> str:
+            text = with_new_attribute(text)
+            head, start, rest = text.partition("object 1 ")
+            return head + start + rest.replace("\n  type = 116\n", "\n  type = 200\n", 1)
+        project = self.edited("new-type.HMI", edit)
+        extract(project, self.target("new-type"))
+        self.assert_same_page_again(project, "new-type")
+
+    def test_a_raw_value_that_is_not_hexadecimal_is_refused(self):
+        target = self.target("bad-raw")
+        extract(self.edited("bad-raw.HMI", with_new_attribute), target)
+        page = target / "pages" / "home.page.toml"
+        page.write_text(page.read_text(encoding="utf-8").replace(
+            'newattr = { bytes = "01" }', 'newattr = { bytes = "zz" }'), encoding="utf-8")
         with self.assertRaises(NxwrightError) as raised:
-            extract(project, self.target("attribute"), continue_with_unknown=True)
-        message = str(raised.exception)
-        self.assertIn("newattr", message)
-        self.assertIn("newer Nextion Editor", message)
-        self.assertFalse(self.target("attribute").exists())
+            build(target, self.folder / "bad-raw-again.HMI")
+        self.assertIn("newattr", str(raised.exception))
+        self.assertIn("hexadecimal", str(raised.exception))
+
+    def assert_same_page_again(self, project: Path, name: str):
+        """Asserts that the source folder extracted from `project`, under
+        `name`, builds into a project whose first page is the same block."""
+        again = self.folder / ("%s-again.HMI" % name)
+        build(self.target(name), again)
+        self.assertEqual(HmiContainer.from_file(again).blocks["0.pa"],
+                         HmiContainer.from_file(project).blocks["0.pa"])
 
     def utf8_project(self) -> Path:
         """Returns a project of a model nxwright knows, in utf-8, whose text
@@ -187,8 +230,11 @@ class ExtractUnknownTest(PatchedDemoTestCase):
             return head + start + rest
         project = self.edited("type.HMI", edit)
         messages = extract(project, self.target("type"))
-        self.assertEqual(messages, ["a component type nxwright does not know (block 0.pa, "
-                                    "object 1), which the source folder keeps exactly"])
+        self.assertEqual(messages[0], "a component type nxwright does not know (block 0.pa, "
+                                      "object 1), which the source folder keeps exactly")
+        # Kept, but to be supported properly later: the report is to send.
+        self.assertIn("nxwright report", messages[1])
+        self.assertEqual(len(messages), 2)
         build(self.target("type"), self.folder / "type-again.HMI")
         page = HmiContainer.from_file(project).blocks["0.pa"]
         again = HmiContainer.from_file(self.folder / "type-again.HMI").blocks["0.pa"]

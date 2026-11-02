@@ -104,16 +104,22 @@ class PagesTest(unittest.TestCase):
         found = unknown_in_pages({"block 0.pa": page([("type", bytes([200])), ("id", b"\1")])})
         self.assertEqual(sorts(found), [("block 0.pa, object 0", KEPT)])
 
-    def test_an_unknown_attribute_cannot_be_kept(self):
+    def test_an_unknown_attribute_is_kept_exactly(self):
+        # As its stored bytes, in the page file's raw form.
         found = unknown_in_pages({"block 0.pa": page([("type", bytes([116])), ("newattr", b"\1")])})
-        self.assertEqual(sorts(found), [("block 0.pa, object 0, attribute newattr",
-                                         CANNOT_BE_KEPT)])
+        self.assertEqual(sorts(found), [("block 0.pa, object 0, attribute newattr", KEPT)])
         self.assertIn("does not know", found[0].what)
 
-    def test_a_known_attribute_at_another_width_cannot_be_kept(self):
+    def test_a_picture_attribute_s_bytes_keep_its_id(self):
+        # A text's pic in 1 byte, where nxwright knows 2: its bytes keep the
+        # picture's ID, not its name.
+        found = unknown_in_pages({"block 0.pa": page([("type", bytes([116])), ("pic", b"\1")])})
+        self.assertEqual(sorts(found), [("block 0.pa, object 0, attribute pic", KEPT)])
+        self.assertIn("keep a resource's ID", found[0].what)
+
+    def test_a_known_attribute_at_another_width_is_kept_exactly(self):
         found = unknown_in_pages({"block 0.pa": page([("type", bytes([116])), ("aph", b"\x7f\0")])})
-        self.assertEqual(sorts(found), [("block 0.pa, object 0, attribute aph",
-                                         CANNOT_BE_KEPT)])
+        self.assertEqual(sorts(found), [("block 0.pa, object 0, attribute aph", KEPT)])
         self.assertIn("2 bytes, where nxwright knows 1", found[0].what)
 
 

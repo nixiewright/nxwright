@@ -31,6 +31,7 @@ from nxwright.project.page_text import expected_width, is_string_attribute, page
 from nxwright.project.resources import (LISTED_IN_ORDER, encode_image_source,
                                         parse_image_source, parse_manifest)
 from nxwright.project.screen_models import model_with_id
+from nxwright.source.page_source import reference_kind
 
 KEPT, MAY_BE_LOST, CANNOT_BE_KEPT = "kept exactly", "may be lost", "cannot be kept"
 # Where an unknown screen model is, by which extract tells it from the rest.
@@ -178,15 +179,20 @@ def _unknown_attribute(attribute: Attribute, object_type: int, where: str) -> li
     width = expected_width(object_type, attribute.name)
     where = "%s, attribute %s" % (where, attribute.name)
     type_name = TYPE_NAMES.get(object_type, "type %d" % object_type)
+    # The page file keeps either as its stored bytes, in its raw form
+    # (page_source.RAW_KEY).
     if width is None:
-        return [UnknownContent("an attribute nxwright does not know, %s, on a %s"
-                               % (attribute.name, type_name), where, attribute.value,
-                               CANNOT_BE_KEPT)]
+        return [UnknownContent("an attribute nxwright does not know, %s, on a %s, kept as its "
+                               "stored bytes" % (attribute.name, type_name), where,
+                               attribute.value, KEPT)]
     if width != len(attribute.value):
+        # Its bytes keep a picture's or a font's ID, not its name.
+        by_id = (", which keep a resource's ID, right only while the resources keep their order"
+                 if reference_kind(object_type, attribute.name) else "")
         return [UnknownContent("an attribute stored in %d bytes, where nxwright knows %d, "
-                               "%s, on a %s" % (len(attribute.value), width, attribute.name,
-                                                type_name), where, attribute.value,
-                               CANNOT_BE_KEPT)]
+                               "%s, on a %s, kept as its stored bytes%s"
+                               % (len(attribute.value), width, attribute.name, type_name,
+                                  by_id), where, attribute.value, KEPT)]
     return []
 
 
@@ -244,6 +250,10 @@ def checked(origin: Path, found: list, continue_with_unknown: bool, project: Pat
         raise UnknownContentError(origin, lost, project, removed_settings)
     notes = ["%s (%s), which the source folder keeps exactly" % (each.what, each.where)
              for each in found if each.sort == KEPT]
+    if notes:
+        # Content kept exactly is still to be supported properly later, so
+        # the user is pointed at the report to send.
+        notes.append(report_hint(project))
     return notes + ["went on past %s (%s), which the next build may lose"
                     % (each.what, each.where) for each in lost]
 

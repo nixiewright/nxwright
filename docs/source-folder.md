@@ -163,6 +163,9 @@ pco = "#ffffff"
   - A picture attribute of `65535` means no picture.
   - A number that matches no picture is kept as a number. The build accepts it, and the page preview shows a note.
   - The build refuses a font number that matches no font ([Fonts](build-rules.md#fonts)).
+- An attribute nxwright does not know, or one stored at another width than nxwright knows, as a newer Nextion Editor may write, is kept as its stored bytes, in hexadecimal: `newattr = { bytes = "01" }`. Extract writes it so, in a table marked `defaults = false`, and the build writes the bytes back as they are. The properties panel shows it, but cannot change it.
+  - For a picture or font attribute, the bytes keep the resource's ID, not its name, so they stay right only while the resources keep their order.
+  - An older nxwright stops at such a value, naming the attribute.
 
 The `[page]` table may also contain:
 

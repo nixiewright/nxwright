@@ -19,13 +19,13 @@ from nxwright.language_server.attributes import attribute_tooltip
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.page_header import SYSTEM_PAGES
 from nxwright.project.page_text import is_string_attribute
-from nxwright.project.attribute_descriptions import SHOWN, describe
+from nxwright.project.attribute_descriptions import SHOWN, VALUE_ONLY, describe
 from nxwright.source.keyboards import CHINESE_INPUT, KEYBOARD_PAGES
 from nxwright.source.keyboard_adding import chinese_keyboard_fonts, keyboard_page
 from nxwright.source.nx_files import with_code_added
 from nxwright.source.page_edits import ComponentTable
-from nxwright.source.page_source import (COLOUR_ATTRIBUTES, attribute_value, page_nx_path,
-                                         reference_kind)
+from nxwright.source.page_source import (COLOUR_ATTRIBUTES, RAW_KEY, attribute_value,
+                                         page_nx_path, reference_kind)
 
 
 def properties(index, read, page: str, name: str) -> dict:
@@ -54,13 +54,17 @@ def properties(index, read, page: str, name: str) -> dict:
         described = describe(table.type, entry.attribute)
         labels = [{"value": number, "label": label}
                   for number, label in sorted(described.choices.items())] if described else []
-        attributes.append({"name": entry.attribute, "value": entry.value,
-                           "default": entry.default, "given": entry.given, "kind": kind,
-                           "choices": choices, "labels": labels,
+        # A value kept as its stored bytes is shown as them, and not edited:
+        # nxwright does not know what they mean (page_source.RAW_KEY).
+        raw = isinstance(entry.value, dict)
+        attributes.append({"name": entry.attribute, "value": _shown_value(entry.value),
+                           "default": _shown_value(entry.default), "given": entry.given,
+                           "kind": kind, "choices": choices, "labels": [] if raw else labels,
                            "line": table.key_lines.get(entry.attribute,
                                                        table.object.first_line),
                            "description": attribute_tooltip(table.type, entry.attribute),
-                           "treatment": described.properties if described else SHOWN})
+                           "treatment": VALUE_ONLY if raw else
+                           described.properties if described else SHOWN})
     place = table.object.place
     return {"name": name, "type": table.type, "defaultsFalse": table.full,
             "firstLine": table.object.first_line, "lastLine": table.object.last_line,
@@ -95,6 +99,16 @@ def key_binding(index, read, page: str, name: str, typed) -> dict:
     return {"keyboard": keyboard, "present": present,
             "local": kind is not None and table.property("vscope").value != 1,
             "chinese": chinese, "fonts": fonts}
+
+
+def _shown_value(value):
+    """Returns `value`, as the page file gives it, for the properties panel:
+    as it is, or, for a value kept as its stored bytes, those bytes as
+    text, such as "stored bytes 7f 00"."""
+    if not isinstance(value, dict):
+        return value
+    text = value[RAW_KEY]
+    return "stored bytes " + " ".join(text[place:place + 2] for place in range(0, len(text), 2))
 
 
 def value_kind(object_type: int, attribute: str) -> str:

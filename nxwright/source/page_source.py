@@ -170,7 +170,10 @@ def page_to_source(page: PageBlock, names: ResourceNames, defaults: dict,
         # Only a component with exactly its type's attributes can be shortened.
         # A disup after its drag is allowed too, and is then written.
         with_disup = None if type_defaults is None else _with_disup(type_defaults.attributes, b"")
-        shortened = type_defaults is not None and (
+        # A component with an attribute kept as its stored bytes lists every
+        # attribute, so that the raw value keeps its place among them.
+        shortened = type_defaults is not None and not any(
+            _is_raw(item, content.type) for item in content.attributes) and (
             stored == type_defaults.names()
             or with_disup is not None and stored == [name for name, _ in with_disup])
         default_values = dict(type_defaults.attributes) if shortened else {}
@@ -419,6 +422,21 @@ def _derived_values(index: int, name: str, values: dict) -> dict:
     return derived
 
 
+# The key of an attribute's raw form in a page file, { bytes = "01" }: its
+# stored bytes, in hexadecimal. It keeps an attribute nxwright does not know,
+# or one stored at another width than its tables give, as a newer Nextion
+# Editor may write them. The build writes the bytes back as they are.
+RAW_KEY = "bytes"
+
+
+def _is_raw(attribute: Attribute, object_type: int) -> bool:
+    """Whether the number attribute `attribute`, of an object of type
+    `object_type`, is kept in its raw form: its tables give it no width, or
+    another than it is stored at (unknown_content.py sorts it so too)."""
+    return (not is_string_attribute(object_type, attribute.name)
+            and len(attribute.value) != expected_width(object_type, attribute.name))
+
+
 def _attribute_to_value(attribute: Attribute, object_type: int, where: str, names: ResourceNames,
                         codec: TextCodec):
     """Returns an attribute's value as <page>.page.toml writes it: a string, a
@@ -427,8 +445,8 @@ def _attribute_to_value(attribute: Attribute, object_type: int, where: str, name
         raise NxwrightError("%s: attribute %s clashes with a key of the page's .page.toml file" % (where, attribute.name))
     if is_string_attribute(object_type, attribute.name):
         return codec.decode(attribute.value, "%s: %s" % (where, attribute.name))
-    if len(attribute.value) != expected_width(object_type, attribute.name):
-        raise NxwrightError("%s: attribute %s has an unexpected size" % (where, attribute.name))
+    if _is_raw(attribute, object_type):
+        return {RAW_KEY: attribute.value.hex()}
     number = number_from_bytes(attribute.value)
     kind = reference_kind(object_type, attribute.name)
     if kind and names.name_of(kind, number) is not None:
@@ -468,8 +486,20 @@ def page_file_text(tables: list) -> str:
     values: the first as [page], the others as [[component]], each after a
     blank line. The headers are written here, as tomli-w writes a list of
     tables as an array of inline ones."""
-    return "\n".join(("[page]" if index == 0 else "[[component]]") + "\n" + tomli_w.dumps(table)
+    return "\n".join(("[page]" if index == 0 else "[[component]]") + "\n" + _table_text(table)
                      for index, table in enumerate(tables))
+
+
+def _table_text(table: dict) -> str:
+    """Returns one table's keys as tomli-w writes them, but for a value in
+    its raw form, which is written in place as an inline table, such as
+    newattr = { bytes = "01" }: tomli-w would write it after the other keys,
+    as a table of its own."""
+    if not any(isinstance(value, dict) for value in table.values()):
+        return tomli_w.dumps(table)
+    return "".join('%s = { %s = "%s" }\n' % (key, RAW_KEY, value[RAW_KEY])
+                   if isinstance(value, dict) else tomli_w.dumps({key: value})
+                   for key, value in table.items())
 
 
 def editor_code_of_block(block: EventBlock, page_name: str, names: ResourceNames, owner: Owner,
@@ -1030,10 +1060,27 @@ def _table_header(table: dict, where: str) -> tuple:
     return name, object_type, events, table.get("defaults", True) is False
 
 
+def _raw_bytes(key: str, value: dict, where: str) -> bytes:
+    """Returns the stored bytes an attribute's raw form `value` gives, such
+    as { bytes = "01" }. Raises NxwrightError for any other table, and for
+    bytes that are not hexadecimal digits."""
+    text = value.get(RAW_KEY)
+    if set(value) != {RAW_KEY} or not isinstance(text, str):
+        raise NxwrightError("%s: %s must be a value, or its stored bytes as { %s = \"01\" }"
+                            % (where, key, RAW_KEY))
+    try:
+        return bytes.fromhex(text)
+    except ValueError:
+        raise NxwrightError("%s: %s's bytes must be hexadecimal digits, two a byte, such as "
+                            "\"01\": %s" % (where, key, text)) from None
+
+
 def _value_to_bytes(key: str, value, object_type: int, names: ResourceNames, codec: TextCodec,
                     where: str) -> bytes:
     """Returns an attribute's stored bytes from its value in <page>.page.toml: the
     reverse of _attribute_to_value."""
+    if isinstance(value, dict):
+        return _raw_bytes(key, value, where)
     if is_string_attribute(object_type, key):
         if not isinstance(value, str):
             raise NxwrightError("%s: %s must be a string" % (where, key))

@@ -5,7 +5,10 @@ import tomllib
 import unittest
 
 from nxwright import NxwrightError
+from nxwright.language.resource_names import ResourceNames
 from nxwright.language_server.file_texts import FileTexts, uri_of
+from nxwright.project.component_defaults import nxwright_defaults
+from nxwright.source.page_source import page_components
 from nxwright.source.folder_index import FolderIndex
 from nxwright.language_server.page_editing import (component_events, default_event,
                                                    key_binding, properties)
@@ -57,6 +60,24 @@ class EditingTestCase(ServerTestCase):
 
 
 class PropertiesTest(EditingTestCase):
+
+    def test_a_raw_value_is_shown_but_not_edited(self):
+        # An attribute kept as its stored bytes, as extract keeps one stored
+        # at another width than nxwright knows (page_source.RAW_KEY), here
+        # the text's aph in 2 bytes where it has 1.
+        text = self.text("pages/page0.page.toml")
+        self.write("pages/page0.page.toml",
+                   text.replace('txt = "x"\n', 'txt = "x"\naph = { bytes = "7f00" }\n', 1))
+        found = properties(self.index(), self.read(), "page0", "title")
+        aph = {entry["name"]: entry for entry in found["attributes"]}["aph"]
+        self.assertEqual((aph["value"], aph["treatment"], aph["given"]),
+                         ("stored bytes 7f 00", "value-only", True))
+        # The page preview reads the page's components as the build does.
+        components = page_components(self.text("pages/page0.page.toml"), "page0",
+                                     ResourceNames(["dot"], ["Sans20", "NotoSans24"]),
+                                     nxwright_defaults(), "iso-8859-1")
+        self.assertEqual(next(each for each in components if each.name == "title")
+                         .values["aph"], 0x007f)
 
     def test_every_attribute_of_the_type(self):
         found = properties(self.index(), self.read(), "page0", "title")
