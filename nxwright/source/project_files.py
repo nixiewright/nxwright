@@ -22,7 +22,9 @@ from nxwright.project.page_text import page_from_text
 from nxwright.project.new_project import write_new_project
 from nxwright.project.component_defaults import defaults_from_pages, defaults_to_toml
 from nxwright.project.replacing import held_by_the_nextion_editor, is_project_file, written_beside
-from nxwright.source.source_folder import export_dump, folder_device_settings, import_dump
+from nxwright.source.source_folder import (export_dump, folder_device_settings, import_dump,
+                                           removes_screen_settings)
+from nxwright.source.unknown_content import MAY_BE_LOST, checked, unknown_in_project_file
 
 
 def build(source_folder: Path, output: Path, refuse_by_table: bool = True):
@@ -66,17 +68,31 @@ def build(source_folder: Path, output: Path, refuse_by_table: bool = True):
     return memory
 
 
-def extract(project: Path, source_folder: Path) -> list:
+def extract(project: Path, source_folder: Path, continue_with_unknown: bool = False) -> list:
     """Extracts `project` into `source_folder`, a new, empty, or existing
     source folder. A new one names the app after the project file. An
     existing one keeps its name, its picture and font names, and its code as
     written, wherever the project did not change them. Returns the warnings
-    of what the source files leave out (source_folder.import_dump)."""
+    of what the source files leave out (source_folder.import_dump), with a
+    note of each content nxwright does not know but keeps exactly, and,
+    when it went on past content that may be lost, a warning of each.
+
+    Before it writes anything, it raises NxwrightError for content nxwright
+    cannot keep, and UnknownContentError for content the next build may
+    lose, unless `continue_with_unknown` (source/unknown_content.py)."""
+    project, source_folder = Path(project), Path(source_folder)
+    with held_by_the_nextion_editor(project):
+        found = unknown_in_project_file(project)
+    lost = [each for each in found if each.sort == MAY_BE_LOST]
+    notes = checked(project, found, continue_with_unknown, project,
+                    source_folder if removes_screen_settings(lost, source_folder) else None)
     with tempfile.TemporaryDirectory() as name:
         dump = Path(name) / "dump"
-        with held_by_the_nextion_editor(Path(project)):
-            ProjectDumper(project, dump).dump()
-        return import_dump(dump, source_folder, Path(project).stem.strip())
+        with held_by_the_nextion_editor(project):
+            ProjectDumper(project, dump, leave_out_unknown_blocks=bool(lost)).dump()
+        # Its unknown content is checked already, with the project's own.
+        warnings = import_dump(dump, source_folder, project.stem.strip(), check_unknown=False)
+    return notes + warnings
 
 
 def write_defaults(sample: Path, output: Path):

@@ -9,6 +9,7 @@
 // mediaViewer.ts), and the Editor code a .nx file compiles to
 // (editorCodeViews.ts).
 // The client holds no knowledge of the language: the server has it all.
+import { execFile } from "child_process";
 import * as path from "path";
 import * as vscode from "vscode";
 import { LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
@@ -39,6 +40,7 @@ import { ComponentsView, PropertiesView } from "./sideBar";
 import { Simulator } from "./simulator";
 import { startTests } from "./tests";
 import { warnerOnce } from "./toolchainVersion";
+import { extractChoice } from "./unknownContent";
 import { appTomlUnsaved, refusedForUnsaved } from "./unsavedChanges";
 import { errorText } from "./userMessages";
 
@@ -390,8 +392,12 @@ async function extract(context: vscode.ExtensionContext): Promise<void> {
     { modal: true, detail: paragraphs.join("\n\n") },
     "Extract",
   );
-  if (answer === "Extract") {
-    await runSubcommand("extract", ["extract", project.fsPath, folder.fsPath]);
+  if (answer !== "Extract") {
+    return;
+  }
+  const unknown = await unknownContentArguments(project.fsPath);
+  if (unknown !== undefined) {
+    await runSubcommand("extract", ["extract", project.fsPath, folder.fsPath, ...unknown]);
   }
 }
 
@@ -638,7 +644,12 @@ async function importProject(context: vscode.ExtensionContext): Promise<void> {
         "source folder with Extract.");
     return;
   }
-  const exitCode = await runSubcommand("extract", ["extract", project.fsPath, folder.fsPath]);
+  const unknown = await unknownContentArguments(project.fsPath);
+  if (unknown === undefined) {
+    return;
+  }
+  const exitCode = await runSubcommand("extract",
+    ["extract", project.fsPath, folder.fsPath, ...unknown]);
   if (exitCode !== 0) {
     return;
   }
@@ -874,6 +885,40 @@ async function askProjectFile(
     projectView?.projectFileChanged();
   }
   return chosen;
+}
+
+// Asks `nxwright extract --list-unknown` what the project file `project`
+// holds that nxwright does not know, and returns the arguments that extract
+// takes besides its own: none, or --continue-with-unknown once the user
+// chose to go on past content the next build may lose. Returns undefined
+// when extract is not to run: refused, or the user chose not to go on
+// (unknownContent.ts). The extract task cannot hand back what the command
+// printed, so it asks first. When the list cannot be had, the extract
+// itself says why.
+async function unknownContentArguments(project: string): Promise<string[] | undefined> {
+  const command = await commandToRun();
+  if (command === undefined) {
+    return undefined;
+  }
+  const listed = await new Promise<string | undefined>((resolve) => {
+    execFile(command[0], [...command.slice(1), "extract", "--list-unknown", project],
+      { cwd: firstWorkspaceFolder(), windowsHide: true },
+      (error, stdout) => resolve(error ? undefined : stdout));
+  });
+  if (listed === undefined) {
+    return [];
+  }
+  const choice = extractChoice(listed);
+  if (choice.kind === "refuse") {
+    void vscode.window.showErrorMessage(`nxwright: ${choice.message}`);
+    return undefined;
+  }
+  if (choice.kind === "ask") {
+    const answer = await vscode.window.showWarningMessage(
+      "Go on extracting?", { modal: true, detail: choice.message }, "Go on");
+    return answer === "Go on" ? ["--continue-with-unknown"] : undefined;
+  }
+  return [];
 }
 
 // Runs `nxwright <args>` as a task, so its output shows in a terminal.

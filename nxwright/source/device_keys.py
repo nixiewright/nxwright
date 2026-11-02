@@ -1,8 +1,9 @@
 """The device settings as app.toml writes them (docs/source-folder.md).
 
 `screen`, `rotation`, and `encoding` come together, or not at all: a project
-whose screen model nxwright does not know has none of them. The other keys
-appear only when their setting is not the Editor's default.
+whose screen model nxwright does not know has none of them, though its texts
+are still read in its own encoding (dump_folder.dump_encoding). The other
+keys appear only when their setting is not the Editor's default.
 """
 from nxwright import NxwrightError
 from nxwright.project.device_settings import (NO_PASSWORD, DeviceSettings, encoding_code,

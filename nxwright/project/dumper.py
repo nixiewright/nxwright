@@ -27,10 +27,23 @@ _KNOWN_EXTENSIONS = ("pa", "is", "i", "zi", "gmovs", "gmov", "v", "wav")
 _SAFE_FILE_NAME = re.compile(r"[A-Za-z0-9_]+")
 
 
+def handles_block(name: str) -> bool:
+    """Whether the dumper handles the block named `name`: the two every
+    project has, the macros, or one named by a number and one of
+    _KNOWN_EXTENSIONS. The finder of unknown content asks it too
+    (source/unknown_content.py), so the two agree."""
+    return name in _KNOWN_SINGLE_BLOCKS or name == MACROS_BLOCK or any(
+        numbered_block(name, extension) is not None for extension in _KNOWN_EXTENSIONS)
+
+
 class ProjectDumper:
     """Writes one project's dump folder."""
 
-    def __init__(self, project_path: Path, output: Path):
+    def __init__(self, project_path: Path, output: Path, leave_out_unknown_blocks: bool = False):
+        """With `leave_out_unknown_blocks`, a block of a kind this tool does
+        not handle is left out of the dump rather than refused, as when the
+        user chose to go on past it (source/unknown_content.py)."""
+        self._leave_out_unknown_blocks = leave_out_unknown_blocks
         self._project_path = Path(project_path)
         self._output = Path(output)
         self._container = None
@@ -70,9 +83,7 @@ class ProjectDumper:
             if name not in self._container.blocks:
                 raise NxwrightError("project has no %s block" % name)
         for name in self._container.blocks:
-            known = name in _KNOWN_SINGLE_BLOCKS or name == MACROS_BLOCK or any(
-                numbered_block(name, extension) is not None for extension in _KNOWN_EXTENSIONS)
-            if not known:
+            if not handles_block(name) and not self._leave_out_unknown_blocks:
                 raise NxwrightError("block %s is of a kind this tool does not handle" % name)
 
     def _write_project_summary(self):

@@ -101,6 +101,8 @@ Colours are stored as **RGB565**: 5 bits of red, 6 of green, 5 of blue.
 
 The header of the manifest contains the project's device settings: the screen model (by a device ID), its series, the rotation, the character encoding, and the other options of the Nextion Editor's device settings page. `nxwright/project/device_settings.py` lists each one's bytes, and `nxwright/project/screen_models.py` lists the 27 models with their device IDs.
 
+The header's other bytes hold one of two forms in every project seen. A project saved by an older Nextion Editor holds `0x43`, 1, and 2 at bytes 9, 36, and 65, where a current one holds `0x44`, 2, and 3. The build writes the current form. Extract asks before going on past another value at one of these bytes, which the build would replace ([commands.md](commands.md#extract)).
+
 ### Fonts
 
 A font block is a `.zi` file, as the Nextion Editor's font generator writes it, turned to the project's rotation. It contains the font's height, its characters' widths, and their pixels. The generator also stores the name it was given, such as `NotoSans16`.

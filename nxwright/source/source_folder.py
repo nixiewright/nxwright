@@ -61,11 +61,13 @@ from nxwright.project.attribute_values import number_from_bytes
 from nxwright.project.component_defaults import DEFAULTS_FILE, defaults_from_toml
 from nxwright.project.dump_folder import (DUMP_FORMAT_LINE, MACROS_FILE, check_dump_format,
                                           check_ids_without_gaps, copied_contents,
-                                          copied_file_name, dump_device_settings, dump_pictures,
-                                          page_text_files)
+                                          copied_file_name, dump_device_settings, dump_encoding,
+                                          dump_header_bytes, dump_pictures, page_text_files)
 from nxwright.project.resources import COPIED_KINDS, FONTS, MEDIA, PICTURE_SUFFIXES
 from nxwright.project.device_settings import DEFAULT_ENCODING, ENCODINGS, DeviceSettings, TextCodec
 from nxwright.source.device_keys import DEVICE_KEYS, device_keys, screen_model, settings_from_keys
+from nxwright.source.unknown_content import (MAY_BE_LOST, UNKNOWN_MODEL_PLACE, checked,
+                                             unknown_in_dump)
 from nxwright.source.nx_files import (blank_lines_dropped, included_path, read_nx_file,
                                       read_page_files, resolve)
 from nxwright.source.macros_source import (MACROS_PATH, block_of_compiled, callable_macros,
@@ -116,7 +118,19 @@ NXLANG = "nxlang"
 LANGUAGES = (NEXTION, NXLANG)
 
 
-def import_dump(dump_folder: Path, source_folder: Path, name: str = None) -> list:
+def removes_screen_settings(lost: list, source_folder: Path) -> bool:
+    """Whether going on past `lost`, UnknownContent that may be lost, would
+    remove the screen settings of the app.toml of `source_folder`: the
+    project's screen model is one nxwright does not know, and app.toml gives
+    settings."""
+    app = Path(source_folder) / "app.toml"
+    unknown_model = any(each.where == UNKNOWN_MODEL_PLACE for each in lost)
+    return unknown_model and app.is_file() and any(
+        key in parse_app(app.read_text(encoding="utf-8")) for key in DEVICE_KEYS)
+
+
+def import_dump(dump_folder: Path, source_folder: Path, name: str = None,
+                continue_with_unknown: bool = False, check_unknown: bool = True) -> list:
     """Imports the dump's project into `source_folder`, and returns the
     warnings of what the source files leave out: blank lines of the code,
     which the build would drop.
@@ -140,6 +154,13 @@ def import_dump(dump_folder: Path, source_folder: Path, name: str = None) -> lis
     holds something the source folder cannot represent, the folder's own code
     cannot be turned into Editor code, or `source_folder` is neither empty nor
     a source folder.
+
+    With `check_unknown`, the content nxwright does not know that the dump
+    shows is checked first, as extract checks a project's
+    (unknown_content.checked): it raises for content nxwright cannot keep,
+    and UnknownContentError for content the next build may lose unless
+    `continue_with_unknown`, and the notes and warnings of the rest lead the
+    warnings it returns.
     """
     dump_folder, source_folder = Path(dump_folder), Path(source_folder)
     updating = (source_folder / "app.toml").is_file()
@@ -147,6 +168,12 @@ def import_dump(dump_folder: Path, source_folder: Path, name: str = None) -> lis
         raise NxwrightError("%s is neither empty nor a source folder (it has no app.toml)"
                             % source_folder)
     check_dump_format(dump_folder)
+    notes = []
+    if check_unknown:
+        found = unknown_in_dump(dump_folder)
+        lost = [each for each in found if each.sort == MAY_BE_LOST]
+        notes = checked(dump_folder, found, continue_with_unknown, None,
+                        source_folder if removes_screen_settings(lost, source_folder) else None)
     old_app = parse_app(read_text(source_folder / "app.toml")) if updating else None
     if updating:
         name = old_app.get("name")
@@ -154,6 +181,13 @@ def import_dump(dump_folder: Path, source_folder: Path, name: str = None) -> lis
         name = None
     files, names, generated, warnings = _source_files_from_dump(dump_folder, source_folder,
                                                                 old_app, name)
+    # A dump that shows no header, as one written from a source folder, says
+    # nothing of the model.
+    if (updating and dump_header_bytes(dump_folder) is not None
+            and dump_device_settings(dump_folder) is None
+            and any(key in old_app for key in DEVICE_KEYS)):
+        warnings.append("app.toml's screen settings are removed, as the project's screen model "
+                        "is not one nxwright knows; the build refuses the folder until it does")
     stale = _keep_existing_code(source_folder, files, names, old_app, generated) if updating else []
     for relative, content in files.items():
         path = source_folder / relative
@@ -165,7 +199,7 @@ def import_dump(dump_folder: Path, source_folder: Path, name: str = None) -> lis
     for relative in stale:
         if relative.lower() not in written:
             (source_folder / relative).unlink(missing_ok=True)
-    return warnings
+    return notes + warnings
 
 
 def _keep_existing_code(source_folder: Path, files: dict, names: ResourceNames,
@@ -786,7 +820,10 @@ def _source_files_from_dump(dump_folder: Path, source_folder: Path, old_app,
                 files["%s/%s%s" % (kind, name, suffix)] = content
     uses_nxlang = old_app is not None and old_app["language"] == NXLANG
     settings = dump_device_settings(dump_folder)
-    encoding = settings.encoding if settings is not None else DEFAULT_ENCODING
+    # The encoding does not depend on the screen model, so a project of a
+    # model nxwright does not know is still read in its own encoding.
+    encoding = (settings.encoding if settings is not None
+                else dump_encoding(dump_folder) or DEFAULT_ENCODING)
     pages, generated, warnings = [], {}, []
     page_files = page_text_files(dump_folder)
     check_ids_without_gaps(page_files, "page")

@@ -6,7 +6,7 @@ animations, videos, and sounds are numbered by their Editor IDs.
 from pathlib import Path
 
 from nxwright import NxwrightError
-from nxwright.project.device_settings import HEADER_SIZE, read_device_settings
+from nxwright.project.device_settings import ENCODINGS, HEADER_SIZE, read_device_settings
 from nxwright.project.resources import PICTURE_SUFFIXES, CopiedKind
 
 # First line of project.txt. It changes whenever the dump's layout does, so that
@@ -35,18 +35,41 @@ def dump_device_settings(dump_folder: Path):
     """Returns the DeviceSettings of the dump's project, from the manifest
     header bytes its project.txt shows, or None when it shows none or the
     screen model is not one nxwright knows."""
+    header = dump_manifest_header(dump_folder)
+    return None if header is None else read_device_settings(header)
+
+
+def dump_encoding(dump_folder: Path):
+    """Returns the character encoding of the dump's project, by its
+    manifest header's byte 13, which does not depend on the screen model,
+    or None when the dump shows no header or nxwright does not know the
+    encoding (ENCODINGS)."""
+    header = dump_manifest_header(dump_folder)
+    return None if header is None else ENCODINGS.get(header[13])
+
+
+def dump_manifest_header(dump_folder: Path):
+    """Returns the manifest header of the dump's project, as its project.txt
+    shows it, or None when it shows none of HEADER_SIZE bytes. The dump
+    shows bytes 8 to 23, then 32 to the end; the others are left 0."""
+    shown = dump_header_bytes(dump_folder)
+    if shown is None or len(shown) != 16 + HEADER_SIZE - 32:
+        return None
+    header = bytearray(HEADER_SIZE)
+    header[8:24] = shown[:16]
+    header[32:HEADER_SIZE] = shown[16:16 + HEADER_SIZE - 32]
+    return bytes(header)
+
+
+def dump_header_bytes(dump_folder: Path):
+    """Returns the manifest header's bytes that the dump's project.txt shows,
+    bytes 8 to 23, then 32 to the end, or None when it shows none, as in a
+    dump written from a source folder."""
     summary = dump_folder / "project.txt"
     for line in summary.read_text(encoding="utf-8").split("\n") if summary.exists() else []:
         words = line.split()
         if len(words) == 2 and words[0] == "unknown_header":
-            # The dump shows header bytes 8 to 23, then 32 to the end.
-            shown = bytes.fromhex(words[1])
-            if len(shown) != 16 + HEADER_SIZE - 32:
-                return None
-            header = bytearray(HEADER_SIZE)
-            header[8:24] = shown[:16]
-            header[32:HEADER_SIZE] = shown[16:16 + HEADER_SIZE - 32]
-            return read_device_settings(bytes(header))
+            return bytes.fromhex(words[1])
     return None
 
 

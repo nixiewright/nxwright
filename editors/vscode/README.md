@@ -118,7 +118,7 @@ All commands are in the command palette, under "nxwright:". Three of them only s
 | Import a Nextion Editor project | Extracts a `.HMI` file into a new folder, and remembers the file for Build. |
 | Choose the project | Chooses which project the side bars show, when the workspace has several. |
 | Build the project file | Builds the `.HMI` file. The first time, it asks where to save it. |
-| Extract the project file into the source folder | Brings changes made in the Nextion Editor back into your files, after asking you to confirm. |
+| Extract the project file into the source folder | Brings changes made in the Nextion Editor back into your files, after asking you to confirm. When the project holds what nxwright does not know and the next build may lose, as one a newer Nextion Editor saved may, it lists it and asks again before going on. What nxwright cannot keep stops it. |
 | Choose the project HMI file for the source folder | Chooses the `.HMI` file that Build writes and Extract reads. |
 | Change the screen model | Changes the screen, and resizes every page. |
 | Change the rotation | Changes the rotation, resizes every page, and rotates fonts and videos. |

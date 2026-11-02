@@ -61,6 +61,13 @@ Brings a project file into a source folder. Use it to start from a project made 
 - Into an existing source folder, it updates it, and keeps the app's name. Your code, names, and comfortable syntax stay wherever the project did not change them ([Extracting into an existing folder](source-folder.md#extracting-into-an-existing-folder)).
 - The Nextion Editor locks a project it has open. If the project is open there, the command fails with "Permission denied", and advises you to close the project in the Nextion Editor first.
 - Blank lines in the project's code are dropped, as the build would drop them. A warning gives each event, macro, or `program.s` that had any. The Nextion Editor compiles them to nothing.
+- A project may hold what nxwright does not know, as one saved by a newer Nextion Editor may. Before writing anything, extract sorts each such thing three ways:
+  - What the source folder keeps exactly, such as a component type nxwright does not know, gets a warning that says so.
+  - What the next build may lose, such as a block of another kind, or a screen model nxwright does not know, is listed. Extract warns that the project may then miss parameters the Nextion Editor needs, and asks whether to go on. With nobody to answer, as in a script, it stops with exit code 3. `--continue-with-unknown` goes on without asking.
+  - What the source folder cannot keep, such as an attribute nxwright does not know, is refused.
+
+  Each warning and refusal ends by naming `nxwright report`, which writes a report of it to send to nxwright's maintainers.
+- `nxwright extract --list-unknown thermostat.HMI` prints what the project holds that nxwright does not know, one JSON object a line, and writes nothing.
 
 `extract` goes through a dump in a temporary folder. `nxwright dump`, then `nxwright import`, do the same in two steps ([dumps.md](dumps.md)).
 

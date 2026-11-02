@@ -72,9 +72,14 @@ class SourceFolderDeviceTest(SourceFolderTestCase):
                          read_device_settings(manifest_of("NX1060P101")))
 
     def test_a_project_of_an_unknown_model_has_none(self):
-        self.give_the_dump_header(bytes(96))
+        # A header of a model nxwright knows, given a device ID it does not.
+        # Import asks before going on past it (unknown_content.py), so the
+        # test goes on.
+        header = bytearray(manifest_of("NX8048P050")[:96])
+        header[16:20] = b"\xee\xee\xee\xee"
+        self.give_the_dump_header(bytes(header))
         source = self.folder / "unknown-model"
-        import_dump(self.dump, source)
+        import_dump(self.dump, source, continue_with_unknown=True)
         self.assertIsNone(folder_device_settings(source))
 
     def test_import_writes_the_dumps_settings(self):

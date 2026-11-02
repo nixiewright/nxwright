@@ -12,7 +12,7 @@ nxwright dump <project.HMI> <output-folder>
 
 - The project file is only read.
 - The output folder must not exist yet, or must be empty. nxwright never deletes anything, so clear an old dump if you want a new one to take its place. A failed run leaves its partial folder in place, and its message points at the folder.
-- nxwright stops with an error when the project contains a kind of block it does not handle, rather than leaving that block out.
+- The dump is the way to look inside a project nxwright does not fully know, as one a newer Nextion Editor saved. So it never asks: it warns of each thing nxwright does not know, such as a kind of block it does not handle, which the dump leaves out, and writes the rest ([commands.md](commands.md#extract)).
 
 ## Layout
 
@@ -81,6 +81,7 @@ Turns a dump into a source folder ([source-folder.md](source-folder.md)).
 - A new or empty folder gets a fresh source folder.
 - A source folder that already has an `app.toml` is updated. Each event keeps its text, comments included, unless the project changed that event's code ([Extracting into an existing folder](source-folder.md#extracting-into-an-existing-folder)).
 - Any other folder is refused.
+- Of what nxwright does not know, the dump shows the manifest header and the pages. Import treats those as extract does: it notes, asks, or refuses, and takes `--continue-with-unknown` ([commands.md](commands.md#extract)).
 
 ## Page files
 

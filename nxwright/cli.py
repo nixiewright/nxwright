@@ -32,6 +32,8 @@ from nxwright.source.folder_check import check_folder
 from nxwright.source.formatting import format_folder
 from nxwright.source.lint import ERROR
 from nxwright.source.project_files import build, extract, write_defaults
+from nxwright.source.unknown_content import (UnknownContentError, report_hint,
+                                             unknown_in_project_file)
 from nxwright.source.keyboards import KEYBOARD_PAGES
 from nxwright.source.resource_removal import KINDS, remove_resource
 from nxwright.source.source_folder import (LANGUAGES, NXLANG, add_page, folder_byte_reader,
@@ -85,6 +87,36 @@ def refuse_unless_replacing(output: Path, ask, kind: str = "project file",
 
 # The kinds of file a command replaces, and how each is told from another file.
 _REPLACEABLE = {"project file": is_project_file, "page file": is_page_file}
+# The exit code of extract or import stopped at content nxwright does not
+# know and the next build may lose, because nobody was there to ask whether
+# to go on, and --continue-with-unknown was not given. A script tells it
+# from another refusal.
+NO_ANSWER_EXIT_CODE = 3
+
+
+class _NoAnswer(NxwrightError):
+    """A refusal for want of an answer, which exits with NO_ANSWER_EXIT_CODE."""
+    exit_code = NO_ANSWER_EXIT_CODE
+
+
+def go_on_past(error: UnknownContentError, ask, command: str):
+    """Returns when the user, asked through `ask(question)`, chooses to go on
+    past the content `error` lists, which `command` prints first. Raises
+    NxwrightError when they choose not to, and _NoAnswer when there is
+    nobody to ask (`ask` is None) or the input ends at the question."""
+    print("nxwright %s: warning: %s" % (command, error), file=sys.stderr)
+    while ask is not None:
+        try:
+            answer = ask("Go on anyway? [y/N]: ").strip().lower()
+        except EOFError:
+            break
+        if answer in ("y", "yes"):
+            return
+        if answer in ("", "n", "no"):
+            raise NxwrightError("stopped; nothing was written")
+        print("Not one of the choices: y, n")
+    raise _NoAnswer("nobody was there to ask whether to go on; nothing was written. Pass "
+                    "--continue-with-unknown to go on past it.")
 
 
 def _terminal_asker():
@@ -287,18 +319,46 @@ def _run_new_page(arguments) -> str:
 
 
 def _run_extract(arguments) -> str:
-    for warning in extract(arguments.project, arguments.source_folder):
+    if arguments.list_unknown:
+        for each in unknown_in_project_file(arguments.project):
+            print(json.dumps({"what": each.what, "where": each.where, "sort": each.sort,
+                              "bytes": each.data.hex()}))
+        return ""
+    if arguments.source_folder is None:
+        raise NxwrightError("give the source folder to extract into")
+    try:
+        warnings = extract(arguments.project, arguments.source_folder,
+                           arguments.continue_with_unknown)
+    except UnknownContentError as error:
+        go_on_past(error, _terminal_asker(), "extract")
+        warnings = extract(arguments.project, arguments.source_folder, True)
+    for warning in warnings:
         print("nxwright extract: warning: %s" % warning, file=sys.stderr)
     return "Extracted %s into %s" % (arguments.project, arguments.source_folder)
 
 
 def _run_dump(arguments) -> str:
-    ProjectDumper(arguments.project, arguments.output_folder).dump()
+    # The dump is how to look inside a project nxwright does not fully know,
+    # so it warns of what it does not know and never asks.
+    found = unknown_in_project_file(arguments.project)
+    for each in found:
+        print("nxwright dump: warning: %s (%s)" % (each.what, each.where), file=sys.stderr)
+    if found:
+        print("nxwright dump: warning: %s" % report_hint(arguments.project), file=sys.stderr)
+    ProjectDumper(arguments.project, arguments.output_folder,
+                  leave_out_unknown_blocks=True).dump()
     return "Wrote %s" % arguments.output_folder
 
 
 def _run_import(arguments) -> str:
-    for warning in import_dump(arguments.dump_folder, arguments.source_folder):
+    try:
+        warnings = import_dump(arguments.dump_folder, arguments.source_folder,
+                               continue_with_unknown=arguments.continue_with_unknown)
+    except UnknownContentError as error:
+        go_on_past(error, _terminal_asker(), "import")
+        warnings = import_dump(arguments.dump_folder, arguments.source_folder,
+                               continue_with_unknown=True)
+    for warning in warnings:
         print("nxwright import: warning: %s" % warning, file=sys.stderr)
     return "Wrote %s" % arguments.source_folder
 
@@ -614,7 +674,14 @@ _SUBCOMMANDS = [
      "keeps its code, names, and comfortable syntax wherever the project did not change "
      "them. The project file is only read.",
      [("project", {"type": Path, "help": "the project file (.HMI)"}),
-      ("source_folder", {"type": Path, "help": "the source folder to update or create"})]),
+      ("source_folder", {"type": Path, "nargs": "?",
+                         "help": "the source folder to update or create"}),
+      ("--continue-with-unknown", {"action": "store_true",
+                                   "help": "go on past content nxwright does not know and the "
+                                   "next build may lose, without asking"}),
+      ("--list-unknown", {"action": "store_true",
+                          "help": "print the content nxwright does not know, one JSON object "
+                          "a line, and write nothing"})]),
     ("dump", _run_dump, "write a project file out as a dump folder of text and asset files",
      "The project file is only read. The output folder must not exist yet, or be empty. "
      "Nothing is ever deleted; clear an old dump yourself.",
@@ -625,7 +692,10 @@ _SUBCOMMANDS = [
      "an app.toml is updated, keeping its code wherever the dump has the same code. Any "
      "other folder is refused.",
      [("dump_folder", {"type": Path, "help": "a dump folder written by nxwright dump"}),
-      ("source_folder", {"type": Path, "help": "the source folder to update or create"})]),
+      ("source_folder", {"type": Path, "help": "the source folder to update or create"}),
+      ("--continue-with-unknown", {"action": "store_true",
+                                   "help": "go on past content nxwright does not know and the "
+                                   "next build may lose, without asking"})]),
     ("write", _run_write, "write a project file from a project and an edited dump of it",
      "Pages, pictures, and fonts may have been edited, added, removed, or renumbered in the "
      "dump, and program.s edited. The rest of the project is copied unchanged. An existing "
@@ -733,7 +803,7 @@ def main(arguments: list = None) -> int:
         message = parsed.run(parsed)
     except (NxwrightError, OSError) as error:
         print("nxwright %s: %s" % (parsed.subcommand, error), file=sys.stderr)
-        return 1
+        return getattr(error, "exit_code", 1)
     if message:
         print(message)
     return 0
