@@ -672,10 +672,11 @@ class NxwrightServer(LanguageServer):
 
     def _new_folder_choices(self, params) -> dict:
         """Returns the choices `nxwright new` asks for: {"models", each
-        {"name", "size"}, "rotations", "encodings", "languages", "defaults"},
-        the defaults those of `nxwright new`; a screen model has none."""
-        return {"models": [{"name": model.name, "size": "%d x %d" % (model.width, model.height)}
-                           for model in MODELS],
+        {"name", "size", "specs"}, "rotations", "encodings", "languages",
+        "defaults"}, the defaults those of `nxwright new`; a screen model has
+        none. A model's "specs" are ScreenModel.specs."""
+        return {"models": [{"name": model.name, "size": "%d x %d" % (model.width, model.height),
+                            "specs": model.specs} for model in MODELS],
                 "rotations": list(ROTATIONS),
                 "encodings": list(ENCODINGS.values()),
                 "languages": list(LANGUAGES),

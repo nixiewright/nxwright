@@ -589,7 +589,7 @@ def compare_models(listed: list, table=MODELS) -> list:
     missing = []
     for model in table:
         same = next((each for each in unmatched
-                     if _told_by(each) == (model.series, _inches(model), model.width,
+                     if _told_by(each) == (model.series, model.inches, model.width,
                                            model.height)), None)
         if same is None:
             missing.append(model)
@@ -598,7 +598,7 @@ def compare_models(listed: list, table=MODELS) -> list:
     found = []
     for model in missing:
         others = [each for each in unmatched
-                  if _told_by(each)[:2] == (model.series, _inches(model))]
+                  if _told_by(each)[:2] == (model.series, model.inches)]
         if len(others) == 1:
             unmatched.remove(others[0])
             found.append(ListedDifference(model.name, MODEL_RESIZED,
@@ -615,12 +615,6 @@ def _told_by(listed: dict) -> tuple:
     """Returns what tells the model `listed` from the others: its series,
     inches, width, and height."""
     return listed["series"], round(listed["inch"], 1), listed["width"], listed["height"]
-
-
-def _inches(model) -> float:
-    """Returns the diagonal of the screen model `model` in inches, from its
-    name: NX4827P043 is 4.3 inches."""
-    return round(int(model.name[7:10]) / 10, 1)
 
 
 def models(old: Path, new: Path, output: Path) -> str:

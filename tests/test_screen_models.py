@@ -52,6 +52,17 @@ class ScreenModelTest(unittest.TestCase):
             with self.subTest(model=name):
                 self.assertEqual(model_named(name).picture_format, kind)
 
+    def test_the_specs_the_editor_lists(self):
+        # One model of each series, as the Nextion Editor's Device window lists it.
+        for name, specs in (
+                ("NX3224T024", "2.4 inch, 240 x 320, flash 4 MB, RAM 3.5 KB, 48 MHz"),
+                ("NX4832F035", "3.5 inch, 320 x 480, flash 16 MB, RAM 3.5 KB, 64 MHz"),
+                ("NX8048K070", "7.0 inch, 800 x 480, flash 32 MB, RAM 8 KB, 108 MHz"),
+                ("NX1060P101", "10.1 inch, 1024 x 600, flash 128 MB, RAM 512 KB, 200 MHz"),
+                ("NX4880E043", "4.3 inch, 480 x 800, flash 128 MB, RAM 512 KB, 200 MHz")):
+            with self.subTest(model=name):
+                self.assertEqual(model_named(name).specs, specs)
+
     def test_an_unknown_model_is_refused_by_name(self):
         with self.assertRaisesRegex(NxwrightError, "unknown screen model 'NX9999X999'"):
             model_named("NX9999X999")

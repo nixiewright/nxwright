@@ -42,7 +42,7 @@ The findings are what the reports list for the new release:
 ## 4. Deal with each finding
 
 - **A new attribute or component type:** open an issue for it, so that it can be supported properly later. Meanwhile, a project that uses it still comes back the same: extract keeps an attribute nxwright does not know as its stored bytes, and keeps a component of a type nxwright does not know exactly.
-- **A new screen model:** save one project of that model in the new release. Its device ID and its stamp number come from that project. Add the project's manifest to `tests/fixtures/manifests/`, and the model to the table in `nxwright/project/screen_models.py`.
+- **A new screen model:** save one project of that model in the new release. Its device ID and its stamp number come from that project. Its diagonal, flash, RAM, and frequency come from its tile in the device settings. Add the project's manifest to `tests/fixtures/manifests/`, and the model to the table in `nxwright/project/screen_models.py`.
 - **Any other finding:** fix nxwright, with a test that fails before the fix.
 
 ## 5. Move to the new release

@@ -12,7 +12,7 @@ from nxwright.cli import main, new_folder_name, new_folder_settings
 from nxwright.language.code_lines import split_line
 from nxwright.project.device_settings import DeviceSettings
 from nxwright.project.dumper import ProjectDumper
-from nxwright.project.screen_models import model_named
+from nxwright.project.screen_models import MODELS, model_named
 from nxwright.project.zi_font import decode_font
 from nxwright.source.project_files import build
 from nxwright.source.source_folder import folder_device_settings, new_source_folder
@@ -60,6 +60,16 @@ class NewFolderSettingsTest(unittest.TestCase):
         self.assertEqual(self.settings(NO_OPTIONS, ask),
                          (DeviceSettings(model_named("NX8048P050"), 0, "iso-8859-1"), "nxlang"))
         self.assertEqual(len(questions), 6)
+
+    def test_a_wrong_screen_model_lists_each_model_with_its_specs(self):
+        ask, _ = answering("NX9999X999", "NX8048P050", "", "", "")
+        with redirect_stdout(io.StringIO()) as printed:
+            new_folder_settings(NO_OPTIONS, ask)
+        lines = printed.getvalue().splitlines()
+        self.assertEqual(lines[0], "Not one of the choices:")
+        self.assertEqual(len(lines), 1 + len(MODELS))
+        self.assertIn("  NX4880E043  4.3 inch, 480 x 800, flash 128 MB, RAM 512 KB, 200 MHz",
+                      lines)
 
     def test_without_anyone_to_ask_the_defaults_apply(self):
         arguments = Namespace(screen="NX4832F035", rotation=None, encoding=None, language=None)

@@ -28,6 +28,7 @@ class NewFolderChoicesTest(unittest.TestCase):
                          [model.name for model in MODELS])
         self.assertEqual(choices["models"][0]["size"],
                          "%d x %d" % (MODELS[0].width, MODELS[0].height))
+        self.assertEqual(choices["models"][0]["specs"], MODELS[0].specs)
         self.assertEqual(choices["rotations"], list(ROTATIONS))
         self.assertEqual(choices["encodings"], list(ENCODINGS.values()))
         self.assertEqual(choices["languages"], list(LANGUAGES))

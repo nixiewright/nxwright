@@ -178,7 +178,8 @@ def new_folder_settings(arguments, ask) -> tuple:
     terminal), or once its input ends, the rotation, encoding, and language
     left out take their defaults, and a missing screen model is refused."""
     screen = arguments.screen or _asked(
-        ask, "Screen model, such as NX8048P050: ", None, [model.name for model in MODELS])
+        ask, "Screen model, such as NX8048P050: ", None, [model.name for model in MODELS],
+        ["%s  %s" % (model.name, model.specs) for model in MODELS])
     if screen is None:
         raise NxwrightError("no screen model: give one with --screen")
     rotation = arguments.rotation if arguments.rotation is not None else int(_asked(
@@ -206,10 +207,12 @@ def new_folder_name(arguments, ask, source_folder: Path) -> str:
     return default
 
 
-def _asked(ask, question: str, default, choices: list):
+def _asked(ask, question: str, default, choices: list, listed: list = None):
     """Returns the answer to `question`, asked again until it is one of
     `choices`. An empty answer is `default`, when there is one. Without
-    `ask`, or once its input ends, returns `default`."""
+    `ask`, or once its input ends, returns `default`. After a wrong answer,
+    the choices are printed on one line, or as the lines `listed` when
+    given, one a line."""
     while ask is not None:
         try:
             answer = ask(question).strip() or default
@@ -217,7 +220,10 @@ def _asked(ask, question: str, default, choices: list):
             break
         if answer in choices:
             return answer
-        print("Not one of the choices: %s" % ", ".join(choices))
+        if listed is None:
+            print("Not one of the choices: %s" % ", ".join(choices))
+        else:
+            print("\n".join(["Not one of the choices:"] + ["  " + line for line in listed]))
     return default
 
 

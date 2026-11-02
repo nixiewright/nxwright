@@ -221,9 +221,9 @@ def listed(series: str, inch: float, width: int, height: int) -> dict:
 
 
 # A table of screen models, as nxwright's: two models of 7 inches on P.
-TABLE = (ScreenModel("NX4827P043", b"\xda\x69\x11\x18", 0, 480, 272),
-         ScreenModel("NX8048P070", b"\xa7\xba\x27\xda", 0, 800, 480),
-         ScreenModel("NX1060P070", b"\xc2\x73\x34\xc4", 0, 1024, 600))
+TABLE = (ScreenModel("NX4827P043", b"\xda\x69\x11\x18", 0, 480, 272, 4.3, 128, 524288, 200),
+         ScreenModel("NX8048P070", b"\xa7\xba\x27\xda", 0, 800, 480, 7.0, 128, 524288, 200),
+         ScreenModel("NX1060P070", b"\xc2\x73\x34\xc4", 0, 1024, 600, 7.0, 128, 524288, 200))
 
 
 class ModelsTest(unittest.TestCase):

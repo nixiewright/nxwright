@@ -466,7 +466,8 @@ async function changeDevice(setting: "screen" | "rotation" | "encoding"): Promis
     chosen = (await vscode.window.showQuickPick(
       models.map((entry) => ({
         label: entry.name,
-        description: entry === current ? `${entry.size}, current` : entry.size,
+        description: entry === current ? `${entry.specs ?? entry.size}, current`
+          : entry.specs ?? entry.size,
       })),
       { title: `The screen model of ${name}`, matchOnDescription: true }))?.label;
     if (chosen === info?.screen) {
@@ -509,9 +510,11 @@ async function upgrade(): Promise<void> {
 }
 
 // The choices `nxwright new` asks for, and their defaults, as the server's
-// nxwright/newFolderChoices gives them.
+// nxwright/newFolderChoices gives them. A model's specs are its diagonal,
+// size, flash, RAM, and processor frequency, in one line of text. An older
+// toolchain gives only the size.
 interface NewFolderChoices {
-  models: { name: string; size: string }[];
+  models: { name: string; size: string; specs?: string }[];
   rotations: number[];
   encodings: string[];
   languages: string[];
@@ -552,7 +555,7 @@ async function newSourceFolder(): Promise<void> {
     return;
   }
   const model = await vscode.window.showQuickPick(
-    choices.models.map((entry) => ({ label: entry.name, description: entry.size })),
+    choices.models.map((entry) => ({ label: entry.name, description: entry.specs ?? entry.size })),
     { title: `${title}: the screen model`, matchOnDescription: true });
   const rotation = model && await pickWithDefault(
     choices.rotations, choices.defaults.rotation, `${title}: the rotation`,
