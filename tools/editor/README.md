@@ -161,7 +161,7 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 - A project must be open, since the Device button is greyed out otherwise.
 - UI Automation does not give a model's name, only the text of its tile. So each model is given by its series, its diagonal in inches, and its size in pixels, along with its memory and frequency. The Nextion Editor 1.68.2 lists NX3224T024 as series `T`, 2.4 inches, 240 by 320.
 - The settings' series buttons show only pictures, so the command takes the series from their order: Basic (T), Discovery (F), Enhanced (K), Intelligent (P), and Edge (E). If the settings show another number of series, or a tile whose text the tool does not read, the command stops, and its error gives that number or text.
-- If pressing a series' button leaves the tiles of the series shown before, as when the press did not take, the command stops. In the Nextion Editor 1.68.2, no series has the same tiles as the one before it.
+- From the second series on, if pressing a series' button leaves the tiles of the series before it, as when the press did not take, the command stops. In the Nextion Editor 1.68.2, no series has the same tiles as the one before it. The first press is not checked, as the settings may open on its series already.
 - The device settings of the Nextion Editor 1.63.3 are laid out otherwise, and the command stops on them.
 
 ### `compile`
