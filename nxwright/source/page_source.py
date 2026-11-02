@@ -97,6 +97,11 @@ _HEADER_KEYS = ("system_page", "locked", "lock_password_hash")
 # Attributes the build derives (see _derived_values). A table gives one only
 # when its stored value differs from the derived one.
 _DERIVED = ("id", "objname", "endx", "endy")
+# disup is an attribute of the Nextion Editors 1.60.1 and 1.63.3, which they
+# read right after drag. The Nextion Editor 1.68.2, whose sample gives the
+# defaults, has none. So a table may give it on a type that has drag, and
+# the build puts it after drag.
+_DISUP, _DRAG = "disup", "drag"
 # Names are plain ASCII, checked once decoded: Latin-1 decodes any byte, so a
 # name that is not reaches that check rather than a decoding error.
 _NAME_ENCODING = "latin-1"
@@ -162,8 +167,12 @@ def page_to_source(page: PageBlock, names: ResourceNames, defaults: dict,
         type_defaults = defaults.get(content.type)
         stored = [item.name for item in page_object.items
                   if isinstance(item, Attribute) and item.name not in DERIVED_ATTRIBUTES]
-        # Only a component with exactly its type's attributes can be shortened.
-        shortened = type_defaults is not None and stored == type_defaults.names()
+        # Only a component with exactly its type's attributes can be shortened,
+        # or with them and a disup after its drag, which is then written.
+        with_disup = None if type_defaults is None else _with_disup(type_defaults.attributes, b"")
+        shortened = type_defaults is not None and (
+            stored == type_defaults.names()
+            or with_disup is not None and stored == [name for name, _ in with_disup])
         default_values = dict(type_defaults.attributes) if shortened else {}
         event_names = [event.name for event in content.events]
         if not shortened:
@@ -795,7 +804,10 @@ def _object_from_table(table: dict, index: int, code: dict, names: ResourceNames
             raise NxwrightError("%s: type %s has no defaults in defaults.toml; add its section "
                                 "there, as nxwright defaults writes it from a sample project"
                                 % (where, TYPE_NAMES.get(object_type, object_type)))
-        known = type_defaults.names()
+        defaults_order = type_defaults.attributes
+        if _DISUP in given:
+            defaults_order = _with_disup(defaults_order, given[_DISUP]) or defaults_order
+        known = [key for key, _ in defaults_order]
         unknown = [key for key in given if key not in known and key not in _DERIVED]
         if unknown:
             raise NxwrightError("%s: type %s has no attribute %s"
@@ -806,7 +818,7 @@ def _object_from_table(table: dict, index: int, code: dict, names: ResourceNames
         if missing:
             raise NxwrightError("%s: component %s needs its place on the screen; %s missing"
                                 % (where, name, ", ".join(missing)))
-        attributes = [Attribute(key, given.get(key, value)) for key, value in type_defaults.attributes]
+        attributes = [Attribute(key, given.get(key, value)) for key, value in defaults_order]
         if events is None:
             events = type_defaults.events
     if whole_checks:
@@ -978,6 +990,21 @@ def stored_value(type_name: str, attribute: str, value, names: ResourceNames, en
     file. Raises NxwrightError as the build does."""
     return _value_to_bytes(attribute, value, TYPES_BY_NAME[type_name], names,
                            TextCodec(encoding), where)
+
+
+def _with_disup(attributes: list, value: bytes):
+    """Returns `attributes`, a type's (name, stored bytes) in stored order,
+    with disup at `value` right after drag. Returns None when they have no
+    drag, as a timer's do. Defaults written from a project that the Nextion
+    Editor 1.60.1 saved may list a disup already. That disup keeps its
+    place, and takes `value`."""
+    names = [name for name, _ in attributes]
+    if _DRAG not in names:
+        return None
+    if _DISUP in names:
+        return [(name, value if name == _DISUP else stored) for name, stored in attributes]
+    at = names.index(_DRAG) + 1
+    return attributes[:at] + [(_DISUP, value)] + attributes[at:]
 
 
 def _table_header(table: dict, where: str) -> tuple:

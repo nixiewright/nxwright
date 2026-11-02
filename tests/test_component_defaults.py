@@ -86,6 +86,56 @@ class LeaveOutTest(unittest.TestCase):
                     page_from_source(PageSource(text, ""), "first", NAMES, defaults)
 
 
+class DisupTest(unittest.TestCase):
+    # The Nextion Editors 1.60.1 and 1.63.3 have disup, one byte right after
+    # drag. 1.68.2, whose sample gives the defaults, has none. DRAG_DEFAULTS
+    # are the page's defaults with a drag added.
+    DRAG_DEFAULTS = {121: TypeDefaults([("vscope", b"\0"), ("drag", b"\0"), ("txt", b"hello")],
+                                       ["down", "up"])}
+
+    def with_drag(self, disup=None):
+        """Returns page() with a drag of 1 after its vscope, then `disup`
+        when given. The page's marker counts the added attributes."""
+        block = page()
+        items = block.objects[0].items
+        added = [Attribute("drag", b"\1")] + ([] if disup is None else [Attribute("disup", disup)])
+        items[5:5] = added
+        items[0] = Marker(b"att-%d" % sum(isinstance(item, Attribute) for item in items))
+        return block
+
+    def test_a_disup_keeps_the_table_short(self):
+        for value in (b"\0", b"\1"):
+            with self.subTest(disup=value):
+                block = self.with_drag(value)
+                source = page_to_source(block, NAMES, self.DRAG_DEFAULTS)
+                self.assertNotIn("defaults = false", source.toml)
+                self.assertIn("disup = %d\n" % value[0], source.toml)
+                self.assertEqual(page_from_source(source, "first", NAMES, self.DRAG_DEFAULTS),
+                                 block)
+
+    def test_the_build_puts_disup_after_drag(self):
+        toml = page_to_source(self.with_drag(), NAMES, self.DRAG_DEFAULTS).toml
+        built = page_from_source(PageSource(toml + "disup = 1\n", ""), "first", NAMES,
+                                 self.DRAG_DEFAULTS)
+        self.assertEqual(built, self.with_drag(b"\1"))
+        self.assertEqual([item.name for item in built.objects[0].items
+                          if isinstance(item, Attribute)][-3:], ["drag", "disup", "txt"])
+
+    def test_defaults_that_have_a_disup_keep_one(self):
+        # Defaults written from a project that the Nextion Editor 1.60.1
+        # saved list a disup after the drag already.
+        defaults = {121: TypeDefaults(self.DRAG_DEFAULTS[121].attributes[:2] + [("disup", b"\0")]
+                                      + self.DRAG_DEFAULTS[121].attributes[2:], ["down", "up"])}
+        toml = page_to_source(self.with_drag(b"\0"), NAMES, defaults).toml
+        built = page_from_source(PageSource(toml + "disup = 1\n", ""), "first", NAMES, defaults)
+        self.assertEqual(built, self.with_drag(b"\1"))
+
+    def test_a_type_without_drag_has_no_disup(self):
+        toml = page_to_source(page(), NAMES, PAGE_DEFAULTS).toml
+        with self.assertRaisesRegex(NxwrightError, "type page has no attribute disup"):
+            page_from_source(PageSource(toml + "disup = 0\n", ""), "first", NAMES, PAGE_DEFAULTS)
+
+
 class DefaultsFileTest(unittest.TestCase):
 
     def test_attributes_that_are_not_a_table_are_refused(self):

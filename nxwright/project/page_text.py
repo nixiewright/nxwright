@@ -49,8 +49,8 @@ STRING_ATTRIBUTES = frozenset({"objname", "txt", "path", "filter"})
 _DEFAULT_WIDTHS = {
     "aph": 1, "autoleft": 1, "bco": 2, "bco1": 2, "bco2": 2, "borderc": 2, "borderw": 1,
     "bpic": 2, "buff": 4, "buffsize": 4, "ch": 1, "close": 4, "dez": 1, "dir_m": 2, "dis": 1,
-    "down": 1, "drag": 1, "effect": 1, "en": 1, "endx": 2, "endy": 2, "filter_m": 2, "find": 4,
-    "first": 1, "font": 1, "fwarning": 1, "groupid0": 4, "groupid1": 4, "h": 2, "hig": 1,
+    "disup": 1, "down": 1, "drag": 1, "effect": 1, "en": 1, "endx": 2, "endy": 2, "filter_m": 2,
+    "find": 4, "first": 1, "font": 1, "fwarning": 1, "groupid0": 4, "groupid1": 4, "h": 2, "hig": 1,
     "id": 1, "isbr": 1, "key": 1, "left": 1, "lockobj": 1, "maxval": 2, "maxval_y": 4,
     "minval": 2, "mode": 1, "molloc": 4, "molloc_s": 4, "movex": 2, "movey": 2, "open": 4,
     "path_m": 2, "pco": 2, "pco1": 2, "pco2": 2, "pic": 2, "pic1": 2, "pic2": 2, "picc": 2,
