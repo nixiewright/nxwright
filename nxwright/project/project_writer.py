@@ -214,8 +214,11 @@ def _plan_pictures(plan: WritePlan, container: HmiContainer, manifest, dump_fold
     for name in manifest.block_names("i"):
         source = parse_image_source(container.blocks[name + "s"])
         unmatched.setdefault((source.data, source.suffix), []).append(name)
-    # A picture's two blocks share their number.
-    next_number = max(_next_block_number(container, "i"), _next_block_number(container, "is"))
+    # A picture's blocks share their number. A source block whose picture
+    # the manifest does not list keeps its number too, so that no new
+    # picture takes it for its own source.
+    next_number = max(_next_block_number(container, extension)
+                      for extension in ("i", "is", SOURCE_EXTENSION))
     added = []
     for picture_id, (file_name, data, suffix) in enumerate(files):
         if unmatched.get((data, suffix)):

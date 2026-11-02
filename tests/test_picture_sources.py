@@ -17,6 +17,7 @@ from nxwright.source.project_files import build, extract
 from nxwright.source.resource_adding import add_pictures
 from nxwright.source.resource_removal import remove_resource_files
 from nxwright.source.unknown_content import UnknownContentError
+from tests.test_container import build_project
 from tests.test_extract_unknown import PatchedDemoTestCase
 from tests.test_picture_files import SourceFolderTestCase
 from tests.test_project_writer import WriterTestCase
@@ -196,6 +197,23 @@ class WriteTest(WriterTestCase):
         blocks = self.written().blocks
         for extension in ("", "s", "b"):
             self.assertNotIn(self.picture_block + extension, blocks)
+
+    def test_a_new_picture_does_not_take_the_number_of_an_orphan_source(self):
+        # A source block whose picture the manifest does not list, which the
+        # dump leaves out, keeps its number: a new picture takes the next one.
+        blocks = HmiContainer.from_file(self.project).blocks
+        orphan = "%d.ib" % (max(int(name.split(".")[0]) for name in blocks
+                                if name.endswith((".i", ".is"))) + 1)
+        self.project = self.folder / "orphan.HMI"
+        self.project.write_bytes(build_project(
+            [(name, data, 0) for name, data in {**blocks, orphan: SOURCE_BLOCK}.items()],
+            editor_layout=True))
+        self.dump = self.folder / "dump-orphan"
+        ProjectDumper(self.project, self.dump, leave_out_unknown_blocks=True).dump()
+        (self.dump / "images" / ("%04d.png" % (self.last + 1))).write_bytes(OTHER_SOURCE)
+        changes = self.write()
+        self.assertFalse([change for change in changes if "the source of" in change], changes)
+        self.assertEqual(self.written().blocks[orphan], SOURCE_BLOCK)
 
     def test_a_dump_in_format_3_is_refused(self):
         summary = self.dump / "project.txt"
