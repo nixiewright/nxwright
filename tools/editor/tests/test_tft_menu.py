@@ -41,11 +41,11 @@ class TftMenuTest(unittest.TestCase):
     def test_a_menu_without_the_item_is_left_closed(self):
         menu = MenuWithoutItem()
         with mock.patch.object(editor, "_MENU_SHOWS", 0.2):
-            self.assertIsNone(editor._press_tft_item(menu))
+            self.assertIsNone(editor._press_file_item(menu, editor._TFT_MENU_ITEM))
         self.assertEqual((menu.presses, menu.is_open), (2, False))
 
     def open_tft_output(self, presses: list):
-        """Runs _open_tft_output with _press_tft_item giving `presses` in
+        """Runs _open_tft_output with _press_file_item giving `presses` in
         turn, and the output window showing once a press gives a list."""
         menu, dedicated = object(), SimpleNamespace(control=lambda name: None,
                                                     recorded=SimpleNamespace(pid=1))
@@ -55,7 +55,7 @@ class TftMenuTest(unittest.TestCase):
         with mock.patch.object(editor, "_only_match", return_value=menu), \
                 mock.patch.object(editor, "_required", side_effect=lambda found, **_: found), \
                 mock.patch.object(editor, "shown_windows", return_value=[]), \
-                mock.patch.object(editor, "_press_tft_item", side_effect=presses) as press, \
+                mock.patch.object(editor, "_press_file_item", side_effect=presses) as press, \
                 mock.patch.object(editor, "_wait_for", side_effect=wait_for):
             try:
                 return editor._open_tft_output(dedicated, None)
@@ -78,10 +78,10 @@ class TftMenuTest(unittest.TestCase):
         menu = DroppingMenu()
         with mock.patch.object(editor, "_MENU_SHOWS", 0.2), \
                 mock.patch.object(editor, "_press_in_background", return_value=[]) as press:
-            self.assertIsNone(editor._press_tft_item(menu))
+            self.assertIsNone(editor._press_file_item(menu, editor._TFT_MENU_ITEM))
             self.assertFalse(menu.is_open)
             press.assert_not_called()
-            self.assertEqual(editor._press_tft_item(menu), [])
+            self.assertEqual(editor._press_file_item(menu, editor._TFT_MENU_ITEM), [])
             press.assert_called_once()
 
 

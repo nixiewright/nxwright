@@ -13,9 +13,9 @@ import unittest
 from tools.editor.dedicated import (Busy, HoldRefused, Lock, Recorded, Shown, check_hold,
                                     editor_name, editor_words, private_memory, process_started,
                                     read_placement, read_recorded, read_shown, records_folder,
-                                    release_hold, renew_hold, standing_hold, starting_placement,
-                                    still_running, take_hold, write_placement, write_recorded,
-                                    write_shown)
+                                    release_hold, renew_hold, runs_program, standing_hold,
+                                    starting_placement, still_running, take_hold,
+                                    write_placement, write_recorded, write_shown)
 
 # Takes the lock and ends without letting it go, as a crashed script would.
 _HOLD_AND_END = """
@@ -68,6 +68,15 @@ class DedicatedTest(unittest.TestCase):
         self.assertTrue(still_running(recorded, lambda pid: 100))
         self.assertFalse(still_running(recorded, lambda pid: 200))
         self.assertFalse(still_running(recorded, lambda pid: None))
+
+    def test_the_recorded_program_is_told_from_another(self):
+        # Windows' paths ignore letter case, and a path may be given relative.
+        folder = Path(tempfile.mkdtemp())
+        program = folder / "Nextion Editor.exe"
+        recorded = Recorded(1234, 100, str(program))
+        self.assertTrue(runs_program(recorded, Path(str(program).upper())))
+        self.assertTrue(runs_program(recorded, Path(os.path.relpath(program))))
+        self.assertFalse(runs_program(recorded, folder / "1.63.3" / "NextionEditor.exe"))
 
     def test_an_ended_process_is_not_running_while_a_handle_to_it_stays_open(self):
         # Windows keeps an ended process's record, its start included, while

@@ -9,7 +9,7 @@ You need Windows and the Nextion Editor 1.68.2.
 - **A dedicated Editor.** The tool starts its own Nextion Editor, called the dedicated Editor, and reuses it on every later run. The tool never touches a Nextion Editor you opened yourself.
 - **No keyboard or mouse input.** The tool drives the dedicated Editor through UI Automation, the Windows interface for controlling another program, and by sending messages to its windows. Your mouse and keyboard are not used.
 - **The Nextion Editor comes to the front** during `open` and `simulate`, so anything you type would go to the Nextion Editor. Click back into your own window before you type. Bringing the Nextion Editor to the front yourself, to watch, does not disturb the tool.
-- **Copies only.** The tool opens a copy of each project, and never saves.
+- **Copies only.** The tool opens a copy of each project. `save` saves that copy, never a project of yours, and writes the result to a new file.
 - **The tool stops rather than guess.** A command stops and reports what it found when it meets a control it cannot drive, the Nextion Editor's unhandled exception dialog, or a window over the simulator.
 - **A command gives up after five minutes without progress,** for example when a call into the Nextion Editor never returns. The command then prints "Timeout" and where each of its threads was, and releases the lock.
 - **The tool never deletes a folder.** A new copy of a project replaces the old copy of the same name. The Nextion Editor locks the project it shows, though, so a copy of that project goes next to the locked one, under a name like `demo (2).HMI`.
@@ -47,7 +47,7 @@ All the Nextion Editors of one Windows user still share the Nextion Editor's own
 
 Name any files your probe writes on a card after yourself, so that they do not clash with anyone else's. Tell the others before you probe the EEPROM or a kept value.
 
-Each Nextion Editor compiles into its own folder. A Nextion Editor can grow to 1.1 GB of memory before `open` restarts it, and that restart is the only time the tool closes one. Close a Nextion Editor's window yourself when you are done with it.
+Each Nextion Editor compiles into its own folder. A Nextion Editor can grow to 1.1 GB of memory before `open` restarts it. Apart from that restart, the tool closes a Nextion Editor only for `save` and `quit`. When you are done with one, run `quit`, or close its window yourself.
 
 ## Setting it up
 
@@ -67,7 +67,7 @@ From then on, run the tool with that environment's Python, called the tool's Pyt
 python -m pip install -r tools/editor/requirements.txt
 ```
 
-The tool looks for the Nextion Editor at the path in the environment variable `NXWRIGHT_EDITOR`, if set, and otherwise where the Nextion Editor's installer recorded it.
+The tool looks for the Nextion Editor at the path in the environment variable `NXWRIGHT_EDITOR`, if set, and otherwise where the Nextion Editor's installer recorded it. `NXWRIGHT_EDITOR` can name an older release unpacked from its zip, such as `NextionEditor.exe` in the folder of `nextion-setup-v1-63-3.zip`. Give each release an Editor name of its own. If the dedicated Editor of that name already runs another program, `open` and the other commands that would reuse it stop, and say to close it first with `quit`.
 
 ## Its commands
 
@@ -82,6 +82,8 @@ python tools/editor/editor.py simulate after.png --touch "press 200,150; release
 python tools/editor/editor.py catalog tools/editor/build/catalog.json
 python tools/editor/editor.py compile
 python tools/editor/editor.py tft tools/editor/build/tft
+python tools/editor/editor.py save tools/editor/build/saved.HMI
+python tools/editor/editor.py quit
 python tools/editor/editor.py status
 python tools/editor/editor.py close-simulator
 python tools/editor/editor.py close-file-dialog
@@ -99,7 +101,7 @@ If another command has the lock, a command waits for it, then gives up and print
 
 - `open` records the copy and its screen size, which `simulate --touch` needs.
 - Once the copy is open, `open` deletes the other `.HMI` files in the work folder, which are copies of earlier projects. A copy the Nextion Editor still has open is kept, as is every file that is not an `.HMI` file.
-- If the project shown has unsaved changes, the Nextion Editor first asks whether to save them. When that project is one of the tool's own copies, `open` answers No, since the tool never saves. Otherwise `open` stops before pressing Open, so that nobody's changes are lost. Any other question stops `open` without an answer.
+- If the project shown has unsaved changes, the Nextion Editor first asks whether to save them. When that project is one of the tool's own copies, `open` answers No, and the changes are dropped. Otherwise `open` stops before pressing Open, so that nobody's changes are lost. Any other question stops `open` without an answer.
 - If the dedicated Editor uses more than 1.1 GB, `open` restarts it first, since the Nextion Editor runs out of memory near 1.4 GB. `open` skips the restart if a window is open over the main window, or if there are unsaved changes.
 
 ### `screenshot <file.png>`
@@ -144,7 +146,7 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 
 ### `catalog <file.json> [--variant <name>] [--known <file.json>]`
 
-`catalog` reads the attributes of every component on every page of the project shown, and of the pages themselves, the same way `attributes` does. The result is written as JSON: `{"variant", "project", "objects": [{"page", "component", "type", "attributes"}]}`, where `type` is the number the project stores for the component's type.
+`catalog` reads the attributes of every component on every page of the project shown, and of the pages themselves, the same way `attributes` does. The result is written as JSON: `{"variant", "project", "editor_version", "objects": [{"page", "component", "type", "attributes"}]}`. `editor_version` is the version that the Nextion Editor's program file gives, such as `1.68.2.3035`, and `type` is the number the project stores for the component's type.
 
 - `--variant` names the catalog, so that merged catalogs can be told apart.
 - `--known` takes an earlier catalog. Rows whose hint that catalog already has for the same type are not clicked, and get no hint.
@@ -167,9 +169,25 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 - The command closes the Explorer window that the Nextion Editor opens on the folder.
 - Your own Nextion Editor shares the dedicated Editor's settings, so it will suggest the same folder the next time you write a TFT file.
 
+### `save <file.HMI>`
+
+`save` saves the project shown with File > Save as, closes the dedicated Editor, and copies the saved project to the file given. The project shown must be a copy that `open` made.
+
+- The command refuses a file that already exists, before it touches the Nextion Editor.
+- The Nextion Editor saves into the work folder, under the copy's name with " (saved)" added.
+- Save As also writes the project's settings into the file the project was opened from. That file is the tool's own copy, so no project of yours changes.
+- The Nextion Editor keeps the file it shows locked against reading until it closes, so the command closes it, as `quit` does, before copying the file.
+
+### `quit`
+
+`quit` closes the dedicated Editor. If the project shown is one of the tool's own copies and has unsaved changes, the Nextion Editor asks whether to save them, and `quit` answers No.
+
+- The command stops, leaving the Nextion Editor open, if the project shown is not one of the tool's copies and has unsaved changes, or if a dialog or message is open. Any other question the Nextion Editor asks as it closes stops the command too, unanswered.
+- `quit` never starts a Nextion Editor.
+
 ### `status`
 
-`status` reports whether the dedicated Editor is running, which project it shows, and who has a hold on it, if anyone.
+`status` reports whether the dedicated Editor is running, which Nextion Editor program it runs, with the version the program's file gives, which project it shows, and who has a hold on it, if anyone.
 
 ### `hold <name> [--minutes N]` and `release <name>`
 
@@ -187,7 +205,7 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 
 ### `close-file-dialog`
 
-`close-file-dialog` cancels a file dialog left open in the dedicated Editor by an `open` that was stopped from outside, for example by closing its terminal. While a file dialog is open, every other command stops on it. If `open` fails after its file dialog appears, `open` cancels the dialog itself. The command never starts a Nextion Editor.
+`close-file-dialog` cancels a file dialog left open in the dedicated Editor by an `open` or a `save` that was stopped from outside, for example by closing its terminal. While a file dialog is open, every other command stops on it. If `open` or `save` fails after its file dialog appears, the command cancels the dialog itself. The command never starts a Nextion Editor.
 
 ### `close-message`
 

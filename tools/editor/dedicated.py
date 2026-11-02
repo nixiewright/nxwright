@@ -248,6 +248,13 @@ def _clock(seconds: float) -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(seconds))
 
 
+def runs_program(recorded: Recorded, program: Path) -> bool:
+    """Whether the recorded process runs `program`. Windows' paths ignore
+    letter case, and either path may be relative."""
+    return (os.path.normcase(os.path.abspath(recorded.program))
+            == os.path.normcase(os.path.abspath(str(program))))
+
+
 def still_running(recorded: Recorded, started_of=None) -> bool:
     """Whether the recorded process still runs: its ID names a process that
     started when it did. `started_of(pid)` is process_started unless given."""

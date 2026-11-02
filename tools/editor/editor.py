@@ -11,6 +11,8 @@ and a command that stops, say which.
     python tools/editor/editor.py compile
     python tools/editor/editor.py tft <folder>
     python tools/editor/editor.py catalog <file.json> [--variant <name>] [--known <file.json>]
+    python tools/editor/editor.py save <file.HMI>
+    python tools/editor/editor.py quit
     python tools/editor/editor.py status
     python tools/editor/editor.py hold <name> [--minutes <n>]
     python tools/editor/editor.py release <name>
@@ -54,6 +56,7 @@ from pywinauto.uia_defines import IUIA, NoPatternInterfaceError  # noqa: E402
 from pywinauto.uia_element_info import UIAElementInfo  # noqa: E402
 import pywintypes  # noqa: E402
 from _ctypes import COMError  # noqa: E402
+import win32api  # noqa: E402
 import win32com.client  # noqa: E402
 import win32con  # noqa: E402
 import win32gui  # noqa: E402
@@ -67,9 +70,9 @@ from tools.editor.dedicated import (HOLD_MINUTES, MOST_HOLD_MINUTES, Busy,  # no
                                     HoldRefused, Lock, Recorded, Shown, check_hold,
                                     editor_name, editor_words, private_memory,
                                     process_started, read_placement, read_recorded, read_shown,
-                                    records_folder, release_hold, renew_hold, standing_hold,
-                                    starting_placement, still_running, take_hold,
-                                    write_placement, write_recorded, write_shown)
+                                    records_folder, release_hold, renew_hold, runs_program,
+                                    standing_hold, starting_placement, still_running,
+                                    take_hold, write_placement, write_recorded, write_shown)
 from tools.editor.editor_windows import (DIALOG_CLASS, MESSAGE_FORM,  # noqa: E402
                                          PROGRESS_FORM, TFT_OUTPUT_FORM, CompileWatch,
                                          NotAnswered, class_name, compiled_file_size,
@@ -140,8 +143,11 @@ _UNINSTALL_KEYS = (r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Unins
 # A window's picture drawn as the screen shows it, DirectComposition included.
 _PW_RENDERFULLCONTENT = 2
 # The control IDs of a Windows file dialog's file name box, its Open button,
-# and its Cancel button (editor_windows.inner_window).
+# and its Cancel button (editor_windows.inner_window). The Save As dialog
+# has its file name box at another ID, and its Save button at the Open
+# button's.
 _FILE_NAME_BOX, _OPEN_BUTTON, _CANCEL_BUTTON = 1148, 1, 2
+_SAVE_AS_NAME_BOX = 1001
 # The File menu's item that writes the project's TFT file.
 _TFT_MENU_ITEM = "TFT file output"
 # In the window that item shows (editor_windows.TFT_OUTPUT_FORM): the box of
@@ -150,14 +156,16 @@ _TFT_MENU_ITEM = "TFT file output"
 _TFT_FOLDER_BOX = "1001"
 _TFT_OUTPUT_BUTTON = "buttonX2"
 _TFT_FILE_NAME = "label1"
-# How long the TFT output window may take to show once its menu item is
-# pressed, in seconds, before the press is taken for lost; how long the File
-# menu may take to list that item once pressed, before that press is taken
-# for lost; and how many times File and the item are pressed in all
-# (_open_tft_output).
+# The File menu's item that saves the project as a new file.
+_SAVE_AS_MENU_ITEM = "Save as"
+# How long the window of a File menu item, such as the TFT output window,
+# may take to show once the item is pressed, in seconds, before the press is
+# taken for lost; how long the File menu may take to list the item once
+# pressed, before that press is taken for lost; and how many times File and
+# the item are pressed in all (_open_file_menu_window).
 _PRESS_SHOWS = 5
 _MENU_SHOWS = 5
-_TFT_PRESSES = 3
+_FILE_ITEM_PRESSES = 3
 # How long the Editor may take to open an Explorer window on the folder once
 # it has written the TFT file, in seconds. It took about 2 s.
 _EXPLORER_WAIT = 10
@@ -224,9 +232,17 @@ def main(arguments=None) -> int:
                          help="the name the catalog goes by once merged with others")
     listing.add_argument("--known", type=Path, metavar="CATALOG",
                          help="an earlier catalog: the rows whose hint it holds are not clicked")
+    saving = commands.add_parser("save", parents=[holding],
+                                 help="save the project shown, a copy this tool opened, "
+                                 "through File > Save as, close the dedicated Editor, and copy "
+                                 "the saved file to a file that does not exist yet")
+    saving.add_argument("output", type=Path)
+    commands.add_parser("quit", parents=[holding],
+                        help="close the dedicated Editor, dropping changes not saved to a copy "
+                        "this tool opened")
     commands.add_parser("status", parents=[holding],
-                        help="say whether the dedicated Editor runs, what it shows, and who "
-                        "holds it")
+                        help="say whether the dedicated Editor runs, which program and version, "
+                        "what it shows, and who holds it")
     commands.add_parser("close-simulator", parents=[holding],
                         help="close a simulator left open in the dedicated Editor")
     commands.add_parser("close-file-dialog", parents=[holding],
@@ -310,7 +326,9 @@ def main(arguments=None) -> int:
 def _run_on_dedicated_editor(options, folder: Path):
     """Runs the command `options` names, but for status, hold, and release,
     on the dedicated Editor, started if need be, under the lock. close-simulator,
-    close-file-dialog, and close-message start no Editor."""
+    close-file-dialog, close-message, and quit start no Editor. Every other
+    command refuses an Editor running another program than the one asked
+    for (_refuse_another_program)."""
     if options.command == "close-simulator":
         print(close_simulator(folder))
         return
@@ -320,6 +338,11 @@ def _run_on_dedicated_editor(options, folder: Path):
     if options.command == "close-message":
         print(close_message(folder))
         return
+    if options.command == "quit":
+        print(quit_editor(folder))
+        return
+    if options.command == "save":
+        _refuse_existing_output(options.output)
     # Before attaching to the Editor, which a fresh one replaces. A path
     # that is no file is refused by open_project, before the Editor is
     # touched.
@@ -330,19 +353,32 @@ def _run_on_dedicated_editor(options, folder: Path):
                   "the project" % (held // 2 ** 20))
     editor = dedicated_editor(folder)
     try:
-        _run_command(options, editor, folder)
+        saved = _run_command(options, editor, folder)
     finally:
         # A fresh Editor takes the placement recorded once the command is
         # done, even one that stopped: given then, it held
         # (give_back_placement).
         if editor.fresh:
             give_back_placement(editor, folder)
+    if options.command == "save":
+        # The Editor keeps the saved file locked until it closes, and closes
+        # only once no element of it is held, as `editor` holds some.
+        del editor
+        try:
+            print(quit_editor(folder))
+        except EditorError as error:
+            raise EditorError("%s; the project is saved at %s" % (error, saved)) from None
+        _copy_saved(saved, options.output)
+        print("Saved %s" % options.output)
 
 
 def _run_command(options, editor: "DedicatedEditor", folder: Path):
     """Runs the command `options` names, but for status, close-simulator,
-    close-file-dialog, and close-message, on the dedicated Editor `editor`,
-    printing what it gives."""
+    close-file-dialog, close-message, and quit, on the dedicated Editor
+    `editor`, printing what it gives. For save, returns the saved copy's
+    path, which the caller copies once the Editor has closed."""
+    if options.command == "save":
+        return save_project(editor, folder, options.output)
     if options.command == "open":
         print("Opened %s" % open_project(editor, folder, options.project))
     elif options.command == "attributes":
@@ -492,6 +528,60 @@ def close_if_full(folder: Path):
     return held
 
 
+def quit_editor(folder: Path) -> str:
+    """Closes the dedicated Editor whose records are in `folder`, and says
+    what it did. It starts no Editor. Changes not saved to one of the
+    tool's own copies are dropped: the Editor's question to save them is
+    answered No, as `open` answers it. It stops, leaving the Editor as it
+    is, on changes not saved to any other project, on a dialog or message
+    already open, and on any other question the Editor asks as it closes.
+
+    The Editor ends only once no UI Automation client holds any of its
+    elements (close_if_full), so the elements read here go out of use
+    before the close is asked for, and each look while it closes reads its
+    windows afresh."""
+    recorded = read_recorded(folder)
+    if recorded is None or not still_running(recorded):
+        return "The dedicated Editor is not running."
+    handle, unsaved = _quittable_main_window(recorded, folder)
+    gc.collect()
+    write_placement(folder, win32gui.GetWindowPlacement(handle))
+    win32gui.PostMessage(handle, win32con.WM_CLOSE, 0, 0)
+    answered = None
+    deadline = time.monotonic() + CLOSING_WAIT
+    while still_running(recorded):
+        if time.monotonic() > deadline:
+            raise EditorError("waited %d s for the Editor to close" % CLOSING_WAIT)
+        watchdog.progress()
+        forms = list(windows_matching(owned_windows(recorded.pid, handle), _wrapped,
+                                      lambda form: form.element_info.automation_id
+                                      == MESSAGE_FORM))
+        answered = _answered_save_question(forms, unsaved, answered)
+        del forms
+        gc.collect()
+        time.sleep(_LOOK_PAUSE)
+    return "Closed the dedicated Editor%s." % (", dropping the changes not saved to its copy"
+                                                if unsaved else "")
+
+
+def _quittable_main_window(recorded: Recorded, folder: Path) -> tuple:
+    """Returns (the handle of the main window of the Editor `recorded`,
+    whether its project has changes not saved), once nothing stops
+    quit_editor: no dialog or message open, and no changes not saved but
+    to one of the tool's own copies, in `folder`'s work folder."""
+    editor = DedicatedEditor(recorded)
+    editor.stop_on_crash()
+    main = editor.main_window()
+    _stop_on_dialog(main, "before quitting")
+    unsaved = _toolbar_button(editor, "Save").is_enabled()
+    shown = shown_project(main.window_text())
+    if unsaved and not is_work_copy(shown, folder / "work"):
+        raise EditorError("the project shown, %s, has changes not saved, and is not a copy "
+                          "this tool opened: save or drop them in the Editor first"
+                          % (shown or "which the Editor's title does not name"))
+    return main.handle, unsaved
+
+
 def _closable_main_window(recorded: Recorded):
     """Returns the handle of the main window of the Editor `recorded` when
     nothing is in the way of closing it (close_if_full), else None. A window
@@ -514,6 +604,8 @@ def dedicated_editor(folder: Path) -> DedicatedEditor:
     if fresh:
         recorded = _start_editor()
         write_recorded(folder, recorded)
+    else:
+        _refuse_another_program(recorded)
     editor = DedicatedEditor(recorded, fresh)
     handle = editor.main_window().handle
     if not fresh:
@@ -521,6 +613,29 @@ def dedicated_editor(folder: Path) -> DedicatedEditor:
         if seen != read_placement(folder):
             write_placement(folder, seen)
     return editor
+
+
+def _refuse_another_program(recorded: Recorded):
+    """Raises EditorError when the dedicated Editor running, `recorded`,
+    runs another program than the one the next start would run: the one
+    NXWRIGHT_EDITOR names, or else the one the registry gives
+    (editor_program). Otherwise a command would drive another release of
+    the Editor than the one asked for, as when two releases share an
+    Editor name."""
+    try:
+        program = editor_program()
+    except EditorError as error:
+        # As when NXWRIGHT_EDITOR named the program the Editor was started
+        # with, and is no longer set.
+        raise EditorError("the dedicated Editor runs %s, but %s. To go on driving it, set "
+                          "NXWRIGHT_EDITOR to %s" % (recorded.program, error,
+                                                     recorded.program)) from None
+    if not runs_program(recorded, program):
+        raise EditorError("the dedicated Editor runs %s, but %s %s; close it first with "
+                          "`editor.py quit`"
+                          % (recorded.program, "NXWRIGHT_EDITOR names"
+                             if os.environ.get("NXWRIGHT_EDITOR")
+                             else "the Nextion Editor installed is", program))
 
 
 def give_back_placement(editor: DedicatedEditor, folder: Path):
@@ -606,8 +721,9 @@ def open_project(editor: DedicatedEditor, folder: Path, project: Path) -> Path:
     main = editor.main_window()
     _stop_on_dialog(main, "before pressing Open")
     # Changes not saved make the Editor ask to save them before its file
-    # dialog shows (editor_windows.py). The tool never saves: it drops
-    # changes to a copy of its own, and leaves anyone else's to them.
+    # dialog shows (editor_windows.py). The tool saves only when `save`
+    # asks: here it drops changes to a copy of its own, and leaves anyone
+    # else's to them.
     unsaved = _toolbar_button(editor, "Save").is_enabled()
     shown = shown_project(main.window_text())
     if unsaved and not is_work_copy(shown, work):
@@ -722,25 +838,36 @@ def _wait_for_file_dialog(main, unsaved: bool, pressing_failed: list):
         file_dialogs = _dialogs(main, _is_file_dialog)
         if file_dialogs:
             return file_dialogs[0]
-        for form in _message_forms(main):
-            if form.handle == answered:
-                continue            # still closing
-            names = {part.element_info.name for part in form.descendants()
-                     if part.element_info.control_type in ("Pane", "Text")}
-            buttons = {button.element_info.name: button
-                       for button in form.descendants(control_type="Button")}
-            if unsaved and answered is None and is_save_question(names, set(buttons)):
-                # No opens the file dialog, which is modal: pressed in the
-                # background, as Open is.
-                _press_in_background(buttons["No"])
-                answered = form.handle
-            else:
-                raise EditorError("the Editor asks %r: %s; it is left unanswered"
-                                  % (form.element_info.name, _words_of(form)))
+        answered = _answered_save_question(_message_forms(main), unsaved, answered)
         time.sleep(_LOOK_PAUSE)
     raise EditorError("waited %d s for the file dialog%s" % (
         DIALOG_WAIT, "; pressing Open failed: %r" % pressing_failed[0]
         if pressing_failed else ""))
+
+
+def _answered_save_question(forms: list, unsaved: bool, answered):
+    """Answers No to the Editor's question to save, among its message
+    windows `forms`, once, when there were changes not saved, `unsaved`.
+    Returns the handle of the window it answered, or else `answered`, the
+    one answered before, if any. That window is passed over while it
+    closes. Raises EditorError, quoting it, for any other message, which
+    is left unanswered."""
+    for form in forms:
+        if form.handle == answered:
+            continue            # still closing
+        names = {part.element_info.name for part in form.descendants()
+                 if part.element_info.control_type in ("Pane", "Text")}
+        buttons = {button.element_info.name: button
+                   for button in form.descendants(control_type="Button")}
+        if unsaved and answered is None and is_save_question(names, set(buttons)):
+            # No may show a modal window, such as the file dialog: pressed
+            # in the background, as Open is.
+            _press_in_background(buttons["No"])
+            answered = form.handle
+        else:
+            raise EditorError("the Editor asks %r: %s; it is left unanswered"
+                              % (form.element_info.name, _words_of(form)))
+    return answered
 
 
 def _screen_size(project: Path):
@@ -838,6 +965,86 @@ def _opened(editor: DedicatedEditor, copy: Path) -> bool:
     return False
 
 
+def save_project(editor: DedicatedEditor, folder: Path, output: Path) -> Path:
+    """Saves the project shown, one of the tool's own copies, as a new file
+    in the work folder of the dedicated Editor whose records are in
+    `folder`, through File > Save as, and returns the new file's path. A
+    project the tool opened has no changes not saved, and the toolbar's
+    Save is enabled only while it has some, so Save As writes the file.
+    The Editor then shows the new file, and keeps it locked against
+    reading until it closes: the caller closes the Editor (quit_editor),
+    then copies the file to `output` (_copy_saved).
+
+    Raises EditorError when `output` exists already, before the Editor is
+    touched. Raises it too when the project shown is not one of the tool's
+    copies, and when the Editor does not show the new file in time. Save As
+    also writes the project's settings into the file it was opened from
+    (docs/format.md), which here is the tool's own copy."""
+    _refuse_existing_output(output)
+    editor.stop_on_crash()
+    main = editor.main_window()
+    _stop_on_dialog(main, "before saving")
+    work = folder / "work"
+    shown = shown_project(main.window_text())
+    if not is_work_copy(shown, work):
+        raise EditorError("the project shown, %s, is not a copy this tool opened; open the "
+                          "project first" % (shown or "none"))
+    saved = _saved_name(work, Path(shown))
+    dialog = _open_file_menu_window(editor, _SAVE_AS_MENU_ITEM, _is_file_dialog,
+                                    "the Save As dialog")
+
+    def press_save():
+        # A press the busy Editor answered with an error may still have
+        # taken: once the dialog has closed, Save is not pressed again.
+        if not _is_file_dialog(dialog):
+            return
+        try:
+            _file_dialog_control(dialog, "Button", _OPEN_BUTTON).invoke()
+        except ElementNotFoundError:
+            if _is_file_dialog(dialog):
+                raise       # still up, without its Save button
+    try:
+        _retried_while_busy(lambda: _file_dialog_control(dialog, "Edit", _SAVE_AS_NAME_BOX)
+                            .set_edit_text(str(saved)))
+        _retried_while_busy(press_save)
+        _wait_for(lambda: _opened(editor, saved), OPENING_WAIT,
+                  "the project to be saved as %s" % saved)
+    except Exception:
+        _cancel_left_dialog(dialog)
+        raise
+    return saved
+
+
+def _refuse_existing_output(output: Path):
+    """Raises EditorError when `output`, where `save` copies the saved
+    project, exists already. The command checks it before it starts or
+    attaches to an Editor (_run_on_dedicated_editor)."""
+    if Path(output).exists():
+        raise EditorError("%s exists already; nothing was saved" % output)
+
+
+def _saved_name(work: Path, shown: Path) -> Path:
+    """Returns the path in the work folder `work` that the project shown,
+    `shown`, is saved as: its name with " (saved)" added, or " (saved 2)"
+    and so on while that file exists."""
+    for number in range(1, 100):
+        path = work / ("%s (saved%s).HMI" % (shown.stem, "" if number == 1 else " %d" % number))
+        if not path.exists():
+            return path
+    raise EditorError("no name is free in %s to save %s as" % (work, shown.name))
+
+
+def _copy_saved(saved: Path, output: Path):
+    """Copies the saved project `saved` to `output`, refusing a file that
+    exists already, as one written since save_project checked."""
+    try:
+        with open(output, "xb") as file:
+            file.write(saved.read_bytes())
+    except FileExistsError:
+        raise EditorError("%s exists already; the saved project is left at %s"
+                          % (output, saved)) from None
+
+
 def _stop_on_dialog(main, when: str):
     """Raises EditorError when a dialog of the Editor's, whatever window
     owns it (_dialogs), or a message of the Editor's over the main window is
@@ -880,8 +1087,10 @@ def _cancel_file_dialog(dialog):
 
 
 def _is_file_dialog(dialog) -> bool:
-    """Whether `dialog` is a file dialog: it holds a file name box."""
-    return inner_window(dialog.handle, "Edit", _FILE_NAME_BOX) is not None
+    """Whether `dialog` is a file dialog, Open or Save As: it holds a file
+    name box."""
+    return any(inner_window(dialog.handle, "Edit", box) is not None
+               for box in (_FILE_NAME_BOX, _SAVE_AS_NAME_BOX))
 
 
 def _file_dialog_control(dialog, window_class: str, control_id: int):
@@ -1249,7 +1458,8 @@ def catalog(editor: DedicatedEditor, variant: str, known: set) -> dict:
     """Reads every component of every page of the project shown, the pages
     themselves included, as `attributes` does, into a catalog named
     `variant` (catalog.py), which also names the project's file, from the
-    main window's title. `known` holds (type name, attribute) pairs whose
+    main window's title, and the Editor program's version
+    (program_version). `known` holds (type name, attribute) pairs whose
     hint is read already: their rows are not clicked."""
     editor.stop_on_crash()
     main = editor.main_window()
@@ -1279,7 +1489,7 @@ def catalog(editor: DedicatedEditor, variant: str, known: set) -> dict:
             print("Read %s %s" % (page, component), file=sys.stderr, flush=True)
     title = main.window_text()
     return {"variant": variant, "project": title[title.index("(") + 1:title.rindex(")")],
-            "objects": objects}
+            "editor_version": program_version(editor.recorded.program), "objects": objects}
 
 
 def _grid_type(editor: DedicatedEditor) -> int:
@@ -1644,17 +1854,28 @@ def write_tft(editor: DedicatedEditor, folder: Path) -> tuple:
 
 
 def _open_tft_output(editor: DedicatedEditor, main):
-    """Shows the window of File > TFT file output, and returns it. The File
-    menu lists its items only once open, so it is opened first. Its item is
-    pressed in the background, as the window it shows is modal.
+    """Shows the window of File > TFT file output, and returns it
+    (_open_file_menu_window)."""
+    return _open_file_menu_window(
+        editor, _TFT_MENU_ITEM,
+        lambda window: window.element_info.automation_id == TFT_OUTPUT_FORM,
+        "the TFT output window")
+
+
+def _open_file_menu_window(editor: DedicatedEditor, item: str, matches, what: str):
+    """Presses the File menu's `item`, and returns the window it shows, the
+    first new window of the Editor's for which `matches` holds, `what` in
+    the errors. The File menu lists its items only once open, so it is
+    opened first. The item is pressed in the background, as the window it
+    shows is modal.
 
     Just after `open`, while the Editor is still busy with the project, a
     press can be lost. A lost press of the item closes the menu, and no
     window shows; a lost press of File opens no menu, and no item shows. So
-    when no item shows within _MENU_SHOWS (_press_tft_item), or no window
+    when no item shows within _MENU_SHOWS (_press_file_item), or no window
     within _PRESS_SHOWS while the main window stays enabled, as no window
     of the Editor's is up, File and its item are pressed again,
-    _TFT_PRESSES times in all."""
+    _FILE_ITEM_PRESSES times in all."""
     file_menu = _required(_retried_while_busy(lambda: _only_match(
         editor.control(_MENU_BAR), "children", name="File", control_type="MenuItem")),
                           title="File", control_type="MenuItem")
@@ -1663,48 +1884,46 @@ def _open_tft_output(editor: DedicatedEditor, main):
     def form():
         new = [handle for handle in shown_windows(editor.recorded.pid)
                if handle not in shown_before]
-        return next(windows_matching(new, _wrapped, lambda window:
-                                     window.element_info.automation_id == TFT_OUTPUT_FORM),
-                    None)
-    for _ in range(_TFT_PRESSES):
-        pressing_failed = _press_tft_item(file_menu)
+        return next(windows_matching(new, _wrapped, matches), None)
+    for _ in range(_FILE_ITEM_PRESSES):
+        pressing_failed = _press_file_item(file_menu, item)
         if pressing_failed is None:
             continue        # the press of File was lost
         try:
-            return _wait_for(form, _PRESS_SHOWS, "the TFT output window")
+            return _wait_for(form, _PRESS_SHOWS, what)
         except EditorError:
             if not win32gui.IsWindowEnabled(editor.main_handle):
                 break       # a window of the Editor's is up: the press took
     else:
         if pressing_failed is None:
             raise EditorError("pressed File %d times, and its menu did not list %s"
-                              % (_TFT_PRESSES, _TFT_MENU_ITEM))
+                              % (_FILE_ITEM_PRESSES, item))
         raise EditorError("pressed File > %s %d times, and its window did not show%s"
-                          % (_TFT_MENU_ITEM, _TFT_PRESSES, "; pressing it failed: %r"
+                          % (item, _FILE_ITEM_PRESSES, "; pressing it failed: %r"
                              % pressing_failed[0] if pressing_failed else ""))
     try:
-        return _wait_for(form, DIALOG_WAIT, "the TFT output window")
+        return _wait_for(form, DIALOG_WAIT, what)
     except EditorError as error:
         if pressing_failed:
             raise EditorError("%s; pressing %s failed: %r"
-                              % (error, _TFT_MENU_ITEM, pressing_failed[0])) from None
+                              % (error, item, pressing_failed[0])) from None
         raise
 
 
-def _press_tft_item(file_menu):
-    """Opens the File menu, unless it is open, and presses its TFT file
-    output item in the background. Returns the list where the press puts
-    what went wrong (_press_in_background), or None when the menu lists no
-    such item within _MENU_SHOWS: the press that opens it was lost, and
-    the menu is left closed for the next press. A press only late, whose
-    menu opens after that wait, may make the next press close it again;
-    the press after that opens it, within _open_tft_output's presses."""
+def _press_file_item(file_menu, name: str):
+    """Opens the File menu, unless it is open, and presses its item `name`
+    in the background. Returns the list where the press puts what went
+    wrong (_press_in_background), or None when the menu lists no such item
+    within _MENU_SHOWS: the press that opens it was lost, and the menu is
+    left closed for the next press. A press only late, whose menu opens
+    after that wait, may make the next press close it again; the press
+    after that opens it, within _open_file_menu_window's presses."""
     if not file_menu.children():
         file_menu.invoke()
     try:
         item = _wait_for(lambda: next((child for child in file_menu.children()
-                                       if child.element_info.name == _TFT_MENU_ITEM), None),
-                         _MENU_SHOWS, "the File menu's %s" % _TFT_MENU_ITEM)
+                                       if child.element_info.name == name), None),
+                         _MENU_SHOWS, "the File menu's %s" % name)
     except EditorError:
         # Open, though without the item: pressed again, it closes.
         if file_menu.children():
@@ -2085,7 +2304,27 @@ def status(folder: Path, name) -> str:
     if recorded is None or not still_running(recorded):
         return "Not running: %s; the next command starts it." % editor_words(name)
     title = DedicatedEditor(recorded).main_window().window_text()
-    return "Running: %s, as process %d: %s" % (editor_words(name), recorded.pid, title)
+    return "Running: %s, as process %d, %s: %s" % (editor_words(name), recorded.pid,
+                                                   _program_words(recorded.program), title)
+
+
+def _program_words(program: str) -> str:
+    """Names the Editor program `program` with its version, as its file
+    gives it, such as "the Nextion Editor 1.68.2.3035 at C:\\...\\Nextion
+    Editor.exe"; without one when the file gives none."""
+    version = program_version(program)
+    return "the Nextion Editor %sat %s" % ("" if version is None else version + " ", program)
+
+
+def program_version(program: str):
+    """Returns the version that the Editor program `program`'s file gives,
+    such as "1.68.2.3035", or None when the file is missing or gives none."""
+    try:
+        info = win32api.GetFileVersionInfo(str(program), "\\")
+    except pywintypes.error:
+        return None
+    high, low = info["FileVersionMS"], info["FileVersionLS"]
+    return "%d.%d.%d.%d" % (high >> 16, high & 0xFFFF, low >> 16, low & 0xFFFF)
 
 
 if __name__ == "__main__":

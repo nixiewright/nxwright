@@ -5,7 +5,8 @@ imports no pywinauto, so that its tests run with nxwright's own Python.
 
 A catalog, as `editor.py catalog` writes it, is JSON:
 
-    {"variant": "defaults",
+    {"variant": "defaults", "project": "C:\\...\\demo.HMI",
+     "editor_version": "1.68.2.3035",
      "objects": [{"page": "page0", "component": "t0", "type": 116,
                   "attributes": [{"name": "sta", "value": "solid color",
                                   "hint": "...", "code_can_change": true}]}]}
