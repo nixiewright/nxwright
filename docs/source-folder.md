@@ -176,7 +176,13 @@ The `[page]` table may also contain:
 - which of the Nextion Editor's system pages it is: `system_page = "keyboard"` for the full keyboard, `"keypad"` for the numeric keypad, `"speed-dial"`, or `"chinese-input"`;
 - that the page is locked: `locked = true`, and `lock_password_hash`, its lock's password, if any. It is given as `app.toml` gives the project's password: the hash that `nxwright password-hash` prints, never the password itself.
 
-The build writes the rest of the page's header in the Nextion Editor's own form, the folder's encoding included ([format.md](format.md)). Extracting stops at a page whose header is not in one of the forms nxwright knows.
+A page header's value that nxwright has not seen keeps its own key, so that the build writes it back as it was. Extract warns of each one.
+
+- A system page mark nxwright does not know is given as its number, such as `system_page = 5`.
+- A lock of another value than locked or unlocked is given as its number, such as `locked = 2`.
+- Two header bytes that every page seen has as `4f 21` are given as their stored bytes when they differ, such as `header_21 = { bytes = "4f22" }`.
+
+The build writes the rest of the page's header in the Nextion Editor's own form, the folder's encoding included ([format.md](format.md)). A page whose header is in a form nxwright has not seen is extracted, with a warning, and the build writes the current form, as the Nextion Editor does whenever it writes a page.
 
 For what the build refuses in page files, such as names, lengths, and values, see [build-rules.md](build-rules.md#page-files).
 

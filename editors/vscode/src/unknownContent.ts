@@ -24,8 +24,11 @@ export type ExtractChoice =
   | { kind: "refuse"; message: string };
 
 // The sorts the list gives, of content the next build may lose, and of
-// content the source folder cannot keep. Content kept exactly needs no
-// question: the extract task's output notes it.
+// content the source folder cannot keep. Content kept exactly, and content
+// the next build writes as nxwright knows it ("written otherwise"), need no
+// question: the extract task's output notes them. Any other sort is taken so
+// too, as a newer nxwright may give one. "cannot be kept" stays for older
+// versions of nxwright, and for what newer ones still cannot keep.
 const MAY_BE_LOST = "may be lost";
 const CANNOT_BE_KEPT = "cannot be kept";
 

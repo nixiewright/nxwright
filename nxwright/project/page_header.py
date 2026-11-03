@@ -14,12 +14,19 @@ user locked and unlocked in the Editor:
            can reset one to its stock version; a project may change them.
   +40..43  01 44 02 and the project's character encoding, as the Editor
            writes them whenever it writes a page. A page it has not written
-           since it was updated holds an older form, 01 43 01 00.
+           since it was updated holds an older form, 01 43 01 00 or
+           01 44 01 00. The second was seen in 32 of the 38 pages of a
+           project for an NSPanel screen, whose other 6 had the newer form.
   +44..55  zero on every page
+
+A value of bytes 16 to 23 not seen is kept, in its own field, so that the
+build writes it back: a system page mark or a lock as its number, and bytes
+21 and 22 as they are. The build writes bytes 40 to 55 in the current form,
+whatever the page had, as the Editor does. The finder of unknown content
+(source/unknown_content.py) tells the user of each such value.
 """
 from dataclasses import dataclass
 
-from nxwright import NxwrightError
 from nxwright.project.page_block import PageBlock
 
 # Byte 23 of the system pages, by the name a page file gives them: the stock
@@ -29,26 +36,31 @@ from nxwright.project.page_block import PageBlock
 SYSTEM_PAGES = {"keyboard": 1, "keypad": 2, "speed-dial": 3, "chinese-input": 4}
 # Bytes 16 to 19 of a page whose lock has no password.
 NO_LOCK_PASSWORD = bytes(4)
-_HEADER_21 = bytes.fromhex("4f21")
+# Bytes 21 and 22, as every page seen has them.
+HEADER_21 = bytes.fromhex("4f21")
 _HEADER_40_START = bytes.fromhex("014402")
-_OLDER_HEADER_40_START = bytes.fromhex("01430100")
+_OLDER_HEADER_40_STARTS = (bytes.fromhex("01430100"), bytes.fromhex("01440100"))
 _HEADER_40_END = bytes(12)
 
 
 @dataclass(frozen=True)
 class PageHeader:
     """What a page's header bytes 16 to 23 say: the system page it is, a
-    name of SYSTEM_PAGES, or None; whether it is locked; and its lock's
-    password, as 4 bytes of password_hash, or NO_LOCK_PASSWORD."""
-    system_page: str = None
-    locked: bool = False
+    name of SYSTEM_PAGES, the number of a mark not known, or None; whether it
+    is locked, or the number of a lock value other than 0 and 1; its lock's
+    password, as 4 bytes of password_hash, or NO_LOCK_PASSWORD; and its
+    bytes 21 and 22."""
+    system_page: object = None
+    locked: object = False
     lock_password_hash: bytes = NO_LOCK_PASSWORD
+    header_21: bytes = HEADER_21
 
 
 def header_16(header: PageHeader) -> bytes:
     """Returns the header bytes 16 to 23 of a page."""
-    return (header.lock_password_hash + bytes([int(header.locked)]) + _HEADER_21
-            + bytes([SYSTEM_PAGES.get(header.system_page, 0)]))
+    mark = SYSTEM_PAGES.get(header.system_page, header.system_page or 0)
+    return (header.lock_password_hash + bytes([int(header.locked)]) + header.header_21
+            + bytes([mark]))
 
 
 def header_40(encoding_code: int) -> bytes:
@@ -57,16 +69,23 @@ def header_40(encoding_code: int) -> bytes:
     return _HEADER_40_START + bytes([encoding_code]) + _HEADER_40_END
 
 
+def header_40_form_known(field_40: bytes) -> bool:
+    """Whether a page's header bytes 40 to 43, the start of `field_40`, are
+    in a form the Editor was seen to write."""
+    return field_40[:3] == _HEADER_40_START or field_40[:4] in _OLDER_HEADER_40_STARTS
+
+
+def header_44_known(field_40: bytes) -> bool:
+    """Whether a page's header bytes 44 to 55, the rest of `field_40`, are
+    the zeros every page seen has."""
+    return field_40[4:] == _HEADER_40_END
+
+
 def page_header_of(page: PageBlock) -> PageHeader:
-    """Returns what `page`'s header says. Raises NxwrightError when its header
-    is not one of the forms the Editor was seen to write, since a page file
-    could not keep it."""
+    """Returns what `page`'s header bytes 16 to 23 say, values not seen
+    among them."""
     marks = {number: name for name, number in SYSTEM_PAGES.items()}
-    field_16, field_40 = page.unknown_16, page.unknown_40
-    known_16 = field_16[4] in (0, 1) and field_16[5:7] == _HEADER_21 and field_16[7] in (0, *marks)
-    known_40 = (field_40[:3] == _HEADER_40_START or field_40[:4] == _OLDER_HEADER_40_START) \
-        and field_40[4:] == _HEADER_40_END
-    if not (known_16 and known_40):
-        raise NxwrightError("page %s: its header (%s, %s) is not one nxwright knows, so a page "
-                            "file cannot keep it" % (page.name, field_16.hex(), field_40.hex()))
-    return PageHeader(marks.get(field_16[7]), bool(field_16[4]), bytes(field_16[:4]))
+    field_16 = page.unknown_16
+    mark, lock = field_16[7], field_16[4]
+    return PageHeader(marks.get(mark, mark or None), bool(lock) if lock in (0, 1) else lock,
+                      bytes(field_16[:4]), bytes(field_16[5:7]))

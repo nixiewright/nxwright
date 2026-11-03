@@ -2,16 +2,21 @@
 another kind, a manifest entry or header byte it does not expect, a
 picture's header the build would write otherwise, a resized picture's
 source it cannot keep, a screen model or a character encoding it has no
-entry for, and a component type or an attribute its tables do not name. A
-newer Nextion Editor may write any of them.
+entry for, a page header's value or form it has not seen, a page whose text
+form does not give back its bytes, and a component type or an attribute its
+tables do not name. A newer Nextion Editor may write any of them.
 
-Each is sorted one of three ways, by what the source folder does with it:
+Each is sorted one of four ways, by what the source folder does with it:
   - kept exactly: the source folder keeps it, and the build writes it back
     unchanged, as a component type nxwright does not know;
+  - written otherwise: the source folder keeps it in a form nxwright knows,
+    and the build writes that form, as the current page header in place of
+    one not seen. Extract warns of it, and goes on without a question;
   - may be lost: the source folder does not keep it, so the build leaves it
-    out or writes the value nxwright knows instead;
+    out or writes the value nxwright knows instead, and what it held is
+    lost. Extract asks first;
   - cannot be kept: the source folder cannot keep the project around it
-    without guessing.
+    without guessing. Extract refuses the project.
 
 Extract, the dump command, and the report all use this module, so they
 agree. Its checks of a page's attributes are the tests the page files'
@@ -24,9 +29,11 @@ from nxwright import NxwrightError
 from nxwright.project.container import HmiContainer, numbered_block
 from nxwright.project.device_settings import ENCODINGS, HEADER_SIZE
 from nxwright.project.dump_folder import dump_header_bytes, dump_manifest_header, page_text_files
-from nxwright.project.dumper import handles_block, kept_picture_sources
+from nxwright.project.dumper import handles_block, kept_picture_sources, page_text_difference
 from nxwright.project.object_types import TYPE_NAMES
 from nxwright.project.page_block import Attribute, parse_page
+from nxwright.project.page_header import (HEADER_21, SYSTEM_PAGES, header_40_form_known,
+                                         header_44_known)
 from nxwright.project.page_text import expected_width, is_string_attribute, page_from_text
 from nxwright.project.pictures import picture_data_size
 from nxwright.project.resources import (LISTED_IN_ORDER, SOURCE_EXTENSION, ImageSource,
@@ -35,6 +42,7 @@ from nxwright.project.screen_models import model_with_id
 from nxwright.source.page_source import reference_kind
 
 KEPT, MAY_BE_LOST, CANNOT_BE_KEPT = "kept exactly", "may be lost", "cannot be kept"
+WRITTEN_OTHERWISE = "written otherwise"
 # Where an unknown screen model is, which extract uses to find it among the
 # rest.
 UNKNOWN_MODEL_PLACE = "manifest header, bytes 16 to 19"
@@ -57,7 +65,7 @@ class UnknownContent:
     """One thing in a project that nxwright does not know: what it is,
     in a few words; where it is, by a block's name, or a page's block and
     an object's index, never by a name of the user's; its bytes; and how it
-    is sorted, KEPT, MAY_BE_LOST, or CANNOT_BE_KEPT."""
+    is sorted, KEPT, WRITTEN_OTHERWISE, MAY_BE_LOST, or CANNOT_BE_KEPT."""
     what: str
     where: str
     data: bytes
@@ -70,7 +78,32 @@ def unknown_in_project_file(project: Path) -> list:
     blocks = HmiContainer.from_file(project).blocks
     manifest = parse_manifest(blocks["main.HMI"])
     pages = {"block %s" % name: parse_page(blocks[name]) for name in manifest.block_names("pa")}
-    return unknown_in_project(blocks, manifest, pages)
+    return (unknown_in_project(blocks, manifest, pages)
+            + unknown_in_page_texts({name: blocks[name] for name in manifest.block_names("pa")}))
+
+
+def unknown_in_page_texts(blocks: dict) -> list:
+    """Returns, of the page blocks {name: bytes}, each whose text form does
+    not give back its bytes, which the dump would write as its text gives it
+    (dumper.page_text_difference). What the difference holds is not known, so
+    it may be lost. A page nxwright cannot write as text at all cannot be
+    kept, and is listed, so that the report and the list still give the
+    rest."""
+    found = []
+    for name, block in blocks.items():
+        try:
+            first = page_text_difference(block)
+        except NxwrightError:
+            # A fixed phrase: the error may name the page or a component,
+            # which the report never gives.
+            found.append(UnknownContent("a page nxwright cannot write as text",
+                                        "block %s" % name, block[:16], CANNOT_BE_KEPT))
+            continue
+        if first is not None:
+            found.append(UnknownContent("a page whose text form does not give back its bytes, "
+                                        "from byte %d" % first, "block %s" % name,
+                                        block[first:first + 16], MAY_BE_LOST))
+    return found
 
 
 def unknown_in_project(blocks: dict, manifest, pages: dict) -> list:
@@ -185,6 +218,7 @@ def unknown_in_pages(pages: dict) -> list:
     stored, which it cannot keep."""
     found = []
     for page_place, page in pages.items():
+        found += unknown_in_page_header(page, page_place)
         for index, page_object in enumerate(page.objects):
             object_type = page_object.attribute("type")[0]
             where = "%s, object %d" % (page_place, index)
@@ -194,6 +228,34 @@ def unknown_in_pages(pages: dict) -> list:
             for item in page_object.items:
                 if isinstance(item, Attribute):
                     found += _unknown_attribute(item, object_type, where)
+    return found
+
+
+def unknown_in_page_header(page, page_place: str) -> list:
+    """Returns the values of the header of `page`, where `page_place` is,
+    that nxwright has not seen (page_header.py). A lock, bytes 21 and 22, or
+    a system page mark not seen is kept exactly, in its own key of the page
+    file. Bytes 40 to 43 in a form not seen are written otherwise, as the
+    build writes the current form, as the Nextion Editor does. Bytes 44 to
+    55 other than zero may be lost, as the build writes zeros."""
+    field_16, field_40 = page.unknown_16, page.unknown_40
+    where = "%s, page header " % page_place
+    found = []
+    if field_16[4] not in (0, 1):
+        found.append(UnknownContent("a page lock value nxwright has not seen", where + "byte 20",
+                                    field_16[4:5], KEPT))
+    if field_16[5:7] != HEADER_21:
+        found.append(UnknownContent("page header bytes nxwright has seen only as 4f 21",
+                                    where + "bytes 21 and 22", field_16[5:7], KEPT))
+    if field_16[7] not in (0, *SYSTEM_PAGES.values()):
+        found.append(UnknownContent("a system page mark nxwright does not know", where + "byte 23",
+                                    field_16[7:8], KEPT))
+    if not header_40_form_known(field_40):
+        found.append(UnknownContent("a page header form nxwright has not seen",
+                                    where + "bytes 40 to 43", field_40[:4], WRITTEN_OTHERWISE))
+    if not header_44_known(field_40):
+        found.append(UnknownContent("page header bytes nxwright has seen only as zeros",
+                                    where + "bytes 44 to 55", field_40[4:], MAY_BE_LOST))
     return found
 
 
@@ -264,8 +326,9 @@ def checked(origin: Path, found: list, continue_with_unknown: bool, project: Pat
     """Applies the rule to `found`, the UnknownContent of `origin`: raises
     NxwrightError for content nxwright cannot keep, and UnknownContentError
     for content the next build may lose, unless `continue_with_unknown`.
-    Otherwise returns a note of each content kept exactly, and a warning of
-    each gone past. `project` and `removed_settings` are UnknownContentError's."""
+    Otherwise returns a note of each content kept exactly, a warning of each
+    written otherwise, which needs no question, and a warning of each gone
+    past. `project` and `removed_settings` are UnknownContentError's."""
     cannot = [each for each in found if each.sort == CANNOT_BE_KEPT]
     if cannot:
         raise NxwrightError("%s contains things nxwright cannot keep:\n%s\nA newer Nextion "
@@ -276,6 +339,8 @@ def checked(origin: Path, found: list, continue_with_unknown: bool, project: Pat
         raise UnknownContentError(origin, lost, project, removed_settings)
     notes = ["%s (%s), which the source folder keeps exactly" % (each.what, each.where)
              for each in found if each.sort == KEPT]
+    notes += ["%s (%s), which the next build writes as nxwright knows it" % (each.what, each.where)
+              for each in found if each.sort == WRITTEN_OTHERWISE]
     notes += ["went on past %s (%s), which the next build may lose"
               % (each.what, each.where) for each in lost]
     if notes:

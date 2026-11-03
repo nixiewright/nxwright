@@ -19,6 +19,7 @@ from nxwright.project.page_text import page_from_text, page_to_text
 from nxwright.language.resource_names import ResourceNames
 from nxwright.source.source_folder import (add_page, app_name, export_dump, import_dump,
                                            read_app, switch_to_nxlang)
+from nxwright.source.unknown_content import UnknownContentError
 from tests.test_project_writer import edit_text, sample_png, write_small_project
 from tests.test_resource_names import named_font
 
@@ -452,27 +453,59 @@ class PageHeaderTest(SourceFolderTestCase):
                               (again / "pages" / "01-second.txt").read_text(encoding="utf-8"))
                 self.set_dump_header("header_16", header, "00000000004f2100")
 
-    def test_extract_refuses_a_header_it_does_not_know(self):
-        for line, old, new in (("header_16", "00000000004f2100", "00000000004f2105"),
-                               ("header_16", "00000000004f2100", "00000000024f2100"),
-                               ("header_16", "00000000004f2100", "00000000004f2200"),
-                               ("header_40", "01440203000000000000000000000000",
-                                "01440203000000000000000000000001"),
-                               ("header_40", "01440203", "01450203")):
-            with self.subTest(line=line, value=new):
-                self.set_dump_header(line, old, new)
-                with self.assertRaisesRegex(NxwrightError, "page second: its header .* is not one"):
-                    import_dump(self.dump, self.folder / "refused")
-                self.assertFalse((self.folder / "refused").exists())
-                self.set_dump_header(line, new, old)
+    def test_a_header_value_not_seen_is_kept_in_its_own_field(self):
+        # Each field keeps its own key, so the others are written as today.
+        for header, lines in (("00000000004f2105", "system_page = 5\n"),
+                              ("00000000024f2100", "locked = 2\n"),
+                              ("52c80ffa014f2200",
+                               'locked = true\nlock_password_hash = "52c80ffa"\n'
+                               'header_21 = { bytes = "4f22" }\n')):
+            with self.subTest(header=header):
+                self.set_dump_header("header_16", "00000000004f2100", header)
+                source = self.folder / header
+                notes = import_dump(self.dump, source)
+                self.assertTrue(any("keeps exactly" in note for note in notes), notes)
+                self.assertIn('type = "page"\n' + lines,
+                              (source / "pages" / "second.page.toml").read_text(encoding="utf-8"))
+                again = self.folder / (header + "-again")
+                export_dump(source, again)
+                self.assertIn("header_16 = " + header,
+                              (again / "pages" / "01-second.txt").read_text(encoding="utf-8"))
+                self.set_dump_header("header_16", header, "00000000004f2100")
+
+    def test_a_header_form_not_seen_is_written_as_the_current_one(self):
+        # With nobody to ask: a warning, and no question.
+        self.set_dump_header("header_40", "01440203", "01450203")
+        source = self.folder / "form"
+        notes = import_dump(self.dump, source)
+        self.assertTrue(any("bytes 40 to 43" in note and "writes as nxwright knows it" in note
+                            for note in notes), notes)
+        export_dump(source, self.folder / "form-again")
+        self.assertIn("header_40 = 01440203000000000000000000000000",
+                      (self.folder / "form-again" / "pages" / "01-second.txt")
+                      .read_text(encoding="utf-8"))
+
+    def test_header_bytes_past_43_other_than_zero_ask_first(self):
+        self.set_dump_header("header_40", "01440203000000000000000000000000",
+                             "01440203000000000000000000000001")
+        with self.assertRaisesRegex(UnknownContentError, "bytes 44 to 55"):
+            import_dump(self.dump, self.folder / "asked")
+        self.assertFalse((self.folder / "asked").exists())
+        import_dump(self.dump, self.folder / "asked", continue_with_unknown=True)
+        export_dump(self.folder / "asked", self.folder / "asked-again")
+        self.assertIn("header_40 = 01440203000000000000000000000000",
+                      (self.folder / "asked-again" / "pages" / "01-second.txt")
+                      .read_text(encoding="utf-8"))
 
     def test_build_refuses_page_files_holding_what_they_no_longer_keep(self):
         page = self.source / "pages" / "second.page.toml"
         cases = {"header_16 , which page files no longer keep":
                  ('type = "page"\n', 'type = "page"\nheader_16 = "00000000004f2100"\n'),
                  "system_page must be": ('type = "page"\n', 'type = "page"\nsystem_page = "pad"\n'),
-                 "locked must be true or false":
+                 "locked must be true, false, or a number from 2 to 255":
                  ('type = "page"\n', 'type = "page"\nlocked = 1\n'),
+                 "header_21 must be 2 bytes":
+                 ('type = "page"\n', 'type = "page"\nheader_21 = { bytes = "4f" }\n'),
                  "lock_password_hash must be 8 lower-case hexadecimal digits":
                  ('type = "page"\n', 'type = "page"\nlock_password_hash = "ABCDEF01"\n'),
                  "only the \\[page\\] table can give locked":

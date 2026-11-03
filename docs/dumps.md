@@ -82,7 +82,7 @@ Turns a dump into a source folder ([source-folder.md](source-folder.md)).
 - A new or empty folder gets a fresh source folder.
 - A source folder that already has an `app.toml` is updated. Each event keeps its text, comments included, unless the project changed that event's code ([Extracting into an existing folder](source-folder.md#extracting-into-an-existing-folder)).
 - Any other folder is refused.
-- Import checks the dump's manifest header and pages for things nxwright does not know, and treats each one as extract does. It warns, prompts you to choose whether to go on, or refuses, and takes `--continue-with-unknown` ([commands.md](commands.md#extract)).
+- Import checks the dump's manifest header and pages for things nxwright does not know, and treats each one as extract does. It warns and goes on, prompts you to choose whether to go on, or refuses, and takes `--continue-with-unknown` ([commands.md](commands.md#extract)).
 
 ## Page files
 

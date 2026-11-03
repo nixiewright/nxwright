@@ -20,6 +20,12 @@ test("content kept exactly is extracted, the command noting it", () => {
   assert.deepEqual(extractChoice(listed + "\n"), { kind: "extract" });
 });
 
+test("content written otherwise is extracted with no question, the command warning of it", () => {
+  const listed = line("a page header form nxwright has not seen",
+    "block 12.pa, page header bytes 40 to 43", "written otherwise");
+  assert.deepEqual(extractChoice(listed + "\n"), { kind: "extract" });
+});
+
 test("content that may be lost makes the user choose first, listing each", () => {
   const listed = [line("a block of a kind nxwright does not handle", "block 2.xb", "may be lost"),
     line("a manifest header byte the build writes as 79", "manifest header, byte 14",

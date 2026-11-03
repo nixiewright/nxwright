@@ -62,9 +62,9 @@ The page header:
   - A lock may have a password. Bytes 16 to 19 contain its hash, the same as the project password's (`password_hash` in `project/device_settings.py`), and are zero without one.
   - Bytes 21 and 22 are `4f 21` on every page.
 - **Bytes 40 to 43 repeat the project's character encoding.** Whenever the Nextion Editor writes a page, it starts them with `01 44 02` and the encoding's number (3 for iso-8859-1).
-  - A page the Nextion Editor has not written since it was updated keeps an older form, `01 43 01 00`, with no encoding.
+  - A page the Nextion Editor has not written since it was updated keeps an older form, `01 43 01 00` or `01 44 01 00`, with no encoding. The second was seen in 32 of the 38 pages of one project, whose other 6 had the newer form.
   - Changing the encoding rewrites every page.
-  - The build writes the newer form into every page. A source folder keeps none of these header bytes but the system page mark and the lock (`source-folder.md`). `project/page_header.py` gives the forms.
+  - The build writes the newer form into every page. A source folder keeps none of these header bytes but the system page mark, the lock, and bytes 21 and 22 when they are not `4f 21` (`source-folder.md`). `project/page_header.py` gives the forms.
 
 ### Page files
 

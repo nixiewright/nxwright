@@ -60,8 +60,8 @@ from nxwright.project.device_settings import (DEFAULT_ENCODING, TextCodec, encod
 from nxwright.project.editor_limits import (LEAST_SIDE, bounded_attributes, check_component_count,
                                              check_page_limits, least_size_words)
 from nxwright.project.page_block import HEADER_SIZE, Attribute, Event, Marker, PageBlock, PageObject
-from nxwright.project.page_header import (NO_LOCK_PASSWORD, SYSTEM_PAGES, PageHeader, header_16,
-                                         header_40, page_header_of)
+from nxwright.project.page_header import (HEADER_21, NO_LOCK_PASSWORD, SYSTEM_PAGES, PageHeader,
+                                         header_16, header_40, page_header_of)
 from nxwright.source.nx_files import (CODE_INDENT, EVENT_COMMENT_MARKER, EventBlock, PageFiles,
                                       blank_lines_dropped, event_blocks, event_heading,
                                       event_label, read_page_files)
@@ -92,9 +92,9 @@ _PLAYED_KINDS = {TYPES_BY_NAME["gmov"]: ANIMATION, TYPES_BY_NAME["video"]: VIDEO
                  TYPES_BY_NAME["audio"]: SOUND}
 # Keys of a <page>.page.toml table that are not attributes.
 _TABLE_KEYS = ("name", "type", "defaults", "events", "system_page", "locked",
-               "lock_password_hash")
+               "lock_password_hash", "header_21")
 # The keys of the [page] table that give the page header (page_header.py).
-_HEADER_KEYS = ("system_page", "locked", "lock_password_hash")
+_HEADER_KEYS = ("system_page", "locked", "lock_password_hash", "header_21")
 # Attributes the build derives (see _derived_values). A table gives one only
 # when its stored value differs from the derived one.
 _DERIVED = ("id", "objname", "endx", "endy")
@@ -1171,14 +1171,18 @@ def _check_keyboard_scope(attributes: list, name: str, where: str):
 
 def _header_keys(header: PageHeader) -> dict:
     """Returns the keys of a [page] table that give `header`: none for an
-    ordinary page, unlocked."""
+    ordinary page, unlocked. A value not seen keeps its own key: a system
+    page mark or a lock as its number, and bytes 21 and 22 as their stored
+    bytes."""
     keys = {}
     if header.system_page is not None:
         keys["system_page"] = header.system_page
     if header.locked:
-        keys["locked"] = True
+        keys["locked"] = header.locked
     if header.lock_password_hash != NO_LOCK_PASSWORD:
         keys["lock_password_hash"] = header.lock_password_hash.hex()
+    if header.header_21 != HEADER_21:
+        keys["header_21"] = {RAW_KEY: header.header_21.hex()}
     return keys
 
 
@@ -1193,16 +1197,32 @@ def _page_header(page_table: dict, components: list, page_name: str) -> PageHead
         if any(isinstance(table, dict) and key in table for table in components):
             raise NxwrightError("%s.page.toml: only the [page] table can give %s"
                                 % (page_name, key))
+    # A system page mark or a lock that nxwright has not seen is kept as its
+    # number, which extract writes (_header_keys).
     system_page = page_table.get("system_page")
-    if system_page is not None and system_page not in SYSTEM_PAGES:
+    unknown_mark = _is_byte(system_page) and system_page not in (0, *SYSTEM_PAGES.values())
+    if system_page is not None and system_page not in SYSTEM_PAGES and not unknown_mark:
         names = ['"%s"' % name for name in SYSTEM_PAGES]
-        raise NxwrightError("%s.page.toml: system_page must be %s, or %s"
-                            % (page_name, ", ".join(names[:-1]), names[-1]))
+        raise NxwrightError("%s.page.toml: system_page must be %s, or the number of a mark "
+                            "nxwright does not know" % (page_name, ", ".join(names)))
     locked = page_table.get("locked", False)
-    if not isinstance(locked, bool):
-        raise NxwrightError("%s.page.toml: locked must be true or false" % page_name)
+    if not isinstance(locked, bool) and not (_is_byte(locked) and locked >= 2):
+        raise NxwrightError("%s.page.toml: locked must be true, false, or a number from 2 to 255"
+                            % page_name)
     password = page_table.get("lock_password_hash", NO_LOCK_PASSWORD.hex())
     if not is_password_hash_text(password):
         raise NxwrightError("%s.page.toml: lock_password_hash must be 8 lower-case "
                             "hexadecimal digits" % page_name)
-    return PageHeader(system_page, locked, bytes.fromhex(password))
+    stored_21 = page_table.get("header_21", {RAW_KEY: HEADER_21.hex()})
+    header_21 = (_raw_bytes("header_21", stored_21, "%s.page.toml" % page_name)
+                 if isinstance(stored_21, dict) else None)
+    if header_21 is None or len(header_21) != 2:
+        raise NxwrightError("%s.page.toml: header_21 must be 2 bytes, such as "
+                            "{ %s = \"4f21\" }" % (page_name, RAW_KEY))
+    return PageHeader(system_page, locked, bytes.fromhex(password), header_21)
+
+
+def _is_byte(value) -> bool:
+    """Whether `value` is a whole number from 0 to 255, and not true or
+    false, which TOML also reads as numbers in Python."""
+    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 255

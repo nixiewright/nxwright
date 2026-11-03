@@ -66,11 +66,16 @@ def kept_picture_sources(blocks: dict, manifest) -> dict:
 class ProjectDumper:
     """Writes one project's dump folder."""
 
-    def __init__(self, project_path: Path, output: Path, leave_out_unknown_blocks: bool = False):
+    def __init__(self, project_path: Path, output: Path, leave_out_unknown_blocks: bool = False,
+                 write_differing_pages: bool = False):
         """With `leave_out_unknown_blocks`, a block of a kind this tool does
         not handle is left out of the dump rather than refused, as when the
-        user chose to go on past it (source/unknown_content.py)."""
+        user chose to go on past it (source/unknown_content.py). With
+        `write_differing_pages`, a page whose text form does not give back
+        its bytes is written as its text gives it, rather than refused, as
+        when the user chose to go on past it too (page_text_difference)."""
         self._leave_out_unknown_blocks = leave_out_unknown_blocks
+        self._write_differing_pages = write_differing_pages
         self._project_path = Path(project_path)
         self._output = Path(output)
         self._container = None
@@ -166,7 +171,10 @@ class ProjectDumper:
                 raise NxwrightError("page %d name %r cannot be used in a file name"
                                     % (page_id, page.name))
             text = page_to_text(page)
-            _check_page_text(text, block, block_name)
+            first = page_text_difference(block)
+            if first is not None and not self._write_differing_pages:
+                raise NxwrightError("page %s does not survive its text form; first difference "
+                                    "at byte %d" % (block_name, first))
             (folder / ("%02d-%s.txt" % (page_id, page.name))).write_text(
                 text, encoding="utf-8", newline="\n")
 
@@ -218,16 +226,17 @@ class ProjectDumper:
         _write_text(folder / "index.txt", index)
 
 
-def _check_page_text(text: str, block: bytes, block_name: str):
-    """Proves the text is lossless: parses it back, encodes it, and compares it
-    with the original block. The stamp (bytes 0 to 3) is not compared, because
-    the text does not hold it."""
-    rebuilt = encode_page(page_from_text(text))
-    if rebuilt[4:] != block[4:]:
-        first = next((i for i in range(4, min(len(rebuilt), len(block)))
-                      if rebuilt[i] != block[i]), min(len(rebuilt), len(block)))
-        raise NxwrightError("page %s does not survive its text form; first difference "
-                            "at byte %d" % (block_name, first))
+def page_text_difference(block: bytes):
+    """Returns where the page block `block` first differs from what its text
+    form gives back, parsed and encoded again, or None when the two are the
+    same. The stamp (bytes 0 to 3) is not compared, because the text does
+    not hold it. The finder of unknown content runs it before anything is
+    written (source/unknown_content.py), and the dump runs it again."""
+    rebuilt = encode_page(page_from_text(page_to_text(parse_page(block))))
+    if rebuilt[4:] == block[4:]:
+        return None
+    return next((i for i in range(4, min(len(rebuilt), len(block))) if rebuilt[i] != block[i]),
+                min(len(rebuilt), len(block)))
 
 
 def _write_text(path: Path, lines: list):

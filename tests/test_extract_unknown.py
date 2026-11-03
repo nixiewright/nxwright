@@ -16,11 +16,13 @@ from nxwright.cli import NO_ANSWER_EXIT_CODE, main
 from nxwright.project.container import HmiContainer
 from nxwright.project.device_settings import DeviceSettings
 from nxwright.project.dumper import ProjectDumper
+from nxwright.project.page_text import page_to_text
 from nxwright.project.project_writer import ProjectWriter
 from nxwright.project.screen_models import model_named
 from nxwright.source.project_files import build, extract
 from nxwright.source.source_folder import new_source_folder
-from nxwright.source.unknown_content import UnknownContentError
+from nxwright.source.unknown_content import (CANNOT_BE_KEPT, UnknownContentError,
+                                             unknown_in_project_file)
 from tests.test_container import build_project
 from tests.test_new_command import answering
 
@@ -117,6 +119,39 @@ class ExtractUnknownTest(PatchedDemoTestCase):
     def test_the_older_header_form_extracts_with_no_question(self):
         project = self.patched("older.HMI", header={9: 0x43, 36: 1, 65: 2})
         self.assertEqual(extract(project, self.target("older")), [])
+
+    def test_a_page_whose_text_form_differs_asks_first(self):
+        # The text form is made to lose the page header's byte 41, which a
+        # real page's text form never does.
+        real = page_to_text
+
+        def losing(page):
+            return real(page).replace("header_40 = 0144", "header_40 = 0145", 1)
+        with mock.patch("nxwright.project.dumper.page_to_text", side_effect=losing):
+            with self.assertRaises(UnknownContentError) as raised:
+                extract(self.demo, self.target("text"))
+            self.assertIn("a page whose text form does not give back its bytes",
+                          str(raised.exception))
+            self.assertIn("byte 41", str(raised.exception))
+            self.assertFalse(self.target("text").exists())
+            extract(self.demo, self.target("text"), continue_with_unknown=True)
+        self.assertTrue((self.target("text") / "app.toml").exists())
+
+    def test_a_page_that_has_no_text_form_is_listed_not_raised(self):
+        # So that `nxwright report` and `--list-unknown` still list the rest.
+        with mock.patch("nxwright.project.dumper.page_to_text",
+                        side_effect=NxwrightError("no text form")):
+            found = unknown_in_project_file(self.demo)
+        self.assertEqual({(each.what, each.sort) for each in found},
+                         {("a page nxwright cannot write as text", CANNOT_BE_KEPT)})
+
+    def test_the_nspanel_s_header_form_extracts_with_no_question(self):
+        # 32 of the 38 pages of a project for an NSPanel screen have it.
+        blocks = HmiContainer.from_file(self.demo).blocks
+        page = bytearray(blocks["0.pa"])
+        page[40:44] = bytes.fromhex("01440100")
+        project = self.patched("nspanel.HMI", blocks={"0.pa": bytes(page)})
+        self.assertEqual(extract(project, self.target("nspanel")), [])
 
     def test_an_unknown_encoding_cannot_be_kept(self):
         project = self.patched("encoding.HMI", header={13: 0xEE})

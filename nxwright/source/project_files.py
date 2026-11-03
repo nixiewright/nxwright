@@ -89,7 +89,11 @@ def extract(project: Path, source_folder: Path, continue_with_unknown: bool = Fa
     with tempfile.TemporaryDirectory() as name:
         dump = Path(name) / "dump"
         with held_by_the_nextion_editor(project):
-            ProjectDumper(project, dump, leave_out_unknown_blocks=bool(lost)).dump()
+            # Content that may be lost, which the dump leaves out or writes
+            # as its text gives it, is there only when the user chose to go
+            # on past it.
+            ProjectDumper(project, dump, leave_out_unknown_blocks=bool(lost),
+                          write_differing_pages=bool(lost)).dump()
         # Its unknown content is checked already, with the project's own.
         warnings = import_dump(dump, source_folder, project.stem.strip(), check_unknown=False)
     return notes + warnings
