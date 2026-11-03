@@ -7,6 +7,7 @@ import io
 import json
 from pathlib import Path
 import re
+import struct
 import tempfile
 import unittest
 from unittest import mock
@@ -18,10 +19,15 @@ from nxwright.project.device_settings import DeviceSettings
 from nxwright.project.dumper import ProjectDumper
 from nxwright.project.page_text import page_to_text
 from nxwright.project.page_block import Attribute, Event, parse_page
+from nxwright.project.resources import (ImageSource, encode_image_source, parse_image_source,
+                                        parse_manifest)
 from nxwright.project.project_writer import ProjectWriter
 from nxwright.project.screen_models import model_named
+from nxwright.source.device_change import change_device
 from nxwright.source.project_files import build, extract
-from nxwright.source.source_folder import new_source_folder
+from nxwright.source.folder_check import check_folder
+from nxwright.source.source_folder import (add_page, folder_lister, folder_reader,
+                                           new_source_folder)
 from nxwright.source.unknown_content import (CANNOT_BE_KEPT, UnknownContentError,
                                              unknown_in_project_file)
 from tests.test_container import build_project
@@ -154,13 +160,111 @@ class ExtractUnknownTest(PatchedDemoTestCase):
         project = self.patched("nspanel.HMI", blocks={"0.pa": bytes(page)})
         self.assertEqual(extract(project, self.target("nspanel")), [])
 
-    def test_an_unknown_encoding_cannot_be_kept(self):
+    def test_an_unknown_encoding_is_kept_as_its_number_and_its_bytes(self):
+        # Extract refused such a project before. Each byte reads as the
+        # character of the same number, so the build gives the same bytes
+        # back.
         project = self.patched("encoding.HMI", header={13: 0xEE})
-        with self.assertRaises(NxwrightError) as raised:
-            extract(project, self.target("encoding"), continue_with_unknown=True)
-        self.assertNotIsInstance(raised.exception, UnknownContentError)
-        self.assertIn("character encoding", str(raised.exception))
-        self.assertFalse(self.target("encoding").exists())
+        notes = extract(project, self.target("encoding"))
+        self.assertTrue(any("character encoding" in note for note in notes), notes)
+        self.assertIn("encoding = 238", (self.target("encoding") / "app.toml")
+                      .read_text(encoding="utf-8"))
+        built = self.folder / "encoding-again.HMI"
+        build(self.target("encoding"), built)
+        blocks = HmiContainer.from_file(built).blocks
+        self.assertEqual(blocks["main.HMI"][13], 0xEE)
+        self.assertEqual(parse_page(blocks["0.pa"]).objects,
+                         parse_page(HmiContainer.from_file(project).blocks["0.pa"]).objects)
+        # The name nxwright gives such an encoding is its own: app.toml gives
+        # the number, and no folder is made or changed to it.
+        app = self.target("encoding") / "app.toml"
+        text = app.read_text(encoding="utf-8")
+        app.write_text(text.replace("encoding = 238", 'encoding = "encoding-238"'),
+                       encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(NxwrightError, "give one nxwright does not know by its "
+                                                   "number, 238"):
+            build(self.target("encoding"), built)
+        app.write_text(text, encoding="utf-8", newline="\n")
+        # A command that writes app.toml again keeps the number.
+        add_page(self.target("encoding"), "second")
+        self.assertIn("encoding = 238", app.read_text(encoding="utf-8"))
+        build(self.target("encoding"), built)
+        with self.assertRaisesRegex(NxwrightError, "unknown character encoding 'encoding-37'"):
+            change_device(self.target("encoding"), encoding="encoding-37")
+        settings = DeviceSettings(model_named("NX4832T035"), 0, "encoding-37")
+        with self.assertRaisesRegex(NxwrightError, "unknown character encoding 'encoding-37'"):
+            new_source_folder(self.folder / "new-encoding", settings, "nextion")
+
+    def test_a_manifest_header_of_another_size_asks_first(self):
+        # As for a screen model nxwright does not know: app.toml gets no
+        # screen settings.
+        main = bytearray(HmiContainer.from_file(self.demo).blocks["main.HMI"])
+        longer = main[:96] + bytes(4) + main[96:]
+        struct.pack_into("<I", longer, 4, 100)
+        struct.pack_into("<I", longer, 24, 100)
+        project = self.patched("header-size.HMI", blocks={"main.HMI": bytes(longer)})
+        with self.assertRaisesRegex(UnknownContentError, "manifest header of 100 bytes"):
+            extract(project, self.target("header-size"))
+        extract(project, self.target("header-size"), continue_with_unknown=True)
+        self.assertNotIn("screen", (self.target("header-size") / "app.toml")
+                         .read_text(encoding="utf-8"))
+
+    def test_a_picture_of_another_file_type_comes_back_unchanged(self):
+        blocks = HmiContainer.from_file(self.demo).blocks
+        name = parse_manifest(blocks["main.HMI"]).block_names("i")[0] + "s"
+        source = parse_image_source(blocks[name])
+        other = encode_image_source(ImageSource(source.width, source.height, source.data, ".tif"))
+        project = self.patched("tif.HMI", blocks={name: other})
+        folder = self.target("tif")
+        notes = extract(project, folder)
+        self.assertTrue(any("keeps exactly" in note for note in notes), notes)
+        kept = list((folder / "pictures").glob("*.tif"))
+        self.assertEqual(len(kept), 1)
+        screen = kept[0].with_suffix(".screen")
+        # The project's own screen copy, kept beside the file.
+        self.assertEqual(screen.read_bytes(), blocks[name[:-1]])
+        checked_folder = check_folder(folder_reader(folder),
+                                      lambda path: (folder / path).is_file(),
+                                      listed=folder_lister(folder))
+        self.assertEqual(checked_folder.errors(), [])
+        built = self.folder / "tif-again.HMI"
+        errors = io.StringIO()
+        with redirect_stderr(errors), redirect_stdout(io.StringIO()):
+            self.assertEqual(main(["build", str(folder), str(built), "--overwrite"]), 0)
+        self.assertIn("used its screen copy, pictures/%s, as it is" % screen.name,
+                      errors.getvalue())
+        again = HmiContainer.from_file(built).blocks
+        self.assertEqual((again[name], again[name[:-1]]), (other, blocks[name[:-1]]))
+        # Without its screen copy, the build has none to write.
+        screen.unlink()
+        with self.assertRaisesRegex(NxwrightError, "screen copy, is missing; save the picture "
+                                                   "as a PNG, JPEG, BMP, or GIF file"):
+            build(folder, built)
+
+    def test_a_screen_file_beside_a_png_survives_extracting_again(self):
+        # It is not nxwright's: only a picture without a PNG, JPEG, BMP, or
+        # GIF file has its screen copy kept.
+        folder = self.target("own-screen")
+        extract(self.demo, folder)
+        png = sorted((folder / "pictures").glob("*.png"))[0]
+        own = png.with_suffix(".screen")
+        own.write_bytes(b"mine")
+        extract(self.demo, folder)
+        self.assertEqual(own.read_bytes(), b"mine")
+
+    def test_the_project_writer_keeps_the_screen_copy_of_such_a_picture(self):
+        # Picture 0 changes from a PNG file to a TIFF file of the same bytes,
+        # so it is written as a new picture, with the dump's screen copy.
+        dump = self.folder / "tif-writer.dump"
+        ProjectDumper(self.demo, dump).dump()
+        png = dump / "images" / "0000.png"
+        png.rename(png.with_suffix(".tif"))
+        path = self.folder / "tif-writer.HMI"
+        ProjectWriter(self.demo, dump, path).write()
+        blocks = HmiContainer.from_file(path).blocks
+        name = parse_manifest(blocks["main.HMI"]).block_names("i")[0]
+        self.assertEqual(parse_image_source(blocks[name + "s"]).suffix, ".tif")
+        self.assertEqual(blocks[name], (dump / "images" / "0000.i").read_bytes())
 
     def test_an_unknown_attribute_is_kept_as_its_bytes(self):
         # The page's table lists every attribute, the unknown one as its

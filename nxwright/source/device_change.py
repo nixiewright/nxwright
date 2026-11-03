@@ -27,16 +27,18 @@ from pathlib import Path
 from nxwright import NxwrightError
 from nxwright.source.folder_index import APP_FILE, FolderIndex, text_on_disk
 from nxwright.source.page_edits import attribute_edits, edited_text
-from nxwright.project.device_settings import encoding_code
+from nxwright.project.device_settings import encoding_code, is_unknown_encoding
 from nxwright.project.media_files import turned_video, video_frames, video_rotation
-from nxwright.project.screen_copy import ROTATIONS
+from nxwright.project.screen_copy import (FORMAT_COMPRESSED, OPAQUE, ROTATIONS,
+                                          decode_screen_copy, encode_screen_copy)
 from nxwright.project.screen_models import model_named
 from nxwright.project.zi_font import converted_font, font_facts, turned_font
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.folder_check import check_folder
 from nxwright.source.page_source import page_toml_path
-from nxwright.source.source_folder import (app_text, folder_byte_reader, folder_reader, read_app,
-                                           read_bytes, resource_paths)
+from nxwright.source.source_folder import (app_text, folder_byte_reader, folder_lister,
+                                           folder_reader, kept_picture_paths, read_app,
+                                           read_bytes, resource_paths, screen_copy_path)
 from nxwright.source.resource_adding import encodings_taken
 
 # A note names at most this many runs of the characters a converted font
@@ -81,7 +83,8 @@ def change_device(source_folder: Path, screen: str = None, rotation: int = None,
     if files:
         told("Checking the project for what the build will refuse")
         check = check_folder(folder_reader(source_folder), _exists(source_folder),
-                             read_bytes=folder_byte_reader(source_folder))
+                             read_bytes=folder_byte_reader(source_folder),
+                             listed=folder_lister(source_folder))
         refusals = ["%s: %s" % (finding.place, finding.message) for finding in check.errors()]
     return DeviceChange(list(files), notes, refusals)
 
@@ -100,6 +103,10 @@ def device_change_files(source_folder: Path, screen: str = None, rotation: int =
         raise NxwrightError("rotation %r is not one of %s"
                             % (rotation, ", ".join(map(str, ROTATIONS))))
     if encoding is not None:
+        # The name of an encoding nxwright does not know is its own, for a
+        # project extracted with one; a folder is not changed to it.
+        if is_unknown_encoding(encoding):
+            raise NxwrightError("unknown character encoding %r" % encoding)
         encoding_code(encoding)
     source_folder = Path(source_folder)
     app = read_app(source_folder)
@@ -117,6 +124,11 @@ def device_change_files(source_folder: Path, screen: str = None, rotation: int =
     if (new.rotation, new.encoding) != (old.rotation, old.encoding):
         fonts, notes = _changed_fonts(source_folder, app, old, new, told)
         files.update(fonts)
+    if new.screen_copy_layout != old.screen_copy_layout:
+        screen_copies = _made_again_screen_copies(source_folder, app, old, new)
+        files.update(screen_copies)
+        notes += ["%s: made again for the new screen settings, from its own pixels" % path
+                  for path in screen_copies]
     if new.rotation != old.rotation:
         videos = _turned_videos(source_folder, app, new.rotation, told)
         files.update(videos)
@@ -238,6 +250,37 @@ def _turned_videos(source_folder: Path, app: dict, rotation: int, told) -> dict:
                 raise NxwrightError("%s: %s" % (path, error)) from None
             if turned is not video:
                 files[path] = turned
+    return files
+
+
+def _made_again_screen_copies(source_folder: Path, app: dict, old, new) -> dict:
+    """Returns {path: new bytes} of the screen copy of each picture of the
+    folder kept with it (source_folder.kept_picture_paths), made again from
+    its own pixels for the format and the rotation of `new`, the device
+    settings, from those of `old`. nxwright does not decode such a
+    picture's file, so the build takes its screen copy as it is.
+
+    Raises NxwrightError, naming the screen copy, for one that does not
+    decode, or one partly transparent that the new format cannot store: the
+    Nextion Editor blends such a picture with white from its file."""
+    kind, rotation = new.screen_copy_layout
+    files = {}
+    for name in app["pictures"]:
+        if not kept_picture_paths(name, _exists(source_folder), folder_lister(source_folder)):
+            continue
+        path = screen_copy_path(name)
+        block = read_bytes(source_folder / path)
+        try:
+            pixels = decode_screen_copy(block, old.rotation)
+            if kind != FORMAT_COMPRESSED and min(pixels.alphas, default=OPAQUE) < OPAQUE:
+                raise NxwrightError("the picture is partly transparent, which this screen's "
+                                    "format cannot store, and nxwright cannot blend it from its "
+                                    "file; save the picture as a PNG, JPEG, BMP, or GIF file")
+            made = encode_screen_copy(pixels, kind, rotation)
+        except NxwrightError as error:
+            raise NxwrightError("%s: %s" % (path, error)) from None
+        if made != block:
+            files[path] = made
     return files
 
 

@@ -4,13 +4,15 @@ The layout is described in docs/dumps.md. Pages, pictures, fonts,
 animations, videos, and sounds are numbered by their Editor IDs.
 """
 from pathlib import Path
+import re
 
 from nxwright import NxwrightError
-from nxwright.project.device_settings import ENCODINGS, HEADER_SIZE, read_device_settings
+from nxwright.project.device_settings import HEADER_SIZE, encoding_name, read_device_settings
 from nxwright.project.page_text import page_line_name
 from nxwright.project.pictures import picture_data_size
 from nxwright.project.resources import (PICTURE_SUFFIXES, SOURCE_SUFFIX, CopiedKind, ImageSource,
                                         encode_image_source)
+from nxwright.project.screen_copy import decode_screen_copy
 
 # First line of project.txt. It changes whenever the dump's layout does, so that
 # a dump written by another version of nxwright is refused rather than misread.
@@ -57,11 +59,10 @@ def dump_device_settings(dump_folder: Path):
 
 def dump_encoding(dump_folder: Path):
     """Returns the character encoding of the dump's project, by its
-    manifest header's byte 13, which does not depend on the screen model,
-    or None when the dump shows no header or nxwright does not know the
-    encoding (ENCODINGS)."""
+    manifest header's byte 13, which does not depend on the screen model
+    (device_settings.encoding_name), or None when the dump shows no header."""
     header = dump_manifest_header(dump_folder)
-    return None if header is None else ENCODINGS.get(header[13])
+    return None if header is None else encoding_name(header[13])
 
 
 def dump_manifest_header(dump_folder: Path):
@@ -127,23 +128,70 @@ def check_ids_without_gaps(ids, noun: str):
                             % (noun, noun, missing))
 
 
+# A picture's file in a dump: its ID, then one suffix, such as 0003.png.
+_PICTURE_FILE = re.compile(r"(\d+)(\.[A-Za-z0-9]+)")
+
+
 def dump_pictures(dump_folder: Path) -> list:
     """Returns the dump's pictures in ID order, each as (its file's path
-    within the dump, its bytes, its suffix): images/<ID>.png, .jpg, or one of
-    the other suffixes a picture's record may give (resources.PICTURE_SUFFIXES).
+    within the dump, its bytes, its suffix): images/<ID>.png, .jpg, or any
+    other suffix a picture's record gives, as one of a type nxwright does not
+    decode (resources.decodes_picture). The screen copies, images/<ID>.i, and
+    the sources of resized pictures are not pictures' files.
 
     Raises NxwrightError when their IDs do not run from 0 without gaps, or
     one has two files."""
     found = {}
-    for suffix in PICTURE_SUFFIXES:
-        for picture_id, path in numbered_files(dump_folder / "images", suffix).items():
-            if picture_id in found:
-                raise NxwrightError("images/%s and images/%s are there; a picture has one "
-                                    "file" % (found[picture_id].name, path.name))
-            found[picture_id] = path
+    folder = dump_folder / "images"
+    # In PICTURE_SUFFIXES' order, then by name, so that a refusal of two
+    # files of one picture names them in the same order each time.
+    def suffix_order(path: Path) -> tuple:
+        suffix = path.suffix.lower()
+        return (PICTURE_SUFFIXES.index(suffix) if suffix in PICTURE_SUFFIXES
+                else len(PICTURE_SUFFIXES), path.name)
+    for path in sorted(folder.iterdir(), key=suffix_order) if folder.is_dir() else []:
+        matched = _PICTURE_FILE.fullmatch(path.name)
+        if matched is None or matched[2].lower() == ".i" or not path.is_file():
+            continue
+        picture_id = int(matched[1])
+        if picture_id in found:
+            raise NxwrightError("images/%s and images/%s are there; a picture has one "
+                                "file" % (found[picture_id].name, path.name))
+        found[picture_id] = path
     check_ids_without_gaps(found, "picture")
     return [("images/" + found[picture_id].name, found[picture_id].read_bytes(),
              found[picture_id].suffix.lower()) for picture_id in range(len(found))]
+
+
+def kept_picture_blocks(dump_folder: Path, picture_id: int, file_name: str, data: bytes,
+                        suffix: str, rotation: int) -> tuple:
+    """Returns (the file's block, ".is", the screen copy, ".i") of the
+    picture `picture_id`, in a file of a type nxwright does not decode
+    (resources.decodes_picture): its file `data`, of `suffix`, at
+    `file_name` within the dump, and the dump's screen copy of it,
+    images/<ID>.i, as it is. The file's block gives the screen copy's
+    width and height, which are the picture's.
+
+    Raises NxwrightError, naming `file_name`, when the screen copy is
+    missing or does not decode at `rotation`. The error carries
+    `file_name` as its `file` and the rest as its `reason`, so that a
+    build from a source folder can name the folder's file instead."""
+    path = dump_folder / "images" / ("%04d.i" % picture_id)
+    if not path.is_file():
+        reason = ("nxwright does not decode this type of picture, and its screen copy is "
+                  "missing; save the picture as a PNG, JPEG, BMP, or GIF file")
+    else:
+        block = path.read_bytes()
+        try:
+            pixels = decode_screen_copy(block, rotation)
+        except NxwrightError as error:
+            reason = "its screen copy: %s" % error
+        else:
+            return encode_image_source(ImageSource(pixels.width, pixels.height, data,
+                                                   suffix)), block
+    refusal = NxwrightError("%s: %s" % (file_name, reason))
+    refusal.file, refusal.reason = file_name, reason
+    raise refusal
 
 
 def dump_picture_sources(dump_folder: Path, picture_count: int) -> dict:

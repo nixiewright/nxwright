@@ -128,7 +128,7 @@ from nxwright.source.folder_check import check_folder
 from nxwright.source.nx_files import event_heading, read_event_heading, with_code_added
 from nxwright.source.page_source import (KEY_LINE, attribute_value, component_properties,
                                          page_nx_path, page_toml_path)
-from nxwright.source.source_folder import read_page_toml
+from nxwright.source.source_folder import folder_lister, read_page_toml
 
 
 def component_types(read, page: str) -> list:
@@ -170,7 +170,7 @@ def add_component(index, read, exists, page: str, type_name: str, x: int = 0,
     path = page_toml_path(page)
     text = read(path)
     new_text = _with_table(text, "[[component]]\n" + tomli_w.dumps(values))
-    _refuse_breaking(read, exists, page, {path: new_text}, "adding %s" % name)
+    _refuse_breaking(index, read, exists, page, {path: new_text}, "adding %s" % name)
     return {"edits": {path: line_edits(text, new_text)}, "name": name}
 
 
@@ -279,7 +279,7 @@ def paste_components(index, read, exists, page: str, text: str, code: list = (),
         chunks.append("".join(_with_values(line, new_values) + "\n" for line in lines
                               if _key_of(line) not in dropped))
     new_text = _with_table(page_text, "\n".join(chunks))
-    _refuse_breaking(read, exists, page, {path: new_text}, "pasting")
+    _refuse_breaking(index, read, exists, page, {path: new_text}, "pasting")
     edits, created = {path: line_edits(page_text, new_text)}, []
     if code:
         nx_path = page_nx_path(page)
@@ -340,7 +340,7 @@ def paste_parts(index, read, exists, page: str, names: list, text: str, code: li
         if values:
             page_edits += attribute_edits(index, read, page, name, values)
     new_page_text = edited_text(page_text, page_edits)
-    _refuse_breaking(read, exists, page, {path: new_page_text}, "pasting parts")
+    _refuse_breaking(index, read, exists, page, {path: new_page_text}, "pasting parts")
     edits = {path: page_edits} if page_edits else {}
     created = []
     if "code" in parts and code:
@@ -881,13 +881,15 @@ def _lines_with_ends(text: str) -> list:
     return lines if lines[-1] else lines[:-1]
 
 
-def _refuse_breaking(read, exists, page: str, texts: dict, what: str):
-    """Raises NxwrightError when `page` built before an edit and would not
-    after it, the edited files reading `texts`, {path: new text}."""
-    if check_folder(read, exists, [page]).errors():
+def _refuse_breaking(index, read, exists, page: str, texts: dict, what: str):
+    """Raises NxwrightError when `page` of the folder of `index` built
+    before an edit and would not after it, the edited files reading
+    `texts`, {path: new text}."""
+    listed = folder_lister(index.root)
+    if check_folder(read, exists, [page], listed=listed).errors():
         return
     errors = check_folder(lambda path: texts[path] if path in texts else read(path),
-                          exists, [page]).errors()
+                          exists, [page], listed=listed).errors()
     if errors:
         place = "%s line %d" % (errors[0].file, errors[0].line) if errors[0].line \
             else errors[0].file

@@ -206,17 +206,37 @@ class ImageSource:
 def parse_image_source(block: bytes) -> ImageSource:
     """Parses an ".is" block.
 
-    Raises NxwrightError when it is cut short, or names the suffix of a file
-    nxwright does not keep (PICTURE_SUFFIXES).
+    Its file may be of a type nxwright does not decode, which no Nextion
+    Editor known writes (decodes_picture). Raises NxwrightError when it is
+    cut short, or its suffix is not letters and digits, or is one that
+    nxwright gives a picture's screen copy: ".i" in a dump, ".screen" in a
+    source folder.
     """
     if len(block) < _IMAGE_SOURCE_HEADER.size:
         raise NxwrightError("image record is shorter than its header")
     _, _, header_size, width, height, _, _ = _IMAGE_SOURCE_HEADER.unpack_from(block)
     suffix = "." + block[_IMAGE_SOURCE_HEADER.size:header_size].decode("latin-1")
-    if suffix not in PICTURE_SUFFIXES:
-        raise NxwrightError("image record of a %s file; nxwright keeps %s files"
-                            % (suffix, ", ".join(PICTURE_SUFFIXES)))
+    if not suffix[1:].isalnum() or not suffix.isascii():
+        raise NxwrightError("image record of a file whose suffix %r is not letters and digits"
+                            % suffix)
+    # The picture's file would take the name of its screen copy's.
+    if suffix.lower() in _SCREEN_COPY_SUFFIXES:
+        raise NxwrightError("image record of a %s file, the suffix nxwright gives a screen copy"
+                            % suffix)
     return ImageSource(width, height, block[header_size:], suffix)
+
+
+# The suffixes of a picture's screen copy: in a dump, images/0000.i, and in a
+# source folder, pictures/logo.screen (source_folder.SCREEN_COPY_SUFFIX).
+_SCREEN_COPY_SUFFIXES = (".i", ".screen")
+
+
+def decodes_picture(suffix: str) -> bool:
+    """Whether nxwright decodes a picture's file of `suffix`, such as ".png",
+    to make its screen copy: one of PICTURE_SUFFIXES. Of a file of another
+    type, the source folder keeps the project's own screen copy, which the
+    build uses as it is."""
+    return suffix.lower() in PICTURE_SUFFIXES
 
 
 def encode_image_source(source: ImageSource) -> bytes:

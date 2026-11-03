@@ -46,6 +46,7 @@ This page describes the folder's files. [commands.md](commands.md) describes eac
 | `pages/<page>.nx` | The page's event code. |
 | `pictures/<name>.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | A picture. `nxwright picture` adds one ([commands.md](commands.md#picture)). |
 | `pictures/<name>.source.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | The file a picture had before you resized it in the Nextion Editor's picture viewer. Only a resized picture has one. |
+| `pictures/<name>.screen` | The project's screen copy of a picture whose file is of a type nxwright does not decode, such as `pictures/logo.tif`. Only such a picture has one. |
 | `fonts/<name>.zi` | A font. `nxwright font` draws one from a typeface file, such as a `.ttf` file, or adds a ready-made font file ([commands.md](commands.md#font)). |
 | `animations/<name>.gmov`, `animations/<name>.screen.gmov` | An animation: its frames, and the form the screen shows. `nxwright animation` makes both from picture files, or from GmovMaker's file ([Animations, videos, and sounds](#animations-videos-and-sounds)). |
 | `videos/<name>.video` | A video. `nxwright video` makes one. |
@@ -67,6 +68,10 @@ About picture files:
 - A `/` in a name makes a subfolder: `pictures/icons/back.png`.
 - When you resize a picture in the Nextion Editor's picture viewer, the Nextion Editor keeps the file the picture had before, so that its "Restore to source size" can go back to it. Extracting writes that file beside the picture's, as its source file, such as `pictures/logo.source.png`, and the build gives it back to the project. A picture has one source file at most.
 - When you replace a picture's file, delete its source file too. Otherwise the Nextion Editor's "Restore to source size" brings back the old picture.
+- No Nextion Editor known stores a picture in a file of a type other than PNG, JPEG, BMP, or GIF. If a project has one, such as a TIFF file, extracting writes the file as it is, and the project's screen copy of it beside it, such as `pictures/logo.screen`.
+  - nxwright cannot make a screen copy from such a file, so the build writes the `.screen` file as it is, and warns you. An edit of the picture's file does not reach the screen.
+  - Without the `.screen` file, the build stops.
+  - To change the picture, save it as a PNG, JPEG, BMP, or GIF file, and delete the old file and its `.screen` file.
 
 ## app.toml
 
@@ -105,7 +110,7 @@ nxwright writes its TOML files with tomli-w, which lays out each list with one n
 - `screen`, `rotation`, and `encoding` are the device settings the Nextion Editor sets for the project:
   - the screen model;
   - the rotation in degrees: 0, 90, 180, or 270;
-  - the character encoding: `ascii`, `iso-8859-1`, `utf-8`, or one of the others the Nextion Editor offers.
+  - the character encoding: `ascii`, `iso-8859-1`, `utf-8`, or one of the others the Nextion Editor offers. A project in an encoding nxwright does not know gives its number instead, such as `encoding = 37`. Its texts are then read one character per byte, so they may show as the wrong characters, and the build writes their bytes back as they are.
 
   The build needs all three. Change them with `nxwright device`, which also changes what depends on them ([commands.md](commands.md#device)).
 - Extracting also writes the other device settings, when they are not the Nextion Editor's defaults. You may add them by hand too:
@@ -118,7 +123,7 @@ nxwright writes its TOML files with tomli-w, which lays out each list with one n
   | `ignore_image_resources` | "Ignore image resources at compile time" | `true` or `false` (the default) |
   | `password_hash` | The hash of the project's password | the hash that `nxwright password-hash` prints ([commands.md](commands.md#password-hash)), so that the password itself stays out of the folder |
 
-  A project of a screen model nxwright does not know gets none of the device settings, and the build refuses the folder until nxwright knows the model. Its texts and code are still read in its own character encoding. Extract prompts you to choose whether to go on with such a project ([commands.md](commands.md#extract)). If the folder it updates has device settings, the prompt warns that they will be removed.
+  A project of a screen model nxwright does not know gets none of the device settings, and the build refuses the folder until nxwright knows the model. Its texts and code are still read in its own character encoding. A project whose settings are stored in a header of a size nxwright has not seen gets none of them either, and its texts are read as `iso-8859-1`. Extract prompts you to choose whether to go on with such a project ([commands.md](commands.md#extract)). If the folder it updates has device settings, the prompt warns that they will be removed.
 - `pages` lists the project's pages by name. A page's name may use any character of Latin-1, as a component's name may, except a double quote or a control character: `"p 0"`, `"a:b"`, or `"café"`.
 - `pictures`, `fonts`, `animations`, `videos`, and `sounds` list the project's resources by name. A folder with none of a kind leaves its list out, as extracting does.
 - The order of `pages`, `pictures`, `fonts`, `animations`, `videos`, and `sounds` is their order in the project, and so it sets their IDs. To reorder, reorder these lists.

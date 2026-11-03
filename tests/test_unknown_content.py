@@ -79,13 +79,24 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(sorts(unknown_in_manifest_header(header)),
                          [("manifest header, bytes 16 to 19", MAY_BE_LOST)])
 
-    def test_an_unknown_encoding_cannot_be_kept(self):
+    def test_an_unknown_encoding_is_kept_exactly(self):
+        # It was sorted cannot be kept before. Now it is kept as its number,
+        # and its texts read byte by byte.
         self.assertEqual(sorts(unknown_in_manifest_header(with_bytes(HEADER, b13=0xEE))),
-                         [("manifest header, byte 13", CANNOT_BE_KEPT)])
+                         [("manifest header, byte 13", KEPT)])
 
-    def test_a_header_of_another_size_cannot_be_kept(self):
+    def test_an_unknown_encoding_of_an_unknown_model_may_be_lost(self):
+        # app.toml then gets no device settings to keep its number in.
+        found = unknown_in_manifest_header(with_bytes(HEADER, b13=0xEE, b16=0xEE, b17=0xEE))
+        self.assertEqual(sorts(found), [("manifest header, byte 13", MAY_BE_LOST),
+                                        ("manifest header, bytes 16 to 19", MAY_BE_LOST)])
+        self.assertIn("encoding = 238", found[0].what)
+
+    def test_a_header_of_another_size_may_be_lost(self):
+        # Cannot be kept before: as for an unknown model, app.toml gets no
+        # screen settings.
         self.assertEqual(sorts(unknown_in_manifest_header(HEADER + bytes(4))),
-                         [("manifest header", CANNOT_BE_KEPT)])
+                         [("manifest header", MAY_BE_LOST)])
 
 
 class PictureHeadersTest(unittest.TestCase):
@@ -96,6 +107,21 @@ class PictureHeadersTest(unittest.TestCase):
         changed = block[:1] + b"\x0b" + block[2:]
         self.assertEqual(sorts(unknown_in_picture_headers({"0.is": changed})),
                          [("block 0.is", MAY_BE_LOST)])
+
+    def test_a_picture_nxwright_does_not_decode_is_kept_exactly(self):
+        # With the project's screen copy of it, which the build uses as it is.
+        block = encode_image_source(ImageSource(8, 4, b"II*\0 data", ".tif"))
+        self.assertEqual(sorts(unknown_in_picture_headers({"0.is": block})),
+                         [("block 0.is", KEPT)])
+        # Its record gets the checks of any picture's.
+        block = encode_image_source(ImageSource(8, 4, b"II*\0 data", ".TIF"))
+        self.assertEqual(sorts(unknown_in_picture_headers({"0.is": block})),
+                         [("block 0.is", KEPT), ("block 0.is", WRITTEN_OTHERWISE)])
+
+    def test_a_suffix_in_capitals_is_written_otherwise(self):
+        block = encode_image_source(ImageSource(8, 4, b"\x89PNG data", ".PNG"))
+        self.assertEqual(sorts(unknown_in_picture_headers({"0.is": block})),
+                         [("block 0.is", WRITTEN_OTHERWISE)])
 
 
 # A page header's bytes 16 to 23 and 40 to 55, as the Nextion Editor 1.68.2
@@ -160,7 +186,7 @@ class PagesTest(unittest.TestCase):
                 self.assertEqual(sorts(found), [("block 0.pa, page header " + place, KEPT)])
 
     def test_what_the_page_files_do_not_keep_as_it_is(self):
-        # Plans/extract-what-it-reads.md, Phase 2: each case and its sort.
+        # Each case the page files do not keep as it is, and its sort.
         text, codec = ("type", bytes([116])), TextCodec("utf-8")
         cases = {
             "an object's records out of their usual order":

@@ -67,7 +67,7 @@ Brings a project file into a source folder. Use it to start from a project made 
   - **Kept exactly**, such as a component type nxwright does not know, or an attribute it does not know. A page file keeps such an attribute as its stored bytes ([source-folder.md](source-folder.md#page-files)). A warning gives each thing kept.
   - **Written otherwise** by the next build, in a form nxwright knows, such as a page header in a form nxwright has not seen, which the build writes in the current form, as the Nextion Editor does, or an object's records out of their usual order, which the build writes in order. A warning gives each one, and extract goes on without prompting, even with no terminal.
   - **May be lost** by the next build, such as a block of another kind, or a screen model nxwright does not know. Extract lists each one, and warns that the project may then miss parameters the Nextion Editor needs. Then it prompts you to choose whether to go on. If there is no terminal to answer at, as in a script, extract stops with exit code 3. `--continue-with-unknown` goes on without prompting.
-  - **Cannot be kept**, such as a character encoding nxwright does not know. Extract refuses the project.
+  - **Cannot be kept**, such as a component without its type, ID, or name. Extract refuses the project.
 
   The warnings and the refusal end with a pointer to `nxwright report`, which writes a report to send to nxwright's maintainers ([report](#report)).
 - `nxwright extract --list-unknown thermostat.HMI` prints each thing in the project that nxwright does not know, one JSON object a line, and writes nothing. An object gives what the thing is, where it is, its sort, its size, and its first 16 bytes in hexadecimal.
@@ -457,11 +457,13 @@ As it works, the command prints each step as it starts, with the file it works o
 - Each page takes the new screen's size, at its rotation: each page file's `w` and `h` change.
 - Every component keeps its place and its size.
 - Pictures, animations, and sounds stay as they are. The build makes the pictures' screen copies for the series and the rotation, and the Nextion Editor makes an animation's form again as it compiles.
+- A picture in a file of a type nxwright does not decode keeps the project's screen copy of it, such as `pictures/logo.screen` ([source-folder.md](source-folder.md#layout)). The command makes that file again from its own pixels, for the new screen's format and the rotation. If the picture is partly transparent and the new screen's format cannot store that, the command stops and writes nothing, as the Nextion Editor makes such a screen copy from the picture's file.
 
 ### A new rotation
 
 - Each page takes the screen's size at the new rotation, as for a new screen.
 - Each font is turned to the new rotation.
+- A picture's `.screen` file is made again, as for a new screen.
 - A video is made for one rotation. The Nextion Editor's compile refuses a video made for another, and so does the build. nxwright does not keep the source a video was made from. So each video is made again from its own frames, each frame coded again as VideoBox codes one, which loses a little quality. The command prints a note for each video.
 - If nxwright cannot turn one of the folder's fonts, for example a font file it cannot read, the command stops and writes nothing. A source folder keeps every font at its rotation, as `nxwright font` does.
 

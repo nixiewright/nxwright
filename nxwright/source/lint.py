@@ -46,6 +46,7 @@ resource:
     its file without decoding its pixels (pictures.picture_problem).
 """
 from dataclasses import dataclass, field
+from pathlib import Path
 import tomllib
 
 from nxwright import NxwrightError, listed_in_words
@@ -56,6 +57,7 @@ from nxwright.project.component_defaults import nxwright_defaults
 from nxwright.project.media_files import VIDEO_HEAD_SIZE, sound_file_problem, sound_form_problem
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.pictures import picture_problem
+from nxwright.project.resources import decodes_picture
 from nxwright.project.screen_arithmetic import int32
 from nxwright.source.nx_files import (FUNCTION_HEADING, event_blocks, read_event_heading,
                                       read_nx_file, read_page_files)
@@ -208,26 +210,33 @@ def sound_errors(app: dict, read, read_bytes) -> list:
     return found
 
 
-def picture_errors(app: dict, read, read_bytes, exists) -> list:
+def picture_errors(app: dict, read, read_bytes, exists, listed=None) -> list:
     """Returns the error Findings of the pictures nxwright cannot read, of
     the folder whose settings are `app`, whose files' text `read(path)`
     returns, and their bytes `read_bytes(path)`: each opened without its
     pixels decoded, as the build would refuse it (pictures.picture_problem),
     and so for a resized picture's source file. A picture with no file, or
     more than one, or more than one source file, which the checks report
-    already (source_folder.resource_problems), is not read."""
+    already (source_folder.resource_problems), is not read, and nor is a
+    picture's file of a type nxwright does not decode, whose screen copy
+    the build takes as it is (`listed`, source_folder.kept_picture_paths)."""
     found = []
     for name in app["pictures"]:
         paths = []
-        for check, path_of in ((check_picture_file, picture_file),
-                               (check_picture_source, picture_source_file)):
-            try:
-                check(name, exists)
-            except NxwrightError:
-                continue    # the check reports it
-            path = path_of(name, exists)
+        try:
+            check_picture_file(name, exists, listed)
+            path = picture_file(name, exists, listed)
+            if decodes_picture(Path(path).suffix):
+                paths.append(path)
+        except NxwrightError:
+            pass    # the check reports it
+        try:
+            check_picture_source(name, exists)
+            path = picture_source_file(name, exists)
             if path is not None:
                 paths.append(path)
+        except NxwrightError:
+            pass    # the check reports it
         for path in paths:
             try:
                 problem = picture_problem(read_bytes(path))

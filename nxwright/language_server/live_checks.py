@@ -36,7 +36,7 @@ from nxwright.project.editor_limits import MOST_COMPONENTS
 from nxwright.source.folder_index import APP_FILE, FolderIndex, page_of
 from nxwright.source.folder_check import check_folder, memory_findings
 from nxwright.source.lint import ERROR
-from nxwright.source.source_folder import folder_byte_reader
+from nxwright.source.source_folder import folder_byte_reader, folder_lister
 
 _EVERY_PAGE_FILES = {APP_FILE, "defaults.toml"}
 
@@ -110,7 +110,7 @@ class LiveChecks:
 
         result = check_folder(self._texts.folder_reader(root),
                               lambda path: (root / path).is_file(), pages,
-                              folder_byte_reader(root))
+                              folder_byte_reader(root), folder_lister(root))
         if pages is None or result.read_failed:
             state.page_findings, state.measures = {}, {}
         for page in result.page_findings:

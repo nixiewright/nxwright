@@ -79,8 +79,8 @@ class TextEncodingTest(SourceFolderTestCase):
 
     def test_bytes_that_are_not_text_are_kept_as_their_bytes(self):
         # In code page 932, fa 4a and 87 54 are both U+2160, which encodes as
-        # 87 54, so fa 4a would not come back. Each was refused before
-        # (Plans/extract-what-it-reads.md, Phase 2).
+        # 87 54, so fa 4a would not come back. Extract refused each of these
+        # before.
         for encoding, text in (("utf-8", b"\xff"), ("shift-jis", bytes.fromhex("fa4a")),
                                ("ascii", b"\xe9")):
             with self.subTest(encoding=encoding):

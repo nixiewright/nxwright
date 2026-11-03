@@ -43,7 +43,8 @@ from nxwright.project.container import (DIRECTORY_COPY_OFFSET, ENTRY_SIZE, Direc
 from nxwright.project.device_settings import read_device_settings
 from nxwright.project.dump_folder import (MACROS_BLOCK, MACROS_FILE, check_dump_format,
                                           check_ids_without_gaps, copied_contents,
-                                          dump_picture_sources, dump_pictures, page_text_files,
+                                          dump_picture_sources, dump_pictures,
+                                          kept_picture_blocks, page_text_files,
                                           picture_source_block)
 from nxwright.project.editor_limits import check_page_limits, page_count_refusal
 from nxwright.project.page_block import encode_page, parse_page
@@ -52,9 +53,9 @@ from nxwright.project.picture_cache import make_screen_copy, opened_cache
 from nxwright.project.pictures import read_picture
 from nxwright.project.replacing import held_by_the_nextion_editor, is_project_file, written_beside
 from nxwright.project.resources import (COPIED_KINDS, SOURCE_EXTENSION, CopiedKind, ImageSource,
-                                        check_manifest_matches_blocks, encode_image_source,
-                                        encode_manifest, parse_image_source, parse_manifest,
-                                        partner_name, with_kind_in_order)
+                                        check_manifest_matches_blocks, decodes_picture,
+                                        encode_image_source, encode_manifest, parse_image_source,
+                                        parse_manifest, partner_name, with_kind_in_order)
 from nxwright.project.screen_copy import (FORMAT_RAW, FORMAT_RAW_WITH_HEADER, ROTATIONS,
                                           decode_screen_copy, is_compressed_format_3,
                                           matches_within_editor_rounding, screen_copy_format)
@@ -77,8 +78,10 @@ class WritePlan:
     # Each picture's source block, as the dump asks for it, in ID order:
     # (".ib" block name, its bytes, or None for a picture without one).
     picture_sources: list = field(default_factory=list)
-    # Screen copies taken from the picture cache: ".i" block name -> the block.
-    # They have no pixels to decode back to, so the written block is compared.
+    # Screen copies taken as they are, from the picture cache or, for a
+    # picture nxwright does not decode, from the dump: ".i" block name -> the
+    # block. They have no pixels to decode back to, so the written block is
+    # compared.
     cached_screen_copies: dict = field(default_factory=dict)
     screen_copy_format: int = None      # of new screen copies, from the project's pictures
     screen_copy_rotation: int = None    # of new screen copies, from the project's pictures
@@ -241,7 +244,8 @@ def _plan_pictures(plan: WritePlan, container: HmiContainer, manifest, dump_fold
                                                                                  manifest)
         with opened_cache() as cache:
             for picture_id, file_name, block_name, data, suffix in added:
-                _plan_new_picture(plan, picture_id, file_name, block_name, data, suffix, cache)
+                _plan_new_picture(plan, dump_folder, picture_id, file_name, block_name, data,
+                                  suffix, cache)
 
 
 def _plan_picture_sources(plan: WritePlan, container: HmiContainer, dump_folder: Path):
@@ -265,11 +269,19 @@ def _plan_picture_sources(plan: WritePlan, container: HmiContainer, dump_folder:
                                 % ("Replaced" if old is not None else "Added", picture_id, name))
 
 
-def _plan_new_picture(plan: WritePlan, picture_id: int, file_name: str, block_name: str,
-                      data: bytes, suffix: str, cache):
+def _plan_new_picture(plan: WritePlan, dump_folder: Path, picture_id: int, file_name: str,
+                      block_name: str, data: bytes, suffix: str, cache):
     """Adds the file's block and the screen copy of one new picture, its
     file `data` from the dump's `file_name`, of `suffix`, the screen copy
-    made now or taken from `cache` (picture_cache.py, or None)."""
+    made now or taken from `cache` (picture_cache.py, or None). Of a file
+    of a type nxwright does not decode, the dump's own screen copy is taken
+    as it is (dump_folder.kept_picture_blocks)."""
+    if not decodes_picture(suffix):
+        plan.blocks[block_name + "s"], plan.blocks[block_name] = kept_picture_blocks(
+            dump_folder, picture_id, file_name, data, suffix, plan.screen_copy_rotation)
+        plan.cached_screen_copies[block_name] = plan.blocks[block_name]
+        plan.changes.append("Added picture %d as block %s" % (picture_id, block_name))
+        return
     try:
         made = make_screen_copy(data, plan.screen_copy_format, plan.screen_copy_rotation, cache)
     except NxwrightError as error:

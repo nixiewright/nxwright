@@ -83,7 +83,8 @@ class FolderCheck:
         return [finding for finding in self.findings() if finding.severity == ERROR]
 
 
-def check_folder(read, exists, pages: list = None, read_bytes=None) -> FolderCheck:
+def check_folder(read, exists, pages: list = None, read_bytes=None,
+                 listed=None) -> FolderCheck:
     """Returns the FolderCheck of the source folder whose files `read(path)`
     returns, and `exists(path)` tells apart from missing ones, by their paths
     within the folder. With `pages`, only those pages are built. With
@@ -94,7 +95,10 @@ def check_folder(read, exists, pages: list = None, read_bytes=None) -> FolderChe
     sounds', to warn of one not in the Editor's form (lint.sound_warnings),
     and to find one a screen does not play (lint.sound_errors); and
     the start of the videos', to find one made for another rotation
-    (lint.video_rotation_errors)."""
+    (lint.video_rotation_errors). With `listed(folder)`, which returns the
+    names of the files in a folder within the source folder
+    (source_folder.folder_lister), a picture in a file of a type nxwright
+    does not decode is found too (source_folder.kept_picture_paths)."""
     result = FolderCheck()
     try:
         folder = read_folder_source(read, skip_broken_pages=True)
@@ -123,7 +127,7 @@ def check_folder(read, exists, pages: list = None, read_bytes=None) -> FolderChe
         globals_used += page_globals
     for kind in RESOURCE_FILES:
         for name in folder.app[kind]:
-            for problem in resource_problems(kind, name, exists):
+            for problem in resource_problems(kind, name, exists, listed):
                 line = line_naming(read("app.toml"), name)
                 result.folder_findings.append(Finding("app.toml", line, ERROR, problem))
     result.pages, result.screen = list(folder.app["pages"]), folder.screen
@@ -141,7 +145,7 @@ def check_folder(read, exists, pages: list = None, read_bytes=None) -> FolderChe
         result.folder_findings.append(_finding(error, read))
     result.folder_findings += warnings(folder.app, read)
     if read_bytes is not None:
-        result.folder_findings += (picture_errors(folder.app, read, read_bytes, exists)
+        result.folder_findings += (picture_errors(folder.app, read, read_bytes, exists, listed)
                                    + video_rotation_errors(folder.app, read, read_bytes)
                                    + sound_errors(folder.app, read, read_bytes)
                                    + sound_warnings(folder.app, read, read_bytes))

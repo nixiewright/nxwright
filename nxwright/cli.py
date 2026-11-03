@@ -38,7 +38,8 @@ from nxwright.source.unknown_content import (UnknownContentError, report_hint,
 from nxwright.source.keyboards import KEYBOARD_PAGES
 from nxwright.source.resource_removal import KINDS, remove_resource
 from nxwright.source.source_folder import (LANGUAGES, NXLANG, add_page, folder_byte_reader,
-                                           folder_reader, import_dump, new_source_folder,
+                                           folder_lister, folder_reader, import_dump,
+                                           kept_screen_copy_warnings, new_source_folder,
                                            switch_to_nxlang)
 from nxwright.source.resource_adding import (VIDEO_RATE, add_animation, add_font, add_font_file,
                                              add_pictures, add_sound, add_video,
@@ -54,6 +55,8 @@ def _run_build(arguments) -> str:
     memory = build(arguments.source_folder, arguments.output)
     if memory.warning is not None:
         print("nxwright build: warning: %s" % memory.warning, file=sys.stderr)
+    for warning in kept_screen_copy_warnings(arguments.source_folder):
+        print("nxwright build: warning: %s" % warning, file=sys.stderr)
     # Each page's memory, as the Editor's compile lists it. Counted without
     # what the table did not measure, it is a lower bound.
     at_least = "at least " if memory.unmeasured is not None else ""
@@ -132,7 +135,7 @@ def _run_check(arguments) -> str:
     if not (folder / "app.toml").is_file():
         raise NxwrightError("%s has no app.toml" % folder)
     result = check_folder(folder_reader(folder), lambda path: (folder / path).is_file(),
-                          read_bytes=folder_byte_reader(folder))
+                          read_bytes=folder_byte_reader(folder), listed=folder_lister(folder))
     findings = result.findings()
     for finding in findings:
         print("%s: %s" % (finding.place, finding.severity) if finding.place

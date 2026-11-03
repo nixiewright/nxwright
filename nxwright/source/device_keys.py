@@ -7,7 +7,7 @@ keys appear only when their setting is not the Editor's default.
 """
 from nxwright import NxwrightError
 from nxwright.project.device_settings import (NO_PASSWORD, DeviceSettings, encoding_code,
-                                              is_password_hash_text)
+                                              is_password_hash_text, is_unknown_encoding)
 from nxwright.project.screen_copy import ROTATIONS
 from nxwright.project.screen_models import model_named
 
@@ -18,10 +18,16 @@ _REQUIRED = DEVICE_KEYS[:3]
 _FLAGS = ("one_time_update", "ignore_library_resources", "ignore_image_resources")
 
 
+def app_encoding(name: str):
+    """Returns the encoding `name` as app.toml gives it: its name, or the
+    number of one nxwright does not know, such as 37 (is_unknown_encoding)."""
+    return encoding_code(name) if is_unknown_encoding(name) else name
+
+
 def device_keys(settings: DeviceSettings) -> dict:
     """Returns the app.toml keys for `settings`, in DEVICE_KEYS order."""
     keys = {"screen": settings.model.name, "rotation": settings.rotation,
-            "encoding": settings.encoding}
+            "encoding": app_encoding(settings.encoding)}
     for flag in _FLAGS:
         if getattr(settings, flag):
             keys[flag] = True
@@ -55,7 +61,8 @@ def settings_from_keys(app: dict):
     try:
         model = model_named(app["screen"])
         if not isinstance(app["encoding"], str):
-            raise NxwrightError("encoding must be a name, such as \"iso-8859-1\"")
+            raise NxwrightError("encoding must be a name, such as \"iso-8859-1\", or the "
+                                "number of one nxwright does not know")
         encoding_code(app["encoding"])
     except NxwrightError as error:
         raise NxwrightError("app.toml: %s" % error) from None

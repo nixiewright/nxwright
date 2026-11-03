@@ -42,8 +42,9 @@ from nxwright.project.screen_models import model_named
 from nxwright.source.folder_check import check_folder
 from nxwright.source.lint import ERROR, Finding
 from nxwright.source.project_files import build, extract
-from nxwright.source.source_folder import (folder_byte_reader, folder_reader, new_source_folder,
-                                           picture_file)
+from nxwright.source.resource_removal import remove_resource_files
+from nxwright.source.source_folder import (folder_byte_reader, folder_lister, folder_reader,
+                                           new_source_folder, picture_file)
 from tests.test_folder_check import edited_app, edited_page_file
 from tests.test_pictures import png_bytes
 from tests.test_project_writer import WriterTestCase
@@ -92,10 +93,16 @@ class RecordTest(unittest.TestCase):
         source = ImageSource(160, 96, jpeg("baseline.jpg"), ".png")
         self.assertEqual(parse_image_source(encode_image_source(source)), source)
 
-    def test_a_suffix_nxwright_does_not_keep_is_refused(self):
-        record = encode_image_source(ImageSource(160, 96, jpeg("baseline.jpg"), ".tif"))
-        with self.assertRaisesRegex(NxwrightError, "image record of a .tif file; nxwright keeps "
-                                                   ".png, .jpg, .jpeg, .bmp, .gif files"):
+    def test_a_record_of_any_file_type_is_read(self):
+        # Such a record was refused before. The source folder keeps such a
+        # picture with its screen copy.
+        source = ImageSource(160, 96, jpeg("baseline.jpg"), ".tif")
+        self.assertEqual(parse_image_source(encode_image_source(source)), source)
+        record = encode_image_source(ImageSource(160, 96, jpeg("baseline.jpg"), ".t/f"))
+        with self.assertRaisesRegex(NxwrightError, "suffix '.t/f' is not letters and digits"):
+            parse_image_source(record)
+        record = encode_image_source(ImageSource(160, 96, jpeg("baseline.jpg"), ".screen"))
+        with self.assertRaisesRegex(NxwrightError, "the suffix nxwright gives a screen copy"):
             parse_image_source(record)
 
 
@@ -247,6 +254,41 @@ class SourceFolderTest(SourceFolderTestCase):
         with self.assertRaisesRegex(NxwrightError, missing):
             self.built()
         self.assertIn(Finding("app.toml", self.photo_line(), ERROR, missing), self.findings())
+
+
+class KeptScreenCopyTest(SourceFolderTestCase):
+    """A picture in a file of a type nxwright does not decode, such as
+    pictures/photo.tif, which the folder keeps with the project's screen
+    copy of it, pictures/photo.screen."""
+
+    def listed_findings(self) -> list:
+        return check_folder(folder_reader(self.source),
+                            lambda path: (self.source / path).is_file(), None,
+                            folder_byte_reader(self.source),
+                            folder_lister(self.source)).folder_findings
+
+    def test_another_file_beside_a_png_is_not_the_picture_s(self):
+        self.picture(".png", write_png(4, 4, bytes(4 * 4 * 4)))
+        self.picture(".svg", b"<svg/>")
+        self.assertEqual(self.listed_findings(), [])
+        self.built()
+        removed, _ = remove_resource_files(self.source, "pictures", "photo")
+        self.assertEqual(removed, ["pictures/photo.png"])
+        self.assertTrue((self.source / "pictures" / "photo.svg").is_file())
+
+    def test_without_its_screen_copy_it_is_refused(self):
+        self.picture(".tif", b"II*\0")
+        [finding] = self.listed_findings()
+        self.assertEqual(finding.message, "pictures/photo.tif: nxwright does not decode this "
+                                          "type of picture, and pictures/photo.screen, its screen "
+                                          "copy, is missing; save the picture as a PNG, JPEG, "
+                                          "BMP, or GIF file")
+
+    def test_removing_it_deletes_its_screen_copy(self):
+        self.picture(".tif", b"II*\0")
+        self.picture(".screen", b"screen copy")
+        self.assertEqual(remove_resource_files(self.source, "pictures", "photo"),
+                         (["pictures/photo.tif", "pictures/photo.screen"], []))
 
 
 class UnreadablePictureTest(SourceFolderTestCase):

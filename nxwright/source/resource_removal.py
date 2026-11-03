@@ -40,8 +40,10 @@ from nxwright.source.references import references
 from nxwright.source.folder_check import check_folder
 from nxwright.source.macros_source import MACROS_PATH
 from nxwright.source.page_source import page_toml_path, reference_kind
-from nxwright.source.source_folder import (RESOURCE_FILES, app_text, folder_reader, number_in_table,
-                                           picture_source_paths, read_app, read_folder_source)
+from nxwright.source.source_folder import (RESOURCE_FILES, app_text, folder_file_exists,
+                                           folder_lister, folder_reader, kept_picture_paths,
+                                           number_in_table, picture_source_paths, read_app,
+                                           read_folder_source, screen_copy_path)
 
 # The kinds the command takes, by the word it takes them as: "picture".
 KINDS = {noun: kind for kind, noun in NOUNS.items()}
@@ -91,7 +93,8 @@ def remove_resource(source_folder: Path, kind: str, name: str) -> tuple:
     if name not in names:
         raise NxwrightError("the folder has no %s named %s" % (kind, name))
     read = folder_reader(source_folder)
-    errors = check_folder(read, lambda path: (source_folder / path).is_file()).errors()
+    errors = check_folder(read, lambda path: (source_folder / path).is_file(),
+                          listed=folder_lister(source_folder)).errors()
     if errors:
         first = errors[0]
         raise NxwrightError("the folder's checks find an error, so its uses of %s %s cannot "
@@ -111,19 +114,22 @@ def remove_resource(source_folder: Path, kind: str, name: str) -> tuple:
 def remove_resource_files(source_folder: Path, listed: str, name: str) -> tuple:
     """Takes the resource `name` out of app.toml's list `listed`, then
     deletes each of its files: those of its name with one of its kind's
-    suffixes (RESOURCE_FILES), and a picture's source file, each by its own
-    path; no folder. Returns (the
-    paths deleted, those that could not be, a sentence each), within the
-    folder. app.toml goes first, so that a file left behind is one no list
+    suffixes (RESOURCE_FILES), and a picture's source file, or its file of
+    a type nxwright does not decode and its screen copy
+    (source_folder.kept_picture_paths), each by its own path; no folder.
+    Returns (the paths deleted, those that could not be, a sentence each),
+    within the folder. app.toml goes first, so that a file left behind is one no list
     names, never a name whose file is gone. It checks no use of the
     resource: remove_resource does, before."""
     app = read_app(source_folder)
+    kept = (kept_picture_paths(name, folder_file_exists(source_folder),
+                               folder_lister(source_folder)) if listed == "pictures" else [])
     app[listed] = [listed_name for listed_name in app[listed] if listed_name != name]
     (source_folder / "app.toml").write_text(app_text(app), encoding="utf-8", newline="\n")
     removed, left = [], []
     paths = ["%s/%s%s" % (listed, name, suffix) for suffix in RESOURCE_FILES[listed]]
     if listed == "pictures":
-        paths += picture_source_paths(name)
+        paths += picture_source_paths(name) + kept + ([screen_copy_path(name)] if kept else [])
     for relative in paths:
         path = source_folder / relative
         if not path.is_file():

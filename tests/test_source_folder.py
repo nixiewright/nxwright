@@ -789,7 +789,7 @@ class PageSourceTest(unittest.TestCase):
                     page_to_source(page, NO_NAMES, NO_DEFAULTS)
 
     def test_takes_what_the_source_keeps_otherwise(self):
-        # Each was refused before (Plans/extract-what-it-reads.md, Phase 2).
+        # Extract refused each of these before.
         cases = {
             "control character": (lambda page: page.objects[0].items.append(
                 Event("down", [b"a\x01"])), "kept_events = { down = { lines = [\"6101\"] } }"),

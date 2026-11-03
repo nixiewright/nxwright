@@ -19,6 +19,7 @@ The two "one time update" and "memory file storage size" settings exist only
 for the Intelligent (P) and Edge (E) series in the Editor.
 """
 from dataclasses import dataclass
+import re
 import struct
 
 from nxwright import NxwrightError
@@ -81,10 +82,8 @@ def read_device_settings(header: bytes):
         raise NxwrightError("the manifest names %s but series %d" % (model.name, header[11]))
     if header[12] > 3:
         raise NxwrightError("the manifest's rotation %d is not 0 to 3" % header[12])
-    if header[13] not in ENCODINGS:
-        raise NxwrightError("the manifest's character encoding %d is not known" % header[13])
     return DeviceSettings(
-        model=model, rotation=header[12] * 90, encoding=ENCODINGS[header[13]],
+        model=model, rotation=header[12] * 90, encoding=encoding_name(header[13]),
         one_time_update=bool(header[15]),
         memory_file_storage_size=struct.unpack_from("<I", header, 32)[0],
         ignore_library_resources=bool(header[38]), ignore_image_resources=bool(header[39]),
@@ -161,7 +160,10 @@ class TextCodec:
     def __init__(self, name: str):
         encoding_code(name)
         self.name = name
-        self._own_codec = self._OWN_CODECS.get(name, name)
+        # An encoding nxwright does not know reads each byte as the character
+        # of the same number, which encodes back to the same byte.
+        self._own_codec = "latin-1" if is_unknown_encoding(name) else self._OWN_CODECS.get(
+            name, name)
         self._codec = self._WINDOWS_CODE_PAGES.get(name, self._own_codec)
 
     @property
@@ -225,9 +227,31 @@ class TextCodec:
                                                             error.object[error.start])) from None
 
 
+# The name of an encoding nxwright does not know, by its number, manifest
+# byte 13, such as "encoding-37". app.toml gives the number alone.
+_UNKNOWN_ENCODING = re.compile(r"encoding-(\d+)")
+
+
+def encoding_name(code: int) -> str:
+    """Returns the name of the encoding whose manifest byte 13 is `code`: a
+    name of ENCODINGS, or the name of one nxwright does not know, such as
+    "encoding-37"."""
+    return ENCODINGS.get(code, "encoding-%d" % code)
+
+
+def is_unknown_encoding(name) -> bool:
+    """Whether `name` names an encoding nxwright does not know, by its
+    number, as encoding_name gives it."""
+    found = _UNKNOWN_ENCODING.fullmatch(name) if isinstance(name, str) else None
+    return found is not None and int(found[1]) < 256 and int(found[1]) not in ENCODINGS
+
+
 def encoding_code(name: str) -> int:
-    """Returns manifest byte 13 for the encoding `name`. Raises NxwrightError
-    for a name ENCODINGS does not hold."""
+    """Returns manifest byte 13 for the encoding `name`, a name of ENCODINGS
+    or one encoding_name gives an encoding nxwright does not know. Raises
+    NxwrightError for any other name."""
+    if is_unknown_encoding(name):
+        return int(_UNKNOWN_ENCODING.fullmatch(name)[1])
     if name not in _ENCODING_CODES:
         raise NxwrightError("unknown character encoding %r; known: %s"
                             % (name, ", ".join(_ENCODING_CODES)))

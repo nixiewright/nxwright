@@ -26,13 +26,14 @@ from nxwright.project.container import (DIRECTORY_COPY_OFFSET, ENTRY_SIZE, Direc
 from nxwright.project.device_settings import DeviceSettings, encoding_code, manifest_header
 from nxwright.project.dump_folder import (MACROS_BLOCK, MACROS_FILE, check_dump_format,
                                           check_ids_without_gaps, copied_contents,
-                                          dump_picture_sources, dump_pictures, page_text_files,
+                                          dump_picture_sources, dump_pictures,
+                                          kept_picture_blocks, page_text_files,
                                           picture_source_block)
 from nxwright.project.page_block import encode_page, parse_page
 from nxwright.project.page_header import header_40
 from nxwright.project.page_text import page_from_text
 from nxwright.project.picture_cache import make_screen_copy, opened_cache
-from nxwright.project.resources import (COPIED_KINDS, CopiedKind, ImageSource,
+from nxwright.project.resources import (COPIED_KINDS, CopiedKind, ImageSource, decodes_picture,
                                         encode_image_source, encode_manifest, parse_manifest)
 from nxwright.project.stamp import with_model_manifest_stamp, with_stamp
 
@@ -122,24 +123,39 @@ def _picture_blocks(dump_folder: Path, settings: DeviceSettings) -> list:
         return blocks
     with opened_cache() as cache:
         for picture_id, (file_name, data, suffix) in enumerate(files):
-            try:
-                made = make_screen_copy(data, kind, rotation, cache)
-            except NxwrightError as error:
-                # The dump's file is kept apart from the words too, so that a
-                # build can name the source folder's file in its place. This
-                # `file` is a dump's path, not a source folder's as
-                # NxwrightError's docstring has it: no finding is placed by it
-                # until project_files.build has turned it into the folder's.
-                refusal = NxwrightError("%s: %s" % (file_name, error))
-                refusal.file, refusal.reason = file_name, str(error)
-                raise refusal from None
-            blocks.append(("%d.is" % picture_id,
-                           encode_image_source(ImageSource(made.width, made.height, data,
-                                                           suffix))))
-            blocks.append(("%d.i" % picture_id, made.block))
+            if not decodes_picture(suffix):
+                # nxwright cannot make its screen copy, so the project's own
+                # is used as it is.
+                blocks += zip(("%d.is" % picture_id, "%d.i" % picture_id), kept_picture_blocks(
+                    dump_folder, picture_id, file_name, data, suffix, rotation))
+            else:
+                blocks += _made_picture_blocks(picture_id, file_name, data, suffix, kind,
+                                               rotation, cache)
             if picture_id in sources:
                 blocks.append(("%d.ib" % picture_id, picture_source_block(*sources[picture_id])))
     return blocks
+
+
+def _made_picture_blocks(picture_id: int, file_name: str, data: bytes, suffix: str, kind: int,
+                         rotation: int, cache) -> list:
+    """Returns [(block name, block)] of the file (".is") and the screen copy
+    (".i") of the picture `picture_id`, whose file `data`, of `suffix`, is
+    the dump's `file_name`. The screen copy, of format `kind` and rotation
+    `rotation`, is made now or taken from `cache`."""
+    try:
+        made = make_screen_copy(data, kind, rotation, cache)
+    except NxwrightError as error:
+        # The dump's file is kept apart from the words too, so that a
+        # build can name the source folder's file in its place. This
+        # `file` is a dump's path, not a source folder's as
+        # NxwrightError's docstring has it: no finding is placed by it
+        # until project_files.build has turned it into the folder's.
+        refusal = NxwrightError("%s: %s" % (file_name, error))
+        refusal.file, refusal.reason = file_name, str(error)
+        raise refusal from None
+    return [("%d.is" % picture_id,
+             encode_image_source(ImageSource(made.width, made.height, data, suffix))),
+            ("%d.i" % picture_id, made.block)]
 
 
 def _copied_blocks(kind: CopiedKind, contents: list) -> list:

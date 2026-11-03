@@ -27,7 +27,7 @@ from pathlib import Path
 
 from nxwright import NxwrightError
 from nxwright.project.container import HmiContainer, numbered_block
-from nxwright.project.device_settings import ENCODINGS, HEADER_SIZE, TextCodec
+from nxwright.project.device_settings import ENCODINGS, HEADER_SIZE, TextCodec, encoding_name
 from nxwright.project.dump_folder import dump_header_bytes, dump_manifest_header, page_text_files
 from nxwright.project.dumper import handles_block, kept_picture_sources, page_text_difference
 from nxwright.project.object_types import TYPE_NAMES
@@ -37,7 +37,8 @@ from nxwright.project.page_header import (HEADER_21, SYSTEM_PAGES, header_40_for
 from nxwright.project.page_text import expected_width, is_string_attribute, page_from_text
 from nxwright.project.pictures import picture_data_size
 from nxwright.project.resources import (LISTED_IN_ORDER, SOURCE_EXTENSION, ImageSource,
-                                        encode_image_source, parse_image_source, parse_manifest)
+                                        decodes_picture, encode_image_source, parse_image_source,
+                                        parse_manifest)
 from nxwright.project.screen_models import model_with_id
 # The sorts, which other modules take from here.
 from nxwright.source.content_sorts import CANNOT_BE_KEPT, KEPT, MAY_BE_LOST, WRITTEN_OTHERWISE
@@ -141,12 +142,25 @@ def unknown_in_manifest_header(header: bytes) -> list:
     and bytes the build writes as constants that have other values, may be
     lost, unless the header is the older form as a whole."""
     if len(header) != HEADER_SIZE:
-        return [UnknownContent("a manifest header of %d bytes, not %d" % (len(header), HEADER_SIZE),
-                               "manifest header", header[:16], CANNOT_BE_KEPT)]
+        # Its device settings cannot be read, as for a screen model nxwright
+        # does not know.
+        return [UnknownContent("a manifest header of %d bytes, not %d: app.toml gets no screen "
+                               "settings, and the build refuses the folder until they are given"
+                               % (len(header), HEADER_SIZE), "manifest header", header[:16],
+                               MAY_BE_LOST)]
     found = []
-    if header[13] not in ENCODINGS:
-        found.append(UnknownContent("a character encoding nxwright does not know",
-                                    "manifest header, byte 13", header[13:14], CANNOT_BE_KEPT))
+    if header[13] not in ENCODINGS and model_with_id(header[16:20]) is None:
+        # app.toml gets no device settings to keep its number in, so the
+        # note gives the number to write back with them.
+        found.append(UnknownContent("a character encoding nxwright does not know, which app.toml "
+                                    "does not keep without the screen settings: give it back as "
+                                    "encoding = %d" % header[13], "manifest header, byte 13",
+                                    header[13:14], MAY_BE_LOST))
+    elif header[13] not in ENCODINGS:
+        # Kept as its number, its texts read byte by byte (encoding_name).
+        found.append(UnknownContent("a character encoding nxwright does not know, whose texts "
+                                    "read byte by byte and may read wrong until nxwright knows "
+                                    "it", "manifest header, byte 13", header[13:14], KEPT))
     if model_with_id(header[16:20]) is None:
         found.append(UnknownContent("a screen model nxwright does not know: app.toml gets no "
                                     "screen settings, and the build refuses the folder until "
@@ -178,6 +192,15 @@ def unknown_in_picture_headers(blocks: dict) -> list:
         if numbered_block(name, "is") is None:
             continue
         source = parse_image_source(block)
+        if not decodes_picture(source.suffix):
+            found.append(UnknownContent("a picture in a %s file, which nxwright does not decode: "
+                                        "the source folder keeps the project's screen copy of it, "
+                                        "which the build uses as it is" % source.suffix,
+                                        "block %s" % name, block[:16], KEPT))
+        if source.suffix != source.suffix.lower():
+            found.append(UnknownContent("a picture's suffix %s in capitals, which the build "
+                                        "writes in lower case" % source.suffix,
+                                        "block %s" % name, block[:16], WRITTEN_OTHERWISE))
         size = len(block) - len(source.data)
         if block[:size] != encode_image_source(source)[:size]:
             found.append(UnknownContent("a picture's header that differs from the build's",
@@ -219,7 +242,7 @@ def unknown_in_pages(pages: dict, encoding_code: int = None) -> list:
     type nxwright does not know, which the source folder keeps exactly; and
     each attribute its tables give no width, or another width than the one
     stored, which the source folder keeps as its stored bytes."""
-    codec = TextCodec(ENCODINGS[encoding_code]) if encoding_code in ENCODINGS else None
+    codec = None if encoding_code is None else TextCodec(encoding_name(encoding_code))
     found = []
     for page_place, page in pages.items():
         found += unknown_in_page_header(page, page_place)
@@ -376,8 +399,10 @@ def unknown_in_dump(dump_folder: Path) -> list:
         # A dump written from a source folder shows no header to check.
         found = []
     elif header is None:
-        found = [UnknownContent("a manifest header of another size than %d bytes" % HEADER_SIZE,
-                                "manifest header", shown[:16], CANNOT_BE_KEPT)]
+        found = [UnknownContent("a manifest header of another size than %d bytes: app.toml gets "
+                                "no screen settings, and the build refuses the folder until they "
+                                "are given" % HEADER_SIZE, "manifest header", shown[:16],
+                                MAY_BE_LOST)]
     else:
         found = unknown_in_manifest_header(header)
     pages = {"page file %s" % path.name: page_from_text(path.read_text(encoding="utf-8"))

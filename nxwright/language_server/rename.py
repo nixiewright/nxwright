@@ -20,6 +20,7 @@ from nxwright import NxwrightError
 from nxwright.source.folder_index import APP_FILE, FolderIndex
 from nxwright.source.references import references, targets_at
 from nxwright.source.folder_check import check_folder
+from nxwright.source.source_folder import folder_lister
 
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
@@ -43,10 +44,11 @@ def rename(index: FolderIndex, path: str, line: int, column: int, new_name: str,
     edits = {}
     for place in references(index, path, line, column, with_declarations=True):
         edits.setdefault(place.path, []).append((place, new_name))
-    if not check_folder(read, exists).errors():
+    listed = folder_lister(index.root)
+    if not check_folder(read, exists, listed=listed).errors():
         texts = {file: _edited(read(file), file_edits) for file, file_edits in edits.items()}
         errors = check_folder(lambda file: texts[file] if file in texts else read(file),
-                              exists).errors()
+                              exists, listed=listed).errors()
         if errors:
             place = "%s line %d" % (errors[0].file, errors[0].line) if errors[0].line \
                 else errors[0].file

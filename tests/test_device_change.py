@@ -13,6 +13,8 @@ from nxwright.cli import main
 from nxwright.project.device_settings import DeviceSettings
 from nxwright.project.media_files import video_rotation
 from nxwright.project.pictures import write_png
+from nxwright.project.screen_copy import (FORMAT_COMPRESSED, FORMAT_RAW, OPAQUE, ScreenPixels,
+                                          encode_screen_copy)
 from nxwright.project.screen_models import model_named
 from nxwright.project.font_drawing import draw_font_block
 from nxwright.project.truetype import NOTO_SANS, TrueTypeFont
@@ -113,6 +115,61 @@ class ScreenModelTest(DeviceChangeTestCase):
         self.assertEqual(self.app()["screen"], "NX4832T035")
         self.assertTrue(any("lacks the type select" in refusal for refusal in change.refusals),
                         change.refusals)
+
+
+class KeptScreenCopyTest(DeviceChangeTestCase):
+    """A picture in a file of a type nxwright does not decode, kept with the
+    project's screen copy of it, pictures/logo.screen: the device change
+    makes the screen copy again from its own pixels."""
+
+    # A picture of 4 by 2, of eight colours, and a partly transparent one.
+    PIXELS = ScreenPixels(4, 2, list(range(0x1000, 0x1008)), [OPAQUE] * 8)
+    SEE_THROUGH = ScreenPixels(4, 2, list(range(0x1000, 0x1008)), [OPAQUE] * 7 + [40])
+
+    def keep(self, pixels: ScreenPixels):
+        """Gives the folder the picture logo, as pictures/logo.tif and its
+        screen copy in the folder's format and rotation."""
+        settings = DeviceSettings(model_named(self.app()["screen"]), self.app()["rotation"],
+                                  "iso-8859-1")
+        kind, rotation = settings.screen_copy_layout
+        (self.source / "pictures").mkdir(exist_ok=True)
+        (self.source / "pictures" / "logo.tif").write_bytes(b"II*\0 data")
+        (self.source / "pictures" / "logo.screen").write_bytes(
+            encode_screen_copy(pixels, kind, rotation))
+        app = self.source / "app.toml"
+        app.write_text(edited_app(app.read_text(encoding="utf-8"),
+                                  lambda found: found.update(pictures=["logo"])),
+                       encoding="utf-8", newline="\n")
+
+    def screen_copy(self) -> bytes:
+        return (self.source / "pictures" / "logo.screen").read_bytes()
+
+    def test_a_rotation(self):
+        self.make("NX8048P050")
+        self.keep(self.SEE_THROUGH)
+        change = change_device(self.source, rotation=90)
+        self.assertEqual(self.screen_copy(),
+                         encode_screen_copy(self.SEE_THROUGH, FORMAT_COMPRESSED, 90))
+        self.assertTrue(any("pictures/logo.screen" in note for note in change.notes),
+                        change.notes)
+        self.assertEqual(change.refusals, [])
+
+    def test_a_screen_of_another_format(self):
+        self.make("NX8048P050")
+        self.keep(self.PIXELS)
+        change_device(self.source, screen="NX4832T035")
+        self.assertEqual(self.screen_copy(), encode_screen_copy(self.PIXELS, FORMAT_RAW, 0))
+
+    def test_transparency_a_format_cannot_store(self):
+        # The Editor blends it with white from the picture's file, which
+        # nxwright does not decode.
+        self.make("NX8048P050")
+        self.keep(self.SEE_THROUGH)
+        before = folder_files(self.source)
+        with self.assertRaisesRegex(NxwrightError, "pictures/logo.screen: the picture is partly "
+                                                   "transparent"):
+            change_device(self.source, screen="NX4832T035")
+        self.assertEqual(folder_files(self.source), before)
 
 
 class RotationTest(DeviceChangeTestCase):
