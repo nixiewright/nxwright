@@ -2,7 +2,8 @@
 rotation, gives the bytes it gave when fixtures/fonts/turned-font-hashes.json
 was recorded. The file gives the SHA-256 of each font turned to 0, 90, 180,
 and 270 degrees, so that a change to how fonts are decoded, turned, or coded
-cannot change a byte unseen.
+cannot change a byte unseen. And a font turned to any rotation, then
+upright, gives the bytes of the font turned upright at once.
 
 A change that is meant to change those bytes records the file again:
 `python -m tests.test_turned_font_bytes --record`."""
@@ -43,19 +44,38 @@ def repository_fonts() -> dict:
 def turned_hashes(block: bytes) -> dict:
     """Returns {rotation: SHA-256} of the font `block` turned to each
     rotation, the rotation as text, as the file gives it."""
-    return {str(rotation): hashlib.sha256(turned_font(block, rotation)).hexdigest()
-            for rotation in ROTATIONS}
+    return hashes_of(turned_blocks(block))
+
+
+def turned_blocks(block: bytes) -> dict:
+    """Returns {rotation: the font `block` turned to it}, for each rotation."""
+    return {rotation: turned_font(block, rotation) for rotation in ROTATIONS}
+
+
+def hashes_of(turned: dict) -> dict:
+    """Returns {rotation as text: SHA-256} of `turned`, as turned_blocks
+    gives it."""
+    return {str(rotation): hashlib.sha256(each).hexdigest() for rotation, each in turned.items()}
 
 
 class TurnedFontBytesTest(unittest.TestCase):
 
-    def test_each_font_gives_the_bytes_recorded(self):
+    def test_each_font_gives_the_bytes_recorded_and_the_same_upright(self):
+        # Each font is turned to each rotation once, for both checks. A font
+        # turned to any rotation, then upright, gives the bytes the font
+        # gives turned upright at once. So a font that turned_font wrote at
+        # the screen's rotation need not be turned upright again to be
+        # compared with the one it was turned from.
         recorded = json.loads(HASHES.read_text(encoding="utf-8"))
         fonts = repository_fonts()
         self.assertEqual(sorted(fonts), sorted(recorded))
         for name, block in fonts.items():
-            with self.subTest(font=name):
-                self.assertEqual(turned_hashes(block), recorded[name])
+            turned = turned_blocks(block)
+            with self.subTest(font=name, check="the bytes recorded"):
+                self.assertEqual(hashes_of(turned), recorded[name])
+            for rotation, each in turned.items():
+                with self.subTest(font=name, rotation=rotation, check="the same upright"):
+                    self.assertEqual(turned_font(each, 0), turned[0])
 
 
 if __name__ == "__main__":
