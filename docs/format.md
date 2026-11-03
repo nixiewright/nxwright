@@ -45,6 +45,7 @@ A page block is a header, a table of objects, then the objects. Object 0 is the 
 
 - The Nextion Editor 1.68.2 refuses a component's name of more than 14 bytes, one that starts with a digit or a space, and one another component of the page has. It also refuses one with any of `" % & ' * + , - . / = [ \ ]`.
 - It takes other punctuation, such as `(`, `)`, or `:`, and a space inside the name, as in `b 0`. Code cannot then name the component, but its events run.
+- A page's name may have a space or punctuation too, as in `p 0` or `p(0)`, but not `"`, `/`, or `\`.
 
 An object is a run of **records**:
 

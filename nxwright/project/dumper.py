@@ -6,13 +6,13 @@ folder layout and the page text format are described in docs/dumps.md.
 """
 from pathlib import Path
 import hashlib
-import re
 
 from nxwright import NxwrightError
 from nxwright.project.container import HmiContainer, numbered_block
 from nxwright.project.dump_folder import (DUMP_FORMAT_LINE, MACROS_BLOCK, MACROS_FILE,
                                           copied_file_name)
 from nxwright.project.page_block import encode_page, parse_page
+from nxwright.project.page_file_names import page_file_stem
 from nxwright.project.page_text import page_from_text, page_to_text
 from nxwright.project.pictures import picture_problem
 from nxwright.project.resources import (FONTS, MEDIA, SOURCE_EXTENSION, SOURCE_SUFFIX,
@@ -28,7 +28,6 @@ from nxwright.project.zi_font import parse_font_header
 # gives are dumped.
 _KNOWN_SINGLE_BLOCKS = ("main.HMI", "Program.s")
 _KNOWN_EXTENSIONS = ("pa", "is", "i", SOURCE_EXTENSION, "zi", "gmovs", "gmov", "v", "wav")
-_SAFE_FILE_NAME = re.compile(r"[A-Za-z0-9_]+")
 
 
 def handles_block(name: str) -> bool:
@@ -166,16 +165,14 @@ class ProjectDumper:
         for page_id, block_name in enumerate(self._manifest.block_names("pa")):
             block = self._container.blocks[block_name]
             page = parse_page(block)
-            # The page name becomes part of a file name, so it must not hold path characters.
-            if not _SAFE_FILE_NAME.fullmatch(page.name):
-                raise NxwrightError("page %d name %r cannot be used in a file name"
-                                    % (page_id, page.name))
             text = page_to_text(page)
             first = page_text_difference(block)
             if first is not None and not self._write_differing_pages:
                 raise NxwrightError("page %s does not survive its text form; first difference "
                                     "at byte %d" % (block_name, first))
-            (folder / ("%02d-%s.txt" % (page_id, page.name))).write_text(
+            # The page's name, in its file's name, with the characters Windows
+            # refuses in a file name encoded.
+            (folder / ("%02d-%s.txt" % (page_id, page_file_stem(page.name)))).write_text(
                 text, encoding="utf-8", newline="\n")
 
     def _write_images(self):

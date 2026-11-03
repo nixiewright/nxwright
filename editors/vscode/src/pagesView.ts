@@ -5,6 +5,7 @@
 // header buttons, New page and Add a keyboard page, are package.json's.
 import * as vscode from "vscode";
 import { CurrentProject, NO_PROJECT_NOTE } from "./currentProject";
+import { pageFileStem } from "./pageFileNames";
 import { Pages, tomlOf } from "./pages";
 
 // A page of the current project: its name and ID.
@@ -64,7 +65,7 @@ export class PagesView implements vscode.TreeDataProvider<ProjectPage> {
   // The page file of a page of the current project.
   private pageFile(name: string): vscode.Uri | undefined {
     const folder = this.project.folder;
-    return folder && vscode.Uri.joinPath(folder, "pages", `${name}.page.toml`);
+    return folder && vscode.Uri.joinPath(folder, "pages", `${pageFileStem(name)}.page.toml`);
   }
 
   // Selects the page the side bar shows, when it is one of the current project's.

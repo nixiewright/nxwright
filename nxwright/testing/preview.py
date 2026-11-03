@@ -17,6 +17,7 @@ from nxwright.drawing.page_drawing import DrawingResources, draw_page
 from nxwright.language.resource_names import ANIMATION, LISTS
 from nxwright.project.media_files import (animation_frames, is_card_picture, read_card_picture,
                                           video_frames)
+from nxwright.project.page_file_names import page_of_file_stem
 from nxwright.project.pictures import (data_url, exif_orientation, picture_size, read_picture,
                                        write_png)
 from nxwright.project.screen_copy import FORMAT_COMPRESSED, OPAQUE
@@ -133,9 +134,10 @@ class Previews:
 
 def page_of_file(path: str):
     """Returns the page whose own .page.toml or .nx file is `path`, a path within
-    the source folder, or None."""
+    the source folder, or None. The file's name gives the page's encoded
+    (page_file_names.py)."""
     found = _PAGE_FILE.fullmatch(path)
-    return found[1] if found else None
+    return page_of_file_stem(found[1]) if found else None
 
 
 class _FolderResources(DrawingResources):

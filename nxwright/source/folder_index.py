@@ -20,6 +20,7 @@ from nxwright import NxwrightError
 from nxwright.language.code_lines import split_line
 from nxwright.language.nxlang import PARAMETER, is_constant_line, token_spans
 from nxwright.language.resource_names import LISTS
+from nxwright.project.page_file_names import page_of_file_stem
 from nxwright.project.resources import PICTURE_SUFFIXES
 from nxwright.project.screen_models import model_named
 from nxwright.source.macros_source import MACROS_PATH
@@ -58,9 +59,10 @@ def file_start(path: str) -> Place:
 
 
 def page_of(path: str):
-    """Returns the page whose .page.toml file is `path`, or None."""
+    """Returns the page whose .page.toml file is `path`, or None. The file's
+    name gives the page's encoded (page_file_names.py)."""
     match = re.fullmatch(r"pages/([^/]+)\.page\.toml", path)
-    return match[1] if match else None
+    return page_of_file_stem(match[1]) if match else None
 
 
 def picture_of(path: str):

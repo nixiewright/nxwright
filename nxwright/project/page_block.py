@@ -102,9 +102,9 @@ def parse_page(block: bytes) -> PageBlock:
         raise NxwrightError("page block says %d bytes but holds %d" % (size, len(block)))
     if header_size != HEADER_SIZE:
         raise NxwrightError("unexpected page header size %d" % header_size)
-    name = _decode_padded_name(block[24:24 + _NAME_SIZE])
+    name = _decode_page_name(block[24:24 + _NAME_SIZE])
     if name is None:
-        raise NxwrightError("page name field is not a plain NUL-padded name")
+        raise NxwrightError("page name field is not a NUL-padded name of printable ASCII")
     objects = [PageObject(_parse_object_body(body)) for body in _object_bodies(block, count)]
     return PageBlock(name=name, header_size=header_size, unknown_16=block[16:24],
                      unknown_40=block[40:56], objects=objects, stamp=stamp)
@@ -189,6 +189,19 @@ def _decode_padded_name(field_bytes: bytes):
     if name.ljust(len(field_bytes), b"\0") != field_bytes:
         return None
     if not all(0x20 < byte < 0x7f for byte in name):
+        return None
+    return name.decode("ascii")
+
+
+def _decode_page_name(field_bytes: bytes):
+    """Returns the page's name in the header's NUL-padded field, or None
+    when it is empty, has a byte outside printable ASCII, or the padding is
+    not all NUL. Unlike an attribute's name, a page's may have a space or
+    punctuation, as the Nextion Editor allows: `p 0`, or `a:b`."""
+    name = field_bytes.split(b"\0")[0]
+    if not name or name.ljust(len(field_bytes), b"\0") != field_bytes:
+        return None
+    if not all(0x20 <= byte < 0x7f for byte in name):
         return None
     return name.decode("ascii")
 

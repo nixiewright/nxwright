@@ -52,6 +52,7 @@ from nxwright import NxwrightError
 from nxwright.language.code_checks import ObjectNames
 from nxwright.language.code_preprocessor import Owner, preprocess, preprocess_with_places
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
+from nxwright.project.page_file_names import page_file_stem
 from nxwright.project.screen_colours import COLOUR_TEXT, hex_to_rgb565, rgb565_to_hex
 from nxwright.project.screen_models import ScreenModel
 from nxwright.project.component_defaults import DERIVED_ATTRIBUTES, PLACEMENT_ATTRIBUTES
@@ -274,14 +275,16 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
     try:
         data = tomllib.loads(source.toml)
     except tomllib.TOMLDecodeError as error:
-        raise NxwrightError("%s.page.toml: %s" % (page_name, error)) from None
+        raise NxwrightError("%s.page.toml: %s" % (page_file_stem(page_name), error)) from None
     page_table, components = data.get("page"), data.get("component", [])
     if not isinstance(page_table, dict):
-        raise NxwrightError("%s.page.toml has no [page] table" % page_name)
+        raise NxwrightError("%s.page.toml has no [page] table" % page_file_stem(page_name))
     if set(data) - {"page", "component"} or not isinstance(components, list):
-        raise NxwrightError("%s.page.toml holds only [page] and [[component]] tables" % page_name)
+        raise NxwrightError("%s.page.toml holds only [page] and [[component]] tables"
+                            % page_file_stem(page_name))
     if page_table.get("name") != page_name:
-        raise NxwrightError("%s.page.toml names the page %r" % (page_name, page_table.get("name")))
+        raise NxwrightError("%s.page.toml names the page %r"
+                            % (page_file_stem(page_name), page_table.get("name")))
     page_table = page_table_at_screen(page_table, page_size, defaults)
     header = _page_header(page_table, components, page_name)
     codec = TextCodec(encoding)
@@ -292,7 +295,8 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
     for index, table in enumerate(tables):
         if isinstance(table, dict) and not isinstance(table.get("name"), (str, type(None))):
             try:
-                _table_header(table, "%s.page.toml, object %d" % (page_name, index))
+                _table_header(table, "%s.page.toml, object %d"
+                              % (page_file_stem(page_name), index))
             except NxwrightError as error:
                 error.table = index
                 raise
@@ -321,15 +325,17 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
     # Checked before the objects are made, because making an object past ID
     # 255 fails.
     check_component_count(object_names, len(tables) - page_file_tables,
-                          "%s.page.toml" % page_name)
+                          "%s.page.toml" % page_file_stem(page_name))
     if len(set(object_names)) != len(object_names):
         raise NxwrightError("%s.page.toml: two objects are named %s"
-                            % (page_name, next(name for name in object_names if object_names.count(name) > 1)))
+                            % (page_file_stem(page_name),
+                               next(name for name in object_names if object_names.count(name) > 1)))
     objects = []
     for index, table in enumerate(tables):
         try:
             objects.append(_object_from_table(table, index, code, names, defaults, codec,
-                                              "%s.page.toml, object %d" % (page_name, index)))
+                                              "%s.page.toml, object %d"
+                                              % (page_file_stem(page_name), index)))
         except NxwrightError as error:
             error.table = index
             raise
@@ -338,13 +344,13 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
         if nxlang_program is not None and (name, event) == (page_name, "load"):
             # The build puts the functions' tsw lines there.
             raise NxwrightError("%s.page.toml: functions need the page's load event, which its "
-                                "events do not list" % page_name)
+                                "events do not list" % page_file_stem(page_name))
         raise NxwrightError("%s.nx: %s.%s is not an event listed in the page's .page.toml file"
-                            % (page_name, name, event))
+                            % (page_file_stem(page_name), name, event))
     page = PageBlock(name=page_name, header_size=HEADER_SIZE,
                      unknown_16=header_16(header),
                      unknown_40=header_40(encoding_code(encoding)), objects=objects)
-    check_page_limits(page, "%s.page.toml" % page_name)
+    check_page_limits(page, "%s.page.toml" % page_file_stem(page_name))
     _check_fonts(page, names, page_name)
     return page
 
@@ -362,7 +368,8 @@ def _check_fonts(page: PageBlock, names: ResourceNames, page_name: str):
         error = NxwrightError(
             "%s.page.toml: component %s: its font is number %d, and the project has %s; the "
             "Nextion Editor refuses it, saying \"Invalid Font ID\". `nxwright font` adds one" % (
-                page_name, (page_object.attribute("objname") or b"").decode("latin-1"), font,
+                page_file_stem(page_name),
+                (page_object.attribute("objname") or b"").decode("latin-1"), font,
                 "%d fonts" % len(names.fonts) if names.fonts else "no fonts"))
         error.table = index
         raise error
@@ -524,7 +531,8 @@ def editor_code_of_block(block: EventBlock, page_name: str, names: ResourceNames
         return block.marked_comment() + preprocess(block.code_lines(), names, objects, variables,
                                                    macros, screen, owner, codec=codec)
     except NxwrightError as error:
-        raise error.in_file(page_nx_path(page_name), shown="%s.nx" % page_name) from None
+        raise error.in_file(page_nx_path(page_name),
+                            shown="%s.nx" % page_file_stem(page_name)) from None
 
 
 def table_types(tables: list) -> dict:
@@ -537,13 +545,15 @@ def table_types(tables: list) -> dict:
 
 
 def page_nx_path(page_name: str) -> str:
-    """Returns the source folder path of a page's own .nx file."""
-    return "pages/%s.nx" % page_name
+    """Returns the source folder path of a page's own .nx file, its name
+    written as page_file_names.page_file_stem writes it."""
+    return "pages/%s.nx" % page_file_stem(page_name)
 
 
 def page_toml_path(page_name: str) -> str:
-    """Returns the source folder path of a page's file, `<page>.page.toml`."""
-    return "pages/%s%s" % (page_name, PAGE_FILE_SUFFIX)
+    """Returns the source folder path of a page's file, `<page>.page.toml`,
+    its name written as page_file_names.page_file_stem writes it."""
+    return "pages/%s%s" % (page_file_stem(page_name), PAGE_FILE_SUFFIX)
 
 
 def _no_includes(path: str) -> str:
@@ -813,7 +823,7 @@ def _parse_events(text: str, page_name: str, names: ResourceNames, codec: TextCo
     page's, in ID order, the page's first."""
     code = {}
     for key, block in event_blocks(text, page_nx_path(page_name)).items():
-        where = "%s.nx: %s.%s" % (page_name, *key)
+        where = "%s.nx: %s.%s" % (page_file_stem(page_name), *key)
         code[key] = [codec.encode(line, where)
                      for line in editor_code_of_block(block, page_name, names,
                                                       Owner.among(key[0], object_names), objects,
@@ -1189,14 +1199,16 @@ def _header_keys(header: PageHeader) -> dict:
 def _page_header(page_table: dict, components: list, page_name: str) -> PageHeader:
     """Returns the page header the [page] table gives, after checking the
     tables."""
+    shown = page_file_stem(page_name)
     for key in ("header_16", "header_40"):
         if key in page_table:
             raise NxwrightError("%s.page.toml: [page] holds %s, which page files no longer keep; "
-                                "extract the project into the folder again" % (page_name, key))
+                                "extract the project into the folder again"
+                                % (shown, key))
     for key in _HEADER_KEYS:
         if any(isinstance(table, dict) and key in table for table in components):
             raise NxwrightError("%s.page.toml: only the [page] table can give %s"
-                                % (page_name, key))
+                                % (shown, key))
     # A system page mark or a lock that nxwright has not seen is kept as its
     # number, which extract writes (_header_keys).
     system_page = page_table.get("system_page")
@@ -1204,21 +1216,21 @@ def _page_header(page_table: dict, components: list, page_name: str) -> PageHead
     if system_page is not None and system_page not in SYSTEM_PAGES and not unknown_mark:
         names = ['"%s"' % name for name in SYSTEM_PAGES]
         raise NxwrightError("%s.page.toml: system_page must be %s, or the number of a mark "
-                            "nxwright does not know" % (page_name, ", ".join(names)))
+                            "nxwright does not know" % (shown, ", ".join(names)))
     locked = page_table.get("locked", False)
     if not isinstance(locked, bool) and not (_is_byte(locked) and locked >= 2):
         raise NxwrightError("%s.page.toml: locked must be true, false, or a number from 2 to 255"
-                            % page_name)
+                            % shown)
     password = page_table.get("lock_password_hash", NO_LOCK_PASSWORD.hex())
     if not is_password_hash_text(password):
         raise NxwrightError("%s.page.toml: lock_password_hash must be 8 lower-case "
-                            "hexadecimal digits" % page_name)
+                            "hexadecimal digits" % shown)
     stored_21 = page_table.get("header_21", {RAW_KEY: HEADER_21.hex()})
-    header_21 = (_raw_bytes("header_21", stored_21, "%s.page.toml" % page_name)
+    header_21 = (_raw_bytes("header_21", stored_21, "%s.page.toml" % shown)
                  if isinstance(stored_21, dict) else None)
     if header_21 is None or len(header_21) != 2:
         raise NxwrightError("%s.page.toml: header_21 must be 2 bytes, such as "
-                            "{ %s = \"4f21\" }" % (page_name, RAW_KEY))
+                            "{ %s = \"4f21\" }" % (shown, RAW_KEY))
     return PageHeader(system_page, locked, bytes.fromhex(password), header_21)
 
 

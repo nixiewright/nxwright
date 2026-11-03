@@ -54,12 +54,16 @@ class SmallProjectTest(unittest.TestCase):
             self.assertTrue((output / "pages" / "00-main.txt").exists())
             self.assertEqual((output / "program.s").read_bytes(), b"//code")
 
-    def test_refuses_page_name_with_path_characters(self):
+    def test_a_page_name_with_path_characters_stays_in_the_dump(self):
+        # Its file's name encodes the slash (page_file_names.py), so the page
+        # is written inside the dump's pages folder, and nothing outside it.
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / "dump"
-            with self.assertRaises(NxwrightError):
-                ProjectDumper(write_project(Path(folder), "../evil"), output).dump()
-            self.assertEqual(list((output / "pages").iterdir()), [])
+            ProjectDumper(write_project(Path(folder), "../evil"), output).dump()
+            self.assertEqual([path.name for path in (output / "pages").iterdir()],
+                             ["00-..%2Fevil.txt"])
+            self.assertEqual(sorted(path.name for path in Path(folder).iterdir()),
+                             sorted(["dump", "project.HMI"]))
 
     def test_files_are_numbered_by_editor_id(self):
         # The manifest order, not the block name, gives the Editor's IDs.

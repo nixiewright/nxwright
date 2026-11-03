@@ -42,7 +42,7 @@ This page describes the folder's files. [commands.md](commands.md) describes eac
 | `defaults.toml` | What a newly added component of each type has ([Component defaults](#component-defaults)). |
 | `program.nx` | The code that runs when the screen starts. |
 | `macros.nx` | The project's macros, if it has any ([Macros](#macros)). |
-| `pages/<page>.page.toml` | The page and its components, in ID order. The `.page.toml` ending marks a page file, so VS Code opens it in the page preview. |
+| `pages/<page>.page.toml` | The page and its components, in ID order. The `.page.toml` ending marks a page file, so VS Code opens it in the page preview. In the names of a page's files, `%` and the characters Windows refuses in a file name, `\ / : * ? " < > |`, are percent-encoded: the page `a:b` has `pages/a%3Ab.page.toml`. |
 | `pages/<page>.nx` | The page's event code. |
 | `pictures/<name>.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | A picture. `nxwright picture` adds one ([commands.md](commands.md#picture)). |
 | `pictures/<name>.source.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | The file a picture had before you resized it in the Nextion Editor's picture viewer. Only a resized picture has one. |
@@ -119,6 +119,7 @@ nxwright writes its TOML files with tomli-w, which lays out each list with one n
   | `password_hash` | The hash of the project's password | the hash that `nxwright password-hash` prints ([commands.md](commands.md#password-hash)), so that the password itself stays out of the folder |
 
   A project of a screen model nxwright does not know gets none of the device settings, and the build refuses the folder until nxwright knows the model. Its texts and code are still read in its own character encoding. Extract prompts you to choose whether to go on with such a project ([commands.md](commands.md#extract)). If the folder it updates has device settings, the prompt warns that they will be removed.
+- `pages` lists the project's pages by name. A page's name may use ASCII letters, digits, spaces, and ASCII punctuation other than a double quote, such as `"p 0"` or `"a:b"`.
 - `pictures`, `fonts`, `animations`, `videos`, and `sounds` list the project's resources by name. A folder with none of a kind leaves its list out, as extracting does.
 - The order of `pages`, `pictures`, `fonts`, `animations`, `videos`, and `sounds` is their order in the project, and so it sets their IDs. To reorder, reorder these lists.
   - Do this with care. A name follows the change, but a number keeps pointing at whatever now has that ID. Code that uses a number in place of a name will then reach another page or resource: `page 2`, `p0.pic=3`, or the page array `p[2]`.

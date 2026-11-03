@@ -121,6 +121,7 @@ from nxwright.project.editor_language import (EDITOR_COLOURS, EDITOR_PROGRAM_VAR
                                               UNDECLARED_PROGRAM_VARIABLE)
 from nxwright.project.editor_limits import LONGEST_LINES, NAME_LIMIT
 from nxwright.project.object_types import TYPES_BY_NAME
+from nxwright.project.page_file_names import page_file_stem
 from nxwright.project.page_text import STRING_ATTRIBUTES, is_string_attribute
 from nxwright.project.screen_arithmetic import int32
 
@@ -1610,7 +1611,7 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
     Raises NxwrightError naming the file and line of anything it cannot compile.
     """
     functions, owners = functions or {}, owners or {}
-    page_file = preambles[-1][0] if preambles else page_name + ".nx"
+    page_file = preambles[-1][0] if preambles else page_file_stem(page_name) + ".nx"
     for name in component_names:
         if name.startswith(GENERATED_PREFIX):
             raise NxwrightError("component %s starts with %r, which generated variables use"

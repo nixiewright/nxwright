@@ -17,7 +17,7 @@ from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.keyboards import (CHINESE_INPUT, KEYBOARD_PAGES, UTF8_CHARACTERS,
                                        chinese_font_height, chinese_label_characters,
                                        font_widths, keyboard, keyboard_font, typeface_widths)
-from nxwright.source.page_source import page_toml_path
+from nxwright.source.page_source import page_nx_path, page_toml_path
 from nxwright.source.source_folder import (FONT_SUFFIX, app_text, drawn_font_name, folder_reader,
                                            noto_sans_lacks, parse_app, parsed_page_toml,
                                            read_bytes, read_text)
@@ -87,7 +87,7 @@ def add_keyboard(source_folder: Path, kind: str, typeface: Path = None, font: st
         block = (None if made.font_name in fonts
                  else keyboard_font(made, settings.rotation, settings.encoding))
     files = {page_toml_path(page): made.page_toml.encode("utf-8"),
-             "pages/%s.nx" % page: made.code.encode("utf-8")}
+             page_nx_path(page): made.code.encode("utf-8")}
     if block is not None:
         files["fonts/%s%s" % (made.font_name, FONT_SUFFIX)] = block
         fonts = fonts + [made.font_name]

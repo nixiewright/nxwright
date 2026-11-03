@@ -23,7 +23,7 @@ Pages, pictures, fonts, animations, videos, and sounds are numbered by their IDs
 | `project.txt` | The dump format, the file's size, the directory's counts (live blocks, stale entries), and the manifest: its header bytes that are not understood, and the resource list in stored order. |
 | `program.s` | The program code that runs at power-on, bytes unchanged. |
 | `macros.s` | The project's macros, its `comcode.sn` block's bytes unchanged (`format.md`, Macros), when it has any. |
-| `pages/NN-<name>.txt` | One file per page, numbered by page ID. |
+| `pages/NN-<name>.txt` | One file per page, numbered by page ID, its name encoded as a source folder's page files are ([source-folder.md](source-folder.md)). The page's name comes from the file's first line, not from the file's name. |
 | `images/index.txt` | Per picture: ID, block, size, and a SHA-256 of the screen copy. |
 | `images/NNNN.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | The picture's file the Nextion Editor shows, as the project keeps it, with the suffix its record gives. |
 | `images/NNNN.i` | The screen copy, as stored. Output only: nxwright never reads these files back. |
