@@ -143,7 +143,8 @@ do the fonts of tests/fixtures/fonts/utf-8 and
 tests/fixtures/fonts/chosen-characters, upright and turned.
 """
 from dataclasses import dataclass, field
-from functools import cache
+from functools import cache, lru_cache
+from itertools import groupby
 import struct
 
 from nxwright import NxwrightError
@@ -257,7 +258,7 @@ class Character:
                 raise NxwrightError("character %d decodes to %d pixels, where its %d by %d "
                                     "glyph holds %d" % (self.code, len(pixels), self.width,
                                                         self._height, self.width * self._height))
-            self._coverages = _upright(pixels, self.width, self._height, self._rotation)
+            self._coverages = list(_upright(pixels, self.width, self._height, self._rotation))
         return self._coverages
 
 
@@ -651,39 +652,61 @@ def _code_name(code: int) -> str:
     return pair_name(code) if code > 0xff else "%02x" % code
 
 
-def _upright(pixels: list, width: int, height: int, rotation: int) -> list:
+def _upright(pixels: bytes, width: int, height: int, rotation: int) -> bytes:
     """Returns a glyph's coverages, stored at `rotation` in the order the
     screen stores a picture (screen_copy.stored_order), row by row from the
     top, each row from left to right."""
-    upright = [0] * len(pixels)
-    for stored, pixel in enumerate(stored_order(width, height, rotation)):
-        upright[pixel] = pixels[stored]
-    return upright
+    if rotation == 0:
+        return pixels
+    return bytes(map(pixels.__getitem__, _upright_order(width, height, rotation)))
 
 
-def _decode_glyph(glyph: bytes, code: int) -> list:
+# A font's glyphs come in a few sizes, so the pixel orders of each size are
+# worked out once. The bound keeps a long-running process, such as the
+# language server, from keeping those of every font it has read.
+@lru_cache(maxsize=512)
+def _stored_order(width: int, height: int, rotation: int) -> tuple:
+    """For each pixel of a glyph stored at `rotation`, in stored order, its
+    index upright (screen_copy.stored_order)."""
+    return tuple(stored_order(width, height, rotation))
+
+
+@lru_cache(maxsize=512)
+def _upright_order(width: int, height: int, rotation: int) -> tuple:
+    """For each pixel of a glyph upright, row by row, its index in the order
+    of a glyph stored at `rotation`: the reverse of _stored_order."""
+    order = _stored_order(width, height, rotation)
+    return tuple(sorted(range(len(order)), key=order.__getitem__))
+
+
+def _decode_glyph(glyph: bytes, code: int) -> bytes:
     """Returns the coverages of a glyph's stream, as stored."""
     levels = glyph[0]
     if levels not in (_EIGHT_LEVELS, _TWO_LEVELS):
         raise NxwrightError("the glyph of character %d starts with %d, not 1 or 3"
                             % (code, levels))
+    return b"".join(map(_code_pixels(levels).__getitem__, glyph[1:]))
+
+
+@cache
+def _code_pixels(levels: int) -> tuple:
+    """Returns, for each byte of a glyph's stream of `levels` codes, the
+    coverages it stands for (the module's docstring lays the codes out)."""
     pixels = []
-    for byte in glyph[1:]:
+    for byte in range(256):
         kind, value = byte >> 6, byte & 0x3f
         if kind == 0:
-            pixels += [7 if value & 0x20 else 0] * (value & 0x1f)
+            pixels.append(bytes([7 if value & 0x20 else 0]) * (value & 0x1f))
         elif kind == 1:
-            pixels += [0] * (value & 0x1f) + [7] * (2 if value & 0x20 else 1)
+            pixels.append(bytes(value & 0x1f) + b"\x07" * (2 if value & 0x20 else 1))
         elif levels == _EIGHT_LEVELS:
-            if kind == 2:
-                pixels += [0] * (value >> 3) + [value & 7]
-            else:
-                pixels += [value >> 3, value & 7]
+            pixels.append(bytes(value >> 3) + bytes([value & 7]) if kind == 2
+                          else bytes([value >> 3, value & 7]))
         elif kind == 2:
-            pixels += [0] * (value & 0x1f) + [7] * (4 if value & 0x20 else 3)
+            pixels.append(bytes(value & 0x1f) + b"\x07" * (4 if value & 0x20 else 3))
         else:
-            pixels += [0] * (value >> 3) + [7] * (value & 7)
-    return pixels
+            pixels.append(bytes(value >> 3) + b"\x07" * (value & 7))
+    return tuple(pixels)
 
 
 def encode_font(name: str, encoding: str, height: int, rotation: int, glyphs: list,
@@ -974,10 +997,10 @@ def _glyph_stream(glyph: Glyph, height: int, rotation: int) -> bytes:
     checking it (_checked). An empty glyph, as a gb2312 font's empty
     positions are by the thousand, is coded at once: its stream, runs of
     empty pixels, is the same at every rotation."""
-    size = _checked_size(glyph, height)
-    if glyph.coverages.count(0) == size:
-        return _empty_codes(size)
-    return _glyph_codes(_turned(_checked(glyph, height), glyph.width, height, rotation))
+    pixels = _checked(glyph, height)
+    if not max(pixels, default=0):
+        return _empty_codes(len(pixels))
+    return _glyph_codes(_turned(pixels, glyph.width, height, rotation))
 
 
 def _empty_codes(count: int) -> bytes:
@@ -989,14 +1012,19 @@ def _empty_codes(count: int) -> bytes:
     return bytes([_TWO_LEVELS] + [_MOST_RUN] * runs + [rest + 1])
 
 
-def _checked(glyph: Glyph, height: int) -> tuple:
-    """Returns a glyph's coverages, after checking they fill its rectangle with
-    values from 0 to 7."""
+def _checked(glyph: Glyph, height: int) -> bytes:
+    """Returns a glyph's coverages as bytes, after checking they fill its
+    rectangle with values from 0 to 7."""
     _checked_size(glyph, height)
-    wrong = [value for value in glyph.coverages if value not in range(8)]
-    if wrong:
+    try:
+        pixels = bytes(glyph.coverages)
+    except (TypeError, ValueError):
+        pixels = None       # a value that is not a byte
+    if pixels is None or max(pixels, default=0) > 7:
+        wrong = [value for value in glyph.coverages
+                 if not (isinstance(value, int) and 0 <= value <= 7)]
         raise NxwrightError("character %d has a coverage of %r" % (glyph.code, wrong[0]))
-    return glyph.coverages
+    return pixels
 
 
 def _checked_size(glyph: Glyph, height: int) -> int:
@@ -1012,69 +1040,76 @@ def _checked_size(glyph: Glyph, height: int) -> int:
     return size
 
 
-def _turned(pixels: tuple, width: int, height: int, rotation: int) -> list:
+def _turned(pixels: bytes, width: int, height: int, rotation: int) -> bytes:
     """Returns upright coverages in the order of a glyph stored at
     `rotation`: the reverse of _upright."""
-    return [pixels[pixel] for pixel in stored_order(width, height, rotation)]
+    if rotation == 0:
+        return pixels
+    return bytes(map(pixels.__getitem__, _stored_order(width, height, rotation)))
 
 
-def _glyph_codes(pixels: list) -> bytes:
+def _glyph_codes(pixels: bytes) -> bytes:
     """Returns a glyph's bytes for its stream of coverages, coded as the
-    module's docstring says the Editor codes one."""
-    two_levels = set(pixels) <= {0, 7}
+    module's docstring says the Editor codes one.
+
+    The stream is taken as runs of equal coverages, [coverage, count], in
+    order. Most codes take a whole run. A code of a pair of pixels may take
+    the first pixel of the next run too."""
+    two_levels = not pixels.translate(None, b"\x00\x07")
     out = [_TWO_LEVELS if two_levels else _EIGHT_LEVELS]
-    position, count = 0, len(pixels)
-
-    def run_of(value: int) -> int:
-        end = position
-        while end < count and pixels[end] == value:
-            end += 1
-        return end - position
-
-    while position < count:
-        pixel = pixels[position]
+    runs = [[value, len(list(stretch))] for value, stretch in groupby(pixels)]
+    index, count = 0, len(runs)
+    while index < count:
+        pixel, length = runs[index]
+        index += 1
+        following, after = runs[index] if index < count else (None, 0)
         if pixel == 0:
-            empty = run_of(0)
-            position += empty
+            empty = length
             while empty > _MOST_RUN:
                 out.append(_MOST_RUN)
                 empty -= _MOST_RUN
-            following = pixels[position] if position < count else None
-            full = run_of(7) if following == 7 else 0
+            full = after if following == 7 else 0
             if full in (1, 2):
                 out.append((0x40 if full == 1 else 0x60) | empty)
-                position += full
+                index += 1
             elif two_levels and full in (3, 4):
                 out.append((0x80 if full == 3 else 0xa0) | empty)
-                position += full
+                index += 1
             elif two_levels and full and empty <= 7 and full <= 7:
                 out.append(0xc0 | empty << 3 | full)
-                position += full
+                index += 1
             # A partial pixel followed by an equal one is left to go in a pair
             # with it.
-            elif (not two_levels and following not in (None, 0, 7) and empty <= 7
-                  and pixels[position + 1:position + 2] != [following]):
+            elif not two_levels and following not in (None, 0, 7) and empty <= 7 and after == 1:
                 out.append(0x80 | empty << 3 | following)
-                position += 1
+                index += 1
             else:
                 out.append(empty)
-        elif pixel == 7:
-            full = run_of(7)
+            continue
+        if pixel == 7:
+            full = length
             while full > _MOST_RUN:
                 out.append(0x20 | _MOST_RUN)
-                position += _MOST_RUN
                 full -= _MOST_RUN
-            following = pixels[position + full] if position + full < count else None
-            if not two_levels and full == 1 and following not in (None, 0):
-                out.append(0xc0 | 7 << 3 | following)
-                position += 2
-            else:
+            if two_levels or full != 1 or following in (None, 0):
                 out.append(0x20 | full)
-                position += full
-        elif position + 1 < count:
-            out.append(0xc0 | pixel << 3 | pixels[position + 1])
-            position += 2
+                continue
+            # A lone full pixel before a partial one goes in a pair with it.
+            out.append(0xc0 | 7 << 3 | following)
         else:
-            out.append(0x80 | pixel)
-            position += 1
+            # A partial pixel goes in a pair with the next one: with its
+            # equals two at a time, then the odd one out with the next run's
+            # first, or alone at the glyph's end.
+            pairs, odd = divmod(length, 2)
+            out += [0xc0 | pixel << 3 | pixel] * pairs
+            if not odd:
+                continue
+            if following is None:
+                out.append(0x80 | pixel)
+                continue
+            out.append(0xc0 | pixel << 3 | following)
+        # The pair took the next run's first pixel.
+        runs[index][1] -= 1
+        if not runs[index][1]:
+            index += 1
     return bytes(out)
