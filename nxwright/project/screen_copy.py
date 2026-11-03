@@ -42,7 +42,10 @@ bits are the block's kind:
   1 to 13  short runs: 8 RGB565 words follow. Each 4-bit field of the control
            word, lowest first, is how many pixels repeat the matching word
            (0: the word is unused). The lowest field is also the kind, so the
-           first word always repeats 1 to 13 times.
+           first word always repeats 1 to 13 times. In the pictures seen,
+           the Editor leaves words unused only in the last block. An
+           NX8048P070 with firmware 293 stops drawing the picture at an
+           earlier block that leaves two words unused.
   14       long run: the control word shifted right by 4 is a pixel count.
            8 RGB565 words follow; the run uses the first.
   15       literals: the control word shifted right by 4 is a count of RGB565
@@ -406,17 +409,33 @@ def _encode_colours(colours: list) -> bytes:
 def _short_run_chunks(pending: deque) -> list:
     """Returns up to 8 (value, length) chunks from the front of `pending`, each
     at most _SHORT_RUN_MAX long, stopping before a run long enough for a
-    long-run block."""
+    long-run block. Chunks stopped before such a run are split until there
+    are 8 (_split_into_eight)."""
     chunks = []
     for value, count in pending:
         if chunks and count >= _LONG_RUN_MIN:
-            break
+            return _split_into_eight(chunks)
         while count and len(chunks) < 8:
             length = min(count, _SHORT_RUN_MAX)
             chunks.append((value, length))
             count -= length
         if len(chunks) == 8:
             break
+    return chunks
+
+
+def _split_into_eight(chunks: list) -> list:
+    """Returns `chunks` with its longest chunks split in two, until there are
+    8, or until every chunk is 1 pixel long. A real screen can stop drawing
+    a picture at a short-run block before the last that leaves words
+    unused, as the module's docstring describes."""
+    chunks = list(chunks)
+    while len(chunks) < 8:
+        longest = max(range(len(chunks)), key=lambda index: chunks[index][1])
+        value, length = chunks[longest]
+        if length < 2:
+            break
+        chunks[longest:longest + 1] = [(value, length - 1), (value, 1)]
     return chunks
 
 

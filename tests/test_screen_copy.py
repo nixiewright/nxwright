@@ -134,6 +134,18 @@ class CompressedFormat3Test(unittest.TestCase):
                     decode_screen_copy(data, 0)
 
 
+def _colour_block_controls(block: bytes) -> list:
+    """Returns the control word of each colour block of the format 4 screen
+    copy `block`, in stored order."""
+    after, alpha_at = struct.unpack_from("<II", block, 16)
+    end, at, controls = 24 + (alpha_at or after), 44, []
+    while at < end:
+        control, = struct.unpack_from("<I", block, at)
+        controls.append(control)
+        at += 4 + 2 * (control >> 4) if control & 15 == 15 else 20
+    return controls
+
+
 class EncodeTest(unittest.TestCase):
 
     def assert_round_trip(self, pixels: ScreenPixels):
@@ -159,6 +171,22 @@ class EncodeTest(unittest.TestCase):
         # Uncompressed, the colours alone take 4000 bytes. The 700 and 1000
         # pixel stretches must shrink to a few blocks.
         self.assertLess(len(block), 1000)
+
+    def test_short_run_blocks_use_all_their_fields_until_the_last_block(self):
+        # At 180 degrees the row is stored right to left. Its runs of 9 and 3
+        # pixels, then one long enough for a long-run block, end a short-run
+        # block after two runs. Firmware 293 of a real screen can stop
+        # drawing at a short-run block with unused fields, unless it is the
+        # last block, so its runs must be split to fill the 8 fields.
+        colours = [1] * 5 + [2] * 6 + [3] * 200 + [4] * 3 + [5] * 9
+        block = self.assert_round_trip(ScreenPixels(len(colours), 1, colours,
+                                                    [OPAQUE] * len(colours)))
+        controls = _colour_block_controls(block)
+        self.assertGreater(len(controls), 2)
+        for control in controls[:-1]:
+            if control & 15 not in (14, 15):
+                self.assertTrue(all(control >> 4 * field & 15 for field in range(8)),
+                                "short-run block %08x has unused fields" % control)
 
     def test_opaque_picture_has_no_alpha_section(self):
         block = encode_screen_copy(ScreenPixels(2, 1, [1, 2], [OPAQUE, OPAQUE]), FORMAT_COMPRESSED, 180)
