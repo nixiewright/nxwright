@@ -27,7 +27,7 @@ from pathlib import Path
 
 from nxwright import NxwrightError
 from nxwright.project.container import HmiContainer, numbered_block
-from nxwright.project.device_settings import ENCODINGS, HEADER_SIZE
+from nxwright.project.device_settings import ENCODINGS, HEADER_SIZE, TextCodec
 from nxwright.project.dump_folder import dump_header_bytes, dump_manifest_header, page_text_files
 from nxwright.project.dumper import handles_block, kept_picture_sources, page_text_difference
 from nxwright.project.object_types import TYPE_NAMES
@@ -39,10 +39,9 @@ from nxwright.project.pictures import picture_data_size
 from nxwright.project.resources import (LISTED_IN_ORDER, SOURCE_EXTENSION, ImageSource,
                                         encode_image_source, parse_image_source, parse_manifest)
 from nxwright.project.screen_models import model_with_id
-from nxwright.source.page_source import reference_kind
-
-KEPT, MAY_BE_LOST, CANNOT_BE_KEPT = "kept exactly", "may be lost", "cannot be kept"
-WRITTEN_OTHERWISE = "written otherwise"
+# The sorts, which other modules take from here.
+from nxwright.source.content_sorts import CANNOT_BE_KEPT, KEPT, MAY_BE_LOST, WRITTEN_OTHERWISE
+from nxwright.source.page_source import object_irregularities, reference_kind
 # Where an unknown screen model is, which extract uses to find it among the
 # rest.
 UNKNOWN_MODEL_PLACE = "manifest header, bytes 16 to 19"
@@ -113,7 +112,8 @@ def unknown_in_project(blocks: dict, manifest, pages: dict) -> list:
     header = blocks["main.HMI"][:manifest.header_size]
     return (unknown_in_blocks(blocks) + unknown_in_manifest_entries(manifest)
             + unknown_in_manifest_header(header) + unknown_in_picture_headers(blocks)
-            + unknown_in_picture_sources(blocks, manifest) + unknown_in_pages(pages))
+            + unknown_in_picture_sources(blocks, manifest)
+            + unknown_in_pages(pages, header[13] if len(header) > 13 else None))
 
 
 def unknown_in_blocks(blocks: dict) -> list:
@@ -210,24 +210,39 @@ def unknown_in_picture_sources(blocks: dict, manifest) -> list:
     return found
 
 
-def unknown_in_pages(pages: dict) -> list:
+def unknown_in_pages(pages: dict, encoding_code: int = None) -> list:
     """Returns, of the pages {where each is: PageBlock}, such as "block
-    0.pa", each component type
-    nxwright does not know, which the source folder keeps exactly; and each
-    attribute its tables give no width, or another width than the one
-    stored, which it cannot keep."""
+    0.pa", each value of a page header nxwright has not seen
+    (unknown_in_page_header); what of each object the page files do not keep
+    as it is (page_source.object_irregularities), its texts checked in the
+    encoding of number `encoding_code` when nxwright knows it; each component
+    type nxwright does not know, which the source folder keeps exactly; and
+    each attribute its tables give no width, or another width than the one
+    stored, which the source folder keeps as its stored bytes."""
+    codec = TextCodec(ENCODINGS[encoding_code]) if encoding_code in ENCODINGS else None
     found = []
     for page_place, page in pages.items():
         found += unknown_in_page_header(page, page_place)
         for index, page_object in enumerate(page.objects):
-            object_type = page_object.attribute("type")[0]
+            where = "%s, object %d, " % (page_place, index)
+            irregular = [UnknownContent(what, where + place, data, sort)
+                         for sort, what, place, data
+                         in object_irregularities(page_object, index, page.name, codec)]
+            found += irregular
+            if any(each.sort == CANNOT_BE_KEPT for each in irregular):
+                # An object nxwright cannot read has nothing more to check.
+                continue
+            # The last of a type given twice, as the conversion keeps it.
+            object_type = [item for item in page_object.items
+                           if isinstance(item, Attribute) and item.name == "type"][-1].value[0]
             where = "%s, object %d" % (page_place, index)
             if object_type not in TYPE_NAMES:
                 found.append(UnknownContent("a component type nxwright does not know", where,
                                             bytes([object_type]), KEPT))
-            for item in page_object.items:
-                if isinstance(item, Attribute):
-                    found += _unknown_attribute(item, object_type, where)
+            # The last of an attribute given twice, as the conversion keeps it.
+            for item in {item.name: item for item in page_object.items
+                         if isinstance(item, Attribute)}.values():
+                found += _unknown_attribute(item, object_type, where)
     return found
 
 
@@ -367,4 +382,4 @@ def unknown_in_dump(dump_folder: Path) -> list:
         found = unknown_in_manifest_header(header)
     pages = {"page file %s" % path.name: page_from_text(path.read_text(encoding="utf-8"))
              for _, path in sorted(page_text_files(dump_folder).items())}
-    return found + unknown_in_pages(pages)
+    return found + unknown_in_pages(pages, None if header is None else header[13])

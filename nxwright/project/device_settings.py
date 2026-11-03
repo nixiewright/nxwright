@@ -190,6 +190,14 @@ class TextCodec:
                                 "exactly" % (where, data.hex(" "), self.name))
         return text
 
+    def keeps(self, data: bytes) -> bool:
+        """Whether `data` is text in this encoding that decode gives back
+        exactly."""
+        try:
+            return data.decode(self._codec).encode(self._codec) == data
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            return False
+
     def decode_keeping_bytes(self, data: bytes) -> str:
         """Returns the characters `data` holds, keeping each byte that is not
         text in this encoding as a character of its own (Python's

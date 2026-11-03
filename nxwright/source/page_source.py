@@ -63,6 +63,7 @@ from nxwright.project.editor_limits import (LEAST_SIDE, bounded_attributes, chec
 from nxwright.project.page_block import HEADER_SIZE, Attribute, Event, Marker, PageBlock, PageObject
 from nxwright.project.page_header import (HEADER_21, NO_LOCK_PASSWORD, SYSTEM_PAGES, PageHeader,
                                          header_16, header_40, page_header_of)
+from nxwright.source.content_sorts import CANNOT_BE_KEPT, KEPT, MAY_BE_LOST, WRITTEN_OTHERWISE
 from nxwright.source.nx_files import (CODE_INDENT, EVENT_COMMENT_MARKER, EventBlock, PageFiles,
                                       blank_lines_dropped, event_blocks, event_heading,
                                       event_label, read_page_files)
@@ -92,7 +93,8 @@ _REFERENCE_KINDS["font"] = FONT
 _PLAYED_KINDS = {TYPES_BY_NAME["gmov"]: ANIMATION, TYPES_BY_NAME["video"]: VIDEO,
                  TYPES_BY_NAME["audio"]: SOUND}
 # Keys of a <page>.page.toml table that are not attributes.
-_TABLE_KEYS = ("name", "type", "defaults", "events", "system_page", "locked",
+_TABLE_KEYS = ("name", "type", "defaults", "events", "kept_events", "kept_attributes",
+               "system_page", "locked",
                "lock_password_hash", "header_21")
 # The keys of the [page] table that give the page header (page_header.py).
 _HEADER_KEYS = ("system_page", "locked", "lock_password_hash", "header_21")
@@ -159,14 +161,16 @@ def page_to_source(page: PageBlock, names: ResourceNames, defaults: dict,
     if page.header_size != HEADER_SIZE:
         raise NxwrightError("page %s: header size %d is not %d" % (page.name, page.header_size,
                                                                   HEADER_SIZE))
-    if not page.objects or page.objects[0].attribute("objname") != page.name.encode(_NAME_ENCODING):
-        raise NxwrightError("page %s: the page object is not named after the page" % page.name)
+    if not page.objects:
+        raise NxwrightError("page %s has no page object" % page.name)
     header = page_header_of(page)
     codec = TextCodec(encoding)
     tables, headings, warnings = [], [], []
     for index, page_object in enumerate(page.objects):
         where = "page %s, object %d" % (page.name, index)
-        content = _ObjectContent.read(page_object, index, where)
+        # The page object is named after its page, as the build writes it.
+        content = _ObjectContent.read(page_object, index, where,
+                                      page.name if index == 0 else None)
         table = {"name": content.name, "type": TYPE_NAMES.get(content.type, content.type)}
         if index == 0:
             table.update(_header_keys(header))
@@ -179,7 +183,8 @@ def page_to_source(page: PageBlock, names: ResourceNames, defaults: dict,
         # A component with an attribute kept as its stored bytes lists every
         # attribute, so that the raw value keeps its place among them.
         shortened = type_defaults is not None and not any(
-            _is_raw(item, content.type) for item in content.attributes) and (
+            _is_raw(item, content.type) or item.name in _TABLE_KEYS
+            for item in content.attributes) and (
             stored == type_defaults.names()
             or with_disup is not None and stored == [name for name, _ in with_disup])
         default_values = dict(type_defaults.attributes) if shortened else {}
@@ -189,12 +194,25 @@ def page_to_source(page: PageBlock, names: ResourceNames, defaults: dict,
         if not shortened or event_names != type_defaults.events:
             table["events"] = event_names
         for attribute in content.attributes:
-            if (attribute.name in _DERIVED or attribute.name in PLACEMENT_ATTRIBUTES
+            if attribute.name in _TABLE_KEYS:
+                # Under a key of its own, as the attribute's name would be
+                # read as the page file's key (kept_attributes). Two such
+                # attributes with others between them come back together, at
+                # the first one's place.
+                table.setdefault("kept_attributes", {})[attribute.name] = {
+                    RAW_KEY: attribute.value.hex()}
+            elif (attribute.name in _DERIVED or attribute.name in PLACEMENT_ATTRIBUTES
                     or default_values.get(attribute.name) != attribute.value):
                 table[attribute.name] = _attribute_to_value(attribute, content.type, where, names,
                                                             codec)
+        for event in content.events:
+            if kept_as_lines(event, codec):
+                table.setdefault("kept_events", {})[event.name] = {
+                    "lines": [line.hex() for line in event.lines]}
         tables.append(table)
         for event in content.events:
+            if kept_as_lines(event, codec):
+                continue
             text, dropped = _event_to_text(content.name, event, where, codec)
             if text is not None:
                 headings.append(text)
@@ -386,30 +404,38 @@ class _ObjectContent:
     events: list
 
     @classmethod
-    def read(cls, page_object: PageObject, index: int, where: str) -> "_ObjectContent":
-        """Returns the content of `page_object`, the object at `index` on its page.
+    def read(cls, page_object: PageObject, index: int, where: str,
+             page_name: str = None) -> "_ObjectContent":
+        """Returns the content of `page_object`, the object at `index` on its
+        page, as the source files give it. Records out of their usual order
+        are taken in it; of an attribute or an event given twice, the last;
+        and records of other kinds are left out (object_irregularities sorts
+        each). The page object, given `page_name`, is named after its page.
 
-        Raises NxwrightError, starting with `where`, when the object does not
-        have the shape the source files assume.
+        Raises NxwrightError, starting with `where`, for an object without its
+        type, ID, or name, which nxwright cannot read as an object.
         """
         items = page_object.items
-        attributes = [item for item in items if isinstance(item, Attribute)]
-        events = [item for item in items if isinstance(item, Event)]
-        if (not items or items[0] != Marker(b"att-%d" % len(attributes))
-                or items[1:] != attributes + events):
-            raise NxwrightError("%s: records are not a class marker, attributes, then events" % where)
-        names = [attribute.name for attribute in attributes]
-        event_names = [event.name for event in events]
-        # A TOML table holds each key once, and a heading names each event once.
-        if len(set(names)) != len(names) or len(set(event_names)) != len(event_names):
-            raise NxwrightError("%s: an attribute or event appears twice" % where)
-        if not all(re.fullmatch(r"[a-z]+", name) for name in event_names):
-            raise NxwrightError("%s: an event name is not lowercase letters" % where)
-        if names[:3] != ["type", "id", "objname"] or len(attributes[0].value) != 1:
-            raise NxwrightError("%s: attributes do not start with type, id, objname" % where)
-        if ("h" in names) != ("endx" in names) or (
-                "h" in names and names[names.index("h") + 1:names.index("h") + 3] != ["endx", "endy"]):
-            raise NxwrightError("%s: endx and endy do not follow h" % where)
+        # A TOML table holds each key once, and a heading names each event
+        # once: the last of each is kept, in the place of the first.
+        attributes = {}
+        for item in items:
+            if isinstance(item, Attribute):
+                attributes[item.name] = item
+        event_by_name = {}
+        for item in items:
+            if isinstance(item, Event):
+                event_by_name[item.name] = item
+        events = list(event_by_name.values())
+        if any(name not in attributes for name in ("type", "id", "objname")) \
+                or len(attributes["type"].value) != 1:
+            raise NxwrightError("%s: the object has no type, id, or objname, so nxwright cannot "
+                                "read it" % where)
+        if page_name is not None:
+            attributes["objname"] = Attribute("objname", page_name.encode(_NAME_ENCODING))
+        attributes = ([attributes[name] for name in ("type", "id", "objname")]
+                      + [attribute for name, attribute in attributes.items()
+                         if name not in ("type", "id", "objname")])
         objname = attributes[2].value.decode(_NAME_ENCODING)
         if not objname:
             raise NxwrightError("%s: name '' is empty" % where)
@@ -456,9 +482,11 @@ def _attribute_to_value(attribute: Attribute, object_type: int, where: str, name
                         codec: TextCodec):
     """Returns an attribute's value as <page>.page.toml writes it: a string, a
     resource's name, a "#rrggbb" colour, or a number."""
-    if attribute.name in _TABLE_KEYS:
-        raise NxwrightError("%s: attribute %s clashes with a key of the page's .page.toml file" % (where, attribute.name))
     if is_string_attribute(object_type, attribute.name):
+        # A text that is not text in the project's encoding is kept as its
+        # stored bytes.
+        if not codec.keeps(attribute.value):
+            return {RAW_KEY: attribute.value.hex()}
         return codec.decode(attribute.value, "%s: %s" % (where, attribute.name))
     if _is_raw(attribute, object_type):
         return {RAW_KEY: attribute.value.hex()}
@@ -496,6 +524,116 @@ def _event_to_text(name: str, event: Event, where: str, codec: TextCodec) -> tup
     return "\n".join(lines) + "\n", dropped
 
 
+def kept_as_lines(event: Event, codec: TextCodec) -> bool:
+    """Whether `event` is kept in its page file as its stored lines rather
+    than in a .nx file: a line of its code is not text in the project's
+    encoding, `codec`'s, or has a control character, which a .nx file cannot
+    contain. unknown_content.py sorts such an event so too."""
+    for line in event.lines:
+        if not codec.keeps(line):
+            return True
+        text = codec.decode(line, "")
+        if any(ord(char) < 0x20 and char != "\t" or ord(char) == 0x7f for char in text):
+            return True
+    return False
+
+
+def object_irregularities(page_object: PageObject, index: int, page_name: str,
+                          codec: TextCodec = None) -> list:
+    """Returns what of the object `page_object`, at `index` on the page
+    `page_name`, the page files do not keep as it is, as (sort, what, where in
+    the object, bytes), the sort one of content_sorts.py's. `codec` is the
+    project's encoding's, or None when nxwright does not know it, and its
+    texts are then not checked. _ObjectContent.read and page_to_source do
+    what each sort says, so the finder of unknown content and the conversion
+    agree."""
+    items = page_object.items
+    attributes = [item for item in items if isinstance(item, Attribute)]
+    events = [item for item in items if isinstance(item, Event)]
+    names = [attribute.name for attribute in attributes]
+    if not all(name in names for name in ("type", "id", "objname")) or len(
+            [attribute for attribute in attributes if attribute.name == "type"][-1].value) != 1:
+        return [(CANNOT_BE_KEPT, "an object without its type, ID, or name", "records", b"")]
+    found = [(MAY_BE_LOST, "a record of a kind the page files do not keep", "records", b"")
+             for item in items[1:] if not isinstance(item, (Attribute, Event))][:1]
+    if items[0] != Marker(b"att-%d" % len(attributes)) or not _in_usual_order(items):
+        found.append((WRITTEN_OTHERWISE, "an object's records out of their usual order",
+                      "records", b""))
+    for kind, given in (("attribute", names), ("event", [event.name for event in events])):
+        found += [(MAY_BE_LOST, "an %s given twice, of which the source folder keeps the last"
+                   % kind, "%s %s" % (kind, name), b"")
+                  for name in sorted({name for name in given if given.count(name) > 1})]
+    object_type = [attribute for attribute in attributes if attribute.name == "type"][-1].value[0]
+    for attribute in attributes:
+        # The type attribute is the one the table's own type key gives.
+        if attribute.name in _TABLE_KEYS and attribute.name != "type":
+            found.append((KEPT, "an attribute named like a key of the page file",
+                          "attribute " + attribute.name, attribute.value))
+        elif codec is not None and is_string_attribute(object_type, attribute.name) \
+                and not codec.keeps(attribute.value):
+            found.append((KEPT, "a text not valid in the project's encoding",
+                          "attribute " + attribute.name, attribute.value))
+    if codec is not None:
+        # The last of an event given twice, as the conversion keeps it.
+        kept_events = {event.name: event for event in events}.values()
+        found += [(KEPT, "an event whose code a .nx file cannot contain, kept as its lines",
+                   "event " + event.name, b"") for event in kept_events
+                  if kept_as_lines(event, codec)]
+    objname = [attribute for attribute in attributes if attribute.name == "objname"][-1].value
+    if index == 0 and objname != page_name.encode(_NAME_ENCODING):
+        found.append((WRITTEN_OTHERWISE, "a page object not named after its page", "objname",
+                      objname))
+    return found
+
+
+def _in_usual_order(items: list) -> bool:
+    """Whether an object's records `items` are in the order the build writes
+    them: a marker, the attributes, type, id, and objname first, and endx and
+    endy right after h, then the events."""
+    attributes = [item for item in items if isinstance(item, Attribute)]
+    events = [item for item in items if isinstance(item, Event)]
+    names = [attribute.name for attribute in attributes]
+    after_h = names[names.index("h") + 1:names.index("h") + 3] if "h" in names else []
+    return (isinstance(items[0], Marker) and items[1:] == attributes + events
+            and names[:3] == ["type", "id", "objname"]
+            and (("h" in names) == ("endx" in names)) and ("h" not in names
+                                                          or after_h == ["endx", "endy"]))
+
+
+def _kept_attributes(value, where: str) -> dict:
+    """Returns {attribute: stored bytes} of a table's kept_attributes, the
+    attributes named like a key of the page file, each in its raw form."""
+    if not isinstance(value, dict) or not all(isinstance(raw, dict) for raw in value.values()):
+        raise NxwrightError("%s: kept_attributes must give each attribute's stored bytes, as "
+                            "{ events = { %s = \"05\" } }" % (where, RAW_KEY))
+    return {key: _raw_bytes(key, raw, where) for key, raw in value.items()}
+
+
+def _kept_events(value, events: list, code: dict, name: str, where: str) -> dict:
+    """Returns {event: its lines' stored bytes} of a table's kept_events, the
+    events kept as their lines (kept_as_lines). Each must be among the
+    object's events, and have no heading in a .nx file too."""
+    if not isinstance(value, dict) or not all(
+            isinstance(kept, dict) and set(kept) == {"lines"} and isinstance(kept["lines"], list)
+            and all(isinstance(line, str) for line in kept["lines"]) for kept in value.values()):
+        raise NxwrightError("%s: kept_events must give each event's lines in hexadecimal, as "
+                            "{ load = { lines = [\"7072696e7420310d\"] } }" % where)
+    kept = {}
+    for event, given in value.items():
+        if event not in (events or []):
+            raise NxwrightError("%s: kept_events gives %s, which events does not list"
+                                % (where, event))
+        if (name, event) in code:
+            raise NxwrightError("%s: event %s is kept in the page file, and has a heading in a "
+                                ".nx file too; remove one" % (where, event))
+        try:
+            kept[event] = [bytes.fromhex(line) for line in given["lines"]]
+        except ValueError:
+            raise NxwrightError("%s: kept_events' lines of %s must be hexadecimal digits"
+                                % (where, event)) from None
+    return kept
+
+
 def page_file_text(tables: list) -> str:
     """Returns the text of <page>.page.toml from its tables, dicts of their
     values: the first as [page], the others as [[component]], each after a
@@ -512,9 +650,25 @@ def _table_text(table: dict) -> str:
     as a table of its own."""
     if not any(isinstance(value, dict) for value in table.values()):
         return tomli_w.dumps(table)
-    return "".join('%s = { %s = "%s" }\n' % (key, RAW_KEY, value[RAW_KEY])
+    return "".join("%s = %s\n" % (_toml_key(key), _inline(value))
                    if isinstance(value, dict) else tomli_w.dumps({key: value})
                    for key, value in table.items())
+
+
+def _toml_key(key: str) -> str:
+    """Returns `key` as TOML writes it: bare, or quoted when it must be."""
+    return tomli_w.dumps({key: 0})[:-len(" = 0\n")]
+
+
+def _inline(value) -> str:
+    """Returns `value`, a table, a list, a text, or a number, as an inline
+    TOML value, on one line, such as { bytes = "01" }."""
+    if isinstance(value, dict):
+        return "{ %s }" % ", ".join("%s = %s" % (_toml_key(key), _inline(item))
+                                    for key, item in value.items())
+    if isinstance(value, list):
+        return "[%s]" % ", ".join(_inline(item) for item in value)
+    return tomli_w.dumps({"v": value})[len("v = "):-1]
 
 
 def editor_code_of_block(block: EventBlock, page_name: str, names: ResourceNames, owner: Owner,
@@ -844,8 +998,12 @@ def _object_from_table(table: dict, index: int, code: dict, names: ResourceNames
     filled in, in the defaults' order.
     """
     name, object_type, events, full = _table_header(table, where)
-    given = {key: _value_to_bytes(key, value, object_type, names, codec, where)
-             for key, value in table.items() if key not in _TABLE_KEYS}
+    given = {}
+    for key, value in table.items():
+        if key == "kept_attributes":
+            given.update(_kept_attributes(value, where))
+        elif key not in _TABLE_KEYS:
+            given[key] = _value_to_bytes(key, value, object_type, names, codec, where)
     if full:
         attributes = [Attribute(key, value) for key, value in given.items()]
     else:
@@ -889,7 +1047,10 @@ def _object_from_table(table: dict, index: int, code: dict, names: ResourceNames
         if attribute.name == "h":
             ordered += [Attribute(key, given.get(key, derived[key])) for key in ("endx", "endy")]
     items = [Marker(b"att-%d" % len(ordered))] + ordered
-    items += [Event(event, code.pop((name, event), [])) for event in events or []]
+    # Once a table that leaves its events out has its type's events.
+    kept_events = _kept_events(table.get("kept_events", {}), events, code, name, where)
+    items += [Event(event, kept_events[event] if event in kept_events
+                    else code.pop((name, event), [])) for event in events or []]
     return PageObject(items)
 
 

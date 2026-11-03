@@ -6,7 +6,8 @@ from types import SimpleNamespace
 import unittest
 
 from nxwright.project.device_settings import DeviceSettings, manifest_header
-from nxwright.project.page_block import Attribute, Marker, PageObject
+from nxwright.project.device_settings import TextCodec
+from nxwright.project.page_block import Attribute, Event, Marker, PageObject
 from nxwright.project.resources import ImageSource, encode_image_source, parse_manifest
 from nxwright.project.screen_models import model_named
 from nxwright.source.unknown_content import (CANNOT_BE_KEPT, KEPT, MAY_BE_LOST,
@@ -106,11 +107,22 @@ HEADER_40 = bytes.fromhex("01440203") + bytes(12)
 def page(*objects, header_16: bytes = HEADER_16, header_40: bytes = HEADER_40) -> SimpleNamespace:
     """Returns a stand-in page holding `objects`, each a list of
     (name, bytes) attributes, its header's bytes 16 to 23 `header_16` and 40
-    to 55 `header_40`."""
-    return SimpleNamespace(name="page0", unknown_16=header_16, unknown_40=header_40, objects=[
+    to 55 `header_40`. Each object gets the id and objname that every real
+    object has, after its type, when it does not give them, and the page
+    takes its object 0's name."""
+    filled = []
+    for index, attributes in enumerate(objects):
+        given = dict(attributes)
+        first = [("id", given.get("id", bytes([index]))),
+                 ("objname", given.get("objname", b"o%d" % index))]
+        filled.append(attributes[:1] + first
+                      + [item for item in attributes[1:] if item[0] not in ("id", "objname")])
+    first = dict(filled[0])["objname"] if filled else b"page0"
+    return SimpleNamespace(name=first.decode("latin-1"), unknown_16=header_16,
+                           unknown_40=header_40, objects=[
         PageObject([Marker(b"att-%d" % len(attributes))]
                    + [Attribute(name, value) for name, value in attributes])
-        for attributes in objects])
+        for attributes in filled])
 
 
 class PagesTest(unittest.TestCase):
@@ -146,6 +158,40 @@ class PagesTest(unittest.TestCase):
             with self.subTest(header_16=header_16):
                 found = unknown_in_pages({"block 0.pa": page(header_16=bytes.fromhex(header_16))})
                 self.assertEqual(sorts(found), [("block 0.pa, page header " + place, KEPT)])
+
+    def test_what_the_page_files_do_not_keep_as_it_is(self):
+        # Plans/extract-what-it-reads.md, Phase 2: each case and its sort.
+        text, codec = ("type", bytes([116])), TextCodec("utf-8")
+        cases = {
+            "an object's records out of their usual order":
+                (lambda items: items.insert(1, Event("down", [])), WRITTEN_OTHERWISE),
+            "a record of a kind the page files do not keep":
+                (lambda items: items.append(Marker(b"other")), MAY_BE_LOST),
+            "an attribute given twice, of which the source folder keeps the last":
+                (lambda items: items.append(Attribute("x", b"\0\0")), MAY_BE_LOST),
+            "an attribute named like a key of the page file":
+                (lambda items: items.append(Attribute("events", b"\5")), KEPT),
+            "a text not valid in the project's encoding":
+                (lambda items: items.append(Attribute("txt", b"\xff")), KEPT),
+            "an event whose code a .nx file cannot contain, kept as its lines":
+                (lambda items: items.append(Event("down", [b"a\x01"])), KEPT),
+        }
+        for what, (change, sort) in cases.items():
+            with self.subTest(what):
+                found = page([text, ("x", b"\0\0")])
+                change(found.objects[0].items)
+                found.objects[0].items[0] = Marker(b"att-%d" % sum(
+                    isinstance(item, Attribute) for item in found.objects[0].items))
+                listed = unknown_in_pages({"block 0.pa": found}, encoding_code=24)
+                self.assertIn((what, sort), [(each.what, each.sort) for each in listed])
+        unread = page([text])
+        del unread.objects[0].items[2]
+        self.assertEqual([each.sort for each in unknown_in_pages({"block 0.pa": unread})],
+                         [CANNOT_BE_KEPT])
+        named = page([text])
+        named.name = "other"
+        self.assertEqual(sorts(unknown_in_pages({"block 0.pa": named})),
+                         [("block 0.pa, object 0, objname", WRITTEN_OTHERWISE)])
 
     def test_an_unknown_type_is_kept_exactly(self):
         found = unknown_in_pages({"block 0.pa": page([("type", bytes([200])), ("id", b"\1")])})

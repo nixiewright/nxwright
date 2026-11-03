@@ -776,15 +776,10 @@ class PageSourceTest(unittest.TestCase):
             "page first, event first.up: 1 blank line dropped; the Nextion Editor compiles it to "
             "nothing"))
 
-    def test_refuses_what_the_source_cannot_hold(self):
+    def test_refuses_what_it_cannot_read(self):
         cases = {
-            "control character": lambda page: page.objects[0].items.append(Event("down", [b"a\x01"])),
-            "class marker": lambda page: page.objects[0].items.insert(1, Marker(b"att-1")),
             "header size": lambda page: setattr(page, "header_size", 60),
-            "appears twice": lambda page: page.objects[0].items.extend([Event("down", []),
-                                                                         Event("down", [])]),
-            "lowercase letters": lambda page: page.objects[0].items.append(Event("Down", [])),
-            "named after the page": lambda page: setattr(page, "name", "other"),
+            "no type, id, or objname": lambda page: page.objects[0].items.pop(1),
         }
         for message, change in cases.items():
             with self.subTest(message=message):
@@ -792,6 +787,32 @@ class PageSourceTest(unittest.TestCase):
                 change(page)
                 with self.assertRaisesRegex(NxwrightError, message):
                     page_to_source(page, NO_NAMES, NO_DEFAULTS)
+
+    def test_takes_what_the_source_keeps_otherwise(self):
+        # Each was refused before (Plans/extract-what-it-reads.md, Phase 2).
+        cases = {
+            "control character": (lambda page: page.objects[0].items.append(
+                Event("down", [b"a\x01"])), "kept_events = { down = { lines = [\"6101\"] } }"),
+            # A second marker is left out, and of an event given twice, the
+            # last is kept.
+            "class marker": (lambda page: page.objects[0].items.insert(1, Marker(b"att-1")),
+                             'type = "page"\n'),
+            "given twice": (lambda page: page.objects[0].items.extend(
+                [Event("down", [b"a=1"]), Event("down", [b"a=2"])]), None),
+            "named after another page": (lambda page: setattr(page, "name", "other"),
+                                         'name = "other"'),
+        }
+        for message, (change, written) in cases.items():
+            with self.subTest(message=message):
+                page = self.page()
+                change(page)
+                source = page_to_source(page, NO_NAMES, NO_DEFAULTS)
+                if written is not None:
+                    self.assertIn(written, source.toml)
+                    self.assertNotIn("att-1", source.toml)
+                else:
+                    self.assertIn("a=2", source.events)
+                    self.assertNotIn("a=1", source.events)
 
     def test_four_byte_values_are_written_signed(self):
         # As the Editor's panel shows them: -42 for 0xFFFFFFD6.

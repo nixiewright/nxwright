@@ -171,6 +171,9 @@ pco = "#ffffff"
 - An attribute nxwright does not know, or one stored at another width than nxwright knows, as a newer Nextion Editor may write, is kept as its stored bytes, in hexadecimal: `newattr = { bytes = "01" }`. Extract writes it so, in a table marked `defaults = false`, and the build writes the bytes back as they are. The properties panel shows it, but cannot change it.
   - For a picture or font attribute, the bytes keep the resource's ID, not its name, so they stay right only while the resources keep their order.
   - An older nxwright stops at such a value, naming the attribute.
+- A text whose bytes are not text in the project's encoding is kept the same way: `txt = { bytes = "636166e9" }`.
+- An attribute named like a key of the page file, such as `events`, is kept under `kept_attributes`, in the same form: `kept_attributes = { events = { bytes = "05" } }`. If an object has two such attributes with others between them, the build writes the two together, at the first one's place.
+- An event whose code a `.nx` file cannot contain, such as a line with a control character, or one not valid in the project's encoding, is kept under `kept_events`, as its lines in hexadecimal: `kept_events = { load = { lines = ["610d62"] } }`. Its code has no heading in the `.nx` file, so it cannot be edited there, and the build writes its lines back as they are.
 
 The `[page]` table may also contain:
 

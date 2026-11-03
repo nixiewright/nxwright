@@ -77,16 +77,24 @@ class TextEncodingTest(SourceFolderTestCase):
         self.assertIn('txt = "镕"', (source / "pages" / "first.page.toml").read_text(encoding="utf-8"))
         self.assert_same_text_and_program(self.built_dump(source))
 
-    def test_bytes_that_are_not_text_stop_the_extract(self):
-        # In code page 932, fa 4a and 87 54 are both U+2160, which encodes as 87 54.
+    def test_bytes_that_are_not_text_are_kept_as_their_bytes(self):
+        # In code page 932, fa 4a and 87 54 are both U+2160, which encodes as
+        # 87 54, so fa 4a would not come back. Each was refused before
+        # (Plans/extract-what-it-reads.md, Phase 2).
         for encoding, text in (("utf-8", b"\xff"), ("shift-jis", bytes.fromhex("fa4a")),
                                ("ascii", b"\xe9")):
             with self.subTest(encoding=encoding):
                 self.set_dump(encoding, text)
-                with self.assertRaisesRegex(NxwrightError, "page first, object 0: txt: the bytes "
-                                            "%s are not text in %s" % (text.hex(" "), encoding)):
-                    self.extract()
-                self.assertFalse((self.folder / "extracted").exists())
+                source = self.folder / ("extracted-" + encoding)
+                import_dump(self.dump, source)
+                self.assertIn('txt = { bytes = "%s" }' % text.hex(),
+                              (source / "pages" / "first.page.toml").read_text(encoding="utf-8"))
+                built = self.folder / ("built-%s.HMI" % encoding)
+                build(source, built)
+                dump = self.folder / ("built-dump-" + encoding)
+                ProjectDumper(built, dump).dump()
+                page = (dump / "pages" / "00-first.txt").read_text(encoding="utf-8")
+                self.assertIn("txt = " + escape_string(text), page)
                 edit_text(self.dump / "pages" / "00-first.txt", "txt = " + escape_string(text),
                           'txt = "hello"')
 

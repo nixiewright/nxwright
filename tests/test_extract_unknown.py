@@ -17,6 +17,7 @@ from nxwright.project.container import HmiContainer
 from nxwright.project.device_settings import DeviceSettings
 from nxwright.project.dumper import ProjectDumper
 from nxwright.project.page_text import page_to_text
+from nxwright.project.page_block import Attribute, Event, parse_page
 from nxwright.project.project_writer import ProjectWriter
 from nxwright.project.screen_models import model_named
 from nxwright.source.project_files import build, extract
@@ -306,6 +307,107 @@ class ExtractUnknownTest(PatchedDemoTestCase):
     def test_a_project_without_unknown_content_extracts_as_before(self):
         target = self.target("plain")
         self.assertEqual(extract(self.demo, target), [])
+
+
+def in_object_0(edit):
+    """Returns an edit of a page's dump text that applies `edit` to its
+    object 0, the page itself, alone."""
+    def edited(text: str) -> str:
+        head, start, rest = text.partition("object 0 ")
+        body, end, tail = rest.partition("\nobject ")
+        return head + start + edit(body) + end + tail
+    return edited
+
+
+def with_count(body: str, more: int) -> str:
+    """Returns an object's dump text `body` with its count of attributes
+    `more` higher."""
+    count = int(re.search(r"marker att-(\d+)", body).group(1))
+    return body.replace("marker att-%d" % count, "marker att-%d" % (count + more), 1)
+
+
+class ObjectsAndEventsTest(PatchedDemoTestCase):
+    """What a page's objects contain that the page files cannot write as
+    they are: each was refused before, and is extracted now."""
+
+    def round_trip(self, name: str, project: Path) -> tuple:
+        """Extracts `project` with no question, builds it again, and returns
+        (the notes, the page file's text, the first page's object 0 as built,
+        and as the project had it)."""
+        notes = extract(project, self.target(name))
+        built = self.folder / (name + "-again.HMI")
+        build(self.target(name), built)
+        page_file = (self.target(name) / "pages" / "home.page.toml").read_text(encoding="utf-8")
+        def object_0(path: Path):
+            return parse_page(HmiContainer.from_file(path).blocks["0.pa"]).objects[0]
+        return notes, page_file, object_0(built), object_0(project)
+
+    def test_records_out_of_their_usual_order_are_written_in_order(self):
+        project = self.edited("order.HMI", in_object_0(lambda body: body.replace(
+            "  event loadend\n", "", 1).replace("  marker att-28\n",
+                                                 "  marker att-28\n  event loadend\n", 1)))
+        notes, _, built, _ = self.round_trip("order", project)
+        self.assertTrue(any("records out of their usual order" in note
+                            and "writes as nxwright knows it" in note for note in notes), notes)
+        kinds = [type(item).__name__ for item in built.items]
+        self.assertEqual(kinds, sorted(kinds, key=["Marker", "Attribute", "Event"].index))
+
+    def test_an_attribute_given_twice_asks_first_and_keeps_the_last(self):
+        project = self.edited("twice.HMI", in_object_0(lambda body: with_count(body, 1).replace(
+            "  aph = 127\n", "  aph = 127\n  aph = 100\n", 1)))
+        with self.assertRaisesRegex(UnknownContentError, "given twice"):
+            extract(project, self.target("twice"))
+        extract(project, self.target("twice"), continue_with_unknown=True)
+        self.assertIn("aph = 100\n", (self.target("twice") / "pages" / "home.page.toml")
+                      .read_text(encoding="utf-8"))
+
+    def test_an_event_that_nx_files_cannot_contain_is_kept_as_its_lines(self):
+        # A line of code with a control character. An event whose name is not
+        # lowercase letters cannot be one: page_block.py reads such a record
+        # as records of other kinds.
+        project = self.edited("control.HMI", in_object_0(lambda body: body.replace(
+            "  event load\n", "  event load\n    raw 610d62\n", 1)))
+        notes, page_file, built, original = self.round_trip("control", project)
+        self.assertTrue(any("keeps exactly" in note for note in notes), notes)
+        self.assertIn("kept_events = { ", page_file)
+        self.assertEqual([item for item in built.items if isinstance(item, Event)],
+                         [item for item in original.items if isinstance(item, Event)])
+
+    def test_an_attribute_named_like_a_page_file_key_is_kept_as_its_bytes(self):
+        project = self.edited("key.HMI", in_object_0(lambda body: with_count(body, 1).replace(
+            "\n  vscope = 0\n", "\n  vscope = 0\n  events:u8 = 5\n", 1)))
+        notes, page_file, built, original = self.round_trip("key", project)
+        self.assertTrue(any("keeps exactly" in note for note in notes), notes)
+        self.assertIn('kept_attributes = { events = { bytes = "05" } }', page_file)
+        self.assertEqual([item for item in built.items if isinstance(item, Attribute)],
+                         [item for item in original.items if isinstance(item, Attribute)])
+
+    def test_a_text_not_valid_in_the_encoding_is_kept_as_its_bytes(self):
+        # In utf-8, a lone e9 is not text.
+        edited = self.edited("text.HMI", lambda text: text.replace(
+            'txt = "Living room"', 'txt = "Living r\\xe9om"', 1))
+        project = self.patched("text-utf8.HMI", header={13: 24}, base=edited)
+        notes, _, _, _ = self.round_trip("text", project)
+        self.assertTrue(any("keeps exactly" in note for note in notes), notes)
+        title = (self.target("text") / "pages" / "home.page.toml").read_text(encoding="utf-8")
+        self.assertIn('txt = { bytes = "4c6976696e672072e96f6d" }', title)
+        rebuilt = HmiContainer.from_file(self.folder / "text-again.HMI").blocks["0.pa"]
+        self.assertIn(b"Living r\xe9om", rebuilt)
+
+    def test_a_page_object_not_named_after_its_page_is_named_so(self):
+        project = self.edited("named.HMI", in_object_0(lambda body: body.replace(
+            'objname = "home"', 'objname = "house"', 1).replace("home\n", "house\n", 1)))
+        notes, _, built, _ = self.round_trip("named", project)
+        self.assertTrue(any("not named after its page" in note for note in notes), notes)
+        self.assertEqual(built.attribute("objname"), b"home")
+
+    def test_a_record_of_another_kind_asks_first(self):
+        project = self.edited("record.HMI", in_object_0(lambda body: body.replace(
+            "  marker att-28\n", "  marker att-28\n  raw 0102\n", 1)))
+        with self.assertRaisesRegex(UnknownContentError, "a record of a kind"):
+            extract(project, self.target("record"))
+        extract(project, self.target("record"), continue_with_unknown=True)
+        self.assertTrue((self.target("record") / "app.toml").exists())
 
 
 class ExtractCommandTest(PatchedDemoTestCase):
