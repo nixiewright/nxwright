@@ -37,7 +37,7 @@ Pages, pictures, fonts, animations, videos, and sounds are numbered by their IDs
 
 The dump stops with an error if the manifest does not list every page, picture, font, animation, video, and sound block exactly once, because the IDs would then be ambiguous.
 
-A dump records its format version in the first line of `project.txt`. A dump written by another version of nxwright is refused rather than misread: dump the project again.
+A dump records its format version in the first line of `project.txt`. A dump written by another version of nxwright is refused rather than misread: dump the project again. A dump is in format 5 when one of its page lines is quoted (Page text), and in format 4 otherwise, so that an older nxwright still reads it. nxwright reads both.
 
 ## Page text
 
@@ -62,6 +62,7 @@ object 0 settings
   event down
 ```
 
+- `page name` gives the page's name. A name outside printable ASCII, or with a double quote, is quoted as a string is, as `page "caf\xe9"` for `café`.
 - `object N name` labels the object with its index and name. The name is left off when it is empty or contains a space.
 - `marker` lines are short tags; `att-NN` gives the component's class.
 - Numbers are decimal. A number whose width in bytes differs from what nxwright expects for that component type shows its width, for example `val:u8 = 0`.

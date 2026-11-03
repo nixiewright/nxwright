@@ -31,6 +31,9 @@ Rules:
     long is written as a quoted string of its bytes.
   - Strings are quoted. Printable ASCII is written as is; quotes, backslashes
     and every other byte are escaped ("\\x0d").
+  - The page line gives the page's name as it is, or quoted as a string when
+    the name is not printable ASCII or has a double quote: page "caf\\xe9".
+    The name's bytes are Latin-1.
   - Event code lines follow "| ". A line that is not printable ASCII, or that
     ends in a space, is written as "raw <hex>" so the text stays exact.
   - A record the parser did not recognise is written as "raw <hex>".
@@ -143,7 +146,7 @@ def expected_width(object_type, name: str):
 
 def page_to_text(page: PageBlock) -> str:
     """Returns the text form of `page`. The stamp is not written."""
-    lines = ["page " + page.name,
+    lines = ["page " + page_line_name(page.name),
              "header_size = %d" % page.header_size,
              "header_16 = " + page.unknown_16.hex(),
              "header_40 = " + page.unknown_40.hex()]
@@ -151,6 +154,16 @@ def page_to_text(page: PageBlock) -> str:
         lines.append("")
         lines.extend(_object_to_lines(index, page_object))
     return "\n".join(lines) + "\n"
+
+
+def page_line_name(name: str) -> str:
+    """Returns how the page line writes the page name `name`: as it is when
+    it is printable ASCII without a double quote, or else quoted, as a
+    string, so that `café` is `"caf\\xe9"`. An unquoted name then never
+    starts with a quote."""
+    if all(0x20 <= ord(character) < 0x7f for character in name) and '"' not in name:
+        return name
+    return escape_string(name.encode("latin-1"))
 
 
 def _object_to_lines(index: int, page_object: PageObject) -> list:
@@ -308,7 +321,9 @@ class _PageTextParser:
     def _parse_page_line(self, line: str):
         self._event = None
         if line.startswith("page "):
-            self._page_name = line[5:]
+            name = line[5:]
+            self._page_name = (unescape_string(name).decode("latin-1") if name.startswith('"')
+                               else name)
             return
         match = _OBJECT_LINE.fullmatch(line)
         if match:

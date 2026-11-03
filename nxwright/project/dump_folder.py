@@ -7,17 +7,31 @@ from pathlib import Path
 
 from nxwright import NxwrightError
 from nxwright.project.device_settings import ENCODINGS, HEADER_SIZE, read_device_settings
+from nxwright.project.page_text import page_line_name
 from nxwright.project.pictures import picture_data_size
 from nxwright.project.resources import (PICTURE_SUFFIXES, SOURCE_SUFFIX, CopiedKind, ImageSource,
                                         encode_image_source)
 
 # First line of project.txt. It changes whenever the dump's layout does, so that
 # a dump written by another version of nxwright is refused rather than misread.
-DUMP_FORMAT_LINE = "dump format        4"
+_FORMAT_LINE = "dump format        %d"
+# Format 5 adds one form to format 4: the quoted page line of a page name that
+# is not printable ASCII, or has a double quote (page_text.page_line_name). A
+# dump without such a line stays in format 4, which an older nxwright still
+# reads. Both are read.
+_FORMATS_READ = (4, 5)
 # A project's macros: the block holding them, which a project without
 # macros lacks, and the dump's file of its bytes (format.md).
 MACROS_BLOCK = "comcode.sn"
 MACROS_FILE = "macros.s"
+
+
+def dump_format_line(page_names: list) -> str:
+    """Returns the first line of project.txt for a dump of the pages named
+    `page_names`: format 5 when the page line of one of them is quoted, and
+    format 4 otherwise."""
+    quoted = any(page_line_name(name) != name for name in page_names)
+    return _FORMAT_LINE % (5 if quoted else 4)
 
 
 def check_dump_format(dump_folder: Path):
@@ -28,7 +42,7 @@ def check_dump_format(dump_folder: Path):
     """
     summary = dump_folder / "project.txt"
     first_line = summary.read_text(encoding="utf-8").split("\n", 1)[0] if summary.exists() else ""
-    if first_line != DUMP_FORMAT_LINE:
+    if first_line not in [_FORMAT_LINE % found for found in _FORMATS_READ]:
         raise NxwrightError("%s is not a dump in the current format; dump the project "
                             "again with nxwright dump" % dump_folder)
 

@@ -62,11 +62,11 @@ from nxwright.project.zi_font import UTF8
 from nxwright.source.keyboards import UTF8_CHARACTERS
 from nxwright.project.attribute_values import number_from_bytes
 from nxwright.project.component_defaults import DEFAULTS_FILE, defaults_from_toml
-from nxwright.project.dump_folder import (DUMP_FORMAT_LINE, MACROS_FILE, check_dump_format,
+from nxwright.project.dump_folder import (MACROS_FILE, check_dump_format,
                                           check_ids_without_gaps, copied_contents,
                                           copied_file_name, dump_device_settings, dump_encoding,
-                                          dump_header_bytes, dump_picture_sources, dump_pictures,
-                                          page_text_files)
+                                          dump_format_line, dump_header_bytes,
+                                          dump_picture_sources, dump_pictures, page_text_files)
 from nxwright.project.page_file_names import page_file_stem
 from nxwright.project.resources import COPIED_KINDS, FONTS, MEDIA, PICTURE_SUFFIXES, SOURCE_SUFFIX
 from nxwright.project.device_settings import DEFAULT_ENCODING, ENCODINGS, DeviceSettings, TextCodec
@@ -100,12 +100,12 @@ from nxwright.project.screen_models import ScreenModel
 from nxwright.source.series_components import check_series_components
 
 SOURCE_FORMAT = 1
-# A page's name in app.toml: any the Nextion Editor allows, printable ASCII,
-# as a page's header stores it, but not a double quote, which an event's
-# quoted heading cannot contain. Its files' names encode the characters
-# Windows refuses in a file name (page_file_names.py). nxwright new-page
-# gives plain names of its own.
-_PAGE_NAME = re.compile(r'[ !#-~]+')
+# A page's name in app.toml, as a component's name: any character of Latin-1,
+# in which a page's header stores it, except a control character or a double
+# quote, which an event's quoted heading cannot contain. Its files' names
+# encode the characters Windows refuses in a file name (page_file_names.py).
+# nxwright new-page gives plain names of its own.
+_PAGE_NAME = re.compile(r'[ !#-\xff]+')
 # The kinds of resource a source folder holds, by their list in app.toml,
 # which is also their folder: the suffixes of each one's files. A picture has
 # one file, of any of its suffixes (picture_file); the others, a file of each.
@@ -1286,7 +1286,7 @@ def _dump_files_from_source(source_folder: Path, refuse_by_table: bool) -> tuple
     folder = read_folder_source(folder_reader(source_folder), refuse_by_table=refuse_by_table)
     app = folder.app
     check_page_count(app, folder.read("app.toml"))
-    files = {"project.txt": (DUMP_FORMAT_LINE + "\n").encode("utf-8")}
+    files = {"project.txt": (dump_format_line(app["pages"]) + "\n").encode("utf-8")}
     globals_used = []
     measured = {}       # {page name: what page_memory.measure_page found}
     for page_id, page_name in enumerate(app["pages"]):
@@ -1426,8 +1426,8 @@ def parse_app(text: str) -> dict:
     pages = app.get("pages")
     if not isinstance(pages, list) or not all(isinstance(name, str) and _PAGE_NAME.fullmatch(name)
                                               for name in pages):
-        raise NxwrightError("app.toml: pages must be a list of page names, each of printable "
-                            "ASCII without a double quote")
+        raise NxwrightError("app.toml: pages must be a list of page names, each of characters "
+                            "Latin-1 has, without a double quote or a control character")
     if len(set(pages)) != len(pages):
         raise NxwrightError("app.toml: pages lists a name twice")
     for kind in _OPTIONAL_LISTS:

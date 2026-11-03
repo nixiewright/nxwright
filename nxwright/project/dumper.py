@@ -9,8 +9,8 @@ import hashlib
 
 from nxwright import NxwrightError
 from nxwright.project.container import HmiContainer, numbered_block
-from nxwright.project.dump_folder import (DUMP_FORMAT_LINE, MACROS_BLOCK, MACROS_FILE,
-                                          copied_file_name)
+from nxwright.project.dump_folder import (MACROS_BLOCK, MACROS_FILE, copied_file_name,
+                                          dump_format_line)
 from nxwright.project.page_block import encode_page, parse_page
 from nxwright.project.page_file_names import page_file_stem
 from nxwright.project.page_text import page_from_text, page_to_text
@@ -136,8 +136,10 @@ class ProjectDumper:
         """Writes project.txt: the dump format line, block counts, and the manifest."""
         container = self._container
         manifest = self._manifest
+        page_names = [parse_page(container.blocks[name]).name
+                      for name in manifest.block_names("pa")]
         lines = [
-            DUMP_FORMAT_LINE,
+            dump_format_line(page_names),
             "file               %s" % self._project_path.name,
             "size               %d bytes" % container.file_size,
             "directory entries  %d" % container.entry_count,
