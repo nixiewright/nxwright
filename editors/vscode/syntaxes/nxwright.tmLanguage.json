@@ -21,7 +21,7 @@
   ],
   "repository": {
     "heading": {
-      "comment": "An event heading in a .nx file: on <object>.<event>:, the object's name quoted when it is not plain, as on \"b 0\".up:",
+      "comment": "An event heading in a .nx file, such as `on b0.up:`. An object name with characters other than letters, digits, and _ is quoted, as in `on \"b 0\".up:`.",
       "match": "^(on)\\s+([A-Za-z0-9_]+|\"[^\"\\x00-\\x1f]*\")(\\.)([a-z]+)(:)$",
       "captures": {
         "1": { "name": "keyword.other.event.nxwright" },

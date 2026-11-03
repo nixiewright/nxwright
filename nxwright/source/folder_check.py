@@ -95,10 +95,10 @@ def check_folder(read, exists, pages: list = None, read_bytes=None,
     sounds', to warn of one not in the Editor's form (lint.sound_warnings),
     and to find one a screen does not play (lint.sound_errors); and
     the start of the videos', to find one made for another rotation
-    (lint.video_rotation_errors). With `listed(folder)`, which returns the
-    names of the files in a folder within the source folder
-    (source_folder.folder_lister), a picture in a file of a type nxwright
-    does not decode is found too (source_folder.kept_picture_paths)."""
+    (lint.video_rotation_errors). `listed(folder)` returns the names of the
+    files in a folder within the source folder (source_folder.folder_lister).
+    If `listed` is given, the checks also find a picture whose file is of a
+    type nxwright does not decode (source_folder.kept_picture_paths)."""
     result = FolderCheck()
     try:
         folder = read_folder_source(read, skip_broken_pages=True)

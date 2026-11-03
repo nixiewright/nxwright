@@ -29,8 +29,9 @@ _PICTURE_FORMATS = {"T": FORMAT_RAW, "K": FORMAT_RAW, "F": FORMAT_RAW_WITH_HEADE
 class ScreenModel:
     """One of the Editor's screen models. `device_id` is manifest bytes 16 to
     19 as stored; `stamp_number` is the model's part of the manifest stamp.
-    `inches` is the screen's diagonal, `flash_mb` and `ram_bytes` its
-    memories, and `frequency_mhz` its processor's speed."""
+    `inches` is the screen's diagonal in inches. `flash_mb` is the size of
+    its flash memory in MB, and `ram_bytes` the size of its RAM in bytes.
+    `frequency_mhz` is the speed of its processor in MHz."""
     name: str
     device_id: bytes
     stamp_number: int
@@ -43,8 +44,9 @@ class ScreenModel:
 
     @property
     def specs(self) -> str:
-        """The model's specs, as a list of models shows them beside its name,
-        such as "5.0 inch, 800 x 480, flash 128 MB, RAM 512 KB, 200 MHz"."""
+        """The model's specs, as nxwright shows them beside the model's name
+        in a list of models, such as "5.0 inch, 800 x 480, flash 128 MB, RAM
+        512 KB, 200 MHz"."""
         return "%.1f inch, %d x %d, flash %d MB, RAM %g KB, %d MHz" % (
             self.inches, self.width, self.height, self.flash_mb, self.ram_bytes / 1024,
             self.frequency_mhz)

@@ -63,14 +63,14 @@ Brings a project file into a source folder. Use it to start from a project made 
 - Into an existing source folder, it updates it, and keeps the app's name. Your code, names, and comfortable syntax stay wherever the project did not change them ([Extracting into an existing folder](source-folder.md#extracting-into-an-existing-folder)).
 - The Nextion Editor locks a project it has open. If the project is open there, the command fails with "Permission denied", and advises you to close the project in the Nextion Editor first.
 - Blank lines in the project's code are dropped, as the build would drop them. A warning gives each event, macro, or `program.s` that had any. The Nextion Editor compiles them to nothing.
-- A project saved by a newer Nextion Editor may contain things nxwright does not know. Before writing anything, extract sorts each such thing four ways:
+- A project saved by a newer Nextion Editor may contain things nxwright does not know. Before writing anything, extract puts each one in one of four groups:
   - **Kept exactly**, such as a component type nxwright does not know, or an attribute it does not know. A page file keeps such an attribute as its stored bytes ([source-folder.md](source-folder.md#page-files)). A warning gives each thing kept.
-  - **Written otherwise** by the next build, in a form nxwright knows, such as a page header in a form nxwright has not seen, which the build writes in the current form, as the Nextion Editor does, or an object's records out of their usual order, which the build writes in order. A warning gives each one, and extract goes on without prompting, even with no terminal.
+  - **Written otherwise** by the next build, in a form nxwright knows. For example, the build writes a page header of a form nxwright has not seen in the current form, as the Nextion Editor does, and puts an object's records back in their usual order. A warning gives each one, and extract goes on without prompting, even with no terminal.
   - **May be lost** by the next build, such as a block of another kind, or a screen model nxwright does not know. Extract lists each one, and warns that the project may then miss parameters the Nextion Editor needs. Then it prompts you to choose whether to go on. If there is no terminal to answer at, as in a script, extract stops with exit code 3. `--continue-with-unknown` goes on without prompting.
   - **Cannot be kept**, such as a component without its type, ID, or name. Extract refuses the project.
 
   The warnings and the refusal end with a pointer to `nxwright report`, which writes a report to send to nxwright's maintainers ([report](#report)).
-- `nxwright extract --list-unknown thermostat.HMI` prints each thing in the project that nxwright does not know, one JSON object a line, and writes nothing. An object gives what the thing is, where it is, its sort, its size, and its first 16 bytes in hexadecimal.
+- `nxwright extract --list-unknown thermostat.HMI` prints each thing in the project that nxwright does not know, one JSON object per line, and writes nothing. Each object gives what the thing is, where it is, its sort, its size, and its first 16 bytes in hexadecimal.
 
 `extract` goes through a dump in a temporary folder. `nxwright dump`, then `nxwright import`, do the same in two steps ([dumps.md](dumps.md)).
 
@@ -82,10 +82,10 @@ nxwright report thermostat.HMI report.md
 
 Writes a report on the things in a project file that nxwright does not know, for nxwright's maintainers to look into. Paste the report into an issue, with the issue template "A project nxwright does not understand".
 
-- The report gives nxwright's, Python's, and Windows' versions, the project file's blocks by name and size, its manifest header, and the device settings nxwright reads from it.
-- Each thing nxwright does not know comes with what it is, where it is, and at most its first 16 bytes. Where it is goes by a block's name, an object's number, or an attribute's name.
+- The report gives the versions of nxwright, Python, and Windows, the project file's blocks by name and size, its manifest header, and the device settings nxwright reads from it.
+- Each thing nxwright does not know comes with what it is, where it is, and at most its first 16 bytes. Its place is given by a block's name, an object's number, or an attribute's name.
 - The project's code, texts, names of pages or components, pictures, fonts, animations, videos, and sounds are left out. The password's hash is blanked, and the report gives only whether there is a password.
-- Those first 16 bytes may contain a text of yours. Read the report before you send it.
+- Those first 16 bytes may contain some of your own text. Read the report before you send it.
 - Two blanks are left for you to fill in: the Nextion Editor's version, and what you did in it before you saved the project.
 - The project file is only read. The report is written only to a new file.
 
@@ -243,7 +243,7 @@ A font is either drawn from a typeface file, or added from a ready-made font fil
 nxwright font app NotoSans-Regular.ttf 20
 ```
 
-Draws a font from a TrueType (`.ttf`) or OpenType (`.otf`) file, or from the first typeface of a collection (`.ttc`), as the Nextion Editor's font generator draws one ([format.md, Drawing a font](format.md#drawing-a-font)). The font is stored for the folder's rotation, or upright on the F series, as the Nextion Editor stores one, and added after the folder's other fonts.
+Draws a font from a TrueType (`.ttf`) or OpenType (`.otf`) file, or from the first typeface of a collection (`.ttc`), as the Nextion Editor's font generator draws one ([format.md, Drawing a font](format.md#drawing-a-font)). The font is stored for the folder's rotation, or upright on the F series, as the Nextion Editor stores fonts. It is added after the folder's other fonts.
 
 - The height: from 12 to 254 pixels.
 - `--name`: the font's name. By default, the typeface's name and the height, such as `NotoSans20`.
@@ -274,7 +274,7 @@ nxwright font app NotoSans16.zi
 
 Adds a ready-made font file, such as the Nextion Editor's font generator writes, as it is, after the folder's other fonts.
 
-- A font stored otherwise is turned: to the folder's rotation, or upright on the F series. nxwright can turn a font in any encoding, two-byte ones included ([format.md, Two-byte fonts](format.md#two-byte-fonts)).
+- A font stored for another rotation is turned to the folder's rotation, or to upright on the F series. nxwright can turn a font in any encoding, two-byte ones included ([format.md, Two-byte fonts](format.md#two-byte-fonts)).
 - The font file contains a name, which the font generator stored in it, such as `NotoSans16`. The font gets that name in the folder, unless you give another with `--name`. The name inside the file does not change.
 - A name the folder has, and a file that is not a font, are refused.
 
@@ -426,7 +426,7 @@ Writes, for each picture, the file an external picture shows from the screen's S
 nxwright remove app picture icons/back
 ```
 
-Removes a picture, font, animation, video, or sound: its files, a picture's source file among them, and its name in `app.toml`.
+Removes a picture, font, animation, video, or sound: its files, including a picture's source file, and its name in `app.toml`.
 
 Every later one of its kind then gets an ID one lower. Code that uses a resource by its name follows the change, but a number does not, and would then point to another one. So the command refuses to remove a resource while the folder uses it, either by its name, or by a number from its ID to the last ID of its kind. Each place found is listed:
 
@@ -457,7 +457,7 @@ As it works, the command prints each step as it starts, with the file it works o
 - Each page takes the new screen's size, at its rotation: each page file's `w` and `h` change.
 - Every component keeps its place and its size.
 - Pictures, animations, and sounds stay as they are. The build makes the pictures' screen copies for the series and the rotation, and the Nextion Editor makes an animation's form again as it compiles.
-- A picture in a file of a type nxwright does not decode keeps the project's screen copy of it, such as `pictures/logo.screen` ([source-folder.md](source-folder.md#layout)). The command makes that file again from its own pixels, for the new screen's format and the rotation. If the picture is partly transparent and the new screen's format cannot store that, the command stops and writes nothing, as the Nextion Editor makes such a screen copy from the picture's file.
+- For a picture whose file is of a type nxwright does not decode, the folder keeps the project's screen copy, such as `pictures/logo.screen` ([source-folder.md](source-folder.md#layout)). The command makes that screen copy again from the pixels it contains, in the new screen's format and rotation. If the picture is partly transparent, and the new screen's format cannot store transparency, the command stops and writes nothing. The Nextion Editor blends such a picture with white, working from the picture's file, and nxwright cannot decode that file.
 
 ### A new rotation
 

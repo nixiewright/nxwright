@@ -60,7 +60,8 @@ def file_start(path: str) -> Place:
 
 def page_of(path: str):
     """Returns the page whose .page.toml file is `path`, or None. The file's
-    name gives the page's encoded (page_file_names.py)."""
+    name encodes the characters that Windows refuses in a file name, and
+    this function decodes them (page_file_names.py)."""
     match = re.fullmatch(r"pages/([^/]+)\.page\.toml", path)
     return page_of_file_stem(match[1]) if match else None
 

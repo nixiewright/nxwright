@@ -65,12 +65,13 @@ class DeviceSettings:
 
     @property
     def font_rotation(self) -> int:
-        """The orientation, in degrees, a compiled file keeps fonts in, which
-        nxwright makes new fonts in: 0 on the F series, as the Nextion
-        Editor writes each font so whatever the rotation, and the rotation
-        on the others. The Nextion Editor saves a font so as it turns a
-        project, and takes one in any orientation, which its compile turns
-        (ResearchNotes/format.md, Fonts)."""
+        """The orientation, in degrees, in which nxwright makes new fonts. A
+        compiled file keeps its fonts in this orientation. On the F series,
+        the orientation is 0, because the Nextion Editor writes every font
+        upright, whatever the rotation. On the other series, the orientation
+        is the rotation. When the Nextion Editor turns a project, it saves
+        each font in this orientation. But it accepts a font in any
+        orientation, and its compile turns the font as needed."""
         return 0 if self.model.series == "F" else self.rotation
 
     @property
@@ -170,8 +171,9 @@ class TextCodec:
     def __init__(self, name: str):
         encoding_code(name)
         self.name = name
-        # An encoding nxwright does not know reads each byte as the character
-        # of the same number, which encodes back to the same byte.
+        # In an encoding that nxwright does not know, each byte is read as the
+        # character with the same number. That character encodes back to the
+        # same byte.
         self._own_codec = "latin-1" if is_unknown_encoding(name) else self._OWN_CODECS.get(
             name, name)
         self._codec = self._WINDOWS_CODE_PAGES.get(name, self._own_codec)
@@ -203,8 +205,8 @@ class TextCodec:
         return text
 
     def keeps(self, data: bytes) -> bool:
-        """Whether `data` is text in this encoding that decode gives back
-        exactly."""
+        """Returns whether `data` is text in this encoding that encodes back
+        to the same bytes. decode refuses any other `data`."""
         try:
             return data.decode(self._codec).encode(self._codec) == data
         except (UnicodeDecodeError, UnicodeEncodeError):
@@ -237,29 +239,31 @@ class TextCodec:
                                                             error.object[error.start])) from None
 
 
-# The name of an encoding nxwright does not know, by its number, manifest
-# byte 13, such as "encoding-37". app.toml gives the number alone.
+# The name that nxwright gives an encoding it does not know: "encoding-" and
+# the encoding's number, manifest byte 13, such as "encoding-37". In
+# app.toml, an unknown encoding is given as its number alone.
 _UNKNOWN_ENCODING = re.compile(r"encoding-(\d+)")
 
 
 def encoding_name(code: int) -> str:
-    """Returns the name of the encoding whose manifest byte 13 is `code`: a
-    name of ENCODINGS, or the name of one nxwright does not know, such as
-    "encoding-37"."""
+    """Returns the name of the encoding whose manifest byte 13 is `code`: its
+    name in ENCODINGS, or, for an encoding that nxwright does not know, a
+    name such as "encoding-37"."""
     return ENCODINGS.get(code, "encoding-%d" % code)
 
 
 def is_unknown_encoding(name) -> bool:
-    """Whether `name` names an encoding nxwright does not know, by its
-    number, as encoding_name gives it."""
+    """Returns whether `name` is a name that encoding_name gives an encoding
+    nxwright does not know, such as "encoding-37". The number must be below
+    256, and must not be one of ENCODINGS."""
     found = _UNKNOWN_ENCODING.fullmatch(name) if isinstance(name, str) else None
     return found is not None and int(found[1]) < 256 and int(found[1]) not in ENCODINGS
 
 
 def encoding_code(name: str) -> int:
-    """Returns manifest byte 13 for the encoding `name`, a name of ENCODINGS
-    or one encoding_name gives an encoding nxwright does not know. Raises
-    NxwrightError for any other name."""
+    """Returns manifest byte 13 for the encoding `name`. The name is one of
+    ENCODINGS, or a name that encoding_name gives an encoding nxwright does
+    not know. Raises NxwrightError for any other name."""
     if is_unknown_encoding(name):
         return int(_UNKNOWN_ENCODING.fullmatch(name)[1])
     if name not in _ENCODING_CODES:

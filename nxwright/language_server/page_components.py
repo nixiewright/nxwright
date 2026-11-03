@@ -882,9 +882,9 @@ def _lines_with_ends(text: str) -> list:
 
 
 def _refuse_breaking(index, read, exists, page: str, texts: dict, what: str):
-    """Raises NxwrightError when `page` of the folder of `index` built
-    before an edit and would not after it, the edited files reading
-    `texts`, {path: new text}."""
+    """Raises NxwrightError when `page` built before an edit, but would not
+    build after it. `index` is the index of the page's folder, and `texts`
+    gives the new text of each edited file, as {path: new text}."""
     listed = folder_lister(index.root)
     if check_folder(read, exists, [page], listed=listed).errors():
         return

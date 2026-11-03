@@ -102,7 +102,7 @@ class RecordTest(unittest.TestCase):
         with self.assertRaisesRegex(NxwrightError, "suffix '.t/f' is not letters and digits"):
             parse_image_source(record)
         record = encode_image_source(ImageSource(160, 96, jpeg("baseline.jpg"), ".screen"))
-        with self.assertRaisesRegex(NxwrightError, "the suffix nxwright gives a screen copy"):
+        with self.assertRaisesRegex(NxwrightError, "the suffix nxwright uses for screen copies"):
             parse_image_source(record)
 
 
@@ -149,8 +149,8 @@ class DumpTest(WriterTestCase):
 
     def test_an_id_with_two_files_is_refused(self):
         (self.dump / "images" / "0001.jpg").write_bytes(jpeg("baseline.jpg"))
-        with self.assertRaisesRegex(NxwrightError, "images/0001.png and images/0001.jpg are "
-                                                   "there; a picture has one file"):
+        with self.assertRaisesRegex(NxwrightError, "images/0001.png and images/0001.jpg both "
+                                                   "exist; a picture can have only one file"):
             self.write()
         self.assertFalse(self.output.exists())
 
@@ -244,7 +244,7 @@ class SourceFolderTest(SourceFolderTestCase):
     def test_a_picture_of_two_files_is_refused(self):
         self.picture(".png", write_png(160, 96, bytes(160 * 96 * 4)))
         self.picture(".jpg", jpeg("baseline.jpg"))
-        two = "pictures/photo.png and pictures/photo.jpg are there; a picture has one file"
+        two = "pictures/photo.png and pictures/photo.jpg exist; a picture can have only one file"
         with self.assertRaisesRegex(NxwrightError, two):
             self.built()
         self.assertIn(Finding("app.toml", self.photo_line(), ERROR, two), self.findings())

@@ -356,19 +356,20 @@ async function build(context: vscode.ExtensionContext): Promise<void> {
   }
 }
 
-// What a caller, such as the extension's tests, may give the Extract command
-// in place of the user's choices: the source folder, the project file, and
-// whether to go on past content the next build may lose. Given these, the
-// command asks nothing.
+// The choices that a caller, such as the extension's tests, may pass to the
+// Extract command in place of the user's: the source folder, the project
+// file, and whether to go on when the next build may lose some content.
+// With these, the command does not prompt the user.
 interface ExtractArguments {
   folder: string;
   project: string;
   goOnPastUnknown: boolean;
 }
 
-// Extracts a project file into a source folder: those `given`, or else the
-// current project's, after asking the user. Returns the extract's exit
-// code, or undefined when it did not run.
+// Extracts a project file into a source folder. The two are taken from
+// `given`, or else they are the current project's, chosen after asking the
+// user. Returns the exit code of extract, or undefined when extract did not
+// run.
 async function extract(context: vscode.ExtensionContext,
                        given?: ExtractArguments): Promise<number | undefined> {
   const folder = given ? vscode.Uri.file(given.folder) : await activeSourceFolder();
@@ -906,13 +907,14 @@ async function askProjectFile(
 }
 
 // Runs `nxwright extract --list-unknown` on the project file `project`, and
-// returns the arguments that extract takes besides its own: none, or
-// --continue-with-unknown once the user chose to go on past content the
-// next build may lose. Returns undefined when extract is not to run:
-// refused, or the user chose not to go on (unknownContent.ts). When `goOn`
-// is given, it is the choice, and the user is not asked. The extract task
-// cannot hand back what the command printed, so this list comes first.
-// When the list cannot be had, the extract task itself prints the error.
+// returns the extra arguments to pass to extract. That is none, or
+// --continue-with-unknown when the user chose to extract a project whose
+// content the next build may lose. Returns undefined when extract must not
+// run, because unknownContent.ts refuses the project or the user chose not
+// to go on. When `goOn` is given, it is the user's choice, and the user is
+// not asked. The list runs first because the extract task cannot hand back
+// what the command printed. When the list fails, extract runs as usual and
+// prints the error itself.
 async function unknownContentArguments(project: string,
                                        goOn?: boolean): Promise<string[] | undefined> {
   const command = await commandToRun();
@@ -934,7 +936,7 @@ async function unknownContentArguments(project: string,
   }
   if (choice.kind === "ask") {
     const goingOn = goOn ?? (await vscode.window.showWarningMessage(
-      "Go on extracting?", { modal: true, detail: choice.message }, "Go on")) === "Go on";
+      "Extract anyway?", { modal: true, detail: choice.message }, "Extract")) === "Extract";
     return goingOn ? ["--continue-with-unknown"] : undefined;
   }
   return [];

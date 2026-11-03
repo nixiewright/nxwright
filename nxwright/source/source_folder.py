@@ -14,9 +14,10 @@ Layout:
   pages/<page>.nx          their event code
   pictures/<name>.png      or .jpg, the picture's file as the project keeps it;
                            a "/" in a name makes a subfolder (resource_names.py)
-  pictures/<name>.source.png   or .jpg, the file a picture resized in the
-                           Editor had before, which the Editor keeps as its
-                           source; a picture never resized has none
+  pictures/<name>.source.png   or .jpg, the picture's file from before it
+                           was resized in the Editor, which the Editor keeps
+                           as the picture's source; a picture never resized
+                           has none
   fonts/<name>.zi
   animations/<name>.gmov          GmovMaker's file
   animations/<name>.screen.gmov   the form the Editor made of it, which the
@@ -104,20 +105,22 @@ from nxwright.project.screen_models import ScreenModel
 from nxwright.source.series_components import check_series_components
 
 SOURCE_FORMAT = 1
-# A page's name in app.toml, as a component's name: any character of Latin-1,
-# in which a page's header stores it, except a control character or a double
-# quote, which an event's quoted heading cannot contain. Its files' names
-# encode the characters Windows refuses in a file name (page_file_names.py).
-# nxwright new-page gives plain names of its own.
+# A page's name in app.toml follows the same rule as a component's name. It
+# can have any Latin-1 character, because a page's header stores the name in
+# Latin-1. The exceptions are the control characters below the space, and the
+# double quote, which an event's quoted heading cannot contain. The names of
+# the page's files encode the characters that Windows refuses in a file name
+# (page_file_names.py). `nxwright new-page` accepts only plain names.
 _PAGE_NAME = re.compile(r'[ !#-\xff]+')
 # The kinds of resource a source folder holds, by their list in app.toml,
 # which is also their folder: the suffixes of each one's files. A picture has
 # one file, of any of its suffixes (picture_file); the others, a file of each.
 RESOURCE_FILES = {"pictures": PICTURE_SUFFIXES,
                   **{kind.folder: kind.suffixes for kind in COPIED_KINDS}}
-# The suffix of the file that keeps the project's screen copy of a picture in
-# a file of a type nxwright does not decode, such as pictures/logo.screen
-# beside pictures/logo.tif. The build writes it as it is.
+# The suffix of the file that keeps the project's screen copy of a picture
+# whose file is of a type nxwright does not decode, such as
+# pictures/logo.screen beside pictures/logo.tif. The build writes the screen
+# copy as it is.
 SCREEN_COPY_SUFFIX = ".screen"
 # The suffix of a font's file in a source folder.
 FONT_SUFFIX = FONTS.suffixes[0]
@@ -138,10 +141,10 @@ LANGUAGES = (NEXTION, NXLANG)
 
 
 def removes_screen_settings(lost: list, source_folder: Path) -> bool:
-    """Whether going on past `lost`, UnknownContent that may be lost, would
-    remove the screen settings of the app.toml of `source_folder`: the
-    project's screen model is one nxwright does not know, and app.toml gives
-    settings."""
+    """Returns whether going on past `lost`, the UnknownContent that may be
+    lost, would remove the screen settings from the app.toml of
+    `source_folder`. That is the case if the project's screen model is one
+    nxwright does not know, and app.toml has screen settings."""
     app = Path(source_folder) / "app.toml"
     unknown_model = any(each.where == UNKNOWN_MODEL_PLACE for each in lost)
     return unknown_model and app.is_file() and any(
@@ -174,12 +177,12 @@ def import_dump(dump_folder: Path, source_folder: Path, name: str = None,
     cannot be turned into Editor code, or `source_folder` is neither empty nor
     a source folder.
 
-    With `check_unknown`, the content nxwright does not know that the dump
-    shows is checked first, as extract checks a project's
-    (unknown_content.checked): it raises for content nxwright cannot keep,
-    and UnknownContentError for content the next build may lose unless
-    `continue_with_unknown`, and the notes and warnings of the rest lead the
-    warnings it returns.
+    If `check_unknown` is true, the function first checks the content that
+    the dump shows and nxwright does not know, as extract checks a project's
+    (unknown_content.checked). It raises NxwrightError for content nxwright
+    cannot keep. It raises UnknownContentError for content the next build
+    may lose, unless `continue_with_unknown` is true. The notes and warnings
+    on the rest of that content come first in the warnings it returns.
     """
     dump_folder, source_folder = Path(dump_folder), Path(source_folder)
     updating = (source_folder / "app.toml").is_file()
@@ -200,13 +203,14 @@ def import_dump(dump_folder: Path, source_folder: Path, name: str = None,
         name = None
     files, names, generated, warnings = _source_files_from_dump(dump_folder, source_folder,
                                                                 old_app, name)
-    # A dump that shows no header, as one written from a source folder, gives
-    # nothing of the model.
+    # A dump that does not show a header, such as one written from a source
+    # folder, does not give the screen model.
     if (updating and dump_header_bytes(dump_folder) is not None
             and dump_device_settings(dump_folder) is None
             and any(key in old_app for key in DEVICE_KEYS)):
         warnings.append("app.toml's screen settings are removed, as the project's screen model "
-                        "is not one nxwright knows; the build refuses the folder until it does")
+                        "is not one nxwright knows; the build refuses the folder until "
+                        "nxwright knows the model")
     stale = _keep_existing_code(source_folder, files, names, old_app, generated) if updating else []
     for relative, content in files.items():
         path = source_folder / relative
@@ -483,9 +487,9 @@ def picture_file(name: str, exists, listed=None) -> str:
     pictures/<name> with one of the suffixes its record may give
     (resources.PICTURE_SUFFIXES), as `exists(path)` finds it: the first in
     their order when several are there, which the build and the checks
-    refuse (check_picture_file). Without one, it is the file of a type
-    nxwright does not decode that `listed` finds (kept_picture_paths), or
-    else its PNG's path."""
+    refuse (check_picture_file). If the picture has none of these files,
+    the path is that of its file of a type nxwright does not decode, found
+    with `listed` (kept_picture_paths), or else the path of its PNG."""
     paths = picture_paths(name)
     found = next((path for path in paths if exists(path)), None)
     if found is None:
@@ -510,29 +514,30 @@ def check_picture_file(name: str, exists, listed=None):
             paths[0], ", ".join(suffix for suffix in RESOURCE_FILES["pictures"][1:-1]),
             RESOURCE_FILES["pictures"][-1]))
     if len(found) > 1:
-        raise NxwrightError("%s are there; a picture has one file" % " and ".join(found))
+        raise NxwrightError("%s exist; a picture can have only one file" % " and ".join(found))
 
 
 def kept_picture_paths(name: str, exists, listed) -> list:
     """Returns the paths, within the folder, of the picture `name`'s files
     of a type nxwright does not decode (resources.decodes_picture), such as
-    pictures/logo.tif, among the files `listed(folder)` gives of each
-    folder within the source folder, such as "pictures".
+    pictures/logo.tif. `listed(folder)` returns the names of the files in a
+    folder within the source folder, such as "pictures". Without `listed`,
+    the function finds no files.
 
-    Only a picture with its screen copy (screen_copy_path) and no file of
-    PICTURE_SUFFIXES has such a file, as `exists(path)` finds them. Any
-    other file of its name, such as pictures/logo.svg beside
-    pictures/logo.png, is not the picture's. Without `listed`, it finds
-    none."""
+    A picture has a file of such a type only if it has its screen copy
+    (screen_copy_path) and no file with one of PICTURE_SUFFIXES.
+    `exists(path)` is true when the folder has a file at `path`. Any other
+    file with the picture's name, such as pictures/logo.svg beside
+    pictures/logo.png, is not the picture's file."""
     if not exists(screen_copy_path(name)) or any(exists(path) for path in picture_paths(name)):
         return []
     return _other_type_paths(name, listed)
 
 
 def _other_type_paths(name: str, listed) -> list:
-    """Returns the paths of the files named after the picture `name`, of a
-    type nxwright does not decode, its screen copy aside, as `listed` finds
-    them (kept_picture_paths)."""
+    """Returns the paths of the files named after the picture `name` that
+    are of a type nxwright does not decode, found with `listed`
+    (kept_picture_paths). The picture's screen copy is not among them."""
     if listed is None:
         return []
     folder, _, stem = ("pictures/" + name).rpartition("/")
@@ -547,15 +552,16 @@ def _other_type_paths(name: str, listed) -> list:
 
 def screen_copy_path(name: str) -> str:
     """Returns the path, within the folder, of the file that keeps the
-    project's screen copy of the picture `name`, for a picture in a file of
-    a type nxwright does not decode: pictures/<name>.screen."""
+    project's screen copy of the picture `name`: pictures/<name>.screen.
+    Only a picture whose file is of a type nxwright does not decode has
+    this file."""
     return "pictures/%s%s" % (name, SCREEN_COPY_SUFFIX)
 
 
 def folder_lister(source_folder: Path):
-    """Returns listed(folder): the names of the files in `folder`, a path
-    within `source_folder` such as "pictures", or [] when it is not there
-    (kept_picture_paths)."""
+    """Returns a function listed(folder), which returns the names of the
+    files in `folder`, a path within `source_folder` such as "pictures". The
+    function returns [] if the folder does not exist (kept_picture_paths)."""
     def listed(folder: str) -> list:
         found = Path(source_folder) / folder
         return sorted(path.name for path in found.iterdir()
@@ -564,23 +570,24 @@ def folder_lister(source_folder: Path):
 
 
 def kept_screen_copy_warnings(source_folder: Path) -> list:
-    """Returns a warning of each picture of the source folder whose screen
-    copy the build takes as it is, from pictures/<name>.screen: a picture
-    in a file of a type nxwright does not decode, whose edits do not reach
-    the screen."""
+    """Returns a warning for each picture of the source folder whose screen
+    copy the build uses as it is, from pictures/<name>.screen. These are the
+    pictures whose files are of a type nxwright does not decode. An edit of
+    such a file does not change what the screen shows."""
     source_folder = Path(source_folder)
     app = parse_app(read_text(source_folder / "app.toml"))
     listed = folder_lister(source_folder)
     return ["%s: nxwright does not decode this type of picture, so the build used its screen "
-            "copy, %s, as it is; an edit of the picture does not reach the screen"
+            "copy, %s, as it is; if you edit the picture's file, the screen does not show "
+            "the change"
             % (path, screen_copy_path(name))
             for name in app["pictures"]
             for path in kept_picture_paths(name, folder_file_exists(source_folder), listed)]
 
 
 def folder_file_exists(source_folder: Path):
-    """Returns exists(path): whether `source_folder` has a file at `path`,
-    a path within it."""
+    """Returns a function exists(path), which returns whether
+    `source_folder` has a file at `path`, a path within the folder."""
     return lambda path: (Path(source_folder) / path).is_file()
 
 
@@ -590,28 +597,30 @@ def picture_paths(name: str) -> list:
 
 
 def picture_source_paths(name: str) -> list:
-    """The paths the source file of the picture `name` may have, in
-    PICTURE_SUFFIXES' order: pictures/<name>.source.png, and so on. The
-    Nextion Editor keeps a picture's source when the picture is resized in
-    its picture viewer: the file the picture had before (resources.py)."""
+    """Returns the paths that the source file of the picture `name` may
+    have, in the order of PICTURE_SUFFIXES: pictures/<name>.source.png, and
+    so on. When a picture is resized in the Nextion Editor's picture viewer,
+    the Editor keeps the file the picture had before as its source
+    (resources.py)."""
     return ["pictures/%s%s%s" % (name, SOURCE_SUFFIX, suffix)
             for suffix in RESOURCE_FILES["pictures"]]
 
 
 def picture_source_file(name: str, exists):
     """Returns the path, within the folder, of the picture `name`'s source
-    file, as `exists(path)` finds it, or None when it has none. With
-    several, it is the first in their order, which the build and the checks
-    refuse (check_picture_source)."""
+    file, as `exists(path)` finds it, or None if it has none. If the picture
+    has several, the function returns the first in their order. The build
+    and the checks refuse a picture with several (check_picture_source)."""
     return next((path for path in picture_source_paths(name) if exists(path)), None)
 
 
 def check_picture_source(name: str, exists):
-    """Raises NxwrightError when the picture `name` has more than one source
+    """Raises NxwrightError if the picture `name` has more than one source
     file, as `exists(path)` finds them."""
     found = [path for path in picture_source_paths(name) if exists(path)]
     if len(found) > 1:
-        raise NxwrightError("%s are there; a picture has one source file" % " and ".join(found))
+        raise NxwrightError("%s exist; a picture can have only one source file"
+                            % " and ".join(found))
 
 
 def resource_paths(kind: str, name: str, exists, listed=None) -> list:
@@ -619,7 +628,8 @@ def resource_paths(kind: str, name: str, exists, listed=None) -> list:
     `name` that app.toml lists in `kind`: a picture's one file
     (picture_file), or a file of each of RESOURCE_FILES' suffixes for the
     others. `exists(path)` is true when the folder has a file at `path`,
-    and `listed(folder)` gives the files a folder has (kept_picture_paths)."""
+    and `listed(folder)` returns the names of the files in a folder
+    (kept_picture_paths)."""
     if kind == "pictures":
         return [picture_file(name, exists, listed)]
     return ["%s/%s%s" % (kind, name, suffix) for suffix in RESOURCE_FILES[kind]]
@@ -628,8 +638,8 @@ def resource_paths(kind: str, name: str, exists, listed=None) -> list:
 def resource_problems(kind: str, name: str, exists, listed=None) -> list:
     """Returns what keeps the resource `name`, of app.toml's list `kind`,
     from being built, a sentence each: a picture with no file or more than
-    one (check_picture_file), or more than one source file
-    (check_picture_source); or a missing file of another resource."""
+    one (check_picture_file), a picture with more than one source file
+    (check_picture_source), or a missing file of another resource."""
     if kind == "pictures":
         problems = []
         try:
@@ -647,9 +657,10 @@ def resource_problems(kind: str, name: str, exists, listed=None) -> list:
 
 def _layout_files(app: dict, source_folder: Path) -> list:
     """Returns the files of `source_folder`, by relative path, that `app`
-    lists, its pictures' files of a type nxwright does not decode among
-    them (kept_picture_paths), with their screen copies. A .screen file
-    beside a picture's PNG is not nxwright's, so it is not listed."""
+    lists. Among them are the pictures' source files, and the pictures'
+    files of a type nxwright does not decode with their screen copies
+    (kept_picture_paths). A .screen file beside a picture's PNG is not
+    nxwright's, so it is not listed."""
     # macros.nx is the folder's whenever it has macros: an update of a
     # project without them removes it.
     listed = ["app.toml", "defaults.toml", "program.nx", MACROS_PATH]
@@ -781,10 +792,11 @@ def add_page(source_folder: Path, name: str = None) -> str:
 def _shipped_font(encoding: str, rotation: int):
     """Returns (name, block, a warning or None) of the font a new folder
     starts with: Noto Sans, which nxwright ships, NEW_FOLDER_FONT_HEIGHT
-    pixels tall, in `encoding` and stored at `rotation`, the orientation a
-    compiled file keeps fonts in (DeviceSettings.font_rotation), as add_font
-    draws it. In utf-8, it has UTF8_CHARACTERS, as a keyboard's font does.
-    In an encoding Noto Sans lacks some characters of, such as koi8-r, it leaves
+    pixels tall, in `encoding`, and stored at `rotation`, the orientation
+    that a compiled file stores fonts in (DeviceSettings.font_rotation). It
+    is drawn as add_font draws it. In utf-8, it has UTF8_CHARACTERS, as a
+    keyboard's font does. In an encoding that Noto Sans lacks some
+    characters of, such as koi8-r, the font leaves
     them out, or in a two-byte encoding draws them empty, and the warning
     says so. Each is drawn once per process, as many folders may start
     alike."""
@@ -963,12 +975,13 @@ def _source_files_from_dump(dump_folder: Path, source_folder: Path, old_app,
             for suffix, content in zip(suffixes, parts):
                 files["%s/%s%s" % (kind, name, suffix)] = content
     # nxwright cannot make the screen copy of a picture it does not decode,
-    # so the project's own is kept beside its file.
+    # so the source folder keeps the project's own screen copy beside the
+    # picture's file.
     for picture_id, (_, _, suffix) in enumerate(pictures):
         if not decodes_picture(suffix):
             files[screen_copy_path(chosen["pictures"][picture_id])] = read_bytes(
                 dump_folder / "images" / ("%04d.i" % picture_id))
-    # A resized picture's source follows the name chosen for the picture.
+    # A resized picture's source file takes the name chosen for the picture.
     for picture_id, (_, content, suffix) in dump_picture_sources(dump_folder,
                                                                  len(pictures)).items():
         files["pictures/%s%s%s" % (chosen["pictures"][picture_id], SOURCE_SUFFIX, suffix)] = \
@@ -976,7 +989,7 @@ def _source_files_from_dump(dump_folder: Path, source_folder: Path, old_app,
     uses_nxlang = old_app is not None and old_app["language"] == NXLANG
     settings = dump_device_settings(dump_folder)
     # The encoding does not depend on the screen model, so a project of a
-    # model nxwright does not know is still read in its own encoding.
+    # model nxwright does not know is still read in the project's own encoding.
     encoding = (settings.encoding if settings is not None
                 else dump_encoding(dump_folder) or DEFAULT_ENCODING)
     pages, generated, warnings = [], {}, []
@@ -1041,7 +1054,7 @@ def check_page_count(app: dict, app_toml: str):
 def app_text(app: dict) -> str:
     """Returns the text of app.toml, its keys in their usual order, leaving
     out the empty lists it may leave out. An encoding nxwright does not
-    know is written as its number, as parse_app reads it."""
+    know is written as its number, the form that parse_app reads."""
     order = ("format", "name", "language") + DEVICE_KEYS + ("pages",) + tuple(RESOURCE_FILES)
     shown = {key: app[key] for key in order
              if app.get(key) is not None and not (key in _OPTIONAL_LISTS and not app[key])}
@@ -1446,7 +1459,7 @@ def _resource_dump_files(app: dict, source_folder: Path) -> tuple:
             if problem:
                 raise NxwrightError("%s: %s" % (path, problem))
         else:
-            # The project's own screen copy, which the build writes as it is.
+            # The build writes the project's own screen copy as it is.
             files["images/%04d.i" % picture_id] = read_bytes(source_folder
                                                              / screen_copy_path(name))
         dump_path = "images/%04d%s" % (picture_id, Path(path).suffix)
@@ -1544,8 +1557,9 @@ def parse_app(text: str) -> dict:
     if not is_number or found != SOURCE_FORMAT:
         raise NxwrightError("app.toml: format must be %d" % SOURCE_FORMAT)
     encoding = app.get("encoding")
-    # An encoding nxwright does not know is given by its number, which the
-    # rest of nxwright reads by the name encoding_name gives it.
+    # app.toml gives an encoding nxwright does not know by its number. The
+    # rest of nxwright uses the name that encoding_name makes from the
+    # number, such as "encoding-37".
     if isinstance(encoding, int) and not isinstance(encoding, bool):
         if not 0 <= encoding < 256 or encoding in ENCODINGS:
             raise NxwrightError("app.toml: encoding %d must be the name of an encoding, such as "
@@ -1553,13 +1567,14 @@ def parse_app(text: str) -> dict:
                                 % encoding)
         app["encoding"] = encoding_name(encoding)
     elif is_unknown_encoding(encoding):
-        raise NxwrightError("app.toml: encoding %r is not a name of an encoding; give one nxwright "
-                            "does not know by its number, %s" % (encoding, encoding_code(encoding)))
+        raise NxwrightError("app.toml: encoding %r is not the name of an encoding; give an "
+                            "encoding nxwright does not know by its number, %s"
+                            % (encoding, encoding_code(encoding)))
     pages = app.get("pages")
     if not isinstance(pages, list) or not all(isinstance(name, str) and _PAGE_NAME.fullmatch(name)
                                               for name in pages):
-        raise NxwrightError("app.toml: pages must be a list of page names, each of characters "
-                            "Latin-1 has, without a double quote or a control character")
+        raise NxwrightError("app.toml: pages must be a list of page names, each made of Latin-1 "
+                            "characters, without a double quote or a control character")
     if len(set(pages)) != len(pages):
         raise NxwrightError("app.toml: pages lists a name twice")
     for kind in _OPTIONAL_LISTS:

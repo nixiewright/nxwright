@@ -661,20 +661,22 @@ def _upright(pixels: bytes, width: int, height: int, rotation: int) -> bytes:
     return bytes(map(pixels.__getitem__, _upright_order(width, height, rotation)))
 
 
-# A font's glyphs come in a few sizes, so the pixel orders of each size are
-# worked out once. The bound keeps a long-running process, such as the
-# language server, from keeping those of every font it has read.
+# A font's glyphs come in only a few sizes, so the pixel order for each size
+# is worked out once and kept. The cache's limit stops a long-running
+# process, such as the language server, from keeping the orders of every
+# font it has read.
 @lru_cache(maxsize=512)
 def _stored_order(width: int, height: int, rotation: int) -> tuple:
-    """For each pixel of a glyph stored at `rotation`, in stored order, its
-    index upright (screen_copy.stored_order)."""
+    """Returns, for each pixel of a glyph stored at `rotation`, in stored
+    order, the pixel's index in the upright glyph (screen_copy.stored_order)."""
     return tuple(stored_order(width, height, rotation))
 
 
 @lru_cache(maxsize=512)
 def _upright_order(width: int, height: int, rotation: int) -> tuple:
-    """For each pixel of a glyph upright, row by row, its index in the order
-    of a glyph stored at `rotation`: the reverse of _stored_order."""
+    """Returns, for each pixel of the upright glyph, row by row, the pixel's
+    index in a glyph stored at `rotation`. This is the reverse of
+    _stored_order."""
     order = _stored_order(width, height, rotation)
     return tuple(sorted(range(len(order)), key=order.__getitem__))
 
@@ -690,8 +692,9 @@ def _decode_glyph(glyph: bytes, code: int) -> bytes:
 
 @cache
 def _code_pixels(levels: int) -> tuple:
-    """Returns, for each byte of a glyph's stream of `levels` codes, the
-    coverages it stands for (the module's docstring lays the codes out)."""
+    """Returns the coverages that each possible byte stands for in a glyph's
+    stream of `levels` codes, indexed by the byte. The module's docstring
+    describes the codes."""
     pixels = []
     for byte in range(256):
         kind, value = byte >> 6, byte & 0x3f
@@ -1019,7 +1022,7 @@ def _checked(glyph: Glyph, height: int) -> bytes:
     try:
         pixels = bytes(glyph.coverages)
     except (TypeError, ValueError):
-        pixels = None       # a value that is not a byte
+        pixels = None       # a value that is not an integer from 0 to 255
     if pixels is None or max(pixels, default=0) > 7:
         wrong = [value for value in glyph.coverages
                  if not (isinstance(value, int) and 0 <= value <= 7)]
@@ -1050,11 +1053,11 @@ def _turned(pixels: bytes, width: int, height: int, rotation: int) -> bytes:
 
 def _glyph_codes(pixels: bytes) -> bytes:
     """Returns a glyph's bytes for its stream of coverages, coded as the
-    module's docstring says the Editor codes one.
+    Editor codes a glyph (the module's docstring describes the codes).
 
-    The stream is taken as runs of equal coverages, [coverage, count], in
-    order. Most codes take a whole run. A code of a pair of pixels may take
-    the first pixel of the next run too."""
+    The function splits the stream into runs of equal coverages, [coverage,
+    count], in order. Most codes cover a whole run. A code for a pair of
+    pixels may also cover the first pixel of the next run."""
     two_levels = not pixels.translate(None, b"\x00\x07")
     out = [_TWO_LEVELS if two_levels else _EIGHT_LEVELS]
     runs = [[value, len(list(stretch))] for value, stretch in groupby(pixels)]
@@ -1094,12 +1097,14 @@ def _glyph_codes(pixels: bytes) -> bytes:
             if two_levels or full != 1 or following in (None, 0):
                 out.append(0x20 | full)
                 continue
-            # A lone full pixel before a partial one goes in a pair with it.
+            # A single full pixel followed by a partial pixel: the two are
+            # coded as a pair.
             out.append(0xc0 | 7 << 3 | following)
         else:
-            # A partial pixel goes in a pair with the next one: with its
-            # equals two at a time, then the odd one out with the next run's
-            # first, or alone at the glyph's end.
+            # Partial pixels are coded in pairs. The equal pixels of the run
+            # are paired two at a time. If one is left over, it is paired with
+            # the first pixel of the next run, or coded alone at the end of
+            # the glyph.
             pairs, odd = divmod(length, 2)
             out += [0xc0 | pixel << 3 | pixel] * pairs
             if not odd:
@@ -1108,7 +1113,8 @@ def _glyph_codes(pixels: bytes) -> bytes:
                 out.append(0x80 | pixel)
                 continue
             out.append(0xc0 | pixel << 3 | following)
-        # The pair took the next run's first pixel.
+        # The pair just coded took the first pixel of the next run. The next
+        # run is now one pixel shorter, and is skipped if it is empty.
         runs[index][1] -= 1
         if not runs[index][1]:
             index += 1

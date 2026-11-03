@@ -50,5 +50,5 @@ test("content that cannot be kept is refused, whatever else there is", () => {
 test("a list that cannot be read is refused", () => {
   const choice = extractChoice("not json\n");
   assert.equal(choice.kind, "refuse");
-  assert.match(choice.message, /could not be read/);
+  assert.match(choice.message, /could not list the things in this project/);
 });

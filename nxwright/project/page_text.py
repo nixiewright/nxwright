@@ -31,9 +31,10 @@ Rules:
     long is written as a quoted string of its bytes.
   - Strings are quoted. Printable ASCII is written as is; quotes, backslashes
     and every other byte are escaped ("\\x0d").
-  - The page line gives the page's name as it is, or quoted as a string when
-    the name is not printable ASCII or has a double quote: page "caf\\xe9".
-    The name's bytes are Latin-1.
+  - The page line gives the page's name as it is. If the name is not
+    printable ASCII, or has a double quote, the line gives it as a quoted
+    string, as in page "caf\\xe9". The string's bytes are the name in
+    Latin-1.
   - Event code lines follow "| ". A line that is not printable ASCII, or that
     ends in a space, is written as "raw <hex>" so the text stays exact.
   - A record the parser did not recognise is written as "raw <hex>".
@@ -157,10 +158,10 @@ def page_to_text(page: PageBlock) -> str:
 
 
 def page_line_name(name: str) -> str:
-    """Returns how the page line writes the page name `name`: as it is when
-    it is printable ASCII without a double quote, or else quoted, as a
-    string, so that `café` is `"caf\\xe9"`. An unquoted name then never
-    starts with a quote."""
+    """Returns the page name `name` as the page line writes it. A name of
+    printable ASCII without a double quote is written as it is. Any other
+    name is written as a quoted string, such as `"caf\\xe9"` for `café`. An
+    unquoted name therefore never starts with a quote."""
     if all(0x20 <= ord(character) < 0x7f for character in name) and '"' not in name:
         return name
     return escape_string(name.encode("latin-1"))

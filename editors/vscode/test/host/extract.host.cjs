@@ -1,8 +1,9 @@
-// Extract inside VS Code, of a project file that contains a block nxwright
-// does not handle (write_unknown_project.py). The command is given its
-// source folder, project file, and answer as arguments, so that it asks
-// nothing; the questions themselves are tested apart (unknown-content.test.mjs).
-// The source folder is a new one in the temporary folder, not the fixture.
+// Tests the Extract command inside VS Code, on a project file that contains
+// a block nxwright does not handle. write_unknown_project.py writes that file.
+// The tests pass the command its source folder, its project file, and whether
+// to go on past content the next build may lose, so that the command does not
+// prompt. unknown-content.test.mjs tests the prompts themselves. Each test
+// extracts into a new folder in the temporary folder, not into a fixture.
 const assert = require("node:assert/strict");
 const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -11,7 +12,7 @@ const path = require("node:path");
 const vscode = require("vscode");
 const { test } = require("./runner.cjs");
 
-// The project file, written once for both tests.
+// The project file that both tests use. It is written only once.
 let project;
 
 function unknownProject() {

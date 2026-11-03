@@ -47,6 +47,6 @@ The findings are what the reports list for the new release:
 
 ## 5. Move to the new release
 
-- Change the version in `tools/editor/tested_editor.toml`, and in the two places that name it as the version nxwright is tested with: nxwright's README and the tool's README. A test checks that the three agree.
+- Change the version in `tools/editor/tested_editor.toml`, and in the two places that give it as the version nxwright is tested with: nxwright's README and the tool's README. A test checks that the three agree.
 - Have the change reviewed, then publish it.
 - Install the new release of the Nextion Editor when you choose. The Editor tool drives the installed Nextion Editor unless `NXWRIGHT_EDITOR` names another program.

@@ -43,8 +43,8 @@ Code and attributes refer to pages, pictures, fonts, animations, videos, and sou
 
 A page block is a header, a table of objects, then the objects. Object 0 is the page itself. The others are its **components**: text fields, buttons, variables, timers, and so on. Each object's name is its `objname` attribute.
 
-- The Nextion Editor 1.68.2 refuses a component's name of more than 14 bytes, one that starts with a digit or a space, and one another component of the page has. It also refuses one with any of `" % & ' * + , - . / = [ \ ]`.
-- It takes other punctuation, such as `(`, `)`, or `:`, and a space inside the name, as in `b 0`. Code cannot then name the component, but its events run.
+- The Nextion Editor 1.68.2 refuses a component's name of more than 14 bytes, one that starts with a digit or a space, and one that another component of the page has already. It also refuses one with any of `" % & ' * + , - . / = [ \ ]`.
+- It takes other punctuation, such as `(`, `)`, or `:`, and a space inside the name, as in `b 0`. Code cannot then refer to the component, but its events run.
 - A page's name may have a space or punctuation too, as in `p 0` or `p(0)`, but not `"`, `/`, or `\`.
 
 An object is a run of **records**:
@@ -172,7 +172,7 @@ On a white background, a pixel of coverage c taking c/7 of the text colour match
 
 #### Rotation
 
-A project may store a font for any rotation. Byte 3 gives which: `0a` at rotation 0, `0b` at 90, `0c` at 180, and `0d` at 270. The Nextion Editor stores a font for the project's rotation, or upright, at 0, on the F series, as a compiled file keeps fonts. The generator's file is upright, and is turned when the font enters the project.
+A project may store a font for any rotation. Byte 3 gives which: `0a` at rotation 0, `0b` at 90, `0c` at 180, and `0d` at 270. The Nextion Editor stores a font for the project's rotation, or upright (at 0) on the F series. A compiled file keeps its fonts the same way. The generator's file is upright, and is turned when the font enters the project.
 
 Each glyph's pixel stream is coded anew, in a turned order:
 
@@ -182,7 +182,7 @@ Each glyph's pixel stream is coded anew, in a turned order:
 
 The character table keeps its advances and overhangs, which still describe the upright character.
 
-The Nextion Editor takes a font stored for another rotation: it shows its text the same, as seen for a font at 0 and at 270 in a project at 270, and turns the font as it compiles. When it turns a project to a new rotation, it turns each font to the project's, or keeps it upright on the F series.
+The Nextion Editor also takes a font stored for another rotation. It shows the font's text the same, as seen for fonts at 0 and at 270 in a project at 270, and turns the font as it compiles. When it turns a project to a new rotation, it turns each font to the new rotation, or keeps it upright on the F series.
 
 #### Writing a font
 

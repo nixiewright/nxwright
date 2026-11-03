@@ -15,9 +15,10 @@ picture plus a removed one, and so for the others. The manifest is rebuilt
 when the order or the set of any of them changed.
 
 A new picture gets two blocks: its file, and a screen copy generated from it.
-A picture resized in the Editor has a third, its source (".ib"), which the
-dump gives as images/<ID>.source with a picture's suffix; the writer adds,
-replaces, or removes it to match.
+A picture resized in the Editor has a third block, its source (".ib"). The
+dump gives the source as images/<ID>.source with a picture's suffix, such as
+images/0002.source.png. The writer adds, replaces, or removes each source
+block to match the dump.
 The dump's own screen copy files are output only and never read. Screen
 copies are generated in the format and pixel order the project's own pictures
 confirm (see screen_copy.py); a project whose pictures confirm none is refused.
@@ -75,13 +76,14 @@ class WritePlan:
     # (".i" block name, (its file's bytes, its suffix)) in ID order.
     pictures: list = field(default_factory=list)
     new_screen_copies: dict = field(default_factory=dict)  # ".i" block name -> ScreenPixels
-    # Each picture's source block, as the dump asks for it, in ID order:
-    # (".ib" block name, its bytes, or None for a picture without one).
+    # Each picture's source block as the dump gives it, in ID order:
+    # (".ib" block name, the block's bytes). The bytes are None for a picture
+    # without a source.
     picture_sources: list = field(default_factory=list)
-    # Screen copies taken as they are, from the picture cache or, for a
-    # picture nxwright does not decode, from the dump: ".i" block name -> the
-    # block. They have no pixels to decode back to, so the written block is
-    # compared.
+    # Screen copies taken as they are: ".i" block name -> the block. They come
+    # from the picture cache, or, for a picture that nxwright does not decode,
+    # from the dump. They have no pixels to decode back to, so the self-check
+    # compares the written block instead.
     cached_screen_copies: dict = field(default_factory=dict)
     screen_copy_format: int = None      # of new screen copies, from the project's pictures
     screen_copy_rotation: int = None    # of new screen copies, from the project's pictures
@@ -217,9 +219,9 @@ def _plan_pictures(plan: WritePlan, container: HmiContainer, manifest, dump_fold
     for name in manifest.block_names("i"):
         source = parse_image_source(container.blocks[name + "s"])
         unmatched.setdefault((source.data, source.suffix), []).append(name)
-    # A picture's blocks share their number. A source block whose picture
-    # the manifest does not list keeps its number too, so that no new
-    # picture takes it for its own source.
+    # A picture's blocks share their number. New numbers start past every
+    # source block too, even one whose picture the manifest does not list. A
+    # new picture then never takes an old source block as its own.
     next_number = max(_next_block_number(container, extension)
                       for extension in ("i", "is", SOURCE_EXTENSION))
     added = []
@@ -234,7 +236,7 @@ def _plan_pictures(plan: WritePlan, container: HmiContainer, manifest, dump_fold
     for block_name in sorted((name for names in unmatched.values() for name in names),
                              key=lambda name: numbered_block(name, "i")):
         plan.removed += [block_name, block_name + "s"]
-        # A resized picture's source goes with it.
+        # When a resized picture is removed, its source is removed too.
         if partner_name(block_name, SOURCE_EXTENSION) in container.blocks:
             plan.removed.append(partner_name(block_name, SOURCE_EXTENSION))
         plan.changes.append("Removed picture block %s" % block_name)
@@ -249,9 +251,9 @@ def _plan_pictures(plan: WritePlan, container: HmiContainer, manifest, dump_fold
 
 
 def _plan_picture_sources(plan: WritePlan, container: HmiContainer, dump_folder: Path):
-    """Writes, replaces, or removes each picture's source block (".ib") to
-    match the dump's source files (dump_folder.dump_picture_sources), once
-    plan.pictures gives each picture's block."""
+    """Plans to add, replace, or remove each picture's source block (".ib"),
+    to match the dump's source files (dump_folder.dump_picture_sources).
+    plan.pictures must already list each picture's block."""
     sources = dump_picture_sources(dump_folder, len(plan.pictures))
     for picture_id, (block_name, _) in enumerate(plan.pictures):
         name = partner_name(block_name, SOURCE_EXTENSION)
@@ -273,9 +275,9 @@ def _plan_new_picture(plan: WritePlan, dump_folder: Path, picture_id: int, file_
                       block_name: str, data: bytes, suffix: str, cache):
     """Adds the file's block and the screen copy of one new picture, its
     file `data` from the dump's `file_name`, of `suffix`, the screen copy
-    made now or taken from `cache` (picture_cache.py, or None). Of a file
-    of a type nxwright does not decode, the dump's own screen copy is taken
-    as it is (dump_folder.kept_picture_blocks)."""
+    made now or taken from `cache` (picture_cache.py, or None). If nxwright
+    does not decode the type of the file, the dump's own screen copy is
+    taken as it is (dump_folder.kept_picture_blocks)."""
     if not decodes_picture(suffix):
         plan.blocks[block_name + "s"], plan.blocks[block_name] = kept_picture_blocks(
             dump_folder, picture_id, file_name, data, suffix, plan.screen_copy_rotation)

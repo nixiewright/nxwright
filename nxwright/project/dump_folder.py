@@ -17,10 +17,11 @@ from nxwright.project.screen_copy import decode_screen_copy
 # First line of project.txt. It changes whenever the dump's layout does, so that
 # a dump written by another version of nxwright is refused rather than misread.
 _FORMAT_LINE = "dump format        %d"
-# Format 5 adds one form to format 4: the quoted page line of a page name that
-# is not printable ASCII, or has a double quote (page_text.page_line_name). A
-# dump without such a line stays in format 4, which an older nxwright still
-# reads. Both are read.
+# The formats that nxwright reads. Format 5 differs from format 4 in one way:
+# a page line may give the page's name quoted (page_text.page_line_name). The
+# name is quoted when it is not printable ASCII, or when it has a double quote.
+# A dump without a quoted page line is written in format 4, so that an older
+# nxwright can still read it.
 _FORMATS_READ = (4, 5)
 # A project's macros: the block holding them, which a project without
 # macros lacks, and the dump's file of its bytes (format.md).
@@ -30,8 +31,8 @@ MACROS_FILE = "macros.s"
 
 def dump_format_line(page_names: list) -> str:
     """Returns the first line of project.txt for a dump of the pages named
-    `page_names`: format 5 when the page line of one of them is quoted, and
-    format 4 otherwise."""
+    `page_names`. The line gives format 5 if the page line of any of these
+    pages is quoted, and format 4 otherwise."""
     quoted = any(page_line_name(name) != name for name in page_names)
     return _FORMAT_LINE % (5 if quoted else 4)
 
@@ -58,17 +59,19 @@ def dump_device_settings(dump_folder: Path):
 
 
 def dump_encoding(dump_folder: Path):
-    """Returns the character encoding of the dump's project, by its
-    manifest header's byte 13, which does not depend on the screen model
-    (device_settings.encoding_name), or None when the dump shows no header."""
+    """Returns the character encoding of the dump's project, or None when the
+    dump does not show the manifest header (dump_manifest_header). The
+    encoding is read from byte 13 of the header (device_settings.encoding_name).
+    Unlike dump_device_settings, this works whatever the screen model."""
     header = dump_manifest_header(dump_folder)
     return None if header is None else encoding_name(header[13])
 
 
 def dump_manifest_header(dump_folder: Path):
-    """Returns the manifest header of the dump's project, as its project.txt
-    shows it, or None when it shows none of HEADER_SIZE bytes. The dump
-    shows bytes 8 to 23, then 32 to the end; the others are left 0."""
+    """Returns the manifest header of the dump's project, HEADER_SIZE bytes,
+    from the bytes that project.txt shows. project.txt shows bytes 8 to 23,
+    then bytes 32 to the end. The other bytes are left 0. Returns None when
+    project.txt shows no header bytes, or the wrong number of them."""
     shown = dump_header_bytes(dump_folder)
     if shown is None or len(shown) != 16 + HEADER_SIZE - 32:
         return None
@@ -79,9 +82,9 @@ def dump_manifest_header(dump_folder: Path):
 
 
 def dump_header_bytes(dump_folder: Path):
-    """Returns the manifest header's bytes that the dump's project.txt shows,
-    bytes 8 to 23, then 32 to the end, or None when it shows none, as in a
-    dump written from a source folder."""
+    """Returns the bytes of the manifest header that the dump's project.txt
+    shows: bytes 8 to 23, then bytes 32 to the end. Returns None when
+    project.txt shows none, as in a dump written from a source folder."""
     summary = dump_folder / "project.txt"
     for line in summary.read_text(encoding="utf-8").split("\n") if summary.exists() else []:
         words = line.split()
@@ -128,23 +131,27 @@ def check_ids_without_gaps(ids, noun: str):
                             % (noun, noun, missing))
 
 
-# A picture's file in a dump: its ID, then one suffix, such as 0003.png.
+# The name of a picture's file in a dump: the picture's ID, then a single
+# suffix, such as 0003.png.
 _PICTURE_FILE = re.compile(r"(\d+)(\.[A-Za-z0-9]+)")
 
 
 def dump_pictures(dump_folder: Path) -> list:
-    """Returns the dump's pictures in ID order, each as (its file's path
-    within the dump, its bytes, its suffix): images/<ID>.png, .jpg, or any
-    other suffix a picture's record gives, as one of a type nxwright does not
-    decode (resources.decodes_picture). The screen copies, images/<ID>.i, and
-    the sources of resized pictures are not pictures' files.
+    """Returns the dump's pictures in ID order, each as (the path of its file
+    within the dump, the file's bytes, its suffix). A picture's file is
+    images/<ID>.png, .jpg, or any other suffix that a picture's record may
+    give, including that of a type nxwright does not decode
+    (resources.decodes_picture). The function skips the screen copies,
+    images/<ID>.i, and the sources of resized pictures, such as
+    images/0002.source.png.
 
-    Raises NxwrightError when their IDs do not run from 0 without gaps, or
-    one has two files."""
+    Raises NxwrightError when the pictures' IDs do not run from 0 without
+    gaps, or when a picture has two files."""
     found = {}
     folder = dump_folder / "images"
-    # In PICTURE_SUFFIXES' order, then by name, so that a refusal of two
-    # files of one picture names them in the same order each time.
+    # The files are sorted by the place of their suffix in PICTURE_SUFFIXES,
+    # then by name. A refusal of two files of one picture then lists them in
+    # the same order every time.
     def suffix_order(path: Path) -> tuple:
         suffix = path.suffix.lower()
         return (PICTURE_SUFFIXES.index(suffix) if suffix in PICTURE_SUFFIXES
@@ -155,8 +162,8 @@ def dump_pictures(dump_folder: Path) -> list:
             continue
         picture_id = int(matched[1])
         if picture_id in found:
-            raise NxwrightError("images/%s and images/%s are there; a picture has one "
-                                "file" % (found[picture_id].name, path.name))
+            raise NxwrightError("images/%s and images/%s both exist; a picture can have "
+                                "only one file" % (found[picture_id].name, path.name))
         found[picture_id] = path
     check_ids_without_gaps(found, "picture")
     return [("images/" + found[picture_id].name, found[picture_id].read_bytes(),
@@ -165,17 +172,18 @@ def dump_pictures(dump_folder: Path) -> list:
 
 def kept_picture_blocks(dump_folder: Path, picture_id: int, file_name: str, data: bytes,
                         suffix: str, rotation: int) -> tuple:
-    """Returns (the file's block, ".is", the screen copy, ".i") of the
-    picture `picture_id`, in a file of a type nxwright does not decode
-    (resources.decodes_picture): its file `data`, of `suffix`, at
-    `file_name` within the dump, and the dump's screen copy of it,
-    images/<ID>.i, as it is. The file's block gives the screen copy's
-    width and height, which are the picture's.
+    """Returns the two blocks of the picture `picture_id`, whose file is of a
+    type nxwright does not decode (resources.decodes_picture). The blocks
+    are (the file's block, ".is", the screen copy, ".i"). The picture's file
+    is `data`, of `suffix`, at `file_name` within the dump. The screen copy
+    is the dump's images/<ID>.i, taken as it is. The file's block gives the
+    width and height of the screen copy as the picture's.
 
-    Raises NxwrightError, naming `file_name`, when the screen copy is
-    missing or does not decode at `rotation`. The error carries
-    `file_name` as its `file` and the rest as its `reason`, so that a
-    build from a source folder can name the folder's file instead."""
+    Raises NxwrightError when the screen copy is missing, or does not decode
+    at `rotation`. The error's message starts with `file_name`. The error
+    also carries `file_name` as its `file`, and the rest of the message as
+    its `reason`. A build from a source folder can then give the folder's
+    file in place of the dump's."""
     path = dump_folder / "images" / ("%04d.i" % picture_id)
     if not path.is_file():
         reason = ("nxwright does not decode this type of picture, and its screen copy is "
@@ -195,32 +203,34 @@ def kept_picture_blocks(dump_folder: Path, picture_id: int, file_name: str, data
 
 
 def dump_picture_sources(dump_folder: Path, picture_count: int) -> dict:
-    """Returns the sources of the dump's resized pictures, {picture ID: (its
-    file's path within the dump, its bytes, its suffix)}: the files named
-    images/<ID>.source with one of a picture's suffixes, such as
-    images/0002.source.png. A picture never resized has none. Raises
-    NxwrightError when one picture has two, or one is of a picture ID past
-    the dump's `picture_count` pictures."""
+    """Returns the sources of the dump's resized pictures, as {picture ID:
+    (the path of its file within the dump, the file's bytes, its suffix)}.
+    A source's file is images/<ID>.source followed by one of
+    PICTURE_SUFFIXES, such as images/0002.source.png. A picture that was
+    never resized has no source. Raises NxwrightError when a picture has two
+    sources, or when the picture ID of a source is not below
+    `picture_count`, the number of pictures in the dump."""
     found = {}
     for suffix in PICTURE_SUFFIXES:
         for picture_id, path in numbered_files(dump_folder / "images",
                                                SOURCE_SUFFIX + suffix).items():
             if picture_id in found:
-                raise NxwrightError("images/%s and images/%s are there; a picture has one "
-                                    "source file" % (found[picture_id].name, path.name))
+                raise NxwrightError("images/%s and images/%s both exist; a picture can have "
+                                    "only one source file" % (found[picture_id].name, path.name))
             if picture_id >= picture_count:
-                raise NxwrightError("images/%s is there, but no picture %d; a source file goes "
-                                    "with its picture" % (path.name, picture_id))
+                raise NxwrightError("images/%s exists, but there is no picture %d; a source "
+                                    "file needs its picture" % (path.name, picture_id))
             found[picture_id] = path
     return {picture_id: ("images/" + path.name, path.read_bytes(),
                          path.suffix.lower()) for picture_id, path in found.items()}
 
 
 def picture_source_block(path: str, data: bytes, suffix: str) -> bytes:
-    """Returns the block of a resized picture's source (".ib") for the
-    dump's file `data`, of `suffix`, at `path` within the dump. Its record
-    gives the file's own width and height, as the Editor's does. Raises
-    NxwrightError, naming `path`, for a file nxwright cannot read."""
+    """Returns the source block (".ib") of a resized picture, made from the
+    dump's file `data`, of `suffix`, at `path` within the dump. As in the
+    Editor's source blocks, the record gives the width and height of the file
+    itself. Raises NxwrightError for a file that nxwright cannot read. The
+    error's message starts with `path`."""
     try:
         width, height = picture_data_size(data)
     except NxwrightError as error:

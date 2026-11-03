@@ -6,8 +6,8 @@ The file is laid out the same for every screen model:
   0x380000   four 0xff bytes
   0x6ffff8   the text "ver21234"
   0x700000   the blocks, back to back: Program.s, the pages, the pictures
-             (each one's file, then its screen copy, then the source of
-             one resized in the Editor), the fonts, the
+             (each one's file, its screen copy, and, for a picture resized
+             in the Editor, its source), the fonts, the
              animations (each one's GmovMaker file, then the screen's form),
              the videos, the sounds, and last the manifest
 Every other byte before 0x700000 is zero. The manifest lists the pictures,
@@ -54,9 +54,9 @@ def write_new_project(dump_folder: Path, settings: DeviceSettings, output: Path)
     version reads or has no program.s, its pages, pictures, fonts,
     animations, videos, or sounds are not numbered from 0 without gaps, an
     animation lacks one of its two files, a picture cannot be stored on
-    the screen model (such as a 1-by-1 picture on a compressed screen), or
-    a picture's source file is one nxwright cannot read, or of no picture
-    (dump_folder.dump_picture_sources).
+    the screen model (such as a 1-by-1 picture on a compressed screen),
+    nxwright cannot read a picture's source file, or there is no picture for
+    a source file (dump_folder.dump_picture_sources).
     """
     dump_folder, output = Path(dump_folder), Path(output)
     if output.exists():
@@ -67,8 +67,8 @@ def write_new_project(dump_folder: Path, settings: DeviceSettings, output: Path)
     pages = _page_blocks(dump_folder, settings)
     pictures = _picture_blocks(dump_folder, settings)
     copied = {kind: copied_contents(dump_folder, kind) for kind in COPIED_KINDS}
-    # The manifest lists each picture by its screen copy. COPIED_KINDS runs in
-    # the Editor's order too.
+    # The manifest lists each picture by its screen copy, the ".i" block.
+    # COPIED_KINDS is in the Editor's order too.
     resources = ([("i", name) for name, _ in pictures if name.endswith(".i")]
                  + [(kind.listed, "%d.%s" % (resource_id, kind.listed))
                     for kind in COPIED_KINDS for resource_id in range(len(copied[kind]))]
@@ -112,9 +112,10 @@ def _page_blocks(dump_folder: Path, settings: DeviceSettings) -> list:
 
 
 def _picture_blocks(dump_folder: Path, settings: DeviceSettings) -> list:
-    """Returns [(block name, block)] for the dump's pictures in ID order: each
-    one's file (".is"), then its screen copy (".i"), then, for a picture
-    resized in the Editor, its source (".ib", dump_folder.picture_source_block)."""
+    """Returns [(block name, block)] for the dump's pictures in ID order. Each
+    picture has its file (".is"), then its screen copy (".i"). A picture
+    resized in the Editor also has its source after them (".ib",
+    dump_folder.picture_source_block)."""
     files = dump_pictures(dump_folder)
     sources = dump_picture_sources(dump_folder, len(files))
     kind, rotation = settings.screen_copy_layout
@@ -124,8 +125,8 @@ def _picture_blocks(dump_folder: Path, settings: DeviceSettings) -> list:
     with opened_cache() as cache:
         for picture_id, (file_name, data, suffix) in enumerate(files):
             if not decodes_picture(suffix):
-                # nxwright cannot make its screen copy, so the project's own
-                # is used as it is.
+                # nxwright cannot make the screen copy of this type of file.
+                # The dump's own screen copy is used as it is.
                 blocks += zip(("%d.is" % picture_id, "%d.i" % picture_id), kept_picture_blocks(
                     dump_folder, picture_id, file_name, data, suffix, rotation))
             else:
@@ -138,18 +139,19 @@ def _picture_blocks(dump_folder: Path, settings: DeviceSettings) -> list:
 
 def _made_picture_blocks(picture_id: int, file_name: str, data: bytes, suffix: str, kind: int,
                          rotation: int, cache) -> list:
-    """Returns [(block name, block)] of the file (".is") and the screen copy
-    (".i") of the picture `picture_id`, whose file `data`, of `suffix`, is
-    the dump's `file_name`. The screen copy, of format `kind` and rotation
-    `rotation`, is made now or taken from `cache`."""
+    """Returns [(block name, block)] for the file (".is") and the screen copy
+    (".i") of the picture `picture_id`. The picture's file is `data`, of
+    `suffix`, at `file_name` within the dump. The screen copy is in the
+    format `kind`, at `rotation`. It is made now, or taken from `cache`."""
     try:
         made = make_screen_copy(data, kind, rotation, cache)
     except NxwrightError as error:
-        # The dump's file is kept apart from the words too, so that a
-        # build can name the source folder's file in its place. This
-        # `file` is a dump's path, not a source folder's as
-        # NxwrightError's docstring has it: no finding is placed by it
-        # until project_files.build has turned it into the folder's.
+        # The error also carries the dump's file apart from the message. A
+        # build from a source folder can then give the folder's file in its
+        # place. Here, `file` is a path within the dump, and not a path within
+        # a source folder as NxwrightError's docstring describes. No finding
+        # uses it until project_files.build has turned it into the source
+        # folder's path.
         refusal = NxwrightError("%s: %s" % (file_name, error))
         refusal.file, refusal.reason = file_name, str(error)
         raise refusal from None

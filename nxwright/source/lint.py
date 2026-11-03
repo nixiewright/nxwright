@@ -214,12 +214,14 @@ def picture_errors(app: dict, read, read_bytes, exists, listed=None) -> list:
     """Returns the error Findings of the pictures nxwright cannot read, of
     the folder whose settings are `app`, whose files' text `read(path)`
     returns, and their bytes `read_bytes(path)`: each opened without its
-    pixels decoded, as the build would refuse it (pictures.picture_problem),
-    and so for a resized picture's source file. A picture with no file, or
-    more than one, or more than one source file, which the checks report
-    already (source_folder.resource_problems), is not read, and nor is a
-    picture's file of a type nxwright does not decode, whose screen copy
-    the build takes as it is (`listed`, source_folder.kept_picture_paths)."""
+    pixels decoded, to find the ones the build would refuse
+    (pictures.picture_problem). A resized picture's source file is checked
+    the same way. The function skips a picture's file if the picture has no
+    file or more than one, and its source file if it has more than one,
+    because the checks already report those (source_folder.resource_problems).
+    It also skips a picture's file of a type nxwright does not decode, which
+    it finds with `listed` (source_folder.kept_picture_paths). The build
+    uses the screen copy of that picture as it is."""
     found = []
     for name in app["pictures"]:
         paths = []
@@ -229,14 +231,14 @@ def picture_errors(app: dict, read, read_bytes, exists, listed=None) -> list:
             if decodes_picture(Path(path).suffix):
                 paths.append(path)
         except NxwrightError:
-            pass    # the check reports it
+            pass    # the checks report the problem
         try:
             check_picture_source(name, exists)
             path = picture_source_file(name, exists)
             if path is not None:
                 paths.append(path)
         except NxwrightError:
-            pass    # the check reports it
+            pass    # the checks report the problem
         for path in paths:
             try:
                 problem = picture_problem(read_bytes(path))

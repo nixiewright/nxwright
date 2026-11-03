@@ -3,10 +3,10 @@
 on them, as the Nextion Editor's Device window changes a project's. The
 Editor 1.68.2 gave each page the new screen's size, at its rotation, and
 kept every component's place and size, and every picture, animation, and
-video. For a new rotation, it turned each font to the orientation a
-compiled file keeps fonts in, which is still 0 degrees on the F series. For
-a new encoding, it kept each text's bytes and each font (docs/commands.md,
-device).
+video. For a new rotation, it turned each font to the orientation that a
+compiled file stores fonts in. That orientation is the project's rotation,
+except on the F series, where it is always 0 degrees. For a new encoding,
+the Editor kept each text's bytes and each font (docs/commands.md, device).
 
 Beyond the Editor: a video is made for one rotation. The Editor's compile
 refuses one made for another, so the build does too. The video's source is
@@ -15,13 +15,14 @@ not kept, so each one is made again from its own frames
 which the build stores in the folder's encoding, so its fonts are converted
 to the new encoding, each glyph keyed by its character
 (zi_font.converted_font), where the Editor keeps the old bytes and fonts. A
-source folder keeps every font in its encoding, so a font nxwright cannot
-convert, one it does not read, refuses the change.
+source folder keeps every font in the folder's encoding. If nxwright cannot
+convert a font, for example because it cannot read the font, it refuses the
+change.
 
-Each font keeps its orientation, so that a change of rotation stays quick,
-as turning a large font takes seconds: the Nextion Editor takes a font in
-any orientation, its compile turns it, and its design view draws it the
-same (ResearchNotes/format.md, Fonts).
+A change of rotation does not turn the fonts, because turning a large font
+takes seconds. Each font can keep its orientation, because the Nextion
+Editor accepts a font in any orientation. Its compile turns each font as
+needed, and its design view draws a font the same in every orientation.
 
 After a change, the folder's checks say what the build then refuses, such as
 a component past a smaller screen's edge, a type the new series lacks, or a
@@ -101,7 +102,7 @@ def device_change_files(source_folder: Path, screen: str = None, rotation: int =
     `app.toml` last, without writing them; {} when the settings given are
     the folder's own. Raises NxwrightError for no setting given, a screen
     model, a rotation, or an encoding there is not, a folder without device
-    settings, and a font nxwright cannot convert or turn, or a file it
+    settings, and a font nxwright cannot convert, or a file it
     cannot read, naming it. `told` is as change_device's."""
     if screen is None and rotation is None and encoding is None:
         raise NxwrightError("give a screen model, a rotation, or an encoding")
@@ -109,8 +110,9 @@ def device_change_files(source_folder: Path, screen: str = None, rotation: int =
         raise NxwrightError("rotation %r is not one of %s"
                             % (rotation, ", ".join(map(str, ROTATIONS))))
     if encoding is not None:
-        # The name of an encoding nxwright does not know is its own, for a
-        # project extracted with one; a folder is not changed to it.
+        # A name such as "encoding-37" stands for an encoding nxwright does
+        # not know. It exists only so that an extracted project keeps its own
+        # encoding. nxwright does not change a folder to an unknown encoding.
         if is_unknown_encoding(encoding):
             raise NxwrightError("unknown character encoding %r" % encoding)
         encoding_code(encoding)
@@ -133,8 +135,8 @@ def device_change_files(source_folder: Path, screen: str = None, rotation: int =
     if new.screen_copy_layout != old.screen_copy_layout:
         screen_copies = _made_again_screen_copies(source_folder, app, old, new)
         files.update(screen_copies)
-        notes += ["%s: made again for the new screen settings, from its own pixels" % path
-                  for path in screen_copies]
+        notes += ["%s: made again for the new screen settings, from the old screen copy's "
+                  "pixels" % path for path in screen_copies]
     if new.rotation != old.rotation:
         videos = _turned_videos(source_folder, app, new.rotation, told)
         files.update(videos)
@@ -172,18 +174,21 @@ def _page_files(source_folder: Path, app: dict, page_size: tuple, told) -> dict:
 def _changed_fonts(source_folder: Path, app: dict, old, new, told) -> tuple:
     """Returns ({path: new bytes}, notes) of the folder's fonts changed for
     the settings `new`, from `old`: when the encoding changes, converted to
-    the new one (zi_font.converted_font), in the orientation it had, if in
-    the old encoding or in one the new does not take
-    (resource_adding.encodings_taken). So a keyboard's iso-8859-1 font in a
-    utf-8 folder stays in iso-8859-1 when the folder is made iso-8859-1. A
-    font is not turned for a new rotation (the module's docstring). Raises
-    NxwrightError, naming the font, for one nxwright cannot convert. `told`
-    hears of each font changed."""
+    the new one (zi_font.converted_font). A converted font keeps its
+    orientation. A font is converted if it is in the old encoding, or in an
+    encoding that a folder in the new encoding does not accept
+    (resource_adding.encodings_taken). For example, a keyboard's iso-8859-1
+    font in a utf-8 folder stays in iso-8859-1 when the folder changes to
+    iso-8859-1. A new rotation does not turn any font, as the module's
+    docstring explains. Raises NxwrightError, with the font's path, for a
+    font nxwright cannot convert. `told` is called once for each font
+    converted."""
     files, notes = {}, []
     taken = encodings_taken(new.encoding)
     for number, name in enumerate(app["fonts"], 1):
         for path in resource_paths("fonts", name, _exists(source_folder)):
-            # Read whatever the change, so that a missing font refuses it.
+            # Read every font, even when the encoding stays the same, so
+            # that a missing font refuses the change.
             block = read_bytes(source_folder / path)
             if new.encoding == old.encoding:
                 continue
@@ -255,15 +260,19 @@ def _turned_videos(source_folder: Path, app: dict, rotation: int, told) -> dict:
 
 
 def _made_again_screen_copies(source_folder: Path, app: dict, old, new) -> dict:
-    """Returns {path: new bytes} of the screen copy of each picture of the
-    folder kept with it (source_folder.kept_picture_paths), made again from
-    its own pixels for the format and the rotation of `new`, the device
-    settings, from those of `old`. nxwright does not decode such a
-    picture's file, so the build takes its screen copy as it is.
+    """Returns {path: new bytes} of the screen copies made again for the
+    device settings `new`. The function remakes the screen copy of each
+    picture whose file is of a type nxwright does not decode
+    (source_folder.kept_picture_paths). nxwright cannot make a new screen
+    copy from such a file, and the build uses the screen copy as it is.
+    Instead, the function decodes the old screen copy, made for the device
+    settings `old`, and stores its pixels again in the format and rotation
+    of `new`.
 
-    Raises NxwrightError, naming the screen copy, for one that does not
-    decode, or one partly transparent that the new format cannot store: the
-    Nextion Editor blends such a picture with white from its file."""
+    Raises NxwrightError, with the screen copy's path, for a screen copy that
+    does not decode. It also raises for a partly transparent picture when
+    the new format cannot store transparency. The Nextion Editor would blend
+    that picture with white, working from the picture's file."""
     kind, rotation = new.screen_copy_layout
     files = {}
     for name in app["pictures"]:
@@ -275,8 +284,10 @@ def _made_again_screen_copies(source_folder: Path, app: dict, old, new) -> dict:
             pixels = decode_screen_copy(block, old.rotation)
             if kind != FORMAT_COMPRESSED and min(pixels.alphas, default=OPAQUE) < OPAQUE:
                 raise NxwrightError("the picture is partly transparent, which this screen's "
-                                    "format cannot store, and nxwright cannot blend it from its "
-                                    "file; save the picture as a PNG, JPEG, BMP, or GIF file")
+                                    "format cannot store. The Nextion Editor blends such a "
+                                    "picture with white, working from its file, but nxwright "
+                                    "cannot decode that file; save the picture as a PNG, JPEG, "
+                                    "BMP, or GIF file")
             made = encode_screen_copy(pixels, kind, rotation)
         except NxwrightError as error:
             raise NxwrightError("%s: %s" % (path, error)) from None

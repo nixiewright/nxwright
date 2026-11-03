@@ -114,11 +114,12 @@ def remove_resource(source_folder: Path, kind: str, name: str) -> tuple:
 def remove_resource_files(source_folder: Path, listed: str, name: str) -> tuple:
     """Takes the resource `name` out of app.toml's list `listed`, then
     deletes each of its files: those of its name with one of its kind's
-    suffixes (RESOURCE_FILES), and a picture's source file, or its file of
-    a type nxwright does not decode and its screen copy
-    (source_folder.kept_picture_paths), each by its own path; no folder.
-    Returns (the paths deleted, those that could not be, a sentence each),
-    within the folder. app.toml goes first, so that a file left behind is one no list
+    suffixes (RESOURCE_FILES). For a picture, it also deletes the picture's
+    source file, and a file of a type nxwright does not decode with its
+    screen copy (source_folder.kept_picture_paths). It deletes each file by
+    its own path, and never a folder. Returns (the paths deleted, a sentence
+    for each file that could not be deleted), all paths within the folder.
+    app.toml is written first, so that a file left behind is one no list
     names, never a name whose file is gone. It checks no use of the
     resource: remove_resource does, before."""
     app = read_app(source_folder)

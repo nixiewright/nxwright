@@ -73,13 +73,15 @@ def extract(project: Path, source_folder: Path, continue_with_unknown: bool = Fa
     source folder. A new one names the app after the project file. An
     existing one keeps its name, its picture and font names, and its code as
     written, wherever the project did not change them. Returns the warnings
-    of what the source files leave out (source_folder.import_dump), with a
-    note of each content nxwright does not know but keeps exactly, and,
-    when it went on past content that may be lost, a warning of each.
+    of what the source files leave out (source_folder.import_dump). Notes on
+    the content nxwright does not know come before the warnings: one for
+    each thing that is kept exactly or written otherwise, and one for each
+    thing that may be lost, if extracting went on past it.
 
-    Before it writes anything, it raises NxwrightError for content nxwright
-    cannot keep, and UnknownContentError for content the next build may
-    lose, unless `continue_with_unknown` (source/unknown_content.py)."""
+    Before it writes anything, the function raises NxwrightError for content
+    nxwright cannot keep. It raises UnknownContentError for content the next
+    build may lose, unless `continue_with_unknown` is true
+    (source/unknown_content.py)."""
     project, source_folder = Path(project), Path(source_folder)
     with held_by_the_nextion_editor(project):
         found = unknown_in_project_file(project)
@@ -89,12 +91,13 @@ def extract(project: Path, source_folder: Path, continue_with_unknown: bool = Fa
     with tempfile.TemporaryDirectory() as name:
         dump = Path(name) / "dump"
         with held_by_the_nextion_editor(project):
-            # Content that may be lost, which the dump leaves out or writes
-            # as its text gives it, is there only when the user chose to go
-            # on past it.
+            # Content that may be lost reaches this point only if the user
+            # chose to go on past it. In that case, the dump leaves out the
+            # blocks of a kind nxwright does not handle. It also writes a page
+            # as text even when the text does not rebuild the page's bytes.
             ProjectDumper(project, dump, leave_out_unknown_blocks=bool(lost),
                           write_differing_pages=bool(lost)).dump()
-        # Its unknown content is checked already, with the project's own.
+        # The dump's unknown content was checked above, as part of the project's.
         warnings = import_dump(dump, source_folder, project.stem.strip(), check_unknown=False)
     return notes + warnings
 

@@ -195,11 +195,12 @@ def _decode_padded_name(field_bytes: bytes):
 
 
 def _decode_page_name(field_bytes: bytes):
-    """Returns the page's name in the header's NUL-padded field, decoded as
-    Latin-1, which keeps every byte, as a component's name is. Returns None
-    when the name is empty, has a byte below 0x20, or the padding is not all
-    NUL. Unlike an attribute's name, a page's may have a space, punctuation,
-    or a letter outside ASCII: `p 0`, `a:b`, or `café`."""
+    """Returns the page's name from the NUL-padded field of the page's
+    header. Like a component's name, the name is decoded as Latin-1, which
+    keeps every byte. Returns None when the name is empty, has a byte below
+    0x20, or when the padding is not all NUL. Unlike an attribute's name, a
+    page's name may have a space, punctuation, or a letter outside ASCII,
+    such as `p 0`, `a:b`, or `café`."""
     name = field_bytes.split(b"\0")[0]
     if not name or name.ljust(len(field_bytes), b"\0") != field_bytes:
         return None

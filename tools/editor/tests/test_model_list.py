@@ -35,7 +35,8 @@ class ModelsOfTest(unittest.TestCase):
     def test_a_series_showing_the_tiles_of_the_one_before_is_refused(self):
         # As when its button's press did not take: the series before would
         # be counted twice, under two letters.
-        with self.assertRaisesRegex(ValueError, "F series' button left the T series' tiles"):
+        with self.assertRaisesRegex(ValueError, "the button of the F series, the tiles of the "
+                                                "T series still showed"):
             models_of([("T", [T_TILE]), ("F", [T_TILE])])
 
 

@@ -91,23 +91,25 @@ def refuse_unless_replacing(output: Path, ask, kind: str = "project file",
 
 # The kinds of file a command replaces, and how each is told from another file.
 _REPLACEABLE = {"project file": is_project_file, "page file": is_page_file}
-# The exit code of extract or import stopped at content nxwright does not
-# know and the next build may lose, because there was no terminal to prompt
-# at, and --continue-with-unknown was not given. A script can then tell this
-# stop from another refusal.
+# The exit code when extract or import stops because of content that
+# nxwright does not know and the next build may lose. This happens when
+# there is no terminal to answer the prompt, and --continue-with-unknown was
+# not given. A script can tell this stop apart from other refusals.
 NO_ANSWER_EXIT_CODE = 3
 
 
 class _NoAnswer(NxwrightError):
-    """A refusal for want of an answer, which exits with NO_ANSWER_EXIT_CODE."""
+    """A refusal because nobody could answer the prompt. It exits with
+    NO_ANSWER_EXIT_CODE."""
     exit_code = NO_ANSWER_EXIT_CODE
 
 
 def go_on_past(error: UnknownContentError, ask, command: str):
-    """Returns when the user, asked through `ask(question)`, chooses to go on
-    past the content `error` lists, which `command` prints first. Raises
-    NxwrightError when they choose not to, and _NoAnswer when there is
-    nobody to ask (`ask` is None) or the input ends at the question."""
+    """Prints `error` as a warning of `command`. The error lists content that
+    the next build may lose. Then prompts the user, through `ask(question)`,
+    to choose whether to go on anyway. Returns if they choose to go on, and
+    raises NxwrightError if they choose not to. Raises _NoAnswer if there is
+    nobody to answer (`ask` is None), or if the input ends at the question."""
     print("nxwright %s: warning: %s" % (command, error), file=sys.stderr)
     while ask is not None:
         try:
@@ -119,8 +121,8 @@ def go_on_past(error: UnknownContentError, ask, command: str):
         if answer in ("", "n", "no"):
             raise NxwrightError("stopped; nothing was written")
         print("Not one of the choices: y, n")
-    raise _NoAnswer("there was no terminal to prompt at, so nothing was written. Pass "
-                    "--continue-with-unknown to go on past this content.")
+    raise _NoAnswer("there is no terminal to answer the prompt, so nothing was written. To "
+                    "go on anyway, pass --continue-with-unknown.")
 
 
 def _terminal_asker():
@@ -214,8 +216,8 @@ def _asked(ask, question: str, default, choices: list, listed: list = None):
     """Returns the answer to `question`, asked again until it is one of
     `choices`. An empty answer is `default`, when there is one. Without
     `ask`, or once its input ends, returns `default`. After a wrong answer,
-    the choices are printed on one line, or as the lines `listed` when
-    given, one a line."""
+    prints the choices on one line. When `listed` is given, prints its lines
+    instead, one per line."""
     while ask is not None:
         try:
             answer = ask(question).strip() or default
@@ -330,8 +332,8 @@ def _run_new_page(arguments) -> str:
 
 def _run_extract(arguments) -> str:
     if arguments.list_unknown:
-        # Each content's size and first bytes alone, as the report gives
-        # them, so that a line stays short whatever the content's size.
+        # Only the size and the first bytes of each content are printed, as
+        # in the report. A line then stays short, however large the content.
         for each in unknown_in_project_file(arguments.project):
             print(json.dumps({"what": each.what, "where": each.where, "sort": each.sort,
                               "size": len(each.data),
@@ -351,8 +353,9 @@ def _run_extract(arguments) -> str:
 
 
 def _run_dump(arguments) -> str:
-    # The dump is how to look inside a project nxwright does not fully know,
-    # so it warns of what it does not know and never prompts.
+    # The dump only warns about content that nxwright does not know, and
+    # never prompts. A dump is how a user looks inside a project that
+    # nxwright does not fully know.
     found = unknown_in_project_file(arguments.project)
     for each in found:
         print("nxwright dump: warning: %s (%s)" % (each.what, each.where), file=sys.stderr)
@@ -526,10 +529,10 @@ _SUBCOMMANDS = [
       ("--name", {"help": "the app's name, as nxwright shows it (default: the folder's)"})]),
     ("font", _run_font,
      "add a font to a source folder, drawn from a typeface file or ready-made",
-     "Draws the characters of the folder's encoding from a typeface file, stored for the "
-     "folder's rotation, or upright on the F series, and adds the font after the folder's other "
-     "fonts. Its name is the typeface's and "
-     "the height, such as NotoSans20, unless --name gives one. In a utf-8 folder, it draws the "
+     "Draws the characters of the folder's encoding from a typeface file, and adds the font "
+     "after the folder's other fonts. The font is stored for the folder's rotation, or upright "
+     "on the F series. Its name is the typeface's name and the height, such as NotoSans20, "
+     "unless --name gives one. In a utf-8 folder, it draws the "
      "characters --characters gives, U+0000 to U+00FF by default, and the space, in a table of "
      "them alone, as the Nextion Editor's generator writes its \"Specified character\"; "
      "--full-table writes one of every code point to U+FFFF instead, at least 655 KB, whatever it "
@@ -537,9 +540,10 @@ _SUBCOMMANDS = [
      "two-byte encoding, such as gb2312 or big5, the font contains every character of the "
      "encoding, and one the file lacks is left empty. A file that has none of the characters, "
      "or a name the folder has, is refused, and nothing is written. A ready-made font file "
-     "(.zi), such as the Nextion Editor's font generator writes, is added as it is, turned to the "
-     "folder's rotation, or upright on the F series, "
-     "and named as it names itself unless --name gives one. It may be in the folder's encoding, "
+     "(.zi), such as the Nextion Editor's font generator writes, is added as it is. It is "
+     "turned to the folder's rotation, or to upright on the F series, if it is stored "
+     "otherwise. It keeps the name stored in it, unless --name gives another. It may be in "
+     "the folder's encoding, "
      "in ascii in an iso-8859-1 folder, or in iso-8859-1 in a folder whose encoding Noto Sans "
      "does not cover, such as utf-8, with a warning.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
@@ -669,14 +673,14 @@ _SUBCOMMANDS = [
       ("name", {"help": "its name, as app.toml lists it"})]),
     ("device", _run_device, "change a source folder's screen model, rotation, or encoding",
      "Changes app.toml's screen model, rotation, or character encoding, as the Nextion Editor's "
-     "Device window does, and what depends on them: each page takes the new screen's size, "
-     "at its rotation; each video is turned to the new rotation, its frames coded again, "
-     "which loses a little of each; each font keeps its orientation, which the compile "
-     "turns as it needs; and each font is converted to the new encoding, keeping the "
-     "characters it has, the others named. Components keep their places and sizes, so it "
-     "then lists what the build refuses, such as a component past a smaller screen's edge, "
-     "or a text the new encoding cannot store. If a font can't be converted, the command "
-     "stops and writes nothing.",
+     "Device window does, along with what depends on them. Each page takes the new screen's "
+     "size, at its rotation. Each video is turned to the new rotation, and its frames are "
+     "coded again, which loses a little quality. Each font keeps its orientation, since the "
+     "compile turns fonts as needed. Each font is converted to the new encoding, keeping "
+     "each of its characters that the new encoding has, and the command lists the ones it "
+     "loses. Components keep their places and sizes, so the command then lists what the build "
+     "refuses, such as a component past a smaller screen's edge, or a text the new encoding "
+     "cannot store. If a font cannot be converted, the command stops and writes nothing.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
       ("--screen", {"help": "the new screen model, such as NX8048P050"}),
       ("--rotation", {"type": int, "choices": ROTATIONS, "help": "the new rotation, in degrees"}),
@@ -697,11 +701,11 @@ _SUBCOMMANDS = [
       ("source_folder", {"type": Path, "nargs": "?",
                          "help": "the source folder to update or create"}),
       ("--continue-with-unknown", {"action": "store_true",
-                                   "help": "go on past content nxwright does not know and the "
-                                   "next build may lose, without prompting"}),
+                                   "help": "extract without prompting, even when the next "
+                                   "build may lose content nxwright does not know"}),
       ("--list-unknown", {"action": "store_true",
                           "help": "print the content nxwright does not know, one JSON object "
-                          "a line, and write nothing"})]),
+                          "per line, and write nothing"})]),
     ("dump", _run_dump, "write a project file out as a dump folder of text and asset files",
      "The project file is only read. The output folder must not exist yet, or be empty. "
      "Nothing is ever deleted; clear an old dump yourself.",
@@ -711,8 +715,8 @@ _SUBCOMMANDS = [
      "does not know",
      "The report leaves out the project's code, texts, names, pictures, fonts, sounds, and "
      "password. For each thing nxwright does not know, the report gives at most its first 16 "
-     "bytes, which may contain a text of the project's, so read the report before you send "
-     "it. The project file is only read, and the report is written only to a new file.",
+     "bytes, which may contain some of the project's texts, so read the report before you "
+     "send it. The project file is only read, and the report is written only to a new file.",
      [("project", {"type": Path, "help": "the project file (.HMI)"}),
       ("output", {"type": Path, "help": "the report to write, a Markdown file that does not "
                   "exist yet"})]),
@@ -723,8 +727,8 @@ _SUBCOMMANDS = [
      [("dump_folder", {"type": Path, "help": "a dump folder written by nxwright dump"}),
       ("source_folder", {"type": Path, "help": "the source folder to update or create"}),
       ("--continue-with-unknown", {"action": "store_true",
-                                   "help": "go on past content nxwright does not know and the "
-                                   "next build may lose, without prompting"})]),
+                                   "help": "import without prompting, even when the next "
+                                   "build may lose content nxwright does not know"})]),
     ("write", _run_write, "write a project file from a project and an edited dump of it",
      "Pages, pictures, and fonts may have been edited, added, removed, or renumbered in the "
      "dump, and program.s edited. The rest of the project is copied unchanged. An existing "

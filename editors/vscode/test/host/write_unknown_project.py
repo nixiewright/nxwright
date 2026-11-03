@@ -1,6 +1,6 @@
 """Writes a project file that contains a block nxwright does not handle, for
-extract.host.cjs: the demo's project, built, with a block 2.xb added, which
-the next build may lose.
+the tests in extract.host.cjs. The file is the demo's project as nxwright
+builds it, with an added block 2.xb. The next build may lose that block.
 
   python write_unknown_project.py <project.HMI>
 

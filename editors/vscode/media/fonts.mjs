@@ -303,7 +303,8 @@ function fontFileNote(reply) {
     return [reply.warning, "warning"];
   }
   return [reply.turned
-    ? "It is turned to the folder's rotation, or upright on the F series." : "", "hint"];
+    ? "The font will be turned to the folder's rotation, or to upright on the F series." : "",
+    "hint"];
 }
 
 // Adds a font as `params` asks, and says what came of it in `note`.

@@ -230,7 +230,7 @@ A `.nx` file can include others: a library of functions shared by pages, or part
 
 A name on its own, without a dot, must be a constant, a local, an `int` variable declared in `program.nx`, or a system variable. Anything else stops the build with "unknown name". That catches a misspelt constant.
 
-A name with a dot must be something that exists, as in strict Nextion syntax ([Names that must exist](build-rules.md#names-that-must-exist)): `t0.txt` a component of the page, and `settings.t0.txt` a component of another page, after its page's name. A component whose name is not made of letters, digits, and `_`, such as `b 0`, cannot be named in code, as in the Nextion Editor. Only its events' headings name it, in quotes ([Code files](source-folder.md#code-files)).
+A name with a dot must be something that exists, as in strict Nextion syntax ([Names that must exist](build-rules.md#names-that-must-exist)): `t0.txt` a component of the page, and `settings.t0.txt` a component of another page, after its page's name. A component whose name is not made of letters, digits, and `_`, such as `b 0`, cannot be used in code, as in the Nextion Editor. Only the headings of its events give its name, in quotes ([Code files](source-folder.md#code-files)).
 
 A local or a function's parameter may share a component's name:
 

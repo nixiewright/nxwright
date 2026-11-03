@@ -50,7 +50,8 @@ class MalformedPageFileTest(SourceFolderTestCase):
 
     def test_components_that_are_not_tables(self):
         edit_text(self.source / "pages" / "second.page.toml", "[page]", "component = 5\n\n[page]")
-        self.assert_export_refused(r"second\.page\.toml holds only \[page\] and \[\[component\]\] tables")
+        self.assert_export_refused(r"second\.page\.toml can contain only \[page\] and "
+                                   r"\[\[component\]\] tables")
 
 
 class SourceFolderLimitTest(SourceFolderTestCase):

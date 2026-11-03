@@ -32,9 +32,10 @@ screen copy, described in screen_copy.py):
   (seen in Editor 1.68.2, tests/test_picture_files.py).
 
 A picture resized in the Editor's picture viewer has a third block, ".ib",
-its source: the file it had before, in the layout of an ".is" block. The
-manifest does not list it, and the compile does not use it; the viewer's
-"Restore to source size" goes back to it (seen in Editor 1.68.2).
+its source. The source block keeps the file that the picture had before it
+was resized, in the layout of an ".is" block. The manifest does not list the
+source block, and the compile does not use it. The viewer's "Restore to
+source size" restores the picture from its source (seen in Editor 1.68.2).
 """
 from dataclasses import dataclass
 import struct
@@ -47,8 +48,9 @@ from nxwright.project.container import numbered_block
 # and those it takes when typed (.jpeg, .gif). A dump and a source folder
 # name a picture's file with the suffix its record gives: "0003.jpg".
 PICTURE_SUFFIXES = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
-# The block of a resized picture's source, and what comes before the
-# suffix of its file in a dump and a source folder: "0003.source.png".
+# The extension of a resized picture's source block, and the part of the
+# source's file name before the picture's suffix, in a dump and in a source
+# folder, as in "0003.source.png".
 SOURCE_EXTENSION = "ib"
 SOURCE_SUFFIX = ".source"
 # A picture record's header, before its suffix.
@@ -206,11 +208,12 @@ class ImageSource:
 def parse_image_source(block: bytes) -> ImageSource:
     """Parses an ".is" block.
 
-    Its file may be of a type nxwright does not decode, which no Nextion
-    Editor known writes (decodes_picture). Raises NxwrightError when it is
-    cut short, or its suffix is not letters and digits, or is one that
-    nxwright gives a picture's screen copy: ".i" in a dump, ".screen" in a
-    source folder.
+    The block's file may be of a type that nxwright does not decode
+    (decodes_picture). No known version of the Nextion Editor writes a file
+    of another type. Raises NxwrightError when the block is cut short, or
+    when the file's suffix is not letters and digits. Also raises it when
+    the suffix is one that nxwright uses for a picture's screen copy: ".i"
+    in a dump, or ".screen" in a source folder.
     """
     if len(block) < _IMAGE_SOURCE_HEADER.size:
         raise NxwrightError("image record is shorter than its header")
@@ -219,23 +222,25 @@ def parse_image_source(block: bytes) -> ImageSource:
     if not suffix[1:].isalnum() or not suffix.isascii():
         raise NxwrightError("image record of a file whose suffix %r is not letters and digits"
                             % suffix)
-    # The picture's file would take the name of its screen copy's.
+    # With this suffix, the picture's file would have the same name as its
+    # screen copy.
     if suffix.lower() in _SCREEN_COPY_SUFFIXES:
-        raise NxwrightError("image record of a %s file, the suffix nxwright gives a screen copy"
+        raise NxwrightError("image record of a %s file, the suffix nxwright uses for screen copies"
                             % suffix)
     return ImageSource(width, height, block[header_size:], suffix)
 
 
-# The suffixes of a picture's screen copy: in a dump, images/0000.i, and in a
-# source folder, pictures/logo.screen (source_folder.SCREEN_COPY_SUFFIX).
+# The suffixes of a picture's screen copy: images/0000.i in a dump, and
+# pictures/logo.screen in a source folder (source_folder.SCREEN_COPY_SUFFIX).
 _SCREEN_COPY_SUFFIXES = (".i", ".screen")
 
 
 def decodes_picture(suffix: str) -> bool:
-    """Whether nxwright decodes a picture's file of `suffix`, such as ".png",
-    to make its screen copy: one of PICTURE_SUFFIXES. Of a file of another
-    type, the source folder keeps the project's own screen copy, which the
-    build uses as it is."""
+    """Returns whether nxwright decodes a picture's file of `suffix`, such
+    as ".png", to make the picture's screen copy. nxwright decodes the
+    suffixes in PICTURE_SUFFIXES. For a file of another type, the source
+    folder keeps the project's own screen copy, and the build uses that
+    screen copy as it is."""
     return suffix.lower() in PICTURE_SUFFIXES
 
 

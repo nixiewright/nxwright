@@ -53,9 +53,9 @@ def picture_problem(data: bytes):
 
 
 def picture_data_size(data: bytes) -> tuple:
-    """Returns the (width, height) of the picture file `data`, from opening
-    it alone, without decoding its pixels. Raises NxwrightError as
-    picture_problem finds a problem."""
+    """Returns the (width, height) of the picture file `data`. The file is
+    only opened, and its pixels are not decoded. Raises NxwrightError for
+    each problem that picture_problem reports."""
     with _opened(data) as opened:
         return opened.size
 

@@ -1,9 +1,10 @@
 """The device settings as app.toml writes them (docs/source-folder.md).
 
 `screen`, `rotation`, and `encoding` come together, or not at all: a project
-whose screen model nxwright does not know has none of them, though its texts
-are still read in its own encoding (dump_folder.dump_encoding). The other
-keys appear only when their setting is not the Editor's default.
+whose screen model nxwright does not know has none of them. nxwright still
+reads its texts in the project's own encoding, which does not depend on the
+model (dump_folder.dump_encoding). The other keys appear only when their
+setting is not the Editor's default.
 """
 from nxwright import NxwrightError
 from nxwright.project.device_settings import (NO_PASSWORD, DeviceSettings, encoding_code,
@@ -19,8 +20,9 @@ _FLAGS = ("one_time_update", "ignore_library_resources", "ignore_image_resources
 
 
 def app_encoding(name: str):
-    """Returns the encoding `name` as app.toml gives it: its name, or the
-    number of one nxwright does not know, such as 37 (is_unknown_encoding)."""
+    """Returns the encoding `name` in the form app.toml stores it. That is
+    the name itself, or the number of an encoding nxwright does not know,
+    such as 37 for "encoding-37" (is_unknown_encoding)."""
     return encoding_code(name) if is_unknown_encoding(name) else name
 
 

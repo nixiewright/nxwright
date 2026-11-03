@@ -54,8 +54,9 @@ def properties(index, read, page: str, name: str) -> dict:
         described = describe(table.type, entry.attribute)
         labels = [{"value": number, "label": label}
                   for number, label in sorted(described.choices.items())] if described else []
-        # A value kept as its stored bytes is shown as them, and not edited:
-        # nxwright does not know what they mean (page_source.RAW_KEY).
+        # The panel shows a value kept as its stored bytes as those bytes,
+        # without a field to edit it. nxwright does not know what the bytes
+        # mean (page_source.RAW_KEY).
         raw = isinstance(entry.value, dict)
         attributes.append({"name": entry.attribute, "value": _shown_value(entry.value),
                            "default": _shown_value(entry.default), "given": entry.given,
@@ -102,9 +103,10 @@ def key_binding(index, read, page: str, name: str, typed) -> dict:
 
 
 def _shown_value(value):
-    """Returns `value`, as the page file gives it, for the properties panel:
-    as it is, or, for a value kept as its stored bytes, those bytes as
-    text, such as "stored bytes 7f 00"."""
+    """Returns `value`, as the page file gives it, in the form that the
+    properties panel shows. Most values are returned as they are. A value
+    kept as its stored bytes is returned as text that lists the bytes, such
+    as "stored bytes 7f 00"."""
     if not isinstance(value, dict):
         return value
     text = value[RAW_KEY]

@@ -12,7 +12,7 @@ nxwright dump <project.HMI> <output-folder>
 
 - The project file is only read.
 - The output folder must not exist yet, or must be empty. nxwright never deletes anything, so clear an old dump if you want a new one to take its place. A failed run leaves its partial folder in place, and its message points at the folder.
-- A dump is the way to look inside a project that nxwright does not fully know, such as one a newer Nextion Editor saved. For that reason, `dump` never prompts you to go on. It warns of each thing nxwright does not know, and writes the rest ([commands.md](commands.md#extract)). A block of a kind nxwright does not handle is left out of the dump.
+- A dump is the way to look inside a project that nxwright does not fully know, such as one a newer Nextion Editor saved. For that reason, `dump` never prompts you to go on. It gives a warning for each thing nxwright does not know, and writes the rest ([commands.md](commands.md#extract)). A block of a kind nxwright does not handle is left out of the dump.
 
 ## Layout
 
@@ -23,7 +23,7 @@ Pages, pictures, fonts, animations, videos, and sounds are numbered by their IDs
 | `project.txt` | The dump format, the file's size, the directory's counts (live blocks, stale entries), and the manifest: its header bytes that are not understood, and the resource list in stored order. |
 | `program.s` | The program code that runs at power-on, bytes unchanged. |
 | `macros.s` | The project's macros, its `comcode.sn` block's bytes unchanged (`format.md`, Macros), when it has any. |
-| `pages/NN-<name>.txt` | One file per page, numbered by page ID, its name encoded as a source folder's page files are ([source-folder.md](source-folder.md)). The page's name comes from the file's first line, not from the file's name. |
+| `pages/NN-<name>.txt` | One file per page, numbered by page ID, with the page's name encoded as in the names of a source folder's page files ([source-folder.md](source-folder.md)). The page's name comes from the file's first line, not from the file's name. |
 | `images/index.txt` | Per picture: ID, block, size, and a SHA-256 of the screen copy. |
 | `images/NNNN.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | The picture's file the Nextion Editor shows, as the project keeps it, with the suffix its record gives. A file of another type, such as `.tif`, has its own suffix. |
 | `images/NNNN.i` | The screen copy, as stored. nxwright reads it back only for a picture whose file is of a type it does not decode, such as `.tif`, and writes it as it is. |
@@ -37,7 +37,7 @@ Pages, pictures, fonts, animations, videos, and sounds are numbered by their IDs
 
 The dump stops with an error if the manifest does not list every page, picture, font, animation, video, and sound block exactly once, because the IDs would then be ambiguous.
 
-A dump records its format version in the first line of `project.txt`. A dump written by another version of nxwright is refused rather than misread: dump the project again. A dump is in format 5 when one of its page lines is quoted (Page text), and in format 4 otherwise, so that an older nxwright still reads it. nxwright reads both.
+A dump records its format version in the first line of `project.txt`. A dump written by another version of nxwright is refused rather than misread: dump the project again. A dump is in format 5 when one of its page lines is quoted (Page text). Otherwise it is in format 4, so that an older nxwright can still read it. nxwright reads both.
 
 ## Page text
 
@@ -83,7 +83,7 @@ Turns a dump into a source folder ([source-folder.md](source-folder.md)).
 - A new or empty folder gets a fresh source folder.
 - A source folder that already has an `app.toml` is updated. Each event keeps its text, comments included, unless the project changed that event's code ([Extracting into an existing folder](source-folder.md#extracting-into-an-existing-folder)).
 - Any other folder is refused.
-- Import checks the dump's manifest header and pages for things nxwright does not know, and treats each one as extract does. It warns and goes on, prompts you to choose whether to go on, or refuses, and takes `--continue-with-unknown` ([commands.md](commands.md#extract)).
+- Import checks the dump's manifest header and pages for things nxwright does not know, and treats each one as extract does. It warns and goes on, prompts you to choose whether to go on, or refuses. It also takes `--continue-with-unknown` ([commands.md](commands.md#extract)).
 
 ## Page files
 
@@ -115,7 +115,7 @@ What the dump can change:
   - Each is `NNNN.png`, `.jpg`, `.jpeg`, `.bmp`, or `.gif`, one file for each ID, kept as it is.
   - Pictures are matched to the project by their files' bytes and suffixes. So an edited picture, or one given another suffix, counts as a new one replacing the old one.
   - nxwright makes each new picture's screen copy. The `.i` files of the dump are ignored.
-  - A picture's source file goes with its ID: add, replace, or delete it, and the project's source block follows. Delete it when you replace the picture's file, unless the new file is a resized form of it.
+  - A picture's source file goes with the picture's ID. If you add, replace, or delete the source file, the project's source block changes to match. Delete it when you replace the picture's file, unless the new file is a resized form of it.
 - **Fonts:** add, remove, or reorder the font files, keeping the IDs without gaps. Fonts are matched to the project by their bytes; take new fonts from another dump, or from the Nextion Editor's font generator.
 - **Animations, videos, and sounds:** add, remove, or reorder their files, keeping the IDs without gaps, an animation's two files together. They are matched to the project by their bytes; take new ones from another dump.
 - **`program.s`.**

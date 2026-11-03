@@ -54,7 +54,7 @@ This page describes the folder's files. [commands.md](commands.md) describes eac
 
 These files are in the same formats as those the Nextion Editor and its tools create, so you can also use what you made with them:
 
-- a font file from the Nextion Editor's font generator, or a video from VideoBox, the Nextion Editor's video tool: copy it into `fonts/` or `videos/`, and list it in `app.toml`. For a font, `nxwright font` can do this for you, and it also turns a font stored for another rotation than the folder's, or than upright on the F series;
+- a font file from the Nextion Editor's font generator, or a video from VideoBox, the Nextion Editor's video tool: copy it into `fonts/` or `videos/`, and list it in `app.toml`. For a font, `nxwright font` can do this for you, and it also turns a font stored for another rotation: to the folder's rotation, or to upright on the F series;
 - a sound: give the original sound file to `nxwright sound`, as you would to the Nextion Editor's Audio panel;
 - an animation made with GmovMaker, the Nextion Editor's animation tool: give its `.gmov` file to `nxwright animation`, as you would to the Nextion Editor's Gmov panel. `nxwright animation` keeps the file, and makes the `.screen.gmov` file the screen shows.
 
@@ -68,8 +68,8 @@ About picture files:
 - A `/` in a name makes a subfolder: `pictures/icons/back.png`.
 - When you resize a picture in the Nextion Editor's picture viewer, the Nextion Editor keeps the file the picture had before, so that its "Restore to source size" can go back to it. Extracting writes that file beside the picture's, as its source file, such as `pictures/logo.source.png`, and the build gives it back to the project. A picture has one source file at most.
 - When you replace a picture's file, delete its source file too. Otherwise the Nextion Editor's "Restore to source size" brings back the old picture.
-- No Nextion Editor known stores a picture in a file of a type other than PNG, JPEG, BMP, or GIF. If a project has one, such as a TIFF file, extracting writes the file as it is, and the project's screen copy of it beside it, such as `pictures/logo.screen`.
-  - nxwright cannot make a screen copy from such a file, so the build writes the `.screen` file as it is, and warns you. An edit of the picture's file does not reach the screen.
+- No known Nextion Editor stores a picture in a file of a type other than PNG, JPEG, BMP, or GIF. If a project has one, such as a TIFF file, extracting writes the file as it is, and the project's screen copy of it beside it, such as `pictures/logo.screen`.
+  - nxwright cannot make a screen copy from such a file, so the build writes the `.screen` file as it is, and warns you. If you edit the picture's file, the screen does not show the change.
   - Without the `.screen` file, the build stops.
   - To change the picture, save it as a PNG, JPEG, BMP, or GIF file, and delete the old file and its `.screen` file.
 
@@ -160,7 +160,7 @@ pco = "#ffffff"
 ```
 
 - Each table has `name`, `type`, a readable name such as `"text"` or `"button"`, and `events`, the events the object has, with or without code. Then come its attributes, by their names in the Nextion Editor.
-  - A component's `name` may be any name the Nextion Editor keeps, such as `b)0` or `b 0`, but not one with a double quote or a control character. As in the Nextion Editor, code cannot name a component whose name is not made of letters, digits, and `_`, but its events run.
+  - A component's `name` may be any name the Nextion Editor keeps, such as `b)0` or `b 0`, but not one with a double quote or a control character. As in the Nextion Editor, code cannot refer to a component whose name is not made of letters, digits, and `_`, but the component's events run.
 - Only what differs from a newly added component of the same type is written ([Component defaults](#component-defaults)).
   - `x`, `y`, `w`, and `h` are always written for components that have a place on the screen.
   - `events` is left out when it is the type's default.
@@ -173,9 +173,9 @@ pco = "#ffffff"
   - A picture attribute of `65535` means no picture.
   - A number that matches no picture is kept as a number. The build accepts it, and the page preview shows a note.
   - The build refuses a font number that matches no font ([Fonts](build-rules.md#fonts)).
-- An attribute nxwright does not know, or one stored at another width than nxwright knows, as a newer Nextion Editor may write, is kept as its stored bytes, in hexadecimal: `newattr = { bytes = "01" }`. Extract writes it so, in a table marked `defaults = false`, and the build writes the bytes back as they are. The properties panel shows it, but cannot change it.
+- An attribute that nxwright does not know, or that is stored at a width nxwright does not expect, is kept as its stored bytes, in hexadecimal: `newattr = { bytes = "01" }`. A newer Nextion Editor may write such attributes. Extract writes them in this form, in a table marked `defaults = false`, and the build writes the bytes back as they are. The properties panel shows it, but cannot change it.
   - For a picture or font attribute, the bytes keep the resource's ID, not its name, so they stay right only while the resources keep their order.
-  - An older nxwright stops at such a value, naming the attribute.
+  - An older nxwright stops at such a value, and its error gives the attribute's name.
 - A text whose bytes are not text in the project's encoding is kept the same way: `txt = { bytes = "636166e9" }`.
 - An attribute named like a key of the page file, such as `events`, is kept under `kept_attributes`, in the same form: `kept_attributes = { events = { bytes = "05" } }`. If an object has two such attributes with others between them, the build writes the two together, at the first one's place.
 - An event whose code a `.nx` file cannot contain, such as a line with a control character, or one not valid in the project's encoding, is kept under `kept_events`, as its lines in hexadecimal: `kept_events = { load = { lines = ["610d62"] } }`. Its code has no heading in the `.nx` file, so it cannot be edited there, and the build writes its lines back as they are.
@@ -185,7 +185,7 @@ The `[page]` table may also contain:
 - which of the Nextion Editor's system pages it is: `system_page = "keyboard"` for the full keyboard, `"keypad"` for the numeric keypad, `"speed-dial"`, or `"chinese-input"`;
 - that the page is locked: `locked = true`, and `lock_password_hash`, its lock's password, if any. It is given as `app.toml` gives the project's password: the hash that `nxwright password-hash` prints, never the password itself.
 
-A page header's value that nxwright has not seen keeps its own key, so that the build writes it back as it was. Extract warns of each one.
+When a page header has a value that nxwright has not seen, the page file keeps it under its own key, so that the build writes it back as it was. Extract gives a warning for each one.
 
 - A system page mark nxwright does not know is given as its number, such as `system_page = 5`.
 - A lock of another value than locked or unlocked is given as its number, such as `locked = 2`.

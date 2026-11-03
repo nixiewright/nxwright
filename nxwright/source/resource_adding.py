@@ -84,8 +84,9 @@ def add_pictures(source_folder: Path, files: list) -> list:
     names = [name_part(file.stem) for file in given.values()]
     pictures = app["pictures"] + names
     check_names(pictures, "pictures")
-    # A picture has one file, so a file of its name under any suffix is in
-    # the way, and so is a source file left from a picture removed by hand.
+    # A picture has only one file, so a file of its name with any suffix is
+    # in the way. A source file left behind by a picture removed by hand is
+    # in the way too.
     for relative in (path for name in names
                      for path in picture_paths(name) + picture_source_paths(name)):
         if (source_folder / relative).exists():
@@ -102,13 +103,14 @@ def add_pictures(source_folder: Path, files: list) -> list:
 def add_font(source_folder: Path, font_file: Path, height: int, name: str = None,
              smoothed: bool = True, characters: str = None, full_table: bool = False) -> tuple:
     """Draws a font from a typeface file (font_drawing.py), `height` pixels
-    tall, smoothed or not, in the source folder's encoding, in the orientation
-    a compiled file keeps fonts in (DeviceSettings.font_rotation). In utf-8,
-    it has the code points `characters` gives, as code_points_of reads
-    them, or else U+0000 to U+00FF, in a table of them and the space alone,
-    or, as a `full_table`, in one of every code point (zi_font.encode_font).
-    Writes it to fonts/<name>.zi, and lists it in app.toml after the
-    folder's fonts. Its name is `name`, or else
+    tall, smoothed or not. The font is in the source folder's encoding, and
+    in the orientation that a compiled file stores fonts in
+    (DeviceSettings.font_rotation). In utf-8, the font has the code points
+    listed in `characters`, as code_points_of reads them, or else U+0000 to
+    U+00FF. Its table has only those code points and the space, or, with
+    `full_table`, every code point (zi_font.encode_font). Writes the font to
+    fonts/<name>.zi, and lists it in app.toml after the folder's fonts. Its
+    name is `name`, or else
     drawn_font_name's. Returns (the name, a warning or None): the warning
     says what characters the typeface file lacks, which the font leaves out
     (font_drawing.font_warning).
@@ -151,9 +153,9 @@ def _drawn_font_place(source_folder: Path, name: str) -> tuple:
 @dataclass(frozen=True)
 class ReadyMadeFont:
     """A ready-made font as add_font_file adds it to a folder: its name, its
-    block, turned to the orientation a compiled file keeps fonts in
-    (DeviceSettings.font_rotation) if it was stored in another, whether it
-    was, and the warning, if any."""
+    block, whether the block was turned, and the warning, if any. nxwright
+    turns a font stored in another orientation than the one a compiled file
+    stores fonts in (DeviceSettings.font_rotation)."""
     name: str
     block: bytes
     turned: bool
@@ -174,9 +176,10 @@ def add_font_file(source_folder: Path, font_file: Path, name: str = None) -> tup
 
 def ready_made_font(source_folder: Path, font_file: Path, name: str = None) -> ReadyMadeFont:
     """Returns the ReadyMadeFont add_font_file would add to a source folder,
-    writing nothing. A font in another orientation than the one a compiled
-    file keeps fonts in (DeviceSettings.font_rotation) is turned to it; one
-    in it is copied as it is. Its name is
+    writing nothing. A font stored in another orientation than the one a
+    compiled file stores fonts in (DeviceSettings.font_rotation) is turned
+    to that orientation. A font already in that orientation is copied as it
+    is. Its name is
     `name`, or else ready_made_font_name's. The name stored in the font
     stays, as in a font renamed in a folder.
 
@@ -187,9 +190,9 @@ def ready_made_font(source_folder: Path, font_file: Path, name: str = None) -> R
 
     Raises NxwrightError for a folder without screen settings, a file that
     is not a font, a damaged font of a kind nxwright decodes
-    (zi_font.decodes), a font in another encoding, one in another
-    orientation that nxwright cannot decode to turn it, a name the folder
-    has, or a file
+    (zi_font.decodes), a font in another encoding, a font in another
+    orientation that nxwright cannot decode in order to turn it, a name the
+    folder already has, or a file
     already at the font's place.
     """
     return _ready_made(Path(source_folder), Path(font_file), name)[2]

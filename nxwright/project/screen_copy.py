@@ -409,8 +409,8 @@ def _encode_colours(colours: list) -> bytes:
 def _short_run_chunks(pending: deque) -> list:
     """Returns up to 8 (value, length) chunks from the front of `pending`, each
     at most _SHORT_RUN_MAX long, stopping before a run long enough for a
-    long-run block. Chunks stopped before such a run are split until there
-    are 8 (_split_into_eight)."""
+    long-run block. When the chunks stop before a long run, they are split
+    until there are 8 of them (_split_into_eight)."""
     chunks = []
     for value, count in pending:
         if chunks and count >= _LONG_RUN_MIN:
@@ -425,10 +425,11 @@ def _short_run_chunks(pending: deque) -> list:
 
 
 def _split_into_eight(chunks: list) -> list:
-    """Returns `chunks` with its longest chunks split in two, until there are
-    8, or until every chunk is 1 pixel long. A real screen can stop drawing
-    a picture at a short-run block before the last that leaves words
-    unused, as the module's docstring describes."""
+    """Returns `chunks`, with the longest chunk split in two again and again
+    until there are 8 chunks, or until every chunk is 1 pixel long. At least
+    one real screen stops drawing a picture at a short-run block that leaves
+    words unused, when that block is not the last. The module's docstring
+    gives the details."""
     chunks = list(chunks)
     while len(chunks) < 8:
         longest = max(range(len(chunks)), key=lambda index: chunks[index][1])

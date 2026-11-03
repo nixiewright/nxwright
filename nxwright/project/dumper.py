@@ -24,30 +24,33 @@ from nxwright.project.zi_font import parse_font_header
 # every project has, the macros, which a project may have, and numbered
 # pages (pa), pictures' files (is), screen copies (i), the sources of
 # resized pictures (ib), fonts (zi), animations (gmovs and gmov), videos
-# (v), and sounds (wav). Of the sources, only those kept_picture_sources
-# gives are dumped.
+# (v), and sounds (wav). The dump writes only the sources that
+# kept_picture_sources returns.
 _KNOWN_SINGLE_BLOCKS = ("main.HMI", "Program.s")
 _KNOWN_EXTENSIONS = ("pa", "is", "i", SOURCE_EXTENSION, "zi", "gmovs", "gmov", "v", "wav")
 
 
 def handles_block(name: str) -> bool:
-    """Whether the dumper handles the block named `name`, by its name alone:
-    the two every project has, the macros, or one named by a number and one
-    of _KNOWN_EXTENSIONS. The finder of unknown content uses it too
-    (source/unknown_content.py), so the two agree. Which pictures' sources
-    it keeps takes the manifest too (kept_picture_sources)."""
+    """Returns whether the dumper handles the block named `name`, judging by
+    the name alone. The dumper handles the two blocks that every project
+    has, the macros, and each block named by a number and one of
+    _KNOWN_EXTENSIONS. The finder of unknown content
+    (source/unknown_content.py) calls this function too, so that the two
+    agree. Whether the dump keeps a picture's source also depends on the
+    manifest (kept_picture_sources)."""
     return name in _KNOWN_SINGLE_BLOCKS or name == MACROS_BLOCK or any(
         numbered_block(name, extension) is not None for extension in _KNOWN_EXTENSIONS)
 
 
 def kept_picture_sources(blocks: dict, manifest) -> dict:
-    """Returns the pictures' sources the dump keeps, {picture ID: (the
-    block's name, its ImageSource)}: each N.ib block of the live `blocks`
-    whose picture N.i the parsed `manifest` lists, and which nxwright reads
-    as a picture's file. The Nextion Editor writes one when a picture is
-    resized in its picture viewer, keeping the file the picture had before.
-    The finder of unknown content reports the other N.ib blocks
-    (source/unknown_content.py), so the two agree."""
+    """Returns the pictures' sources that the dump keeps, as {picture ID:
+    (the block's name, its ImageSource)}. The dump keeps an N.ib block of the
+    live `blocks` if the parsed `manifest` lists its picture N.i, and if
+    nxwright can read the block's file as a picture's file. The Nextion
+    Editor writes an N.ib block when a picture is resized in its picture
+    viewer. The block keeps the file that the picture had before. The finder
+    of unknown content (source/unknown_content.py) reports the other N.ib
+    blocks, so that the two agree."""
     kept = {}
     for picture_id, name in enumerate(manifest.block_names("i")):
         source_name = partner_name(name, SOURCE_EXTENSION)
@@ -67,12 +70,13 @@ class ProjectDumper:
 
     def __init__(self, project_path: Path, output: Path, leave_out_unknown_blocks: bool = False,
                  write_differing_pages: bool = False):
-        """With `leave_out_unknown_blocks`, a block of a kind this tool does
-        not handle is left out of the dump rather than refused, as when the
-        user chose to go on past it (source/unknown_content.py). With
-        `write_differing_pages`, a page whose text form does not give back
-        its bytes is written as its text gives it, rather than refused, as
-        when the user chose to go on past it too (page_text_difference)."""
+        """If `leave_out_unknown_blocks` is true, the dump leaves out each
+        block of a kind this tool does not handle, and does not refuse it. A
+        caller sets it when the user chose to go on anyway
+        (source/unknown_content.py). If `write_differing_pages` is true, a
+        page whose text form does not give back its bytes is written from its
+        text form, and is not refused (page_text_difference). A caller sets
+        it, too, when the user chose to go on anyway."""
         self._leave_out_unknown_blocks = leave_out_unknown_blocks
         self._write_differing_pages = write_differing_pages
         self._project_path = Path(project_path)
@@ -121,9 +125,10 @@ class ProjectDumper:
                 raise NxwrightError("block %s is of a kind this tool does not handle" % name)
 
     def _check_picture_sources(self):
-        """Stops on a picture's source the dump would leave out: one whose
-        picture the manifest does not list, or that nxwright cannot read
-        (kept_picture_sources), unless such blocks are left out."""
+        """Stops on a picture's source that the dump would leave out, unless
+        the dump leaves out unknown blocks. The dump leaves out a source whose
+        picture the manifest does not list, and a source that nxwright cannot
+        read (kept_picture_sources)."""
         if self._leave_out_unknown_blocks:
             return
         kept = {name for name, _ in self._sources.values()}
@@ -170,10 +175,10 @@ class ProjectDumper:
             text = page_to_text(page)
             first = page_text_difference(block)
             if first is not None and not self._write_differing_pages:
-                raise NxwrightError("page %s does not survive its text form; first difference "
-                                    "at byte %d" % (block_name, first))
-            # The page's name, in its file's name, with the characters Windows
-            # refuses in a file name encoded.
+                raise NxwrightError("page %s changes when written as text; the first "
+                                    "difference is at byte %d" % (block_name, first))
+            # The file's name contains the page's name. Each character that
+            # Windows refuses in a file name is encoded.
             (folder / ("%02d-%s.txt" % (page_id, page_file_stem(page.name)))).write_text(
                 text, encoding="utf-8", newline="\n")
 
@@ -226,11 +231,12 @@ class ProjectDumper:
 
 
 def page_text_difference(block: bytes):
-    """Returns where the page block `block` first differs from what its text
-    form gives back, parsed and encoded again, or None when the two are the
-    same. The stamp (bytes 0 to 3) is not compared, because the text does
-    not contain it. The finder of unknown content runs it before anything is
-    written (source/unknown_content.py), and the dump runs it again."""
+    """Returns the offset of the first byte at which the page block `block`
+    differs from the block that its text form gives back, once parsed and
+    encoded again. Returns None when the two are the same. The stamp (bytes
+    0 to 3) is not compared, because the text form does not contain it. The
+    finder of unknown content (source/unknown_content.py) calls this
+    function before anything is written, and the dump calls it again."""
     rebuilt = encode_page(page_from_text(page_to_text(parse_page(block))))
     if rebuilt[4:] == block[4:]:
         return None

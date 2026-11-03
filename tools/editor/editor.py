@@ -118,10 +118,11 @@ _OUTPUT_PANEL = ("dockSite4", "bar3", "panelDockContainer7", "textbianyi")
 # The Attribute panel, and the Page panel.
 _ATTRIBUTE_PANEL = ("dockSite2", "bar4", "panelDockContainer6", "objatt2")
 _PAGE_PANEL = ("dockSite2", "bar8", "panelDockContainer2", "pageadmin1")
-# The toolbar of the Device button, which opens the device settings.
+# The toolbar that has the Device button, which opens the device settings.
 _DEVICE_TOOLBAR = ("dockSite7", "gongju3")
-# The device settings' window, the panel of its series buttons, the panel of
-# the shown series' tiles, and its Cancel button, by their automation IDs.
+# The automation IDs of the device settings' window, of its panel of series
+# buttons, of its panel of tiles for the series shown, and of its Cancel
+# button.
 _DEVICE_SETTINGS, _SERIES_PANEL, _TILE_PANEL = "appset", "itemPanel1", "itemPanel2"
 _DEVICE_SETTINGS_CANCEL = "buttonX1"
 # How long a wait pauses between two looks, in seconds.
@@ -241,9 +242,9 @@ def main(arguments=None) -> int:
     listing.add_argument("--known", type=Path, metavar="CATALOG",
                          help="an earlier catalog: the rows whose hint it holds are not clicked")
     modelling = commands.add_parser("models", parents=[holding],
-                                    help="the screen models the device settings offer, with "
-                                    "their series, sizes, and memory, as JSON; a project must "
-                                    "be open")
+                                    help="write the screen models listed in the device "
+                                    "settings, with their series, sizes, and memory, as JSON; "
+                                    "a project must be open")
     modelling.add_argument("file", type=Path)
     saving = commands.add_parser("save", parents=[holding],
                                  help="save the project shown, a copy this tool opened, "
@@ -1682,11 +1683,12 @@ def _wait_for_change(read, before, seconds: float):
 
 
 def screen_models(editor: DedicatedEditor) -> dict:
-    """Reads the screen models the device settings offer, series by series,
-    and returns them with the Editor program's version (model_list.py). The
-    toolbar's Device button opens the settings, which are cancelled after,
-    so that the project keeps its model. Raises EditorError when no project
-    is open, as the button is greyed out then."""
+    """Reads the screen models listed in the device settings, series by
+    series, and returns them with the version of the Editor's program
+    (model_list.py). The toolbar's Device button opens the settings. They
+    are then cancelled, so that the project keeps its model. Raises
+    EditorError when no project is open, because the button is greyed out
+    then."""
     editor.stop_on_crash()
     main = editor.main_window()
     _stop_on_dialog(main, "before opening the device settings")
@@ -1711,8 +1713,9 @@ def screen_models(editor: DedicatedEditor) -> dict:
 
 
 def _models_shown(settings) -> list:
-    """Shows each series of the device settings `settings` in turn, by its
-    button, and returns the models of its tiles (model_list.models_of)."""
+    """Presses the button of each series in the device settings `settings`
+    in turn, and returns the models of the tiles shown
+    (model_list.models_of)."""
     buttons = _required(_only_match(settings, "descendants", automation_id=_SERIES_PANEL),
                         auto_id=_SERIES_PANEL).children()
     if len(buttons) != len(SERIES_BUTTONS):
@@ -1727,8 +1730,8 @@ def _models_shown(settings) -> list:
     texts = read()
     for series, button in zip(SERIES_BUTTONS, buttons):
         button.invoke()
-        # Pressing the series already shown does not change the tiles, and
-        # so costs the whole wait.
+        # Pressing the button of the series already shown does not change
+        # the tiles, so the wait runs to its end.
         texts = _wait_for_change(read, texts, DIALOG_WAIT)
         shown.append((series, texts))
     try:
@@ -1738,9 +1741,9 @@ def _models_shown(settings) -> list:
 
 
 def _cancel_device_settings(settings):
-    """Closes the device settings `settings` as their Cancel button does. A
-    window already gone is let be: the error that stopped the reading is
-    the one to say."""
+    """Closes the device settings `settings` with their Cancel button. If the
+    window has closed already, nothing is done, so that the error that
+    stopped the reading is the one reported."""
     try:
         cancel = _only_match(settings, "descendants", automation_id=_DEVICE_SETTINGS_CANCEL)
         if cancel is not None:

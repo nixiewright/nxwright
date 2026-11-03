@@ -112,8 +112,8 @@ class SourceFileTest(SourceFolderTestCase):
     def test_two_source_files_of_one_picture_are_refused(self):
         self.source_file(".png", SOURCE)
         self.source_file(".jpg", SOURCE)
-        two = ("pictures/photo.source.png and pictures/photo.source.jpg are there; a picture has "
-               "one source file")
+        two = ("pictures/photo.source.png and pictures/photo.source.jpg exist; a picture can "
+               "have only one source file")
         with self.assertRaisesRegex(NxwrightError, two):
             self.built()
         self.assertIn(Finding("app.toml", self.photo_line(), ERROR, two), self.findings())

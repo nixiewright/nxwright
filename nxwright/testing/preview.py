@@ -134,7 +134,8 @@ class Previews:
 
 def page_of_file(path: str):
     """Returns the page whose own .page.toml or .nx file is `path`, a path within
-    the source folder, or None. The file's name gives the page's encoded
+    the source folder, or None. The file's name encodes the characters that
+    Windows refuses in a file name, and this function decodes them
     (page_file_names.py)."""
     found = _PAGE_FILE.fullmatch(path)
     return page_of_file_stem(found[1]) if found else None
