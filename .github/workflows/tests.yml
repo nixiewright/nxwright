@@ -14,7 +14,16 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
-        python: ["3.11", "3.12", "3.13", "3.14"]
+        # The oldest Python nxwright takes, which catches code that needs a
+        # newer one, and the newest, which catches code that relies on
+        # something Python removed. A version between them is unlikely to
+        # find what these two do not.
+        python: ["3.11", "3.14"]
+        # macOS runners are scarce: GitHub has cancelled every macOS job of
+        # a run when none was free. So macOS runs the newest alone.
+        exclude:
+          - os: macos-latest
+            python: "3.11"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
