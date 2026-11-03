@@ -243,7 +243,7 @@ A font is either drawn from a typeface file, or added from a ready-made font fil
 nxwright font app NotoSans-Regular.ttf 20
 ```
 
-Draws a font from a TrueType (`.ttf`) or OpenType (`.otf`) file, or from the first typeface of a collection (`.ttc`), as the Nextion Editor's font generator draws one ([format.md, Drawing a font](format.md#drawing-a-font)). The font is turned to the folder's rotation, and added after its other fonts.
+Draws a font from a TrueType (`.ttf`) or OpenType (`.otf`) file, or from the first typeface of a collection (`.ttc`), as the Nextion Editor's font generator draws one ([format.md, Drawing a font](format.md#drawing-a-font)). The font is stored for the folder's rotation, or upright on the F series, as the Nextion Editor stores one, and added after the folder's other fonts.
 
 - The height: from 12 to 254 pixels.
 - `--name`: the font's name. By default, the typeface's name and the height, such as `NotoSans20`.
@@ -274,7 +274,7 @@ nxwright font app NotoSans16.zi
 
 Adds a ready-made font file, such as the Nextion Editor's font generator writes, as it is, after the folder's other fonts.
 
-- A font made for another rotation is turned to the folder's rotation. nxwright can turn a font in any encoding, two-byte ones included ([format.md, Two-byte fonts](format.md#two-byte-fonts)).
+- A font stored otherwise is turned: to the folder's rotation, or upright on the F series. nxwright can turn a font in any encoding, two-byte ones included ([format.md, Two-byte fonts](format.md#two-byte-fonts)).
 - The font file contains a name, which the font generator stored in it, such as `NotoSans16`. The font gets that name in the folder, unless you give another with `--name`. The name inside the file does not change.
 - A name the folder has, and a file that is not a font, are refused.
 
@@ -450,7 +450,7 @@ nxwright device app --screen NX4832T035 --rotation 90 --encoding utf-8
 
 Changes the folder's screen model, its rotation, its character encoding, or any of them, like the Nextion Editor's Device window. A setting given its present value changes nothing.
 
-As it works, the command prints each step as it starts, with the file it works on: each page resized, each font rotated or converted, each video made again with its number of frames, then the writing and the check. A video takes the longest.
+As it works, the command prints each step as it starts, with the file it works on: each page resized, each font converted, each video made again with its number of frames, then the writing and the check. A video takes the longest.
 
 ### A new screen
 
@@ -462,10 +462,9 @@ As it works, the command prints each step as it starts, with the file it works o
 ### A new rotation
 
 - Each page takes the screen's size at the new rotation, as for a new screen.
-- Each font is turned to the new rotation.
+- Each font stays as it is. The Nextion Editor takes a font stored for any rotation, shows its text the same, and turns it as it compiles ([format.md, Rotation](format.md#rotation)). Turning a large font takes seconds, so leaving each one as it is keeps the change quick.
 - A picture's `.screen` file is made again, as for a new screen.
 - A video is made for one rotation. The Nextion Editor's compile refuses a video made for another, and so does the build. nxwright does not keep the source a video was made from. So each video is made again from its own frames, each frame coded again as VideoBox codes one, which loses a little quality. The command prints a note for each video.
-- If nxwright cannot turn one of the folder's fonts, for example a font file it cannot read, the command stops and writes nothing. A source folder keeps every font at its rotation, as `nxwright font` does.
 
 ### A new encoding
 

@@ -64,6 +64,16 @@ class DeviceSettings:
         return (height, width) if self.rotation in (90, 270) else (width, height)
 
     @property
+    def font_rotation(self) -> int:
+        """The orientation, in degrees, a compiled file keeps fonts in, which
+        nxwright makes new fonts in: 0 on the F series, as the Nextion
+        Editor writes each font so whatever the rotation, and the rotation
+        on the others. The Nextion Editor saves a font so as it turns a
+        project, and takes one in any orientation, which its compile turns
+        (ResearchNotes/format.md, Fonts)."""
+        return 0 if self.model.series == "F" else self.rotation
+
+    @property
     def screen_copy_layout(self) -> tuple:
         """The (format, rotation) of the screen copies of new pictures
         (screen_copy.py): the model's format, in the pixel order of the

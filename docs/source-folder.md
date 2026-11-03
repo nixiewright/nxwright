@@ -54,7 +54,7 @@ This page describes the folder's files. [commands.md](commands.md) describes eac
 
 These files are in the same formats as those the Nextion Editor and its tools create, so you can also use what you made with them:
 
-- a font file from the Nextion Editor's font generator, or a video from VideoBox, the Nextion Editor's video tool: copy it into `fonts/` or `videos/`, and list it in `app.toml`. For a font, `nxwright font` can do this for you, and it also turns a font made for another rotation;
+- a font file from the Nextion Editor's font generator, or a video from VideoBox, the Nextion Editor's video tool: copy it into `fonts/` or `videos/`, and list it in `app.toml`. For a font, `nxwright font` can do this for you, and it also turns a font stored for another rotation than the folder's, or than upright on the F series;
 - a sound: give the original sound file to `nxwright sound`, as you would to the Nextion Editor's Audio panel;
 - an animation made with GmovMaker, the Nextion Editor's animation tool: give its `.gmov` file to `nxwright animation`, as you would to the Nextion Editor's Gmov panel. `nxwright animation` keeps the file, and makes the `.screen.gmov` file the screen shows.
 

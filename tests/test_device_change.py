@@ -18,7 +18,7 @@ from nxwright.project.screen_copy import (FORMAT_COMPRESSED, FORMAT_RAW, OPAQUE,
 from nxwright.project.screen_models import model_named
 from nxwright.project.font_drawing import draw_font_block
 from nxwright.project.truetype import NOTO_SANS, TrueTypeFont
-from nxwright.project.zi_font import decode_font, grid_table_codes, turned_font
+from nxwright.project.zi_font import decode_font, font_facts, grid_table_codes, turned_font
 from nxwright.source.device_change import change_device
 from nxwright.source.source_folder import export_dump, new_source_folder
 from nxwright.source.resource_adding import add_animation, add_font, add_font_file, add_video
@@ -175,9 +175,9 @@ class KeptScreenCopyTest(DeviceChangeTestCase):
 class RotationTest(DeviceChangeTestCase):
 
     def test_a_rotation(self):
-        # The page is turned, each font turned as the Editor turns it, each
-        # video made again for the new rotation, and each animation kept, as
-        # the Editor keeps it.
+        # The page is turned, each video made again for the new rotation, and
+        # each animation kept, as the Editor keeps it. Each font keeps its
+        # orientation, which the compile turns as it needs.
         self.make("NX8048P050")
         self.add_media()
         before = folder_files(self.source)
@@ -189,7 +189,7 @@ class RotationTest(DeviceChangeTestCase):
         fonts = [path for path in before if path.startswith("fonts/")]
         self.assertTrue(fonts)
         for path in fonts:
-            self.assertEqual(after[path], turned_font(before[path], 90))
+            self.assertEqual(after[path], before[path])
         for path in ("animations/blink.gmov", "animations/blink.screen.gmov"):
             self.assertEqual(after[path], before[path])
         self.assertEqual(video_rotation(after["videos/clip.video"]), 90)
@@ -202,12 +202,10 @@ class RotationTest(DeviceChangeTestCase):
         # So that a long change, as a video coded again, shows what it does.
         self.make("NX8048P050")
         self.add_media()
-        fonts = sorted(path for path in folder_files(self.source) if path.startswith("fonts/"))
         told = []
         change = change_device(self.source, rotation=90, told=told.append)
         self.assertEqual(told[0], "Resizing page 1 of 1 to 480 x 800: pages/page0.page.toml")
-        self.assertEqual([line.split(": ")[1] for line in told
-                          if line.startswith("Rotating font ")], fonts)
+        self.assertFalse([line for line in told if "font" in line], told)
         self.assertIn("Rotating video 1 of 1 to 90 degrees, 2 frames: videos/clip.video", told)
         self.assertEqual(told[-2:], ["Writing %d file(s)" % len(change.written),
                                      "Checking the project for what the build will refuse"])
@@ -218,38 +216,24 @@ class RotationTest(DeviceChangeTestCase):
         told = []
         change_device(self.source, rotation=180, told=told.append)
         self.assertFalse([line for line in told if line.startswith("Resizing")], told)
-        self.assertTrue([line for line in told if line.startswith("Rotating font ")], told)
 
-    def test_a_gb2312_font_turned(self):
-        self.make("NX4832T035", encoding="gb2312")
-        font = self.folder / "Zh.zi"
-        font.write_bytes(gb2312_font())
-        add_font_file(self.source, font, "Zh")
-        change_device(self.source, rotation=90)
-        self.assertEqual((self.source / "fonts" / "Zh.zi").read_bytes(),
-                         turned_font(gb2312_font(), 90))
-
-    def test_a_font_nxwright_cannot_turn(self):
-        # A font nxwright does not read, one character marked as in big5,
-        # which is no grid of every position: the folder keeps every font at
-        # its rotation, as `nxwright font` does.
-        self.make("NX4832T035", encoding="big5")
-        font = self.folder / "Wide.zi"
-        font.write_bytes(font_block([(65, 1, 0, 0, bytes([3, 0b00100001]))], 1, encoding=16))
-        add_font_file(self.source, font, "Wide")
-        before = folder_files(self.source)
-        with self.assertRaisesRegex(NxwrightError, r"fonts/Wide\.zi.*byte 5 at 0"):
-            change_device(self.source, rotation=90)
-        self.assertEqual(folder_files(self.source), before)
-
-    def test_a_big5_font_turned(self):
-        self.make("NX4832T035", encoding="big5")
-        font = self.folder / "Ch.zi"
-        font.write_bytes(grid_font("big5"))
-        add_font_file(self.source, font, "Ch")
-        change_device(self.source, rotation=90)
-        self.assertEqual((self.source / "fonts" / "Ch.zi").read_bytes(),
-                         turned_font(grid_font("big5"), 90))
+    def test_each_font_kept_whatever_its_encoding(self):
+        # A gb2312 or big5 font, and one nxwright does not read, one
+        # character marked as in big5, which is no grid of every position:
+        # each keeps its orientation, so none is turned, and none refuses
+        # the change.
+        for encoding, name, block in (
+                ("gb2312", "Zh", gb2312_font()), ("big5", "Ch", grid_font("big5")),
+                ("big5", "Wide", font_block([(65, 1, 0, 0, bytes([3, 0b00100001]))], 1,
+                                            encoding=16))):
+            with self.subTest(name=name):
+                self.source = self.folder / ("source-" + name)
+                self.make("NX4832T035", encoding=encoding)
+                font = self.folder / (name + ".zi")
+                font.write_bytes(block)
+                add_font_file(self.source, font, name)
+                change_device(self.source, rotation=90)
+                self.assertEqual((self.source / "fonts" / (name + ".zi")).read_bytes(), block)
 
 
 class EncodingTest(DeviceChangeTestCase):
@@ -340,7 +324,7 @@ class EncodingTest(DeviceChangeTestCase):
 
     def test_a_rotation_keeps_each_fonts_encoding(self):
         # An ascii font in an iso-8859-2 folder, as an extracted project
-        # may hold, is turned, not converted, when the encoding stays.
+        # may have, is kept as it is, not converted, when the encoding stays.
         self.make("NX8048P050", encoding="iso-8859-2")
         font = self.source / "fonts" / "Small.zi"
         font.write_bytes(font_block([(65, 1, 0, 0, bytes([3, 0b00100001]))], 1, encoding=1))
@@ -350,8 +334,18 @@ class EncodingTest(DeviceChangeTestCase):
         self.assertEqual(self.app()["fonts"][0], "Small")
         before = font.read_bytes()
         change = change_device(self.source, rotation=90)
-        self.assertEqual(font.read_bytes(), turned_font(before, 90))
+        self.assertEqual(font.read_bytes(), before)
         self.assertFalse(any("converted" in note for note in change.notes), change.notes)
+
+    def test_a_new_encoding_keeps_each_fonts_orientation(self):
+        # A folder turned to 90 degrees keeps its font at 0; made utf-8 then,
+        # the font is converted, still at 0, not at the folder's rotation.
+        self.make("NX8048P050")
+        change_device(self.source, rotation=90)
+        change_device(self.source, encoding="utf-8")
+        font = next((self.source / "fonts").iterdir())
+        facts = font_facts(font.read_bytes())
+        self.assertEqual((facts.encoding, facts.rotation), ("utf-8", 0))
 
     def test_a_folder_made_gb2312_and_back(self):
         # Its font is converted each way, as the folder's texts are built in

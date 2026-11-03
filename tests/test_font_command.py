@@ -300,8 +300,8 @@ class FontFileTest(unittest.TestCase):
                  "CutWide.zi is not a font: the glyph of character 65 runs past the font's end"),
                 (self.new_folder("big5", 90), (self.font_file("Wide.zi", font_block(
                     [(65, 1, 0, 0, bytes([3, 0b00100001]))], 1, encoding=16)),),
-                 "the font is stored at rotation 0, where the folder's is 90, and nxwright "
-                 "cannot turn it: a font in big5 of byte 5 at 0 has not been seen")):
+                 "the font is stored at rotation 0, where the folder's fonts are kept at 90, and "
+                 "nxwright cannot turn it: a font in big5 of byte 5 at 0 has not been seen")):
             with self.subTest(message=message):
                 before = folder_files(target)
                 with self.assertRaisesRegex(NxwrightError, re.escape(message)):

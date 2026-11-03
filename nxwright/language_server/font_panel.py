@@ -142,8 +142,9 @@ def font_file_sample(root: Path, font_file: Path, name: str, text: str, colour: 
     """Returns {"name", "refusal", "turned", "warning"}, and a sample of
     `text` in `colour`, of a ready-made font file as add_font_file would add
     it: its name, `name` or else the one add_font_file gives; why it would be
-    refused; whether it would be turned to the folder's rotation; and the
-    warning it would come with."""
+    refused; whether it would be turned to the orientation a compiled file
+    keeps fonts in (DeviceSettings.font_rotation); and the warning it would
+    come with."""
     encoding = _encoding(root)
     try:
         block = Path(font_file).read_bytes()

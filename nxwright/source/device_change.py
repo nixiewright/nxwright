@@ -3,8 +3,10 @@
 on them, as the Nextion Editor's Device window changes a project's. The
 Editor 1.68.2 gave each page the new screen's size, at its rotation, and
 kept every component's place and size, and every picture, animation, and
-video. For a new rotation, it turned each font. For a new encoding, it kept
-each text's bytes and each font (docs/commands.md, device).
+video. For a new rotation, it turned each font to the orientation a
+compiled file keeps fonts in, which is still 0 degrees on the F series. For
+a new encoding, it kept each text's bytes and each font (docs/commands.md,
+device).
 
 Beyond the Editor: a video is made for one rotation. The Editor's compile
 refuses one made for another, so the build does too. The video's source is
@@ -13,9 +15,13 @@ not kept, so each one is made again from its own frames
 which the build stores in the folder's encoding, so its fonts are converted
 to the new encoding, each glyph keyed by its character
 (zi_font.converted_font), where the Editor keeps the old bytes and fonts. A
-source folder keeps every font in its encoding and at its rotation, so a
-font nxwright cannot convert or turn, one it does not read, refuses the
-change.
+source folder keeps every font in its encoding, so a font nxwright cannot
+convert, one it does not read, refuses the change.
+
+Each font keeps its orientation, so that a change of rotation stays quick,
+as turning a large font takes seconds: the Nextion Editor takes a font in
+any orientation, its compile turns it, and its design view draws it the
+same (ResearchNotes/format.md, Fonts).
 
 After a change, the folder's checks say what the build then refuses, such as
 a component past a smaller screen's edge, a type the new series lacks, or a
@@ -32,7 +38,7 @@ from nxwright.project.media_files import turned_video, video_frames, video_rotat
 from nxwright.project.screen_copy import (FORMAT_COMPRESSED, OPAQUE, ROTATIONS,
                                           decode_screen_copy, encode_screen_copy)
 from nxwright.project.screen_models import model_named
-from nxwright.project.zi_font import converted_font, font_facts, turned_font
+from nxwright.project.zi_font import converted_font, font_facts
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.folder_check import check_folder
 from nxwright.source.page_source import page_toml_path
@@ -166,17 +172,21 @@ def _page_files(source_folder: Path, app: dict, page_size: tuple, told) -> dict:
 def _changed_fonts(source_folder: Path, app: dict, old, new, told) -> tuple:
     """Returns ({path: new bytes}, notes) of the folder's fonts changed for
     the settings `new`, from `old`: when the encoding changes, converted to
-    the new one (zi_font.converted_font), at the new rotation, if in the old
-    encoding or in one the new does not take (resource_adding.encodings_taken);
-    else turned to the new rotation (zi_font.turned_font). So a keyboard's
-    iso-8859-1 font in a utf-8 folder stays in iso-8859-1 when the folder is
-    made iso-8859-1. Raises NxwrightError, naming the font, for one nxwright
-    cannot convert or turn. `told` hears of each font changed."""
+    the new one (zi_font.converted_font), in the orientation it had, if in
+    the old encoding or in one the new does not take
+    (resource_adding.encodings_taken). So a keyboard's iso-8859-1 font in a
+    utf-8 folder stays in iso-8859-1 when the folder is made iso-8859-1. A
+    font is not turned for a new rotation (the module's docstring). Raises
+    NxwrightError, naming the font, for one nxwright cannot convert. `told`
+    hears of each font changed."""
     files, notes = {}, []
     taken = encodings_taken(new.encoding)
     for number, name in enumerate(app["fonts"], 1):
         for path in resource_paths("fonts", name, _exists(source_folder)):
+            # Read whatever the change, so that a missing font refuses it.
             block = read_bytes(source_folder / path)
+            if new.encoding == old.encoding:
+                continue
             try:
                 facts = font_facts(block)
             except NxwrightError as error:
@@ -189,7 +199,7 @@ def _changed_fonts(source_folder: Path, app: dict, old, new, told) -> tuple:
                 told("Converting font %d of %d to %s: %s"
                      % (number, len(app["fonts"]), new.encoding, path))
                 try:
-                    files[path], left_out = converted_font(block, new.encoding, new.rotation)
+                    files[path], left_out = converted_font(block, new.encoding, facts.rotation)
                 except NxwrightError as error:
                     raise NxwrightError("%s: nxwright cannot convert it to %s, and a source "
                                         "folder keeps every font in its encoding: %s"
@@ -200,15 +210,6 @@ def _changed_fonts(source_folder: Path, app: dict, old, new, told) -> tuple:
                              "space. A one-byte font starts at the space, as a two-byte "
                              "font's ascii does" % (_code_points(left_out), new.encoding))
                 notes.append(note)
-            elif facts.rotation != new.rotation:
-                told("Rotating font %d of %d to %d degrees: %s"
-                     % (number, len(app["fonts"]), new.rotation, path))
-                try:
-                    files[path] = turned_font(block, new.rotation)
-                except NxwrightError as error:
-                    raise NxwrightError("%s: nxwright cannot turn it to %d degrees, and a source "
-                                        "folder keeps every font at its rotation: %s"
-                                        % (path, new.rotation, error)) from None
     return files, notes
 
 

@@ -526,8 +526,9 @@ _SUBCOMMANDS = [
       ("--name", {"help": "the app's name, as nxwright shows it (default: the folder's)"})]),
     ("font", _run_font,
      "add a font to a source folder, drawn from a typeface file or ready-made",
-     "Draws the characters of the folder's encoding from a typeface file, turned to the folder's "
-     "rotation, and adds the font after the folder's other fonts. Its name is the typeface's and "
+     "Draws the characters of the folder's encoding from a typeface file, stored for the "
+     "folder's rotation, or upright on the F series, and adds the font after the folder's other "
+     "fonts. Its name is the typeface's and "
      "the height, such as NotoSans20, unless --name gives one. In a utf-8 folder, it draws the "
      "characters --characters gives, U+0000 to U+00FF by default, and the space, in a table of "
      "them alone, as the Nextion Editor's generator writes its \"Specified character\"; "
@@ -537,7 +538,7 @@ _SUBCOMMANDS = [
      "encoding, and one the file lacks is left empty. A file that has none of the characters, "
      "or a name the folder has, is refused, and nothing is written. A ready-made font file "
      "(.zi), such as the Nextion Editor's font generator writes, is added as it is, turned to the "
-     "folder's rotation, "
+     "folder's rotation, or upright on the F series, "
      "and named as it names itself unless --name gives one. It may be in the folder's encoding, "
      "in ascii in an iso-8859-1 folder, or in iso-8859-1 in a folder whose encoding Noto Sans "
      "does not cover, such as utf-8, with a warning.",
@@ -669,12 +670,13 @@ _SUBCOMMANDS = [
     ("device", _run_device, "change a source folder's screen model, rotation, or encoding",
      "Changes app.toml's screen model, rotation, or character encoding, as the Nextion Editor's "
      "Device window does, and what depends on them: each page takes the new screen's size, "
-     "at its rotation; each font and video is turned to the new rotation, a video's frames "
-     "coded again, which loses a little of each; and each font is converted to the new "
-     "encoding, keeping the characters it has, the others named. Components keep their "
-     "places and sizes, so it then lists what the build refuses, such as a component past "
-     "a smaller screen's edge, or a text the new encoding cannot store. If a font can't be "
-     "turned or converted, the command stops and writes nothing.",
+     "at its rotation; each video is turned to the new rotation, its frames coded again, "
+     "which loses a little of each; each font keeps its orientation, which the compile "
+     "turns as it needs; and each font is converted to the new encoding, keeping the "
+     "characters it has, the others named. Components keep their places and sizes, so it "
+     "then lists what the build refuses, such as a component past a smaller screen's edge, "
+     "or a text the new encoding cannot store. If a font can't be converted, the command "
+     "stops and writes nothing.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
       ("--screen", {"help": "the new screen model, such as NX8048P050"}),
       ("--rotation", {"type": int, "choices": ROTATIONS, "help": "the new rotation, in degrees"}),

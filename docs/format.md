@@ -117,7 +117,7 @@ The header also gives the manifest's stamp (bytes 0 to 3), its own size (bytes 4
 
 ### Fonts
 
-A font block is a `.zi` file, as the Nextion Editor's font generator writes it, turned to the project's rotation. It contains the font's height, its characters' widths, and their pixels. The generator also stores the name it was given, such as `NotoSans16`.
+A font block is a `.zi` file, as the Nextion Editor's font generator writes it, stored for a rotation (Rotation, below). It contains the font's height, its characters' widths, and their pixels. The generator also stores the name it was given, such as `NotoSans16`.
 
 The [community notes by hagronnestad](https://github.com/hagronnestad/nextion-font-editor/tree/master/Docs) describe versions 3, 5, and 6 of the format. They were the starting point for the glyph codes, and they are the only source for what is marked "(published notes)" below. nxwright does not copy that project's code.
 
@@ -172,7 +172,7 @@ On a white background, a pixel of coverage c taking c/7 of the text colour match
 
 #### Rotation
 
-The Nextion Editor stores a font in the project's rotation. The generator's file is upright, and is turned when the font enters the project. Byte 3 says how it is stored: `0a` at rotation 0, `0b` at 90, `0c` at 180, and `0d` at 270.
+A project may store a font for any rotation. Byte 3 gives which: `0a` at rotation 0, `0b` at 90, `0c` at 180, and `0d` at 270. The Nextion Editor stores a font for the project's rotation, or upright, at 0, on the F series, as a compiled file keeps fonts. The generator's file is upright, and is turned when the font enters the project.
 
 Each glyph's pixel stream is coded anew, in a turned order:
 
@@ -182,7 +182,7 @@ Each glyph's pixel stream is coded anew, in a turned order:
 
 The character table keeps its advances and overhangs, which still describe the upright character.
 
-A project whose fonts are not in its rotation, such as upright fonts in a project at rotation 180, shows its text upright in the Nextion Editor. The Nextion Editor stores its fonts turned when it saves the project.
+The Nextion Editor takes a font stored for another rotation: it shows its text the same, as seen for a font at 0 and at 270 in a project at 270, and turns the font as it compiles. When it turns a project to a new rotation, it turns each font to the project's, or keeps it upright on the F series.
 
 #### Writing a font
 
@@ -267,7 +267,7 @@ A full table:
   - U+0002 is empty, as wide as DEL (U+007F).
   - U+000A is empty, and U+000C shows the typeface's missing-character box, each at a width of its own.
   - The others show the box at its own advance.
-- **Turned** to a project's rotation, a utf-8 font is stored as a one-byte font is (Rotation, above): byte 3 gives the rotation, the table is unchanged, and each glyph is turned.
+- **Turned** to another rotation, a utf-8 font is stored as a one-byte font is (Rotation, above): byte 3 gives the rotation, the table is unchanged, and each glyph is turned.
   - The Nextion Editor turns a utf-8 font when it saves a project after a change, not as it opens one.
   - U+0000 has no glyph of its own in a turned font. Its entry keeps its glyph's length, and gives the place of the next glyph, U+0001's. Read that way, it seems a run of 20 to 62 pixels, the first bytes of U+0001's glyph. It looks as if the Nextion Editor takes a code of 0 for a code point not chosen as it writes the glyphs.
   - No text shows U+0000, as a 0 byte ends a text.
@@ -302,7 +302,7 @@ A font in gb2312, big5, shift-jis, or ks_c_5601-1987 has a glyph for every pair 
   - the glyphs follow, back to back, as in a one-byte font.
 - **Empty positions:** a position its encoding gives no character may still have a glyph, or be empty, as wide as the font is tall.
 - **The Nextion Editor's own gb2312 font** shows each position as the character GBK gives it. Other GB2312 tables differ from GBK at a few positions: GBK reads `a1 a4` as the middle dot, U+00B7, where some read U+30FB, the katakana middle dot.
-- **Turned** to a project's rotation, as a one-byte font is (Rotation, above), its table kept in its order.
+- **Turned** to another rotation, as a one-byte font is (Rotation, above), its table kept in its order.
 - **Text:**
   - a byte below `80` is a character of its own, and a byte from `80` starts a pair;
   - each byte's index counts from its range's first value, less the gap when the byte is past the value before it;

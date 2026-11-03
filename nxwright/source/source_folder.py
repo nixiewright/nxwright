@@ -710,7 +710,7 @@ def new_source_folder(source_folder: Path, settings: DeviceSettings, language: s
     if settings.encoding not in ENCODINGS.values():
         raise NxwrightError("unknown character encoding %r" % settings.encoding)
     width, height = settings.page_size
-    font_name, font_block, warning = _shipped_font(settings.encoding, settings.rotation)
+    font_name, font_block, warning = _shipped_font(settings.encoding, settings.font_rotation)
     app = dict({"format": SOURCE_FORMAT, "name": name, "language": language},
                **device_keys(settings), pages=["page0"], pictures=[],
                fonts=[font_name])
@@ -781,9 +781,10 @@ def add_page(source_folder: Path, name: str = None) -> str:
 def _shipped_font(encoding: str, rotation: int):
     """Returns (name, block, a warning or None) of the font a new folder
     starts with: Noto Sans, which nxwright ships, NEW_FOLDER_FONT_HEIGHT
-    pixels tall, in `encoding` and turned to `rotation`, as add_font draws
-    it. In utf-8, it holds UTF8_CHARACTERS, as a keyboard's font does. In an
-    encoding Noto Sans lacks some characters of, such as koi8-r, it leaves
+    pixels tall, in `encoding` and stored at `rotation`, the orientation a
+    compiled file keeps fonts in (DeviceSettings.font_rotation), as add_font
+    draws it. In utf-8, it has UTF8_CHARACTERS, as a keyboard's font does.
+    In an encoding Noto Sans lacks some characters of, such as koi8-r, it leaves
     them out, or in a two-byte encoding draws them empty, and the warning
     says so. Each is drawn once per process, as many folders may start
     alike."""

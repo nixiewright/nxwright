@@ -85,7 +85,7 @@ def add_keyboard(source_folder: Path, kind: str, typeface: Path = None, font: st
     else:
         made = keyboard(kind, *settings.page_size)
         block = (None if made.font_name in fonts
-                 else keyboard_font(made, settings.rotation, settings.encoding))
+                 else keyboard_font(made, settings.font_rotation, settings.encoding))
     files = {page_toml_path(page): made.page_toml.encode("utf-8"),
              page_nx_path(page): made.code.encode("utf-8")}
     if block is not None:
@@ -173,7 +173,7 @@ def _chinese_keyboard(source_folder: Path, fonts: list, settings, typeface, font
     if name in fonts:
         raise NxwrightError("the folder has a font %s already: add the keyboard with that "
                             "font instead" % name)
-    block = draw_font_block(name, face, font_height, _GB2312, settings.rotation)
+    block = draw_font_block(name, face, font_height, _GB2312, settings.font_rotation)
     made = keyboard(CHINESE_INPUT, width, height, (name, font_height))
     return made, block, font_warning(face, _GB2312)
 

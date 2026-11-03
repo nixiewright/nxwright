@@ -223,7 +223,8 @@ def noto_sans_covers(encoding: str) -> bool:
 
 def keyboard_font(page: Keyboard, rotation: int, project_encoding: str) -> bytes:
     """Returns the font block of the font a keyboard's page names, drawn from
-    Noto Sans, turned to `rotation`, in the project's encoding,
+    Noto Sans, stored at `rotation`, the orientation a compiled file keeps
+    fonts in (DeviceSettings.font_rotation), in the project's encoding,
     `project_encoding`: in utf-8, of UTF8_CHARACTERS; in an encoding whose
     characters Noto Sans lacks some of, without them, or in a two-byte
     encoding with them empty (font_drawing.drawn_codes)."""

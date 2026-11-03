@@ -102,12 +102,13 @@ def add_pictures(source_folder: Path, files: list) -> list:
 def add_font(source_folder: Path, font_file: Path, height: int, name: str = None,
              smoothed: bool = True, characters: str = None, full_table: bool = False) -> tuple:
     """Draws a font from a typeface file (font_drawing.py), `height` pixels
-    tall, smoothed or not, in the source folder's encoding and turned to its
-    rotation. In utf-8, it holds the code points `characters` gives, as
-    code_points_of reads them, or else U+0000 to U+00FF, in a table of them
-    and the space alone, or, as a `full_table`, in one of every code point
-    (zi_font.encode_font). Writes it to fonts/<name>.zi, and lists it in
-    app.toml after the folder's fonts. Its name is `name`, or else
+    tall, smoothed or not, in the source folder's encoding, in the orientation
+    a compiled file keeps fonts in (DeviceSettings.font_rotation). In utf-8,
+    it has the code points `characters` gives, as code_points_of reads
+    them, or else U+0000 to U+00FF, in a table of them and the space alone,
+    or, as a `full_table`, in one of every code point (zi_font.encode_font).
+    Writes it to fonts/<name>.zi, and lists it in app.toml after the
+    folder's fonts. Its name is `name`, or else
     drawn_font_name's. Returns (the name, a warning or None): the warning
     says what characters the typeface file lacks, which the font leaves out
     (font_drawing.font_warning).
@@ -124,7 +125,7 @@ def add_font(source_folder: Path, font_file: Path, height: int, name: str = None
         raise NxwrightError("a font in %s holds every character of its encoding: a full table "
                             "is for a utf-8 folder" % settings.encoding)
     code_points = None if characters is None else code_points_of(characters)
-    block = draw_font_block(name, typeface, height, settings.encoding, settings.rotation,
+    block = draw_font_block(name, typeface, height, settings.encoding, settings.font_rotation,
                             smoothed, code_points, full_table)
     _add_resource(source_folder, app, "fonts", name, [(path, block)])
     return name, font_warning(typeface, settings.encoding, code_points, full_table)
@@ -150,8 +151,9 @@ def _drawn_font_place(source_folder: Path, name: str) -> tuple:
 @dataclass(frozen=True)
 class ReadyMadeFont:
     """A ready-made font as add_font_file adds it to a folder: its name, its
-    block, turned to the folder's rotation if it was stored at another,
-    whether it was, and the warning, if any."""
+    block, turned to the orientation a compiled file keeps fonts in
+    (DeviceSettings.font_rotation) if it was stored in another, whether it
+    was, and the warning, if any."""
     name: str
     block: bytes
     turned: bool
@@ -172,8 +174,9 @@ def add_font_file(source_folder: Path, font_file: Path, name: str = None) -> tup
 
 def ready_made_font(source_folder: Path, font_file: Path, name: str = None) -> ReadyMadeFont:
     """Returns the ReadyMadeFont add_font_file would add to a source folder,
-    writing nothing. A font at another rotation than the folder's is turned
-    to it; one at the folder's rotation is copied as it is. Its name is
+    writing nothing. A font in another orientation than the one a compiled
+    file keeps fonts in (DeviceSettings.font_rotation) is turned to it; one
+    in it is copied as it is. Its name is
     `name`, or else ready_made_font_name's. The name stored in the font
     stays, as in a font renamed in a folder.
 
@@ -184,8 +187,9 @@ def ready_made_font(source_folder: Path, font_file: Path, name: str = None) -> R
 
     Raises NxwrightError for a folder without screen settings, a file that
     is not a font, a damaged font of a kind nxwright decodes
-    (zi_font.decodes), a font in another encoding, one at another rotation
-    that nxwright cannot decode to turn it, a name the folder has, or a file
+    (zi_font.decodes), a font in another encoding, one in another
+    orientation that nxwright cannot decode to turn it, a name the folder
+    has, or a file
     already at the font's place.
     """
     return _ready_made(Path(source_folder), Path(font_file), name)[2]
@@ -218,14 +222,14 @@ def _ready_made(source_folder: Path, font_file: Path, name: str) -> tuple:
     if facts.encoding not in accepted:
         raise NxwrightError("the font is in %s, and a folder in %s takes fonts in %s"
                             % (facts.encoding, settings.encoding, " or ".join(accepted)))
-    turned = facts.rotation != settings.rotation
+    turned = facts.rotation != settings.font_rotation
     if turned:
         try:
-            block = turned_font(block, settings.rotation)
+            block = turned_font(block, settings.font_rotation)
         except NxwrightError as error:
-            raise NxwrightError("the font is stored at rotation %d, where the folder's is %d, "
-                                "and nxwright cannot turn it: %s"
-                                % (facts.rotation, settings.rotation, error)) from None
+            raise NxwrightError("the font is stored at rotation %d, where the folder's fonts are "
+                                "kept at %d, and nxwright cannot turn it: %s"
+                                % (facts.rotation, settings.font_rotation, error)) from None
     name = name or ready_made_font_name(block, font_file)
     path = _new_resource_paths(source_folder, app, "fonts", name)[0]
     warning = None
