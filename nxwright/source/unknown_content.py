@@ -85,7 +85,7 @@ def unknown_in_project_file(project: Path) -> list:
 def unknown_in_page_texts(blocks: dict) -> list:
     """Returns, of the page blocks {name: bytes}, each whose text form does
     not give back its bytes, which the dump would write as its text gives it
-    (dumper.page_text_difference). What the difference holds is not known, so
+    (dumper.page_text_difference). What the difference contains is not known, so
     it may be lost. A page nxwright cannot write as text at all cannot be
     kept, and is listed, so that the report and the list still give the
     rest."""

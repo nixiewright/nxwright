@@ -230,7 +230,7 @@ def page_text_difference(block: bytes):
     """Returns where the page block `block` first differs from what its text
     form gives back, parsed and encoded again, or None when the two are the
     same. The stamp (bytes 0 to 3) is not compared, because the text does
-    not hold it. The finder of unknown content runs it before anything is
+    not contain it. The finder of unknown content runs it before anything is
     written (source/unknown_content.py), and the dump runs it again."""
     rebuilt = encode_page(page_from_text(page_to_text(parse_page(block))))
     if rebuilt[4:] == block[4:]:

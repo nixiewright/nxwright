@@ -14,7 +14,7 @@ user locked and unlocked in the Editor:
            can reset one to its stock version; a project may change them.
   +40..43  01 44 02 and the project's character encoding, as the Editor
            writes them whenever it writes a page. A page it has not written
-           since it was updated holds an older form, 01 43 01 00 or
+           since it was updated has an older form, 01 43 01 00 or
            01 44 01 00. The second was seen in 32 of the 38 pages of a
            project for an NSPanel screen, whose other 6 had the newer form.
   +44..55  zero on every page
