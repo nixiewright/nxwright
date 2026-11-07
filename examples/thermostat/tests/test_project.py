@@ -1,6 +1,5 @@
 """The project file and the source folder describe the same screen."""
 from pathlib import Path
-import shutil
 import tempfile
 import tomllib
 import unittest
@@ -9,10 +8,6 @@ from nxwright.source.formatting import format_folder
 from nxwright.source.project_files import build, extract
 from nxwright.source.source_folder import folder_reader
 from screen import APP, PROJECT
-
-
-def _files(folder: Path) -> list:
-    return sorted(path.relative_to(folder) for path in folder.rglob("*") if path.is_file())
 
 
 class ProjectMatchesSourceTest(unittest.TestCase):
@@ -38,16 +33,14 @@ class ProjectMatchesSourceTest(unittest.TestCase):
                 with self.subTest(page=path.stem, name=table["name"]):
                     self.assertLessEqual(len(table["name"].encode("latin-1")), 14)
 
-    def test_extracting_the_project_changes_nothing(self):
-        # As after a save in the Editor: every file of the source folder stays.
+    def test_the_project_extracted_into_a_new_folder_builds_the_same_project(self):
         with tempfile.TemporaryDirectory() as folder:
-            copy = Path(folder) / "app"
-            shutil.copytree(APP, copy)
-            extract(PROJECT, copy)
-            self.assertEqual(_files(copy), _files(APP))
-            for relative in _files(APP):
-                with self.subTest(file=str(relative)):
-                    self.assertEqual((copy / relative).read_bytes(), (APP / relative).read_bytes())
+            extracted = Path(folder) / "extracted"
+            extract(PROJECT, extracted)
+            output = Path(folder) / "built.HMI"
+            build(extracted, output)
+            self.assertTrue(output.read_bytes() == PROJECT.read_bytes(),
+                            "the folder extracted from %s builds another project" % PROJECT.name)
 
 
 if __name__ == "__main__":

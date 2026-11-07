@@ -33,11 +33,13 @@ python run.py build examples/thermostat/app examples/thermostat/thermostat.HMI -
 
 A test checks that `thermostat.HMI` matches what `app/` builds, so build again after each change.
 
-If you changed `thermostat.HMI` in the Nextion Editor instead, save it, then bring the change back into the source folder:
+`app/` is in nxlang, so changes made in the Nextion Editor can't come back into it. To see `thermostat.HMI` in strict Nextion syntax, extract it into a new folder:
 
 ```
-python run.py extract examples/thermostat/thermostat.HMI examples/thermostat/app
+python run.py extract examples/thermostat/thermostat.HMI thermostat-extracted
 ```
+
+... or simply load the HMI it into the Nextion Editor and inspect the strict Nextion code.
 
 ## Testing
 

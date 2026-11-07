@@ -2,7 +2,7 @@
 
   nxwright rescue <output.tft> --screen MODEL
                   [--firmware <file.tft> | --editor <folder>] [--download]
-                  [--overwrite]
+                  [--overwrite] [--no-backup]
 
 Writes a TFT file for the screen model MODEL, such as NX4832T035. Its app
 sets the screen's settings back to their defaults, then shows one blank
@@ -24,7 +24,8 @@ out, and upload your own app.
 The firmware comes from where nxwright compile takes it, with the same
 options: --firmware, --editor, and --download. An output file that exists
 already is refused, unless --overwrite is given. Even then, only a TFT
-file is replaced.
+file is replaced. If it changed since nxwright wrote it, it is kept as a
+backup beside the new one, unless --no-backup is given.
 """
 import argparse
 from pathlib import Path
@@ -70,12 +71,16 @@ def main(arguments: list) -> int:
                         "asking, when nothing on this computer has it")
     parser.add_argument("--overwrite", action="store_true",
                         help="replace an existing TFT file")
+    parser.add_argument("--no-backup", action="store_true",
+                        help="do not keep a backup of a TFT file that changed since "
+                        "nxwright wrote it")
     options = parser.parse_args(arguments)
     try:
         compiled = compile_rescue(model_named(options.screen), options.output, options.firmware,
                                   options.editor, TerminalAsker(options.download),
                                   options.overwrite)
-        write_outputs(options.output, compiled.data, overwrite=options.overwrite)
+        write_outputs(options.output, compiled.data, overwrite=options.overwrite,
+                      keep_backup=not options.no_backup)
     except (NxwrightError, OSError) as error:
         print("nxwright rescue: %s" % error, file=sys.stderr)
         return 1

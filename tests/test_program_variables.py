@@ -9,7 +9,6 @@ import unittest
 from nxwright import NxwrightError
 from nxwright.project.editor_language import EDITOR_SYSTEM_VARIABLES
 from nxwright.source.lint import ERROR
-from nxwright.source.project_files import build, extract
 from nxwright.source.source_folder import folder_reader, read_folder_source
 from nxwright.testing import SourceFolderRunner
 from nxwright.testing.simulation import SYSTEM_START, Simulation
@@ -106,12 +105,6 @@ class TabAfterIntTest(FolderTestCase):
         self.write("program.nx", "int  count=3\npage 0\n")
         program = read_folder_source(folder_reader(self.root)).build_program().decode("latin-1")
         self.assertIn("int  count=3\r\n", program)
-
-    def test_extracting_keeps_it_as_written(self):
-        project = self.root.parent / "project.HMI"
-        build(self.root, project)
-        extract(project, self.root)
-        self.assertEqual(self.text("program.nx"), self.PROGRAM)
 
 
 class ProgramVariableTest(unittest.TestCase):

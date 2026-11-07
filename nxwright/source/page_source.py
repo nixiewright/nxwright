@@ -72,10 +72,8 @@ from nxwright.project.attribute_values import number_from_bytes, number_to_bytes
 from nxwright.project.attribute_descriptions import describe
 from nxwright.project.attribute_ranges import range_on_every_series
 from nxwright.language.resource_names import (ANIMATION, FONT, PICTURE, SOUND, VIDEO,
-                                              ResourceNames, UnknownNameError)
-from nxwright.language.nxlang import (GENERATED_NAME, GENERATED_PREFIX, HOTSPOT, HOTSPOT_PREFIX,
-                                      HOTSPOT_SIZE, TEXT, ProgramNames,
-                                      compile_page)
+                                              ResourceNames)
+from nxwright.language.nxlang import HOTSPOT, HOTSPOT_SIZE, TEXT, ProgramNames, compile_page
 
 # Attributes holding a colour, stored as RGB565 (5 bits of red, 6 of green, 5
 # of blue) and written as "#rrggbb".
@@ -115,10 +113,6 @@ _NAME_ENCODING = "latin-1"
 # fit on one line (nx_files.event_heading). The Nextion Editor does not allow
 # an empty name, a double quote, or a control character either.
 _KEPT_NAME = re.compile(r'[^"\x00-\x1f]+')
-_VARIABLE = TYPES_BY_NAME["variable"]
-_HOTSPOT = TYPES_BY_NAME["hotspot"]
-# Object IDs are one byte.
-_MOST_IDS = 256
 
 
 def reference_kind(object_type, attribute: str):
@@ -841,11 +835,10 @@ def compile_page_files(page_files: PageFiles, page_name: str, component_names: l
 
 
 def preprocess_compiled(compiled, page_name: str, names: ResourceNames,
-                        unknown_as_none: bool = False, objects: ObjectNames = None,
+                        objects: ObjectNames = None,
                         screen: ScreenModel = None, codec: TextCodec = None) -> dict:
     """Returns {key: Editor code} of a compiled page's events. With
-    `unknown_as_none`, an event naming a picture or font the app does not
-    list gets None. With `objects`, references are checked, with `screen`,
+    `objects`, references are checked, with `screen`,
     what its series lacks, and with `codec`, the lines' lengths. Errors
     name the .nx file holding the code at fault."""
     out = {}
@@ -853,9 +846,6 @@ def preprocess_compiled(compiled, page_name: str, names: ResourceNames,
         try:
             out[key] = preprocess(lines, names, objects, screen=screen, codec=codec)
         except NxwrightError as error:
-            if unknown_as_none and isinstance(error, UnknownNameError):
-                out[key] = None
-                continue
             # in_file keeps the type, which tells an unknown name apart from other problems.
             raise error.in_file(file_at_fault(compiled, key, page_name, names, objects,
                                               screen, codec)) from None
@@ -925,60 +915,6 @@ def generated_table(variable) -> dict:
     if variable.kind == TEXT:
         table.update(sta=1, txt="", txt_maxl=variable.room)
     return table
-
-
-def strip_generated(page: PageBlock, encoding: str = DEFAULT_ENCODING) -> tuple:
-    """Returns (`page` without its generated variables,
-    {(component, event): [code lines]} of their events: the functions' bodies).
-
-    The build adds them after the page's own components, but a component
-    added later in the Editor comes after them. So they are removed wherever
-    they are, and the IDs of the objects after them move down: the IDs the
-    next build gives.
-
-    Raises NxwrightError for any other object whose name starts with the
-    prefix generated names use.
-    """
-    objects = [page.objects[0]] + [page_object for page_object in page.objects[1:]
-                                   if not _is_generated(page_object)]
-    codec = TextCodec(encoding)
-    removed = {}
-    for page_object in page.objects[1:]:
-        if _is_generated(page_object):
-            name = page_object.attribute("objname").decode(_NAME_ENCODING)
-            for item in page_object.items:
-                if isinstance(item, Event) and item.lines:
-                    where = "page %s, %s.%s" % (page.name, name, item.name)
-                    removed[(name, item.name)] = [codec.decode(line, where) for line in item.lines]
-    for page_object in objects:
-        name = (page_object.attribute("objname") or b"").decode(_NAME_ENCODING)
-        if name.startswith(GENERATED_PREFIX):
-            raise NxwrightError("page %s: component %s starts with %r, which the nxlang "
-                                "language keeps for its generated variables"
-                                % (page.name, name, GENERATED_PREFIX))
-    if len(objects) < len(page.objects):
-        objects = [_with_id(page_object, index) for index, page_object in enumerate(objects)]
-    return PageBlock(name=page.name, header_size=page.header_size, unknown_16=page.unknown_16,
-                     unknown_40=page.unknown_40, objects=objects, stamp=page.stamp), removed
-
-
-def _with_id(page_object: PageObject, index: int) -> PageObject:
-    """Returns `page_object` with its id set to `index`, or unchanged when
-    `index` does not fit in the one byte an ID has."""
-    if index >= _MOST_IDS:
-        return page_object
-    return PageObject([Attribute("id", bytes([index]))
-                       if isinstance(item, Attribute) and item.name == "id" else item
-                       for item in page_object.items])
-
-
-def _is_generated(page_object: PageObject) -> bool:
-    name = (page_object.attribute("objname") or b"").decode(_NAME_ENCODING)
-    if GENERATED_NAME.fullmatch(name) is None:
-        return False
-    # Functions are hotspots; everything else the compiler adds is a variable.
-    kind = _HOTSPOT if name.startswith(HOTSPOT_PREFIX) else _VARIABLE
-    return page_object.attribute("type") == bytes([kind])
 
 
 def _parse_events(text: str, page_name: str, names: ResourceNames, codec: TextCodec,
@@ -1377,8 +1313,7 @@ def _page_header(page_table: dict, components: list, page_name: str) -> PageHead
     for key in ("header_16", "header_40"):
         if key in page_table:
             raise NxwrightError("%s.page.toml: [page] holds %s, which page files no longer keep; "
-                                "extract the project into the folder again"
-                                % (shown, key))
+                                "remove it" % (shown, key))
     for key in _HEADER_KEYS:
         if any(isinstance(table, dict) and key in table for table in components):
             raise NxwrightError("%s.page.toml: only the [page] table can give %s"

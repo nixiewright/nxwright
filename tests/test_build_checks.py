@@ -22,7 +22,7 @@ from nxwright.project.project_writer import ProjectWriter
 from nxwright.source.device_keys import DEVICE_KEYS
 from nxwright.source.folder_check import check_folder
 from nxwright.source.project_files import build
-from nxwright.source.source_folder import (app_text, export_dump, folder_reader, import_dump,
+from nxwright.source.source_folder import (app_text, export_dump, folder_reader,
                                            switch_to_nxlang)
 from nxwright.testing import SourceFolderRunner
 from tests.test_project_writer import edit_text
@@ -2928,8 +2928,7 @@ class TextBytesTest(FirstDownTestCase):
 
     def test_in_nxlang(self):
         # nxlang puts a text whose 0x5C escapes its quote into a text
-        # temporary first. The build takes the line, and an import gives back
-        # the code as written.
+        # temporary first, so the build takes the line.
         switch_to_nxlang(self.source)
         code = ('on first.down:\n  if (t0.txt == "表") {\n    sys1 = 1\n  }\n'
                 '  prints "日表", 0\n')
@@ -2942,8 +2941,6 @@ class TextBytesTest(FirstDownTestCase):
         page = (dump / "pages" / "00-first.txt").read_text(encoding="utf-8")
         self.assertIn("| if(t0.txt==__s0.txt)", page)
         self.assertIn("| prints __s0.txt,0", page)
-        import_dump(dump, self.source)
-        self.assertEqual(nx_file.read_text(encoding="utf-8"), code)
         # The runtime reads a half-width katakana with the character after
         # it, so no character added to the text can be taken off again. Its
         # text stays refused.

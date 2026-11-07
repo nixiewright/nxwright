@@ -22,7 +22,6 @@ from nxwright.drawing.number_drawing import number_text
 from nxwright.drawing.page_drawing import DrawingResources, draw_page
 from nxwright.drawing.screen_pictures import paint_drawing
 from nxwright.source.page_source import Component
-from nxwright.source.project_files import build, extract
 from nxwright.source.source_folder import folder_reader, read_folder_source
 from nxwright.testing import (SourceFolderRunner, editor_machine, folder_resources,
                               simulation as simulation_module)
@@ -4727,7 +4726,6 @@ on second.loadend:
         self.assertEqual(sent, [b"\x00\xff\xff\xff"] * 3)
 
 
-
 class NxlangDataRecordCallTest(SimulationTestCase):
     """A data record's call in nxlang whose argument the Editor would not take
     as written, text joined: nxlang computes it first, so the folder builds,
@@ -4749,13 +4747,6 @@ class NxlangDataRecordCallTest(SimulationTestCase):
             "page0", "pages/page0.nx")
         self.assertEqual([line for _, line in lines],
                          ['__s0.txt="Total^"+t0.txt', "d0.insert(__s0.txt)"])
-
-    def test_extracting_keeps_the_source(self):
-        before = self.text("pages/page0.nx")
-        project = self.root.parent / "project.HMI"
-        build(self.root, project)
-        extract(project, self.root)
-        self.assertEqual(self.text("pages/page0.nx"), before)
 
 
 if __name__ == "__main__":

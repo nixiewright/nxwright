@@ -2,7 +2,7 @@
 
 The build compiles nxlang ([language.md](language.md)) into strict Nextion syntax, which the Nextion Editor accepts. This page describes the code the build writes. It can help when you read that code, for example with VS Code's "Show this file in strict Nextion syntax", or when you work on the compiler.
 
-The compiler is `nxwright/language/nxlang.py`. `nxwright/language/editor_code.py` handles strict Nextion syntax coming into an nxlang folder, for example when you extract a project.
+The compiler is `nxwright/language/nxlang.py`. `nxwright/language/editor_code.py` rewrites strict Nextion syntax when you switch a folder to nxlang.
 
 ## An example
 
@@ -131,7 +131,7 @@ nxlang does not compute an expression where a command puts its result, as in `co
 
 A page has at most 250 components, so the compiler adds as few as it can. Everything it adds has a name starting with `__`.
 
-- **Numbers are globals.** Every number the compiler needs is an `int` global of `program.s`, named after its page: `__g3_17` is page 3's 18th. The build declares them in lines at the top of `program.s`, and extracting leaves those lines out of `program.nx`. Pages never share a global, since changing page runs the new page's Preinitialize event in the middle of the old page's event. Up to 8,000 globals are known to work, and the build refuses more.
+- **Numbers are globals.** Every number the compiler needs is an `int` global of `program.s`, named after its page: `__g3_17` is page 3's 18th. The build declares them in lines at the top of `program.s`. Pages never share a global, since changing page runs the new page's Preinitialize event in the middle of the old page's event. Up to 8,000 globals are known to work, and the build refuses more.
 - **Only text needs a component** on the page. Temporaries are `__s0`, `__s1`, and so on. Text that lasts longer, such as a local, a parameter, a result, or a `switch`'s value, is kept in `__v0`, `__v1`, and so on. Each has room for 255 bytes unless nxlang gives it more, and a text too long for its variable is cut.
   - **A longer quoted text gets the room it needs.** When a variable is given a quoted text longer than 255 bytes, it gets room for that text, plus 255 bytes for each other part joined to it.
   - **Several events or functions can share a variable**, for example as a local in each. The variable gets the most room any of them needs. When a text is copied from it, only the texts written for the same local or parameter count toward the copy's room. For a local, those are the texts its own event or function writes. For a parameter, they are the texts that its function and the function's callers write.

@@ -226,8 +226,6 @@ class NxFile:
     preamble: list      # (line number, text) before the first heading, include lines left out
     blocks: dict        # {key: EventBlock}, in file order
     includes: list      # [(line number, path)] of the files it includes, as source folder paths
-    head: list          # (line number, text) before the first heading, include lines kept
-    end: list = field(default_factory=list)    # the comment at its end (event_blocks)
 
 
 @dataclass
@@ -254,8 +252,8 @@ def read_nx_file(path: str, text: str) -> NxFile:
     Raises NxwrightError for a line starting with `include` that is not
     `include "<path>"`, and for what event_blocks and resolve refuse.
     """
-    preamble, end = [], []
-    blocks = event_blocks(text, path, preamble, end)
+    preamble = []
+    blocks = event_blocks(text, path, preamble)
     kept, includes = [], []
     for number, line in preamble:
         code = split_line(line, number)[1]
@@ -266,7 +264,7 @@ def read_nx_file(path: str, text: str) -> NxFile:
             raise NxwrightError('an include is written include "<path>.nx"', file=path, line=number)
         else:
             kept.append((number, line))
-    return NxFile(path, kept, blocks, includes, preamble, end)
+    return NxFile(path, kept, blocks, includes)
 
 
 def resolve(including: str, written: str, number: int) -> str:
@@ -312,19 +310,6 @@ def read_page_files(page_path: str, page_text: str, read) -> PageFiles:
             homes[key] = nx_file
     visit(read_nx_file(page_path, page_text))
     return PageFiles(files, homes)
-
-
-def render(nx_file: NxFile, blocks: dict) -> str:
-    """Returns the text of `nx_file` with `blocks` in place of its own: the
-    lines before its first heading as they were, then `blocks` in order,
-    then the comment at its end."""
-    lines = [text for _, text in nx_file.head]
-    while lines and not lines[-1].strip():
-        lines.pop()
-    body = with_end("\n".join(block.text() for block in blocks.values()), nx_file.end)
-    if not lines:
-        return body
-    return "\n".join(lines) + "\n" + ("\n" + body if body else "")
 
 
 def blank_lines_dropped(where: str, count: int) -> str:

@@ -20,7 +20,7 @@ import * as vscode from "vscode";
 import { projectFileKey } from "./currentProject";
 import {
   ScreenChoice, chosenScreen, projectFileLinked, projectFileMayBeReplaced,
-  rememberProjectFile, saveScreen, setProjectFileLinked, tftFileKey,
+  rememberProjectFile, saveScreen, setProjectFileLinked, settingsArguments, tftFileKey,
 } from "./tftFiles";
 import { JsonEvent, JsonRun, roundTripDifferences, runJson } from "./tftRun";
 
@@ -35,6 +35,8 @@ export interface TftMeans {
   workingFolder(): string | undefined;
   // The app's name, which a new TFT file is named after.
   appName(folder: vscode.Uri): Promise<string>;
+  // Whether the current project is known to be in nxlang.
+  usesNxlang(): boolean;
   // Shows that a file chosen for a folder, or the link, changed.
   changed(): void;
 }
@@ -120,7 +122,8 @@ class Compiler {
     const context = this.means.context;
     const projectFile = withProjectFile && projectFileLinked(context, folder)
       ? context.workspaceState.get<string>(projectFileKey(folder)) : undefined;
-    if (projectFile && !await projectFileMayBeReplaced(context, projectFile)) {
+    if (projectFile && !await projectFileMayBeReplaced(context, projectFile,
+                                                       this.means.usesNxlang())) {
       return undefined;
     }
     return this.compile(folder.fsPath, tft, projectFile, answer);
@@ -454,7 +457,7 @@ class Compiler {
     let given: string[] = [];
     for (;;) {
       const ran = await this.run(`compiling ${path.basename(tft)}`, [
-        "compile", source, tft, "--overwrite", "--json", ...given,
+        "compile", source, tft, "--overwrite", "--json", ...settingsArguments(), ...given,
         ...(projectFile ? ["--project-file", projectFile] : []),
       ], (event, progress) => progress.report({ message: progressMessage(event) }));
       if (ran === undefined) {

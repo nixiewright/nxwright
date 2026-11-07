@@ -1,41 +1,33 @@
-"""Editor code coming into a source folder that uses nxlang.
+"""Editor code coming into a source folder that switches to nxlang.
 
 Unlike in most modern computer languages, the Nextion Editor computes arithmetic
 strictly from left to right: it reads `a+b*c` as `(a+b)*c`. nxlang follows the
 usual precedence (e.g., like C) and reads it as `a+(b*c)` (see nxlang.py). So
-when Editor code comes into a folder with code in nxlang, each assignment that
+when a folder switches from Editor code to nxlang code, each assignment that
 the two would read differently is rewritten with the parentheses that keep the
-Editor's meaning. That happens when a folder switches from Editor code to nxlang
-code, and when extracting takes an event the Editor changed and writes it into
-nxlang code. Compiling the rewritten code when rebuilding a project converts
+Editor's meaning. Compiling the rewritten code when rebuilding a project converts
 back to the Editor's code.
 
 The exception is a compound assignment like `x-=a+b`: the Editor computes
 `(x-a)+b`, nxlang would compute `x-(a+b)`, so it is rewritten as `x=x-a+b`.
 That compiles to `x=x-a+b`, not back to `x-=a+b`. editor_equivalent applies
-the same rewrite to the Editor's code, so that extracting can check that the
+the same rewrite to the Editor's code, so that the switch can check that the
 rewritten events compile to the same thing.
 
 A hexadecimal number written `0X10` is rewritten `0x10` the same way: the
 Editor reads the two alike, and nxlang reads only the second.
 
-This module also recognises what the build adds to Editor code: the names of
-the generated variables, and the `tsw` lines that turn off the touch of the
-functions' hotspots (both described in nxlang.py).
+This module also writes the lines of program.s that declare the generated
+variables (described in nxlang.py).
 """
 import re
 
 from nxwright import NxwrightError
 from nxwright.language.code_lines import outside_strings, split_line
-from nxwright.language.nxlang import (COMPOUND_ASSIGNMENTS, GENERATED_ANY, GENERATED_GLOBAL,
-                                      HOTSPOT_PREFIX, LEVELS, PRECEDENCE, STRING_LITERAL,
-                                      Binary, Literal, NotParsed, OwnAttribute, Parser, Reference,
-                                      Unary, kind_of, same_as_editor, tokenize)
+from nxwright.language.nxlang import (COMPOUND_ASSIGNMENTS, LEVELS, PRECEDENCE, Binary, Literal,
+                                      NotParsed, OwnAttribute, Parser, Reference, Unary, kind_of,
+                                      same_as_editor, tokenize)
 
-_TOUCH_OFF = re.compile(r"tsw (%s[0-9]+),0" % HOTSPOT_PREFIX)
-_GLOBAL_DECLARATION = re.compile(r"int {0}=0(,{0}=0)*".format(GENERATED_GLOBAL.pattern))
-# A generated name that Editor code uses, not part of a longer name.
-_GENERATED_USE = re.compile(r"(?<![\w.])(%s)\b" % GENERATED_ANY.pattern)
 # The generated globals are declared this many to a line of program.s.
 DECLARATIONS_PER_LINE = 50
 # The 0X of a hexadecimal number, not part of a name, as in a0X1.
@@ -47,24 +39,6 @@ def global_declarations(names: list) -> list:
     `names`, such as "int __g0_0=0,__g0_1=0"."""
     return ["int " + ",".join(name + "=0" for name in names[start:start + DECLARATIONS_PER_LINE])
             for start in range(0, len(names), DECLARATIONS_PER_LINE)]
-
-
-def without_global_declarations(lines: list) -> list:
-    """Returns the lines of program.s without the declarations of generated
-    globals that global_declarations wrote at its start."""
-    position = 0
-    while position < len(lines) and _GLOBAL_DECLARATION.fullmatch(lines[position]):
-        position += 1
-    return lines[position:]
-
-
-def without_touch_off(code: list) -> list:
-    """Returns the lines of an event without the `tsw __f0,0` lines that the
-    build puts at the start of a page's Preinitialize event."""
-    position = 0
-    while position < len(code) and _TOUCH_OFF.fullmatch(code[position].strip()):
-        position += 1
-    return code[position:]
 
 
 def keep_editor_meaning(lines: list) -> list:
@@ -181,17 +155,6 @@ def _expanded_compound(code: str):
     if not code.startswith(target_text + operator):
         return None
     return target_text + "=" + target_text + operator[:-1] + code[len(target_text + operator):]
-
-
-def uses_generated(code: list) -> str:
-    """Returns the first name of a generated variable that lines of Editor
-    code use, outside strings, or "" when they use none."""
-    for line in code:
-        for part in STRING_LITERAL.split(line):
-            found = _GENERATED_USE.search(part)
-            if found:
-                return found[1]
-    return ""
 
 
 def _left_to_right_chain(expression) -> list:

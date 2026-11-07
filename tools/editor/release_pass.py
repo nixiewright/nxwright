@@ -30,15 +30,14 @@ the findings to <output>/report.md. The file comparison writes only its
 report.
 
 For each project (round_trip_projects), the round trip first builds the
-project with nxwright. It extracts the built file into a copy of the
-project's source folder, called the baseline below. Then, with each Editor
-in turn, the round trip:
+project with nxwright. It extracts the built file into a new folder, called
+the baseline below. Then, with each Editor in turn, the round trip:
 
 - has the Editor open the built file, compile it in its simulator, and save
   it;
 - writes the `nxwright report` of the saved file;
-- extracts the saved file into another copy of the source folder, and
-  compares that copy with the baseline;
+- extracts the saved file into another new folder, and compares that folder
+  with the baseline;
 - compares the live blocks of the saved file with those of the built file.
 
 A difference is a file in a folder, or a live block in a project file, that
@@ -291,20 +290,19 @@ def _resource_settings(dump_page: str) -> dict:
     return settings
 
 
-def run_side(name: str, source: Path, built: Path, baseline: Path, side: str, program: Path,
+def run_side(name: str, built: Path, baseline: Path, side: str, program: Path,
              output: Path) -> Side:
     """Runs one side of the round trip for the project `name`, in `output`,
     and returns the Side. `side` is "old" or "new", and `program` is the
     Editor of that side.
 
-    The Editor opens `built`, the file built from the source folder
-    `source`, compiles it in its simulator, and saves it. Then this function
+    The Editor opens `built`, the file built from the source folder,
+    compiles it in its simulator, and saves it. Then this function
     writes the report of the saved file, and extracts the saved file into a
-    copy of `source`. It compares the copy with `baseline`, the built file
-    extracted the same way. Comparing with `baseline` rather than `source`
-    leaves out what extract itself writes differently from `source`, such
-    as its layout of lists. The function also compares the live blocks of
-    the saved file with those of `built`.
+    new folder. It compares that folder with `baseline`, the built file
+    extracted the same way, so that only the Editor's changes show. The
+    function also compares the live blocks of the saved file with those of
+    `built`.
 
     If a step of the Editor fails, the side tries again once, from `open`,
     in a fresh Editor. A busy Editor can fail a step once and pass it the
@@ -331,12 +329,11 @@ def run_side(name: str, source: Path, built: Path, baseline: Path, side: str, pr
         write_report(saved, output / (name + ".report.md"))
     except NxwrightError as error:
         result.findings.append("`nxwright report` refused the saved file: %s" % error)
-    copy = output / "folder"
-    shutil.copytree(source, copy)
+    extracted = output / "folder"
     try:
         result.findings += ["extract: %s" % warning
-                            for warning in extract(saved, copy, continue_with_unknown=True)]
-        result.folder = compare_folders(baseline, copy)
+                            for warning in extract(saved, extracted, continue_with_unknown=True)]
+        result.folder = compare_folders(baseline, extracted)
         result.blocks = _without_save_to_save(compare_blocks(
             HmiContainer.from_file(built).blocks, HmiContainer.from_file(saved).blocks))
     except NxwrightError as error:
@@ -413,13 +410,12 @@ def round_trip(old: Path, new: Path, output: Path) -> str:
             # extract of the built file, so that only the Editor's changes
             # show.
             baseline = output / name / "built-folder"
-            shutil.copytree(source, baseline)
             extract(built, baseline, continue_with_unknown=True)
         except NxwrightError as error:
             sections.append("## %s\n\nnxwright could not build or extract the project: %s\n"
                             % (name, error))
         else:
-            sides = {side: run_side(name, source, built, baseline, side, program,
+            sides = {side: run_side(name, built, baseline, side, program,
                                     output / name / side)
                      for side, program in (("old", old), ("new", new))}
             sections.append(_section(name, sides["old"], sides["new"]))

@@ -335,10 +335,12 @@ variables, and more. Your project still builds into an ordinary HMI file.</p>
 </div>
 
 <h2>Building, and the Nextion Editor</h2>
-<p>nxlang is compiled into strict Nextion code when you build. The HMI file still holds ordinary
-Nextion code, and you keep using the Nextion Editor to compile it into a TFT file, as before. To
-see what a file compiles into, use "Show this file in strict Nextion syntax" in its title
-bar.</p>
+<p>When you build, nxlang is compiled into strict Nextion syntax, so you can still open the HMI
+file in the Nextion Editor and compile it there. To see what a file compiles into, use "Show this
+file in strict Nextion syntax" in its title bar.</p>
+<p>You will not be able to extract changes made in the Nextion Editor back into this folder,
+because the code the build writes cannot turn back into nxlang. Make your changes in the source
+folder instead.</p>
 
 <h2>Going back</h2>
 <p>There is no command to switch back. Right after switching, Undo offers to take the whole

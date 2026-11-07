@@ -40,7 +40,8 @@ import { ComponentsView, PropertiesView } from "./sideBar";
 import { Simulator } from "./simulator";
 import { startTests } from "./tests";
 import { registerTftCommands } from "./tftCommands";
-import { projectFileMayBeReplaced, rememberProjectFile } from "./tftFiles";
+import { EXTRACT_NEW_FOLDER, nxlangExtractNotice } from "./projectFileText";
+import { projectFileMayBeReplaced, rememberProjectFile, settingsArguments } from "./tftFiles";
 import { warnerOnce } from "./toolchainVersion";
 import { extractChoice } from "./unknownContent";
 import { appTomlUnsaved, refusedForUnsaved } from "./unsavedChanges";
@@ -147,12 +148,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ...registerTftCommands({
       context, sourceFolder: activeSourceFolder, command: commandToRun,
       workingFolder: firstWorkspaceFolder,
+      usesNxlang,
       appName: async (folder) =>
         await currentProject?.nameOf(folder) ?? path.basename(folder.fsPath),
       changed: () => projectView?.projectFileChanged(),
     }),
     vscode.commands.registerCommand("nxwright.extract",
       (given?: ExtractArguments) => extract(context, given)),
+    // The overwrite warning runs this (tftFiles.ts). It is not in the palette.
+    vscode.commands.registerCommand("nxwright.extractIntoNewFolder",
+      (file?: string) => extractIntoNewFolder(file)),
     vscode.commands.registerCommand("nxwright.changeScreen", () => changeDevice("screen")),
     vscode.commands.registerCommand("nxwright.changeRotation", () => changeDevice("rotation")),
     vscode.commands.registerCommand("nxwright.changeEncoding", () => changeDevice("encoding")),
@@ -361,9 +366,10 @@ async function build(context: vscode.ExtensionContext): Promise<void> {
   const project = folder && (await projectFile(context, folder, "build"));
   // The user chose this file to build into, so it is replaced without asking,
   // unless it changed elsewhere since nxwright last wrote it (tftFiles.ts).
-  if (folder && project && await projectFileMayBeReplaced(context, project.fsPath)) {
-    const code = await runSubcommand("build",
-                                     ["build", folder.fsPath, project.fsPath, "--overwrite"]);
+  if (folder && project &&
+      await projectFileMayBeReplaced(context, project.fsPath, usesNxlang())) {
+    const code = await runSubcommand("build", ["build", folder.fsPath, project.fsPath,
+                                               "--overwrite", ...settingsArguments()]);
     if (code === 0) {
       await rememberProjectFile(context, project.fsPath);
     }
@@ -387,6 +393,10 @@ interface ExtractArguments {
 async function extract(context: vscode.ExtensionContext,
                        given?: ExtractArguments): Promise<number | undefined> {
   const folder = given ? vscode.Uri.file(given.folder) : await activeSourceFolder();
+  if (folder && !given && usesNxlang()) {
+    await offerExtractIntoNewFolder(context, folder);
+    return undefined;
+  }
   if (!folder || refusedForUnsaved(folder, "extracting")) {
     return undefined;
   }
@@ -409,6 +419,41 @@ async function extract(context: vscode.ExtensionContext,
   return code;
 }
 
+// Returns whether the current project is known to be in nxlang. If the server
+// has not said yet, the command line still refuses to extract over the folder.
+function usesNxlang(): boolean {
+  return currentProject?.info?.language === "nxlang";
+}
+
+// Says why a project cannot be extracted over `folder`, a source folder in
+// nxlang, and offers to extract its project file into a new folder.
+async function offerExtractIntoNewFolder(context: vscode.ExtensionContext,
+                                         folder: vscode.Uri): Promise<void> {
+  const answer = await vscode.window.showInformationMessage(
+    nxlangExtractNotice(folder.fsPath), EXTRACT_NEW_FOLDER);
+  if (answer === EXTRACT_NEW_FOLDER) {
+    const remembered = context.workspaceState.get<string>(projectFileKey(folder));
+    await extractIntoNewFolder(remembered);
+  }
+}
+
+// Extracts the project file `file`, or one the user picks, into a new or empty
+// folder. The new folder does not remember the file, unlike Import a Nextion
+// Editor project. Otherwise, a build from the new folder would overwrite the
+// project file of the folder in nxlang.
+async function extractIntoNewFolder(file?: string): Promise<void> {
+  const title = "Extract into a new folder";
+  const project = file ? vscode.Uri.file(file) : (await vscode.window.showOpenDialog({
+    filters: { "Nextion project": ["HMI"] },
+    openLabel: "Extract",
+    title: `${title}: the project file`,
+  }))?.[0];
+  const folder = project && await extractedIntoChosenFolder(project, title, "");
+  if (folder) {
+    await offerToAddToWorkspace(folder);
+  }
+}
+
 // Says what extracting `project` into `folder` does, and returns whether the
 // user chose to go on.
 async function extractConfirmed(project: vscode.Uri, folder: vscode.Uri): Promise<boolean> {
@@ -423,15 +468,6 @@ async function extractConfirmed(project: vscode.Uri, folder: vscode.Uri): Promis
     "Files of pages and media the project no longer has will be deleted, and comments in " +
       ".toml files will be lost.",
   ];
-  // nxlang code compiled into a function's body or into generated code
-  // cannot take the Nextion Editor's edits back, so extract refuses them.
-  // Said unless the project is known to be in strict Nextion syntax, as the
-  // server may not have said yet.
-  if (currentProject?.info?.language !== "nextion") {
-    paragraphs.push(
-      "In nxlang, an edit to a function's body, or to code the build generated, will stop " +
-        "the extract before anything is written: make that change in the source code instead.");
-  }
   const answer = await vscode.window.showWarningMessage(
     `Extract ${path.basename(project.fsPath)} into ${path.basename(folder.fsPath)}?`,
     { modal: true, detail: paragraphs.join("\n\n") },
@@ -660,6 +696,35 @@ async function offerToAddToWorkspace(folder: vscode.Uri): Promise<void> {
   }
 }
 
+// Asks for a new or empty folder, and extracts `project` into it. A folder that
+// is not empty is refused, with a message that says to choose another, followed
+// by `otherAdvice`.
+// Returns the folder, or undefined when the project was not extracted.
+async function extractedIntoChosenFolder(project: vscode.Uri, title: string,
+                                         otherAdvice: string): Promise<vscode.Uri | undefined> {
+  const folder = (await vscode.window.showOpenDialog({
+    canSelectFiles: false,
+    canSelectFolders: true,
+    openLabel: "Extract here",
+    title: `${title}: a new or empty folder`,
+  }))?.[0];
+  if (!folder) {
+    return undefined;
+  }
+  if ((await vscode.workspace.fs.readDirectory(folder)).length > 0) {
+    void vscode.window.showErrorMessage(
+      `nxwright: ${folder.fsPath} is not empty. Choose a new or empty folder${otherAdvice}.`);
+    return undefined;
+  }
+  const unknown = await unknownContentArguments(project.fsPath);
+  if (unknown === undefined) {
+    return undefined;
+  }
+  const exitCode = await runSubcommand("extract",
+    ["extract", project.fsPath, folder.fsPath, ...unknown]);
+  return exitCode === 0 ? folder : undefined;
+}
+
 // Asks for a project file (.HMI) and a new or empty folder, and extracts the
 // project into it. The project file is remembered for the folder, as Build
 // and Extract remember one, so that Build writes back to it.
@@ -670,29 +735,10 @@ async function importProject(context: vscode.ExtensionContext): Promise<void> {
     openLabel: "Import",
     title: `${title}: the project file`,
   }))?.[0];
-  const folder = project && (await vscode.window.showOpenDialog({
-    canSelectFiles: false,
-    canSelectFolders: true,
-    openLabel: "Extract here",
-    title: `${title}: a new or empty folder`,
-  }))?.[0];
-  if (!project || !folder) {
-    return;
-  }
   // An existing source folder is updated with Extract, which keeps its names.
-  if ((await vscode.workspace.fs.readDirectory(folder)).length > 0) {
-    void vscode.window.showErrorMessage(
-      `nxwright: ${folder.fsPath} is not empty. Choose a new or empty folder, or update a ` +
-        "source folder with Extract.");
-    return;
-  }
-  const unknown = await unknownContentArguments(project.fsPath);
-  if (unknown === undefined) {
-    return;
-  }
-  const exitCode = await runSubcommand("extract",
-    ["extract", project.fsPath, folder.fsPath, ...unknown]);
-  if (exitCode !== 0) {
+  const folder = project && await extractedIntoChosenFolder(
+    project, title, ", or update a source folder with Extract");
+  if (!project || !folder) {
     return;
   }
   await context.workspaceState.update(projectFileKey(folder), project.fsPath);

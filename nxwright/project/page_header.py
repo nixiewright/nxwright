@@ -26,7 +26,7 @@ kept as they are. Like the Editor, the build writes bytes 40 to 55 in the
 current form, whatever the page had. The finder of unknown content
 (source/unknown_content.py) reports each value that was not seen.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from nxwright.project.page_block import PageBlock
 
@@ -90,3 +90,14 @@ def page_header_of(page: PageBlock) -> PageHeader:
     mark, lock = field_16[7], field_16[4]
     return PageHeader(marks.get(mark, mark or None), bool(lock) if lock in (0, 1) else lock,
                       bytes(field_16[:4]), bytes(field_16[5:7]))
+
+
+def with_lock(page: PageBlock) -> PageBlock:
+    """Returns `page` locked, with no password. A page that is locked, or has
+    any other lock value, stays as it is. So does a page with a password,
+    even if it is unlocked, since locking it would bring back a password the
+    user may have forgotten."""
+    header = page_header_of(page)
+    if header.locked or header.lock_password_hash != NO_LOCK_PASSWORD:
+        return page
+    return replace(page, unknown_16=header_16(replace(header, locked=True)))

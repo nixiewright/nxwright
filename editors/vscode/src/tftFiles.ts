@@ -8,6 +8,7 @@ import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
+import { EXTRACT_NEW_FOLDER, changedProjectFileDetail } from "./projectFileText";
 
 // The TFT file chosen for a source folder.
 export function tftFileKey(folder: vscode.Uri): string {
@@ -53,13 +54,15 @@ export async function rememberProjectFile(context: vscode.ExtensionContext,
   }
 }
 
-// Returns whether nxwright may replace the project file `file`. It may when
-// the file does not exist, when nxwright has not written it before, or when
+// Returns whether nxwright may replace `file`, the project file of a source
+// folder. `nxlang` is whether that folder is in nxlang. nxwright may replace the
+// file when it does not exist, when nxwright has not written it before, or when
 // it is still as nxwright last wrote or read it. Otherwise it was changed
-// elsewhere, as in the Nextion Editor, and the user chooses: replace it,
-// extract it first, which runs Extract and returns false, or cancel.
-export async function projectFileMayBeReplaced(context: vscode.ExtensionContext,
-                                               file: string): Promise<boolean> {
+// elsewhere, such as in the Nextion Editor, and the user can replace it, cancel,
+// or extract it. Extracting returns false, and goes into the source folder, or
+// into a new folder if the source folder is in nxlang.
+export async function projectFileMayBeReplaced(context: vscode.ExtensionContext, file: string,
+                                               nxlang: boolean): Promise<boolean> {
   const remembered = context.workspaceState.get<string>(hashKey(file));
   const hash = await hashOf(file);
   if (remembered === undefined || hash === undefined || hash === remembered) {
@@ -67,13 +70,24 @@ export async function projectFileMayBeReplaced(context: vscode.ExtensionContext,
   }
   const answer = await vscode.window.showWarningMessage(
     `${path.basename(file)} was changed outside nxwright since nxwright last wrote it.`,
-    { modal: true, detail: "Replacing it will lose those changes. Extract brings them into " +
-      "the source folder first." },
-    "Replace", "Extract First");
+    { modal: true, detail: changedProjectFileDetail(nxlang, backupsAreOn()) },
+    "Replace", nxlang ? EXTRACT_NEW_FOLDER : "Extract First");
   if (answer === "Extract First") {
     await vscode.commands.executeCommand("nxwright.extract");
+  } else if (answer === EXTRACT_NEW_FOLDER) {
+    await vscode.commands.executeCommand("nxwright.extractIntoNewFolder", file);
   }
   return answer === "Replace";
+}
+
+function backupsAreOn(): boolean {
+  return vscode.workspace.getConfiguration("nxwright").get<boolean>("backups", true);
+}
+
+// Returns the options of a build or a compile that the user's settings decide.
+export function settingsArguments(): string[] {
+  const locks = vscode.workspace.getConfiguration("nxwright").get<boolean>("lockNxlangPages", true);
+  return [...(backupsAreOn() ? [] : ["--no-backup"]), ...(locks ? [] : ["--no-lock"])];
 }
 
 // The screen Upload sends to: its serial port, the rate of the upload, and

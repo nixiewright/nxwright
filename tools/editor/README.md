@@ -283,7 +283,7 @@ python tools/editor/release_pass.py round-trip --old <old program> --new <new pr
 
 - The projects are the demo, a fixture of the tests, a project of one component of each type, and one small project for each screen series. `tools/editor/round_trip/` contains their pictures and sound, which nothing else uses.
 - Each Editor opens each project, compiles it in its simulator, and saves it, under an Editor name of its own, `release-old` or `release-new`. A step that fails is tried once more, in a fresh Nextion Editor.
-- The script then extracts each saved project, and compares it with the project as nxwright built it: the source folders file by file, and the project files block by block.
+- The script then extracts each saved project into a new folder, and compares it with the project as nxwright built it, extracted the same way: the folders file by file, and the project files block by block.
 - `report.md` in the output folder lists what the old Editor's save changes, then what the new Editor alone changes, which are the findings. A run of the Nextion Editor 1.68.2 against itself lists nothing.
 - The Nextion Editor comes to the front during each `open` and `simulate`, so the run is best left to itself.
 

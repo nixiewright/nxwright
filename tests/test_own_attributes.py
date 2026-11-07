@@ -183,21 +183,6 @@ class OwnAttributeTest(SourceFolderTestCase):
             switch_to_nxlang(self.source)
         self.assertNotIn("nxlang", (self.source / "app.toml").read_text(encoding="utf-8"))
 
-    def test_extracting_into_nxlang_takes_it(self):
-        self.write_events("on n0.down:\n  n0.val+=10\n")
-        switch_to_nxlang(self.source)
-        built = self.folder / "built.HMI"
-        build(self.source, built)
-        ProjectDumper(built, self.folder / "built-dump").dump()
-        # The Nextion Editor adds a line using the form to n0's event.
-        page = self.folder / "built-dump" / "pages" / "00-first.txt"
-        edit_text(page, "    | n0.val+=10\n", "    | n0.val+=10\n    | '&val&'+=1\n")
-        import_dump(self.folder / "built-dump", self.source)
-        self.assertIn("'&val&'+=1", (self.source / "pages" / "first.nx").read_text(
-            encoding="utf-8"))
-        values = SourceFolderRunner(self.source).run("first", [("n0", "down")], {"n0.val": 5})
-        self.assertEqual(values["n0.val"], 16)
-
     def test_run_code_refuses_it(self):
         # Its code runs in no object's event.
         switch_to_nxlang(self.source)

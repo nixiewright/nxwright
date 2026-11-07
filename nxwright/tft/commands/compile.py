@@ -3,13 +3,16 @@
   nxwright compile <source-folder or project.HMI> <output.tft>
                         [--firmware <file.tft> | --editor <folder>] [--download]
                         [--ffmpeg <program>] [--project-file <project.HMI>]
-                        [--overwrite] [--json]
+                        [--overwrite] [--no-backup] [--no-lock] [--json]
 
 Builds a source folder with nxwright, whose build decides what a project
 may hold, or reads a project file as it is. With --project-file, the
-project file built from a source folder is written there too. Then it
-checks everything in the project, and the firmware's version
-(tft/matching.py). It refuses what nxwright cannot compile, such as a value
+project file built from a source folder is written there too. Its pages are
+locked if the folder is in nxlang, unless --no-lock is given. The TFT file
+is the same either way.
+
+The command then checks everything in the project, and the firmware's
+version (tft/matching.py). It refuses what nxwright cannot compile, such as a value
 outside the range that can be encoded. Each is listed with its reason
 (tft/reasons.py), and no file is written.
 
@@ -35,8 +38,10 @@ resampled with ffmpeg, as the Nextion Editor does: the ffmpeg the PATH
 finds, or the one --ffmpeg names. Without one, such a project is refused.
 An output file that exists already is refused, unless --overwrite is
 given. Even then, only a TFT file, or a project file for --project-file, is
-replaced, as nxwright build replaces only a project file. Nothing is
-written unless the compile succeeds.
+replaced, as nxwright build replaces only a project file. A file that
+changed since nxwright wrote it is kept as a backup beside the new one, unless
+--no-backup is given.
+Nothing is written unless the compile succeeds.
 
 --json is for programs, such as nxwright's VS Code extension. The command
 then prints one JSON object per line, and its words for people go to
@@ -122,6 +127,12 @@ def main(arguments: list) -> int:
     parser.add_argument("--overwrite", action="store_true",
                         help="replace an existing TFT file, and an existing project file given "
                         "with --project-file")
+    parser.add_argument("--no-backup", action="store_true",
+                        help="do not keep a backup of a TFT file or project file that "
+                        "changed since nxwright wrote it")
+    parser.add_argument("--no-lock", action="store_true",
+                        help="for a folder in nxlang, keep each page's lock in the "
+                        "--project-file as its page file sets it")
     parser.add_argument("--json", action="store_true",
                         help="print JSON objects, one a line, for programs; never prompt")
     options = parser.parse_args(arguments)
@@ -132,9 +143,10 @@ def main(arguments: list) -> int:
         compiled = compile_folder(options.source, options.output, options.firmware,
                                   options.ffmpeg, options.editor,
                                   TerminalAsker(options.download, as_json=options.json),
-                                  options.project_file, options.overwrite)
+                                  options.project_file, options.overwrite,
+                                  not options.no_lock)
         write_outputs(options.output, compiled.data, options.project_file,
-                      compiled.project_file, options.overwrite)
+                      compiled.project_file, options.overwrite, not options.no_backup)
     except FirmwareMissing as error:
         if options.json:
             _print_json({"event": "firmware-missing", "version": error.version})
@@ -170,11 +182,12 @@ class FirmwareMissing(NxwrightError):
 def compile_folder(source: Path, output: Path, firmware_file: Path = None,
                    ffmpeg_file: Path = None, editor_folder: Path = None,
                    asker: DownloadAsker = None, project_file: Path = None,
-                   overwrite: bool = False) -> Compiled:
+                   overwrite: bool = False, lock_nxlang_pages: bool = True) -> Compiled:
     """Returns the compile of `source`, a source folder or a project file,
     to be written as `output`. With `project_file`, which needs a source
     folder, the result also has the project file built on the way, to be
-    written there. The firmware comes from the TFT file `firmware_file` or
+    written there, with the pages of a folder in nxlang locked if
+    `lock_nxlang_pages`. The firmware comes from the TFT file `firmware_file` or
     the Nextion Editor folder `editor_folder`, when one is given, or else
     from the cache, the installed Nextion Editor, or a download that `asker`
     lets the user allow (firmware.find_firmware). Without `asker`, nothing is
@@ -192,7 +205,7 @@ def compile_folder(source: Path, output: Path, firmware_file: Path = None,
     if not source.exists():
         raise NxwrightError("%s does not exist" % source)
     if source.is_dir():
-        project, built = project_and_file_of_folder(source)
+        project, built = project_and_file_of_folder(source, lock_nxlang_pages)
     elif is_project_file(source):
         if project_file is not None:
             raise NxwrightError("--project-file writes the project file built from a source "
@@ -236,14 +249,16 @@ def _refuse_unless_replacing(output: Path, overwrite: bool, is_of_its_kind, kind
 
 
 def write_outputs(tft: Path, data: bytes, project_file: Path = None, project_data: bytes = None,
-                  overwrite: bool = False):
+                  overwrite: bool = False, keep_backup: bool = False):
     """Writes `data` as the TFT file `tft`, and `project_data`, when given,
     as `project_file`. Each is written beside its output first. The project
     file then replaces its output first, as the Nextion Editor may keep it
     from being replaced, and the TFT file last. So a project file that
     cannot be replaced leaves both outputs as they were. Only a TFT file
-    that cannot be replaced, once the project file was, as a read-only one,
-    leaves them apart. Without `overwrite`, an output
+    that cannot be replaced or backed up, once the project file was
+    replaced, leaves the two out of step. With `keep_backup`, an old file that changed
+    since nxwright wrote it is kept as a backup (replacing.written_beside).
+    Without `overwrite`, an output
     that appeared since compile_folder checked it, as during a download, is
     refused."""
     if not overwrite:
@@ -252,11 +267,11 @@ def write_outputs(tft: Path, data: bytes, project_file: Path = None, project_dat
                 raise NxwrightError("%s exists; pass --overwrite to replace it" % output)
     with ExitStack() as stack:
         # Left in reverse order: the last entered is replaced first.
-        written_tft = stack.enter_context(written_beside(tft))
+        written_tft = stack.enter_context(written_beside(tft, keep_backup))
         written_tft.write_bytes(data)
         if project_data is not None:
             stack.enter_context(held_by_the_nextion_editor(project_file))
-            written_project = stack.enter_context(written_beside(project_file))
+            written_project = stack.enter_context(written_beside(project_file, keep_backup))
             written_project.write_bytes(project_data)
 
 
@@ -353,14 +368,15 @@ def project_of_folder(source_folder: Path) -> Project:
     return project_and_file_of_folder(source_folder)[0]
 
 
-def project_and_file_of_folder(source_folder: Path) -> tuple:
+def project_and_file_of_folder(source_folder: Path, lock_nxlang_pages: bool = True) -> tuple:
     """Returns the project nxwright builds from `source_folder`, and the
-    bytes of its project file. Raises NxwrightError when its build refuses
-    the folder."""
+    bytes of its project file, with the pages of a folder in nxlang locked if
+    `lock_nxlang_pages`. Raises NxwrightError when its build refuses the
+    folder."""
     # A folder of Python's own, which it deletes after.
     with tempfile.TemporaryDirectory(prefix="nxwright-compile-") as folder:
         project_file = Path(folder) / "project.HMI"
-        build(source_folder, project_file)
+        build(source_folder, project_file, lock_nxlang_pages=lock_nxlang_pages)
         return Project.from_file(project_file), project_file.read_bytes()
 
 

@@ -1,22 +1,24 @@
 """Tests of nxlang, the nxwright language: compiling it, running what it compiles to, and
-building and importing source folders that use it."""
+building source folders that use it."""
+from contextlib import redirect_stderr
+import io
 from pathlib import Path
 import random
 import re
 import unittest
+from unittest import mock
 
-from nxwright.source.project_files import build
+from nxwright.cli import main
+from nxwright.source import project_files
+from nxwright.source.project_files import build, extract
 from nxwright.project.dumper import ProjectDumper
 from nxwright import NxwrightError
 from nxwright.language.code_preprocessor import preprocess
-from nxwright.source.nx_files import read_page_files
 from nxwright.source.page_source import compile_nxlang_page
-from nxwright.source.editor_code_merge import nxlang_import_changes
 from nxwright.language.resource_names import ResourceNames
 from nxwright.project.device_settings import TextCodec
 from nxwright.language.editor_code import (editor_equivalent, global_declarations,
-                                           keep_editor_meaning, without_global_declarations,
-                                           write_expression)
+                                           keep_editor_meaning, write_expression)
 from nxwright.language.nxlang import (LONGEST_LINE, TEXT, Binary, Literal, Macro, ProgramNames,
                                       _last_argument_start, compile_page, compile_program,
                                       read_program_names)
@@ -1189,24 +1191,17 @@ class NxlangSourceFolderTest(NxlangFolderTestCase):
                          "    x.val=a.val*0x02\n  }\n")
         self.assertIn("sys0=0x10\npage 0", program.read_text(encoding="utf-8"))
 
-    def test_build_adds_generated_variables_and_import_keeps_the_source(self):
+    def test_build_adds_generated_variables(self):
         switch_to_nxlang(self.source)
         (self.source / "pages" / "first.nx").write_text(self.EVENTS, encoding="utf-8", newline="\n")
         dump = self.build_and_dump("nxlang")
         page = (dump / "pages" / "00-first.txt").read_text(encoding="utf-8")
         self.assertIn("| __g0_0=2*a.val", page)
         self.assertTrue((dump / "program.s").read_bytes().startswith(b"int __g0_0=0\r\n"))
-        program = (self.source / "program.nx").read_text(encoding="utf-8")
-        import_dump(dump, self.source)
-        self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"),
-                         self.EVENTS)
-        # The declaration line is the build's; import leaves it out.
-        self.assertEqual((self.source / "program.nx").read_text(encoding="utf-8"), program)
-        self.assertIn('language = "nxlang"', (self.source / "app.toml").read_text(encoding="utf-8"))
 
     def test_another_pages_scrolling_text_keeps_its_direction(self):
-        # Switching and importing compile each page with every page's types,
-        # as the build does: second's g1 is a scrolling text, whose dir is a
+        # Switching compiles each page with every page's types, as the build
+        # does: second's g1 is a scrolling text, whose dir is a
         # number, set as written.
         with open(self.source / "pages" / "second.page.toml", "a", encoding="utf-8",
                   newline="\n") as file:
@@ -1219,60 +1214,6 @@ class NxlangSourceFolderTest(NxlangFolderTestCase):
         dump = self.build_and_dump("nxlang")
         self.assertIn("| second.g1.dir=2\n",
                       (dump / "pages" / "00-first.txt").read_text(encoding="utf-8"))
-        import_dump(dump, self.source)
-        self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"), code)
-
-    def test_import_replaces_an_event_the_editor_changed(self):
-        switch_to_nxlang(self.source)
-        (self.source / "pages" / "first.nx").write_text(self.EVENTS, encoding="utf-8", newline="\n")
-        dump = self.build_and_dump("nxlang")
-        edit_text(dump / "pages" / "00-first.txt", "x.val=1", "x.val=a.val+a.val*3")
-        import_dump(dump, self.source)
-        self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"),
-                         self.EVENTS.replace("x.val = 1", "x.val=(a.val+a.val)*3"))
-
-    def test_import_stops_when_the_editor_changed_compiled_code(self):
-        switch_to_nxlang(self.source)
-        (self.source / "pages" / "first.nx").write_text(self.EVENTS, encoding="utf-8", newline="\n")
-        dump = self.build_and_dump("nxlang")
-        edit_text(dump / "pages" / "00-first.txt", "__g0_0=2*a.val", "__g0_0=3*a.val")
-        before = {path: path.read_bytes() for path in self.source.rglob("*") if path.is_file()}
-        with self.assertRaisesRegex(NxwrightError, "first.nx: the Nextion Editor changed "
-                                                   "first.down"):
-            import_dump(dump, self.source)
-        self.assertEqual({path: path.read_bytes() for path in self.source.rglob("*")
-                          if path.is_file()}, before)
-
-    def test_import_after_a_component_added_in_the_editor(self):
-        switch_to_nxlang(self.source)
-        # TEXT_JOIN needs a text temporary, __s0: a generated component.
-        self.write_text_join()
-        dump = self.build_and_dump("nxlang")
-        page = dump / "pages" / "00-first.txt"
-        # The Editor puts a new component after the generated variables.
-        text = page.read_text(encoding="utf-8")
-        start = text.index("object 2 x")
-        block = text[start:text.index("\n\nobject", start)]
-        added = block.replace("object 2 x", "object 4 y").replace(
-            'objname = "x"', 'objname = "y"').replace("id = 2", "id = 4")
-        page.write_text(text.rstrip("\n") + "\n\n" + added, encoding="utf-8", newline="\n")
-        import_dump(dump, self.source)
-        toml = (self.source / "pages" / "first.page.toml").read_text(encoding="utf-8")
-        self.assertIn('name = "y"', toml)
-        self.assertNotIn("__s0", toml)
-        self.assertNotIn("id = ", toml)
-        export_dump(self.source, self.folder / "again")
-        rebuilt = (self.folder / "again" / "pages" / "00-first.txt").read_text(encoding="utf-8")
-        self.assertIn("object 3 y", rebuilt)
-        self.assertIn("object 4 __s0", rebuilt)
-
-    def test_import_refuses_a_component_with_the_generated_prefix(self):
-        switch_to_nxlang(self.source)
-        dump = self.build_and_dump("nxlang")
-        edit_text(dump / "pages" / "00-first.txt", 'object 1 a\n', 'object 1 __a\n')
-        edit_text(dump / "pages" / "00-first.txt", 'objname = "a"', 'objname = "__a"')
-        with self.assertRaisesRegex(NxwrightError, "component __a starts with"):
-            import_dump(dump, self.source)
 
     def test_build_refuses_a_page_past_250_components_with_a_temporary(self):
         switch_to_nxlang(self.source)
@@ -1284,7 +1225,7 @@ class NxlangSourceFolderTest(NxlangFolderTestCase):
         self.assert_export_refused(r"^first\.page\.toml: nxlang adds 1 component to run this "
                                    r"page's code, which brings the page to 251 components")
 
-    def test_globals_of_two_pages_and_an_import_after_reordering(self):
+    def test_globals_of_two_pages(self):
         switch_to_nxlang(self.source)
         (self.source / "pages" / "first.nx").write_text(self.EVENTS, encoding="utf-8", newline="\n")
         (self.source / "pages" / "second.nx").write_text(
@@ -1294,13 +1235,6 @@ class NxlangSourceFolderTest(NxlangFolderTestCase):
         self.assertIn("| __g1_0=sys2*2",
                       (dump / "pages" / "01-second.txt").read_text(encoding="utf-8"))
         self.assertTrue((dump / "program.s").read_bytes().startswith(b"int __g0_0=0,__g1_0=0\r\n"))
-        # Pages reordered in the Editor: the globals keep the names they were built with.
-        (dump / "pages" / "00-first.txt").rename(dump / "pages" / "tmp.txt")
-        (dump / "pages" / "01-second.txt").rename(dump / "pages" / "00-second.txt")
-        (dump / "pages" / "tmp.txt").rename(dump / "pages" / "01-first.txt")
-        import_dump(dump, self.source)
-        self.assertEqual((self.source / "pages" / "second.nx").read_text(encoding="utf-8"),
-                         "on second.down:\n  sys0 = sys1 - sys2 * 2\n")
 
     def test_build_refuses_too_many_globals(self):
         switch_to_nxlang(self.source)
@@ -1338,6 +1272,85 @@ function greet(who: text):
   t0.txt = "hi " + who
 
 """
+
+
+class ExtractingOverNxlangTest(NxlangFolderTestCase):
+    """A project cannot be extracted or imported over a folder in nxlang, and
+    can be extracted into a new one."""
+
+    REFUSAL = ("uses nxlang, so nxwright cannot extract or import over it: the code the build "
+               "writes cannot turn back into nxlang. Make code changes in the source folder. To "
+               "see what the project contains, extract it into a new folder, and compare that "
+               "folder with your source folder.")
+
+    def setUp(self):
+        super().setUp()
+        switch_to_nxlang(self.source)
+        (self.source / "pages" / "first.nx").write_text(self.EVENTS, encoding="utf-8", newline="\n")
+        self.built = self.folder / "built.HMI"
+        build(self.source, self.built)
+
+    def files(self) -> dict:
+        return {path: path.read_bytes() for path in self.source.rglob("*") if path.is_file()}
+
+    def test_import_changes_nothing(self):
+        dump = self.folder / "built-dump"
+        ProjectDumper(self.built, dump).dump()
+        before = self.files()
+        with self.assertRaisesRegex(NxwrightError, "^%s %s$" % (re.escape(str(self.source)),
+                                                               re.escape(self.REFUSAL))):
+            import_dump(dump, self.source)
+        self.assertEqual(self.files(), before)
+
+    def test_extract_changes_nothing(self):
+        before = self.files()
+        with self.assertRaisesRegex(NxwrightError, "^%s %s$" % (re.escape(str(self.source)),
+                                                               re.escape(self.REFUSAL))):
+            extract(self.built, self.source)
+        self.assertEqual(self.files(), before)
+
+    def test_extract_stops_before_it_looks_at_the_project(self):
+        # Otherwise the user could be prompted about unknown content, and then refused.
+        with mock.patch.object(project_files, "unknown_in_project_file",
+                               side_effect=AssertionError("looked at the project")), \
+                self.assertRaisesRegex(NxwrightError, re.escape(self.REFUSAL)):
+            extract(self.built, self.source)
+
+    def test_the_commands_exit_with_the_refusal(self):
+        dump = self.folder / "built-dump"
+        ProjectDumper(self.built, dump).dump()
+        for arguments in (["extract", str(self.built), str(self.source)],
+                          ["import", str(dump), str(self.source)]):
+            with self.subTest(command=arguments[0]):
+                errors = io.StringIO()
+                with redirect_stderr(errors):
+                    self.assertEqual(main(arguments), 1)
+                self.assertIn(self.REFUSAL, errors.getvalue())
+
+    def test_extract_into_a_new_folder_gives_a_strict_folder_that_builds(self):
+        recovered = self.folder / "recovered"
+        extract(self.built, recovered)
+        self.assertIn('language = "nextion"', (recovered / "app.toml").read_text(encoding="utf-8"))
+        again = self.folder / "again.HMI"
+        build(recovered, again)
+        self.assertEqual(again.read_bytes(), self.built.read_bytes())
+
+    def test_extract_over_the_recovered_strict_folder_still_works(self):
+        recovered = self.folder / "recovered"
+        extract(self.built, recovered)
+        before = {path: path.read_bytes() for path in recovered.rglob("*") if path.is_file()}
+        extract(self.built, recovered)
+        self.assertEqual({path: path.read_bytes() for path in recovered.rglob("*")
+                          if path.is_file()}, before)
+
+    def test_build_of_an_nxlang_folder_with_no_device_settings_does_not_advise_extracting(self):
+        app = self.source / "app.toml"
+        app.write_text("".join(line for line in app.read_text(encoding="utf-8").splitlines(True)
+                               if not line.startswith(("screen", "rotation", "encoding"))),
+                       encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(NxwrightError, "no device settings") as refused:
+            build(self.source, self.folder / "other.HMI")
+        self.assertNotIn("extract", str(refused.exception))
 
 
 class ConditionalTest(unittest.TestCase):
@@ -1563,17 +1576,6 @@ class FunctionTest(unittest.TestCase):
             with self.subTest(text=text), self.assertRaisesRegex(NxwrightError, message):
                 run_page(text + "\non p.down:\n  x.val = 1\n")
 
-    def test_import_does_not_blame_the_editor_for_a_removed_picture(self):
-        # The function names a picture the app no longer lists, so its old body
-        # cannot be compared; that is no sign the Editor changed it.
-        old = "function f():\n  x.val = @pic(gone)\n\non p.down:\n  f()\n"
-        fresh = "on p.down:\n  __g0_0=0\n  click __f0,1\n"
-        generated = {("__f0", "down"): ["// function f()", "if(__g0_0==0)", "{", "  x.val=3", "}"]}
-        page_files = read_page_files("pages/p.nx", old, None)
-        changes = nxlang_import_changes(fresh, "p", page_files, NO_NAMES, COMPONENTS,
-                                        ProgramNames(), generated, 0)
-        self.assertEqual((changes.changes, changes.editor), ({}, {}))
-
     def test_program_cannot_call(self):
         with self.assertRaisesRegex(NxwrightError, "line 1: program.nx cannot call functions"):
             compile_program(_numbered("dim = twice(2)"), ProgramNames())
@@ -1619,7 +1621,7 @@ class FunctionTest(unittest.TestCase):
 
 
 class FunctionSourceFolderTest(NxlangFolderTestCase):
-    """Functions through build and import."""
+    """Functions through the build."""
 
     WITH_FUNCTION = ("function twice(n: number) -> number:\n  return n * 2\n\n"
                      "on first.down:\n  x.val = twice(a.val)\n\non first.up:\n  x.val = 1\n")
@@ -1635,35 +1637,12 @@ class FunctionSourceFolderTest(NxlangFolderTestCase):
         self.set_events("first", ["down", "up"])
         self.assert_export_refused("first.page.toml: functions need the page's load event")
 
-    def test_build_and_import_keep_the_function(self):
+    def test_build_compiles_the_function(self):
         dump = self.build_and_dump("functions")
         page = (dump / "pages" / "00-first.txt").read_text(encoding="utf-8")
         self.assertIn("object 3 __f0", page)
         self.assertIn("| tsw __f0,0", page)
         self.assertIn("| click __f0,1", page)
-        import_dump(dump, self.source)
-        self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"),
-                         self.WITH_FUNCTION)
-        self.assertNotIn("__f0",
-                         (self.source / "pages" / "first.page.toml").read_text(encoding="utf-8"))
-
-    def test_import_stops_when_the_editor_changed_a_function(self):
-        dump = self.build_and_dump("functions")
-        edit_text(dump / "pages" / "00-first.txt", "=__g0_0*2", "=__g0_0*3")
-        with self.assertRaisesRegex(NxwrightError, "first.nx: the Nextion Editor changed function "
-                                                   "twice"):
-            import_dump(dump, self.source)
-
-    def test_import_keeps_an_editor_change_to_the_page_preinitialize_event(self):
-        dump = self.build_and_dump("functions")
-        edit_text(dump / "pages" / "00-first.txt", "| tsw __f0,0", "| tsw __f0,0\n    | x.val=5")
-        import_dump(dump, self.source)
-        text = (self.source / "pages" / "first.nx").read_text(encoding="utf-8")
-        self.assertIn("on first.load:\n  x.val=5\n", text)
-        self.assertNotIn("tsw", text)
-        export_dump(self.source, self.folder / "again")
-        self.assertIn("| tsw __f0,0\n    | x.val=5",
-                      (self.folder / "again" / "pages" / "00-first.txt").read_text(encoding="utf-8"))
 
     def test_build_refuses_a_page_past_250_components_through_functions(self):
         with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8", newline="\n") as file:
@@ -1715,7 +1694,7 @@ class EventCommentTest(NxlangFolderTestCase):
         import_dump(dump, self.source)
         self.assertEqual(self.events(), text.replace("Doubles a.", "Twice a."))
 
-    def test_nxlang_build_and_import(self):
+    def test_nxlang_build(self):
         switch_to_nxlang(self.source)
         self.set_events("first", ["load", "down", "up"])
         text = ("// The page's functions.\n\n"
@@ -1731,11 +1710,6 @@ class EventCommentTest(NxlangFolderTestCase):
         # The comments above a function and at the top stay in the .nx file only.
         self.assertNotIn("Twice its argument", page)
         self.assertNotIn("functions.", page)
-        import_dump(dump, self.source)
-        self.assertEqual(self.events(), text)
-        edit_text(dump / "pages" / "00-first.txt", "| // ### Runs first.", "| // ### Runs at once.")
-        import_dump(dump, self.source)
-        self.assertEqual(self.events(), text.replace("Runs first.", "Runs at once."))
 
     # Comments above no heading: before the first event, between two, and
     # after the last. A blank line parts each from what follows.
@@ -1765,19 +1739,6 @@ class EventCommentTest(NxlangFolderTestCase):
         edit_text(dump / "pages" / "00-first.txt", "| x.val=2", "| x.val=3")
         import_dump(dump, self.source)
         self.assertEqual(self.events(), self.STRAY.replace("x.val=2", "x.val=3"))
-
-    def test_nxlang_import_keeps_a_comment_above_no_heading(self):
-        switch_to_nxlang(self.source)
-        self.set_events("first", ["down", "up"])
-        text = ("on first.down:\n  x.val = 1\n\n// --- Releases ---\n\non first.up:\n"
-                "  x.val = 2\n\n// The end.\n")
-        self.write_events(text)
-        dump = self.build_and_dump("nxlang-stray-comments")
-        import_dump(dump, self.source)
-        self.assertEqual(self.events(), text)
-        edit_text(dump / "pages" / "00-first.txt", "| x.val=2", "| x.val=3")
-        import_dump(dump, self.source)
-        self.assertEqual(self.events(), text.replace("x.val = 2", "x.val=3"))
 
     def test_switching_to_nxlang_keeps_a_comment_above_no_heading(self):
         # nxlang reads the line otherwise, so the switch writes the file again.
@@ -2065,15 +2026,10 @@ class JumpSourceFolderTest(NxlangFolderTestCase):
         switch_to_nxlang(self.source)
         (self.source / "pages" / "first.nx").write_text(self.LOOP, encoding="utf-8", newline="\n")
 
-    def test_import_keeps_the_loop_and_stops_on_an_editor_change(self):
+    def test_build_compiles_the_loop(self):
         dump = self.build_and_dump("jumps")
         # __g0_0 is the loop's control variable, which the break sets to 2.
         self.assertIn("__g0_0=2", (dump / "pages" / "00-first.txt").read_text(encoding="utf-8"))
-        import_dump(dump, self.source)
-        self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"), self.LOOP)
-        edit_text(dump / "pages" / "00-first.txt", "__g0_0=2", "__g0_0=1")
-        with self.assertRaisesRegex(NxwrightError, "it uses the generated variable __g0_0"):
-            import_dump(dump, self.source)
 
 
 class FewerObjectsTest(unittest.TestCase):
@@ -2092,7 +2048,6 @@ class FewerObjectsTest(unittest.TestCase):
         lines = global_declarations(names)
         self.assertEqual([line.count("=0") for line in lines], [50, 50, 20])
         self.assertTrue(lines[0].startswith("int __g0_0=0,__g0_1=0,"))
-        self.assertEqual(without_global_declarations(lines + ["page 0"]), ["page 0"])
 
     def test_events_share_temporaries(self):
         text = ("on p.down:\n  x.val = a.val - b.val * c.val\n\n"
@@ -2354,7 +2309,7 @@ class IncludeTest(unittest.TestCase):
 
 
 class IncludeSourceFolderTest(NxlangFolderTestCase):
-    """Includes through build and import, with two pages sharing a file."""
+    """Includes through the build, with two pages sharing a file."""
 
     SHARED = "const STEP = 3\n\non h.down:\n  x.val = STEP * 2\n"
 
@@ -2384,46 +2339,9 @@ class IncludeSourceFolderTest(NxlangFolderTestCase):
     def page_text(self, page: str) -> Path:
         return self.dump / "pages" / ("%02d-%s.txt" % (["first", "second"].index(page), page))
 
-    def sources(self) -> dict:
-        return {path: path.read_bytes() for path in self.source.rglob("*") if path.is_file()}
-
-    def test_build_and_import_keep_every_file(self):
+    def test_build_reads_every_file(self):
         self.assertIn("| x.val=3*2", self.page_text("second").read_text(encoding="utf-8"))
         self.assertIn(b"sys0=9", (self.dump / "program.s").read_bytes())
-        before = self.sources()
-        import_dump(self.dump, self.source)
-        self.assertEqual(self.sources(), before)
-
-    def test_a_changed_event_is_written_where_it_is_defined(self):
-        for page in ("first", "second"):
-            edit_text(self.page_text(page), "x.val=3*2", "x.val=7")
-        # Page first also gets a down event, which goes to first.nx.
-        edit_text(self.page_text("first"), "x.val=3+1", "x.val=4\n  event down\n    | x.val=1")
-        import_dump(self.dump, self.source)
-        self.assertEqual((self.source / "pages" / "shared.nx").read_text(encoding="utf-8"),
-                         "const STEP = 3\n\non h.down:\n  x.val=7\n")
-        first = (self.source / "pages" / "first.nx").read_text(encoding="utf-8")
-        self.assertEqual(first, 'include "shared.nx"\n\non first.up:\n  x.val=4\n\n'
-                                'on first.down:\n  x.val=1\n')
-
-    def test_an_emptied_event_is_removed_from_its_file(self):
-        for page in ("first", "second"):
-            edit_text(self.page_text(page), "    | x.val=3*2\n", "")
-        import_dump(self.dump, self.source)
-        self.assertEqual((self.source / "pages" / "shared.nx").read_text(encoding="utf-8"),
-                         "const STEP = 3\n")
-
-    def test_pages_disagreeing_about_a_shared_event_stop_the_import(self):
-        before = self.sources()
-        edit_text(self.page_text("first"), "x.val=3*2", "x.val=7")
-        with self.assertRaisesRegex(NxwrightError, "pages/shared.nx: the Nextion Editor left "
-                                                   "h.down different between pages first and "
-                                                   "second"):
-            import_dump(self.dump, self.source)
-        edit_text(self.page_text("second"), "x.val=3*2", "x.val=8")
-        with self.assertRaisesRegex(NxwrightError, "different between pages first and second"):
-            import_dump(self.dump, self.source)
-        self.assertEqual(self.sources(), before)
 
     def test_program_includes_constants_only(self):
         (self.source / "lib" / "constants.nx").write_text("const LIMIT = 9\n\non x.down:\n  r.val = 1\n",

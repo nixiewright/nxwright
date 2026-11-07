@@ -22,19 +22,25 @@ from nxwright.project.page_text import page_from_text
 from nxwright.project.new_project import write_new_project
 from nxwright.project.component_defaults import defaults_from_pages, defaults_to_toml
 from nxwright.project.replacing import held_by_the_nextion_editor, is_project_file, written_beside
-from nxwright.source.source_folder import (export_dump, folder_device_settings, import_dump,
+from nxwright.source.source_folder import (NXLANG, export_dump, folder_device_settings,
+                                           import_dump, read_app, refuse_nxlang_folder,
                                            removes_screen_settings)
 from nxwright.source.unknown_content import MAY_BE_LOST, checked, unknown_in_project_file
 
 
-def build(source_folder: Path, output: Path, refuse_by_table: bool = True):
+def build(source_folder: Path, output: Path, refuse_by_table: bool = True,
+          keep_backup: bool = False, lock_nxlang_pages: bool = True):
     """Writes the project file `output` from `source_folder` alone. Returns
     the project's memory, as the Editor's compile counts it, a
     page_memory.ProjectMemory.
 
     An existing project file at `output` is replaced, but only once the new
     one is written in full and checked. The new file is written beside it
-    first, so a failed build leaves it as it was.
+    first, so a failed build leaves it as it was. With `keep_backup`, an old
+    file that changed since nxwright wrote it is kept as a backup
+    (replacing.written_beside). With `lock_nxlang_pages`, a folder in nxlang
+    gets its pages locked in the project file, which shows in the Nextion
+    Editor that it is not meant for editing (page_header.with_lock).
 
     Raises NxwrightError when `output` exists and is not a project file, the
     folder's app.toml has no device settings (extracting a project, or
@@ -51,13 +57,15 @@ def build(source_folder: Path, output: Path, refuse_by_table: bool = True):
                             "project file" % output)
     settings = folder_device_settings(source_folder)
     if settings is None:
+        advice = ("add them to it" if read_app(source_folder)["language"] == NXLANG
+                  else "extract the project into it, or start the folder with nxwright new")
         raise NxwrightError("%s has no device settings in its app.toml (screen, rotation, "
-                            "encoding); extract the project into it, or start the folder with "
-                            "nxwright new" % source_folder)
-    with held_by_the_nextion_editor(output), written_beside(output) as written, \
+                            "encoding); %s" % (source_folder, advice))
+    with held_by_the_nextion_editor(output), \
+            written_beside(output, keep_backup) as written, \
             tempfile.TemporaryDirectory() as name:
         dump = Path(name) / "dump"
-        pictures, memory = export_dump(source_folder, dump, refuse_by_table)
+        pictures, memory = export_dump(source_folder, dump, refuse_by_table, lock_nxlang_pages)
         try:
             write_new_project(dump, settings, written)
         except NxwrightError as error:
@@ -69,10 +77,12 @@ def build(source_folder: Path, output: Path, refuse_by_table: bool = True):
 
 
 def extract(project: Path, source_folder: Path, continue_with_unknown: bool = False) -> list:
-    """Extracts `project` into `source_folder`, a new, empty, or existing
-    source folder. A new one names the app after the project file. An
-    existing one keeps its name, its picture and font names, and its code as
-    written, wherever the project did not change them. Returns the warnings
+    """Extracts `project` into `source_folder`, a new or empty folder, or an
+    existing source folder in strict Nextion syntax. A new one names the app
+    after the project file. An existing one keeps its name, its picture and
+    font names, and its code as written, wherever the project did not change
+    them. A source folder in nxlang is refused before anything else
+    (source_folder.refuse_nxlang_folder). Returns the warnings
     of what the source files leave out (source_folder.import_dump). Notes on
     the content nxwright does not know come before the warnings: one for
     each thing that is kept exactly or written otherwise, and one for each
@@ -83,6 +93,7 @@ def extract(project: Path, source_folder: Path, continue_with_unknown: bool = Fa
     build may lose, unless `continue_with_unknown` is true
     (source/unknown_content.py)."""
     project, source_folder = Path(project), Path(source_folder)
+    refuse_nxlang_folder(source_folder)
     with held_by_the_nextion_editor(project):
         found = unknown_in_project_file(project)
     lost = [each for each in found if each.sort == MAY_BE_LOST]

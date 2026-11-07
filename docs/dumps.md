@@ -81,7 +81,8 @@ nxwright import <dump-folder> <source-folder>
 `nxwright import` turns a dump into a source folder ([source-folder.md](source-folder.md)).
 
 - A new or empty folder gets a fresh source folder.
-- A source folder that already has an `app.toml` is updated. Each event keeps its text, comments included, unless the project changed that event's code ([Extracting into an existing folder](source-folder.md#extracting-into-an-existing-folder)).
+- A source folder in strict Nextion syntax that already has an `app.toml` is updated. Each event keeps its text, comments included, unless the project changed that event's code ([Extracting into an existing folder](source-folder.md#extracting-into-an-existing-folder)).
+- A source folder in nxlang is refused, and nothing changes ([Working with the Nextion Editor](language.md#working-with-the-nextion-editor)).
 - Any other folder is refused.
 - `import` checks the dump's manifest header and pages for things nxwright does not know. For each one, it warns and goes on, prompts you to choose whether to go on, or refuses. The rules are the same as for `extract`, and `import` also takes `--continue-with-unknown` ([commands.md](commands.md#extract)).
 
@@ -134,7 +135,8 @@ Some projects limit what can be added:
 Writing the output file:
 
 - An existing project file at the output is replaced only once the new one is written in full and has passed the check below. Pass `--overwrite` to replace it without a prompt. Without that option, the command refuses when there is no terminal, as in a script. Any other kind of file at the output is refused.
-- The project file is only read, unless you give it as the output too. It is then read in full first, and the new file replaces it.
+- If the file at the output changed since nxwright wrote it, it is kept as a backup beside the new one ([`nxwright build`](commands.md#build)), unless you pass `--no-backup`.
+- The input project file is only read, unless you also give it as the output. It is then read in full first, and the new file replaces it.
 - The output survives later saves in the Nextion Editor ([format.md](format.md#writing-a-project-file-the-nextion-editor-accepts)).
 - After writing, nxwright reads the file back, and checks that it contains the dump's pages, pictures, fonts, `program.s`, and macros.
 - If the dump does not differ from the project, `nxwright write` does not write a file.

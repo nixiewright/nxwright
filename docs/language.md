@@ -37,9 +37,10 @@ A folder extracted from a project starts in strict Nextion syntax, which is `lan
 nxwright language <source-folder> nxlang
 ```
 
-Always switch with this command, and never by setting `language = "nxlang"` in `app.toml` by hand. The two languages read some code differently: the Nextion Editor computes `a+b*c` as `(a+b)*c`, strictly from left to right, while nxlang computes it with the more usual precedence, as `a+(b*c)`. So the command rewrites every line that the two read differently, adding the parentheses that keep the Nextion Editor's meaning: `(a+b)*c`.
+Always switch with this command, and never by setting `language = "nxlang"` in `app.toml` by hand. The two languages read some code differently: the Nextion Editor computes `a+b*c` as `(a+b)*c`, strictly from left to right, while nxlang computes it with the more usual precedence, as `a+(b*c)`. So the command rewrites every line that the two read differently, adding the parentheses that keep the Nextion Editor's meaning: `(a+b)*c`. It also writes a hexadecimal number such as `0X10` as `0x10`, the only form nxlang has.
 
-- The rewritten code builds to exactly the same project. If any code would not, the command stops before writing anything.
+- The rewritten code builds to exactly the same project, apart from the locks on its pages ([Working with the Nextion Editor](#working-with-the-nextion-editor)). If any code would not, the command stops before writing anything.
+- After the switch, `nxwright extract` and `nxwright import` refuse the folder, so changes made in the Nextion Editor can't come back into it ([Working with the Nextion Editor](#working-with-the-nextion-editor)).
 - There is no command to switch back. If you must, build the project, then extract it into a new folder. You get a folder in strict Nextion syntax that builds the same project. It contains the code the build wrote, with the compiler's hidden variables and hotspots ([nxlang-compiled.md](nxlang-compiled.md)), instead of the nxlang you wrote.
 
 In VS Code, "Switch the source folder to the nxwright language" shows what nxlang adds and each line the switch will rewrite, before you make it. The switch is one edit, so one undo takes it back.
@@ -252,21 +253,10 @@ The build writes your nxlang into strict Nextion syntax, adding hidden variables
   - in a constant, because a constant's text goes into every line that uses the constant, even outside an event;
   - in `program.nx`, which belongs to no event, and where the Nextion Editor refuses it too.
 
-## Extracting from the Nextion Editor
+## Working with the Nextion Editor
 
-Extracting keeps the source of every event whose compiled code the Nextion Editor did not change, and the constants of `program.nx` and of each page's `.nx` file. It leaves the compiler's hidden variables out of the page files.
+A project in nxlang goes one way: from the source folder, optionally through the Nextion Editor, to a TFT file. You can open the project file nxwright builds in the Nextion Editor and compile it there, but make your code changes in the source folder, because the code the build writes cannot turn back into nxlang ([nxlang-compiled.md](nxlang-compiled.md)). If you do save changes in the Nextion Editor, the next build replaces them, and keeps the old file as a backup ([build](commands.md#build)).
 
-An event the Nextion Editor changed takes the Nextion Editor's code, with the parentheses that keep its meaning. It is rewritten in the file that contains it, which may be an included file. An event the Nextion Editor emptied is removed from that file, and one it added goes into the page's own file. Included files are never deleted.
+To show that the project file is not meant for editing, the build locks every page, with no password. You can unlock a page in the Nextion Editor if you need to, and `--no-lock` turns the locks off ([build](commands.md#build)).
 
-Extracting stops in three cases:
-
-- The Nextion Editor changed an event, and its code uses hidden variables. Make the change in the source folder instead. The same goes for a function's body, which is in the event of its hotspot.
-- The Nextion Editor left an event different between the pages that include its file, since writing either version would change the other pages' build. Such a file changes only where the event is the same on every page.
-- nxwright has changed how it compiles since the project was last built. Extracting compares the Nextion Editor's code with what the current nxwright compiles, so it would take every compiled event for a change made in the Nextion Editor. Build the project once before you next extract it.
-
-Some lines and IDs come out differently:
-
-- The Nextion Editor computes `x-=a+b` as `(x-a)+b`, but nxlang reads `x -= a + b` as `x = x - (a + b)`. So extracting writes the Nextion Editor's line as `x=x-a+b`, which computes the same.
-- Extracting, and switching to nxlang, write a hexadecimal number such as `0X10` as `0x10`, the only form nxlang has.
-- The `tsw` lines at the start of a page's Preinitialize event are left out. The build adds them again.
-- A component added to a page in the Nextion Editor comes after the compiler's hidden variables. Extracting removes those, so the new component's ID moves down to where the next build puts it.
+`nxwright extract` and `nxwright import` refuse a folder in nxlang, and change nothing. To see what a project file contains, such as changes saved in the Nextion Editor, extract it into a new folder, and compare that folder with your source folder. The new folder is in strict Nextion syntax, and contains the code the build wrote, with the compiler's hidden variables and hotspots. Its page files say `locked = true`, because the project file's pages were locked. You can remove those lines.

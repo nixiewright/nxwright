@@ -56,7 +56,8 @@ from nxwright.tft.commands import command_summary
 def _run_build(arguments) -> str:
     if not arguments.overwrite:
         refuse_unless_replacing(arguments.output, _terminal_asker())
-    memory = build(arguments.source_folder, arguments.output)
+    memory = build(arguments.source_folder, arguments.output,
+                   keep_backup=not arguments.no_backup, lock_nxlang_pages=not arguments.no_lock)
     if memory.warning is not None:
         print("nxwright build: warning: %s" % memory.warning, file=sys.stderr)
     for warning in kept_screen_copy_warnings(arguments.source_folder):
@@ -391,7 +392,8 @@ def _run_import(arguments) -> str:
 def _run_write(arguments) -> str:
     if not arguments.overwrite:
         refuse_unless_replacing(arguments.output, _terminal_asker(), "project file", "written")
-    changed = ProjectWriter(arguments.project, arguments.dump_folder, arguments.output).write()
+    changed = ProjectWriter(arguments.project, arguments.dump_folder,
+                            arguments.output).write(keep_backup=not arguments.no_backup)
     if not changed:
         return "Nothing in the dump differs from the project; nothing written."
     return "\n".join(changed)
@@ -498,6 +500,11 @@ _TFT_SUBCOMMANDS = {"compile": "compile", "decompile": "decompile", "upload": "u
                     "tft-listing": "listing", "tft-compare": "compare"}
 
 
+# --no-backup, on the subcommands that replace a project file.
+_NO_BACKUP = ("--no-backup", {"action": "store_true",
+                              "help": "do not keep a backup of a project file that changed "
+                                      "since nxwright wrote it"})
+
 # Each subcommand: its name, the function running it (which returns the message
 # to print, or ""), a one-line summary, a fuller description, and its arguments
 # as (name, options for argparse's add_argument).
@@ -505,13 +512,19 @@ _SUBCOMMANDS = [
     ("build", _run_build, "build a project file from a source folder",
      "Writes a new project file from the source folder alone: its pages, code, pictures, "
      "fonts, and device settings. An existing project file at the output is replaced, once "
-     "the new one is written in full. The command asks first, unless --overwrite is given, "
-     "and refuses when there is no terminal to ask at. Any other file there is refused.",
+     "the new one is written in full. The command asks first, unless --overwrite is given, and "
+     "refuses when there is no terminal to ask at. Any other file there is refused. If the old "
+     "project file changed since nxwright wrote it, it is kept as a backup beside the new one. "
+     "A project built from a folder in nxlang has its pages locked, with no password.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
       ("output", {"type": Path, "help": "the project file (.HMI) to write"}),
       ("--overwrite", {"action": "store_true",
                        "help": "replace an existing project file at the output without "
-                               "asking"})]),
+                               "asking"}),
+      _NO_BACKUP,
+      ("--no-lock", {"action": "store_true",
+                     "help": "for a folder in nxlang, keep each page's lock as its page file "
+                             "sets it"})]),
     ("check", _run_check, "check a source folder as the build does, writing nothing",
      "Prints each error the build would stop at, the first of each page, and warnings about "
      "likely mistakes the build accepts, as `<file> line <n>: error: <message>`. Exits with 1 "
@@ -707,9 +720,10 @@ _SUBCOMMANDS = [
       ("name", {"nargs": "?", "help": "the page's name (default: the first free pageN)"})]),
     ("extract", _run_extract, "bring a project file into a source folder",
      "Use it to start from a project made in the Nextion Editor, or to bring back changes "
-     "made there later. A new or empty folder gets a fresh source folder. An existing one "
-     "keeps its code, names, and comfortable syntax wherever the project did not change "
-     "them. The project file is only read.",
+     "made there later. A new or empty folder gets a fresh source folder. An existing one in "
+     "strict Nextion syntax keeps its code, names, and comfortable syntax wherever the project "
+     "did not change them. One in nxlang is refused, because the code the build writes cannot "
+     "turn back into nxlang. The project file is only read.",
      [("project", {"type": Path, "help": "the project file (.HMI)"}),
       ("source_folder", {"type": Path, "nargs": "?",
                          "help": "the source folder to update or create"}),
@@ -734,9 +748,10 @@ _SUBCOMMANDS = [
       ("output", {"type": Path, "help": "the report to write, a Markdown file that does not "
                   "exist yet"})]),
     ("import", _run_import, "turn a dump folder into a source folder, or update one",
-     "A new or empty source folder gets a fresh import. A source folder that already has "
-     "an app.toml is updated, keeping its code wherever the dump has the same code. Any "
-     "other folder is refused.",
+     "A new or empty source folder gets a fresh import. A source folder in strict Nextion "
+     "syntax that already has an app.toml is updated, keeping its code wherever the dump has "
+     "the same code. One in nxlang is refused, because the code the build writes cannot turn "
+     "back into nxlang. Any other folder is refused.",
      [("dump_folder", {"type": Path, "help": "a dump folder written by nxwright dump"}),
       ("source_folder", {"type": Path, "help": "the source folder to update or create"}),
       ("--continue-with-unknown", {"action": "store_true",
@@ -748,13 +763,15 @@ _SUBCOMMANDS = [
      "project file at the output is replaced, once the new one is written in full and has "
      "passed its check: the project itself too, which is read first. The command asks first, "
      "unless --overwrite is given, and refuses when there is no terminal to ask at. Any other "
-     "file there is refused.",
+     "file there is refused. If the old file changed since nxwright wrote it, it is kept as a "
+     "backup beside the new one.",
      [("project", {"type": Path, "help": "the project file (.HMI) the dump was made from"}),
       ("dump_folder", {"type": Path, "help": "the edited dump folder"}),
       ("output", {"type": Path, "help": "the project file to write"}),
       ("--overwrite", {"action": "store_true",
                        "help": "replace an existing project file at the output without "
-                               "asking"})]),
+                               "asking"}),
+      _NO_BACKUP]),
     ("page", _run_page, "write one page of a dump as a page file the Nextion Editor imports",
      "The page file carries the fonts the page uses. Pictures are not carried, so the target "
      "project must have the same pictures with the same IDs. An existing page file at the "

@@ -58,7 +58,7 @@ You can change the screen model, rotation, and character encoding from the Proje
 
 A compile needs the firmware of the Nextion Editor version that nxwright supports ([The firmware](https://github.com/nixiewright/nxwright/blob/main/docs/screens.md#the-firmware)). If you don't have that version installed, nxwright can download the firmware from Nextion's site, or you can point it at a TFT file or a Nextion Editor folder of that version.
 
-If a project file was changed outside nxwright, such as in the Nextion Editor, Build HMI and Compile TFT ask before they replace it, and offer to extract those changes into your source folder first.
+If a project file was changed outside nxwright, such as in the Nextion Editor, Build HMI and Compile TFT ask before they replace it, and keep the old file as a backup ([Settings](#settings)).
 
 ![The nxwright side bar: the Project section with the screen settings, then the project file, the TFT file, and the screen, each with its button, the Media section, and the Simulator section](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/project-side-bar.png)
 
@@ -102,7 +102,7 @@ All your tests appear in Test Explorer and can be debugged using the VS Code deb
 
 ### Switch to nxlang
 
-The extension can switch a project to nxlang, nxwright's version of the Nextion language that adds powerful new functionality, and show you the lines of your code that will change as a result. Once you have switched, you can start using nxlang's extended syntax: functions, includes, local variables, standard operator precedence, and more ([nxlang](https://github.com/nixiewright/nxwright/blob/main/README.md#nxlang)).
+The extension can switch a project to nxlang, nxwright's version of the Nextion language that adds powerful new functionality, and show you the lines of your code that will change as a result. Once you have switched, you can start using nxlang's extended syntax: functions, includes, local variables, standard operator precedence, and more ([nxlang](https://github.com/nixiewright/nxwright/blob/main/README.md#nxlang)). Changes made in the Nextion Editor can no longer be extracted over your source folder as that conversion would now be lossy, but an the HMI file can still be extracted into a new folder.
 
 ## Getting started
 
@@ -128,7 +128,7 @@ All commands are in the command palette, under "nxwright:". Most of them do what
 | Upload the TFT file to the screen | Compiles, then uploads the TFT file, as Upload TFT does. |
 | Upload a TFT file to the screen | Uploads a TFT file you choose, such as one made in the Nextion Editor, without compiling. |
 | Decompile a TFT file into a new source folder | Turns a TFT file back into a source folder, to recover a project you no longer have. |
-| Extract the project file into the source folder | Brings changes made in the Nextion Editor back into your files. A project saved by a newer Nextion Editor may contain things nxwright does not know. If nxwright cannot keep one of them, nothing is extracted. |
+| Extract the project file into the source folder | Brings changes made in the Nextion Editor back into a source folder in strict Nextion syntax. For a folder in nxlang, it offers to extract the file into a new folder instead. A project saved by a newer Nextion Editor may contain things nxwright does not know. If nxwright cannot keep one of them, nothing is extracted. |
 | Choose the project HMI file for the source folder | Chooses the `.HMI` file that Build writes and Extract reads. |
 | Change the screen model | Changes the screen, and resizes every page. |
 | Change the rotation | Changes the rotation, resizes every page, and rotates fonts and videos. |
@@ -210,6 +210,8 @@ On a Mac, use Cmd instead of Ctrl, and the delete key to delete.
 You can change these in VS Code's Settings, where they are grouped by category.
 
 - `nxwright.command`: the command that runs nxwright, as a list of the program and its first arguments. By default, the extension looks for the `nxwright` command, or for a Python that can run nxwright, starting with the interpreter chosen in VS Code. To use a copy of nxwright's repository, you can set it to `["python", "${workspaceFolder}/nxwright/run.py"]`. If you opened a `.code-workspace` file, put this setting in that file's `settings`.
+- `nxwright.backups`: keeps a backup of a project file or a TFT file that changed since nxwright wrote it, when a build or a compile replaces that file. It is on by default. Backups go beside the new file, such as `app.HMI.2026-11-06-143205.bak`, and nxwright never deletes them.
+- `nxwright.lockNxlangPages`: locks the pages of a project file built from nxlang, with no password, to show in the Nextion Editor that the file is not meant for editing. It is on by default.
 - `nxwright.previewGrid`: the size of the grid, in pixels, that dragged components snap to. The default is 1, which means no grid.
 - `nxwright.testFolders`: the folders of tests that Test Explorer lists. By default, it lists every folder named `tests` next to a source folder.
 - The Simulator settings, used when a launch configuration doesn't set its own value:

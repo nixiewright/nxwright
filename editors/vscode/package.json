@@ -57,6 +57,16 @@
             },
             "default": [],
             "markdownDescription": "The command that runs nxwright: the program, then its first arguments. When it is empty, the default, the extension runs the `nxwright` command that `pip install` gives, if it is on PATH; else `python -P -m nxwright` with the first Python that runs it: the interpreter chosen in VS Code, when the Python extension is installed, then `python3`, `python`, and on Windows `py -3`. From a copy of nxwright's repository, use for example `[\"python\", \"${workspaceFolder}/nxwright/run.py\"]`; `${workspaceFolder}` stands for the workspace's first folder."
+          },
+          "nxwright.backups": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "When a build or a compile replaces a project file or a TFT file that changed since nxwright wrote it, keeps the old file as a backup beside the new one, such as `app.HMI.2026-11-06-143205.bak`."
+          },
+          "nxwright.lockNxlangPages": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Locks the pages of a project file built from nxlang, with no password, to show in the Nextion Editor that the file is not meant for editing."
           }
         }
       },
@@ -1049,7 +1059,7 @@
         },
         {
           "command": "nxwright.extract",
-          "when": "view == nxwright.project && nxwright.hasProject",
+          "when": "view == nxwright.project && nxwright.hasProject && nxwright.projectLanguage != nxlang",
           "group": "navigation@1"
         },
         {

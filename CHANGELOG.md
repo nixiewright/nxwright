@@ -15,6 +15,12 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 - `nxwright tft-read`, `tft-listing`, and `tft-compare` show what is inside TFT files.
 - `compile`, `upload`, and `ports` can print JSON with `--json`, so that programs such as the VS Code extension can read their results.
 
+Existing commands also behave differently:
+
+- `extract` and `import` now refuse a source folder in nxlang, because the code the build writes cannot faithfully be turned back into nxlang and the conversion would be lossy. An nxlang project can still be extracted into a new folder.
+- A project file built from a folder in nxlang now has its pages locked, with no password, to show in the Nextion Editor that it is not meant for editing. `--no-lock` turns this off, and unlocking from the Nextion Editor takes a couple of clicks if you need to.
+- `build`, `write`, `compile`, and `rescue` now keep a file they replace as a backup beside the new one, such as `app.HMI.2026-11-06-143205.bak`, if it changed since nxwright wrote it. `--no-backup` turns this off.
+
 ### 0.1.0
 
 First public release.

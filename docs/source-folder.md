@@ -26,9 +26,11 @@ The usual cycle:
 
 1. Edit the source folder (optionally simulate and debug with [nxwright's VS Code extension](../editors/vscode/README.md)).
 2. Build the project into an HMI file.
-3. Open the HMI file in the Nextion Editor, deploy to the physical screen there.
+3. Open the HMI file in the Nextion Editor, and deploy to the physical screen from there.
 
-If a project is changed in the Nextion Editor, save it, then extract it to bring the changes back into the source folder.
+You can also skip the Nextion Editor, and compile and upload with nxwright ([screens.md](screens.md)).
+
+If you change a project in the Nextion Editor, save it, then extract it to bring the changes back into the source folder. This only works for a folder in strict Nextion syntax ([Working with the Nextion Editor](language.md#working-with-the-nextion-editor)), as doing so on an nxlang project would lose your use of extended syntax, such as functions and includes. An nxlang project HMI file can still be extracted into a new folder.
 
 For the options of `nxwright new`, and what it creates, see [commands.md](commands.md#new).
 
@@ -342,19 +344,15 @@ The source folder keeps each animation, video, and sound in the Nextion Editor's
 
 ## Extracting into an existing folder
 
-Extracting into a folder that already has an `app.toml` updates it:
+Extracting into a folder in strict Nextion syntax that already has an `app.toml` updates it:
 
-- Each event, each macro, and `program.nx`, keeps its existing text if that text builds to the same code. So comfortable code and comments survive an edit made in the Nextion Editor.
-- Everything else is rewritten.
-- The files that the old `app.toml` lists, and that the project no longer has, are deleted, one by one.
+- Each event, each macro, and `program.nx` keeps its existing text if that text builds to the same code, so comfortable code and comments survive an edit made in the Nextion Editor.
+- Everything else is rewritten, so comments in `.toml` files are not kept.
+- The files that the old `app.toml` lists, and that the project no longer has, are deleted.
 
-What extracting never does:
+Extracting never deletes a folder, and never touches a file that the old `app.toml` does not list. It refuses a folder in nxlang, and any other folder that is not empty.
 
-- It never deletes a folder.
-- It never touches a file that the old `app.toml` does not list.
-- It refuses any other folder that is not empty.
-
-Comments in `.toml` files are not kept. Extracting stops with an error, before writing anything, at anything a source folder cannot represent, such as a control character in code.
+Extracting stops with an error, before writing anything, at anything a source folder cannot represent, such as a control character in code.
 
 ### The round trip
 

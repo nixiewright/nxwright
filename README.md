@@ -78,7 +78,7 @@ on celsius.up:
   unit = 0
 ```
 
-`nxwright build app screen.HMI` turns the folder back into a project file, which you can open in the Nextion Editor as usual. `nxwright compile app screen.tft` compiles the folder into the TFT file the screen runs. You don't need the Nextion Editor for this. If you change something in the Nextion Editor, save it, and `nxwright extract` brings the change back into the folder, keeping your code wherever the Nextion Editor didn't change it.
+`nxwright build app screen.HMI` turns the folder back into a project file (HMI), which you can open in the Nextion Editor as usual. `nxwright compile app screen.tft` compiles the folder into the TFT file the screen runs. You don't need the Nextion Editor for this. If you change something in the Nextion Editor and save it, `nxwright extract` brings the change back into the folder, keeping your code wherever the Nextion Editor didn't change it. This works until you switch the folder to [nxlang](#nxlang).
 
 ## Write Nextion code comfortably
 
@@ -372,7 +372,9 @@ Shared code lives in one place: fix a function once, and every page that include
 
 ### Switching a project to nxlang
 
-Run `nxwright language app nxlang`, or use "Switch to nxlang" in VS Code, which shows you the examples above and the lines that will change first. Any line of your code that would calculate differently in nxlang gets parentheses, so it keeps giving the same result. There is no command to switch back, but the HMI file nxwright builds can always be extracted into a new folder of plain Nextion code.
+Run `nxwright language app nxlang`, or use "Switch to nxlang" in VS Code, which shows you the examples above and the lines that will change first. Any line of your code that would calculate differently in nxlang gets parentheses, so it keeps giving the same result.
+
+From then on, make your changes in the source folder. You can still open the HMI file nxwright builds in the Nextion Editor and compile it there, but changes made there can't be extracted back into the folder, because the code the build writes can't faithfully be turned back into nxlang and the conversion would be lossy. Although there is no command to switch back, the HMI file nxwright builds can always be extracted into a new folder of plain Nextion code.
 
 See [docs/language.md](https://github.com/nixiewright/nxwright/blob/main/docs/language.md) for the whole language.
 

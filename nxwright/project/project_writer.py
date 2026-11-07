@@ -105,15 +105,16 @@ class ProjectWriter:
         self._dump_folder = Path(dump_folder)
         self._output = Path(output)
 
-    def write(self) -> list:
+    def write(self, keep_backup: bool = False) -> list:
         """Writes the output project and returns readable lines describing the
         changes. Writes nothing and returns an empty list when nothing changed.
 
         An existing project file at the output is replaced, but only once
         the new one is written in full and has passed its self-check
         (replacing.written_beside). So a write that fails leaves it as it
-        was. The output may be the project itself, which is read in full
-        first.
+        was. With `keep_backup`, an old file that changed since nxwright wrote
+        it is kept as a backup. The output may be the project itself, which is
+        read in full first.
 
         Raises NxwrightError when the output exists and is not a project
         file, the project or dump is not in a state the writer handles, or
@@ -135,7 +136,7 @@ class ProjectWriter:
         data = _apply(container, plan)
         _check_written(data, plan)
         with held_by_the_nextion_editor(self._output), \
-                written_beside(self._output) as written:
+                written_beside(self._output, keep_backup) as written:
             try:
                 written.write_bytes(data)
             except OSError as error:
