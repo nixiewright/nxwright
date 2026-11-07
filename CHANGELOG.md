@@ -18,11 +18,11 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 
 Existing commands also changed:
 
-- `extract` and `import` are simpler: they now write only to a new or empty folder, and no longer update an existing source folder, which could cause data loss.
+- `extract` and `import` now write only to a new or empty folder, because updating an existing source folder could lose data.
 - Project files that nxwright builds now have their pages locked (no password) to show that they are not meant to be edited: edit the nxwright project folder and rebuild the HMI instead (or simply compile and upload directly from nxwright).
 - `dump` can now replace an earlier dump.
-- Extracted code now uses a picture's or font's name where a number can only mean that picture or font.
-- Replacing a project file or TFT file that changed outside nxwright now keeps a backup.
+- Extracted code now refers to pictures and fonts by name instead of by number, wherever the number can only mean that picture or font.
+- nxwright now keeps a backup when it replaces a project file or TFT file that was changed outside nxwright.
 
 ### 0.1.0
 

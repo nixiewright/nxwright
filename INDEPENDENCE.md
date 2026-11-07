@@ -2,11 +2,11 @@
 
 nxwright is an independent, cross-platform, open-source project, not affiliated with or endorsed by ITEAD or Nextion. It reads and writes the Nextion Editor's project files so that you can keep your app as text. It can also compile your app into a TFT file without the Windows-only Nextion Editor, and upload the file to your screen.
 
-All of this is backed by public documents and by what the Nextion Editor does, and nxwright ships none of the vendor's files.
+nxwright is built on public documents and on observing the Nextion Editor, and ships none of the vendor's files.
 
 ## What nxwright is built on
 
-The vendor of Nextion screens does not document the formats of HMI project files or TFT files. So every fact nxwright relies on about those files, the Nextion Editor, or the screen is backed by one of two kinds of source:
+The vendor of Nextion screens does not document the formats of HMI project files or TFT files. Every fact that nxwright relies on, whether about those files, the Nextion Editor, or the screen, is backed by one of two kinds of source:
 
 - **What the Nextion Editor does.** The project files it saves, the code its compile accepts and refuses, the TFT files it writes, and how its simulator behaves.
 - **Public documents.** The vendor's [Instruction Set](https://nextion.tech/instruction-set/) and [Editor Guide](https://nextion.tech/editor_guide/), and these documents by the Nextion community:
@@ -31,7 +31,7 @@ Some features need material from the vendor that nxwright does not ship, so they
 
 Every TFT file contains the screen's firmware, which Nextion makes. To compile, nxwright takes the firmware from a TFT file or a Nextion Editor folder you choose, or from the Nextion Editor installed on your computer. If none of these has it, nxwright downloads it from Nextion's site with your permission. Wherever the firmware came from, nxwright keeps it in your cache folder for later compiles.
 
-`nxwright decompile` turns your own TFT file back into a source folder. It reads only the app's part of the file, never the firmware's code. To check the result, the command compiles the folder again, copying the file's firmware unchanged.
+`nxwright decompile` turns your own TFT file back into a source folder. It reads only the app's part of the file, never the firmware's code. To check the result, the command compiles the folder again, and copies the firmware from your TFT file into the new one unchanged.
 
 To test or simulate Chinese input, nxwright needs the screen's pinyin table. It reads the table from your installed Nextion Editor's `input.bin`, or from a TFT file you choose, and never copies it into your project.
 
@@ -40,7 +40,7 @@ To test or simulate Chinese input, nxwright needs the screen's pinyin table. It 
 Please keep nxwright free of the vendor's material, and keep its facts traceable to their sources:
 
 - Work out how the Nextion Editor behaves by observing it: the files it saves, the code its compile accepts and refuses, and what its simulator does. See [tools/editor](tools/editor/README.md) for a tool that drives the Nextion Editor.
-- Do not decompile or disassemble the Nextion Editor or the screen's firmware, and do not decode the data inside the Nextion Editor's program files.
+- Do not decompile or disassemble the Nextion Editor or the screen's firmware, and do not decode the data inside the Nextion Editor's executable and library files.
 - Do not commit any file from the Nextion Editor's installation, any TFT file, or a project, picture, or font the vendor made.
 - Write descriptions in your own words. Do not copy the Nextion Editor's hints or help.
 - When a fact comes from a public document, name the document in a comment beside the code that relies on it.
