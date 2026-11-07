@@ -2,14 +2,18 @@
 // the webview so that Node's test runner can check it. Rectangles are {name,
 // x, y, w, h}, in the page's pixels. The component selected first is the
 // anchor: aligning moves the others to its edge or centre, and sizing gives
-// them its width, its height, or both. Spacing evenly keeps the first and
-// the last components, across or down, where they are, and moves those
-// between so that the gaps between neighbours are equal, as near as whole
-// pixels allow, the first gaps taking the extra pixels. A centre that falls
-// between two pixels takes the one to the left or above. A locked component
-// stays where it is: moves and arrangements leave it out, and spacing keeps
-// it as it keeps the first and the last, spacing the others between each
-// two that stay.
+// them its width, its height, or both. A centre that falls between two
+// pixels takes the one to the left or above.
+//
+// Spacing works across or down. Spacing evenly keeps the first and the last
+// components where they are, and moves those between so that the gaps are
+// equal. When the pixels do not divide evenly, the first gaps get the extra
+// ones. Increasing or decreasing the spacing keeps the first component where
+// it is, and widens or narrows each gap after it by a pixel.
+//
+// A locked component stays where it is, and moves and arrangements leave it
+// out. Spacing treats it as a fixed point, and spaces the components on each
+// side of it separately.
 
 // Returns `others` aligned with `anchor` as `how` says: "left", "right",
 // "top", "bottom", "centreAcross" (the same centre from left to right), or
@@ -41,8 +45,7 @@ export function sameSize(anchor, others, which) {
 // evenly between them. Fewer than three are returned as they are.
 export function spacedEvenly(rects, across, fixed = new Set()) {
   const [at, size] = across ? ["x", "w"] : ["y", "h"];
-  const order = rects.map((rect, index) => [rect, index])
-    .sort(([a, i], [b, j]) => a[at] - b[at] || i - j).map(([rect]) => rect);
+  const order = standingOrder(rects, at);
   if (order.length < 3) {
     return rects;
   }
@@ -55,6 +58,40 @@ export function spacedEvenly(rects, across, fixed = new Set()) {
     }
   });
   return rects.map((rect) => placed.get(rect) ?? rect);
+}
+
+// Returns `rects` with each gap between neighbours widened by a pixel when
+// `step` is 1, or narrowed by a pixel when it is -1. Neighbours are taken
+// left to right when `across` is true, or top to bottom when it is false,
+// and rectangles at the same place keep the order given. The first rectangle
+// and those named in `fixed` stay where they are. Each of the others moves
+// one pixel more than the one before it, and the shift starts again from 0
+// after each rectangle that stays. Narrowing leaves a gap of 0 or less as it is,
+// so components stop closing up once they touch.
+export function spacingChanged(rects, across, step, fixed = new Set()) {
+  const [at, size] = across ? ["x", "w"] : ["y", "h"];
+  const order = standingOrder(rects, at);
+  const placed = new Map();
+  let shift = 0;
+  order.forEach((rect, index) => {
+    if (index === 0 || fixed.has(rect.name)) {
+      shift = 0;
+      return;
+    }
+    const before = order[index - 1];
+    if (step > 0 || rect[at] - (before[at] + before[size]) > 0) {
+      shift += step;
+    }
+    placed.set(rect, { ...rect, [at]: rect[at] + shift });
+  });
+  return rects.map((rect) => placed.get(rect) ?? rect);
+}
+
+// Returns `rects` sorted by `at`, "x" or "y". Rectangles at the same place
+// keep the order given.
+function standingOrder(rects, at) {
+  return rects.map((rect, index) => [rect, index])
+    .sort(([a, i], [b, j]) => a[at] - b[at] || i - j).map(([rect]) => rect);
 }
 
 // Places, in `placed`, those of `order` between its first and its last, so
@@ -75,17 +112,28 @@ function spaceBetween(order, at, size, placed) {
   });
 }
 
-// Returns the rectangles the arrangement `how` gives `rects`, the selected
-// components with a place, the anchor first: an alignment of `aligned`,
-// "sameWidth", "sameHeight", "sameSize", "spaceAcross", or "spaceDown". Those
-// named in `locked` are left out, staying where they are, the anchor's
-// edges, centres, and size still counting.
+// Returns the rectangles that arrangement `how` gives `rects`. `rects` are
+// the selected components that have a place on the page, the anchor first.
+// `how` is an alignment that `aligned` takes, or "sameWidth", "sameHeight",
+// "sameSize", "spaceAcross", "spaceDown", "increaseSpacingAcross",
+// "decreaseSpacingAcross", "increaseSpacingDown", or "decreaseSpacingDown".
+// Those named in `locked` stay where they are and are left out of the
+// result. The anchor's edges, centres, and size still count when the anchor
+// is locked.
 export function arrangement(rects, how, locked = new Set()) {
   const [anchor, ...rest] = rects;
   const sizes = { sameWidth: "width", sameHeight: "height", sameSize: "both" };
   const spacing = { spaceAcross: true, spaceDown: false };
+  // The `across` and `step` arguments that `spacingChanged` takes for each
+  // arrangement.
+  const spacingChanges = {
+    increaseSpacingAcross: [true, 1], decreaseSpacingAcross: [true, -1],
+    increaseSpacingDown: [false, 1], decreaseSpacingDown: [false, -1],
+  };
   const arranged = how in sizes ? sameSize(anchor, rest, sizes[how])
-    : how in spacing ? spacedEvenly(rects, spacing[how], locked) : aligned(anchor, rest, how);
+    : how in spacing ? spacedEvenly(rects, spacing[how], locked)
+    : how in spacingChanges ? spacingChanged(rects, ...spacingChanges[how], locked)
+    : aligned(anchor, rest, how);
   return arranged.filter((rect) => !locked.has(rect.name));
 }
 

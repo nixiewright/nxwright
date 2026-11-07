@@ -1,9 +1,11 @@
-// The glyphs of the side bar's buttons, by name, which its webview sections
-// draw (media/glyph-button.mjs) and its headers show as icons
-// (media/glyph-icons.mjs). Each is the inside of an SVG drawing on a 16 by
-// 16 grid. Lines are drawn in the button's colour (currentColor) and shapes
-// left empty, unless a shape fills itself, as the play button does. Each
-// takes the picture most tools use for its action.
+// The glyphs of the buttons in the side bar and in the page preview's
+// arranging toolbar, by name. The side bar's webview sections draw them
+// (media/glyph-button.mjs), its headers show them as icons
+// (media/glyph-icons.mjs), and the toolbar draws them too
+// (media/arranging-toolbar.mjs). Each glyph is the inside of an SVG drawing
+// on a 16 by 16 grid, and shows the picture most tools use for its action.
+// Lines are drawn in the button's colour (currentColor), and shapes are left
+// empty unless they set their own fill, like the play button's triangle.
 export const GLYPHS = {
   // A folder with a plus.
   newProject: '<path d="M1.5 3.5h4l1.5 1.5h7.5v8.5h-13z"/><path d="M8 7v5M5.5 9.5h5"/>',
@@ -39,4 +41,39 @@ export const GLYPHS = {
     '<path stroke-width="2" stroke-linecap="butt" d="M7 4.6V6M7 12v1.4M2.6 9H4M10 9h1.4' +
     'M3.9 5.9l1 1M9.1 11.1l1 1M3.9 12.1l1-1M9.1 6.9l1-1"/>' +
     '<path d="M13 1.5v4M11 3.5h4"/>',
+  // The page preview's arranging toolbar. Moving components up or down the
+  // ID order: an arrow up or down, with a bar ahead of it when the move goes
+  // all the way to the front or the back.
+  bringToFront: '<path d="M3 2.5h10"/><path d="M8 14V5.5M4.5 9L8 5.5 11.5 9"/>',
+  bringForward: '<path d="M8 13.5V3M4.5 6.5L8 3l3.5 3.5"/>',
+  sendBackward: '<path d="M8 2.5V13M4.5 9.5L8 13l3.5-3.5"/>',
+  sendToBack: '<path d="M3 13.5h10"/><path d="M8 2v8.5M4.5 7L8 10.5 11.5 7"/>',
+  // Aligning: two bars of different lengths against the line they align on.
+  alignLeft: '<path d="M2.5 1.5v13"/><path d="M4.5 3.5h9v3h-9zM4.5 9.5h6v3h-6z"/>',
+  alignRight: '<path d="M13.5 1.5v13"/><path d="M2.5 3.5h9v3h-9zM5.5 9.5h6v3h-6z"/>',
+  alignTop: '<path d="M1.5 2.5h13"/><path d="M3.5 4.5h3v9h-3zM9.5 4.5h3v6h-3z"/>',
+  alignBottom: '<path d="M1.5 13.5h13"/><path d="M3.5 2.5h3v9h-3zM9.5 5.5h3v6h-3z"/>',
+  alignCentresAcross: '<path d="M8 1v14"/><path d="M3.5 3.5h9v3h-9zM5 9.5h6v3H5z"/>',
+  alignCentresDown: '<path d="M1 8h14"/><path d="M3.5 3.5h3v9h-3zM9.5 5h3v6h-3z"/>',
+  // Making the same size: a box with a two-headed arrow across, down, or
+  // corner to corner.
+  sameWidth: '<path d="M1.5 4.5h13v7h-13z"/>' +
+    '<path d="M4 8h8M5.5 6.5L4 8l1.5 1.5M10.5 6.5L12 8l-1.5 1.5"/>',
+  sameHeight: '<path d="M4.5 1.5h7v13h-7z"/>' +
+    '<path d="M8 4v8M6.5 5.5L8 4l1.5 1.5M6.5 10.5L8 12l1.5-1.5"/>',
+  sameSize: '<path d="M2.5 2.5h11v11h-11z"/><path d="M5.5 10.5l5-5M7.5 5.5h3v3M5.5 7.5v3h3"/>',
+  // Spacing: lines standing for components, with an equals sign in each gap,
+  // or arrows that push the outer two apart or pull them together.
+  spaceAcross: '<path d="M1.5 3v10M8 3v10M14.5 3v10"/>' +
+    '<path d="M3.5 7h2.5M3.5 9h2.5M10 7h2.5M10 9h2.5"/>',
+  increaseSpacingAcross: '<path d="M1.5 3v10M14.5 3v10"/>' +
+    '<path d="M4 8h8M6 6L4 8l2 2M10 6l2 2-2 2"/>',
+  decreaseSpacingAcross: '<path d="M1.5 3v10M14.5 3v10"/>' +
+    '<path d="M3.5 8H7M12.5 8H9M5 6l2 2-2 2M11 6L9 8l2 2"/>',
+  spaceDown: '<path d="M3 1.5h10M3 8h10M3 14.5h10"/>' +
+    '<path d="M7 3.5v2.5M9 3.5v2.5M7 10v2.5M9 10v2.5"/>',
+  increaseSpacingDown: '<path d="M3 1.5h10M3 14.5h10"/>' +
+    '<path d="M8 4v8M6 6l2-2 2 2M6 10l2 2 2-2"/>',
+  decreaseSpacingDown: '<path d="M3 1.5h10M3 14.5h10"/>' +
+    '<path d="M8 3.5V7M8 12.5V9M6 5l2 2 2-2M6 11l2-2 2 2"/>',
 };

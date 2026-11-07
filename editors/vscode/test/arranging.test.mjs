@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { aligned, arrangement, boxBetween, groupMembers, lockedAmong, movedBy,
-  movedTogether, movingNames, overlappingBox, sameSize, spacedEvenly }
+  movedTogether, movingNames, overlappingBox, sameSize, spacedEvenly, spacingChanged }
   from "../media/arranging.mjs";
 
 const anchor = { name: "a", x: 100, y: 50, w: 80, h: 40 };
@@ -40,6 +40,57 @@ test("spaced evenly between the first and the last", () => {
   assert.deepEqual(spacedEvenly(rects.slice(0, 2), true), rects.slice(0, 2));
   const column = rects.map((rect) => ({ ...rect, x: 0, y: rect.x, w: 5, h: rect.w }));
   assert.deepEqual(spacedEvenly(column, false).map((rect) => rect.y), [87, 0, 130, 44]);
+});
+
+// A row of components 10 wide, in the order selected, at these x.
+const rowAt = (...xs) => xs.map((x, index) => ({ name: `r${index}`, x, y: 0, w: 10, h: 5 }));
+const xsOf = (rects) => rects.map((rect) => rect.x);
+
+test("the spacing increased or decreased by a pixel, the first component staying", () => {
+  // Selected out of order: r1 stands first and stays, r2 next, r0 last.
+  const row = rowAt(60, 0, 30);
+  assert.deepEqual(xsOf(spacingChanged(row, true, 1)), [62, 0, 31]);
+  assert.deepEqual(xsOf(spacingChanged(row, true, -1)), [58, 0, 29]);
+  // Down, the same rule on y.
+  const column = row.map((rect) => ({ ...rect, x: 0, y: rect.x, w: 5, h: 10 }));
+  assert.deepEqual(spacingChanged(column, false, 1).map((rect) => rect.y), [62, 0, 31]);
+  // Two are enough; one is left as it is.
+  assert.deepEqual(xsOf(spacingChanged(rowAt(0, 20), true, 1)), [0, 21]);
+  assert.deepEqual(spacingChanged(rowAt(5), true, 1), rowAt(5));
+});
+
+test("components at the same place are taken in the order selected", () => {
+  assert.deepEqual(xsOf(spacingChanged(rowAt(0, 0, 0), true, 1)), [0, 1, 2]);
+});
+
+test("decreasing leaves a gap that is closed or overlapping as it is", () => {
+  // Gaps of 0, 5, and -5: only the 5 shrinks, so r2 and r3 move by one.
+  assert.deepEqual(xsOf(spacingChanged(rowAt(0, 10, 25, 30), true, -1)), [0, 10, 24, 29]);
+  // Increasing widens every gap, even an overlap.
+  assert.deepEqual(xsOf(spacingChanged(rowAt(0, 10, 25, 30), true, 1)), [0, 11, 27, 33]);
+});
+
+test("a locked component stays, and the components after it count from it", () => {
+  const row = rowAt(0, 20, 40, 60, 80);
+  const locked = new Set(["r2"]);
+  // r1 moves by 1, narrowing its gap to the locked r2. r3 and r4 count from r2.
+  assert.deepEqual(xsOf(spacingChanged(row, true, 1, locked)), [0, 21, 40, 61, 82]);
+  // Increasing again and again closes that gap, then overlaps the locked one.
+  assert.deepEqual(xsOf(spacingChanged(rowAt(0, 29, 40), true, 1, new Set(["r2"]))), [0, 30, 40]);
+  assert.deepEqual(xsOf(spacingChanged(rowAt(0, 30, 40), true, 1, new Set(["r2"]))),
+                   [0, 31, 40]);
+  // Through arrangement, the locked component is left out.
+  assert.deepEqual(arrangement(row, "increaseSpacingAcross", locked).map((rect) => rect.name),
+                   ["r0", "r1", "r3", "r4"]);
+});
+
+test("arrangement increases and decreases the spacing across and down", () => {
+  const row = rowAt(0, 20);
+  const column = row.map((rect) => ({ ...rect, x: 0, y: rect.x }));
+  assert.deepEqual(xsOf(arrangement(row, "increaseSpacingAcross")), [0, 21]);
+  assert.deepEqual(xsOf(arrangement(row, "decreaseSpacingAcross")), [0, 19]);
+  assert.deepEqual(arrangement(column, "increaseSpacingDown").map((rect) => rect.y), [0, 21]);
+  assert.deepEqual(arrangement(column, "decreaseSpacingDown").map((rect) => rect.y), [0, 19]);
 });
 
 test("the components a box overlaps, the page aside", () => {

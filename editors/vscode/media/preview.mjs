@@ -24,6 +24,10 @@
 //    (src/pageComponents.ts); aligns, sizes, spaces, and moves them up or
 //    down the ID order (src/preview.ts); locks and unlocks them; and groups
 //    and ungroups them;
+//  - the arranging toolbar has buttons for the right-click menu's commands
+//    that align, size, space, and move the selected components up or down
+//    the ID order, and greys out a button when the menu would not offer its
+//    command (arranging-toolbar.mjs);
 //  - a locked component shows a padlock, and is not moved: it has no
 //    handles, and dragging, the arrow keys, and arranging move the other
 //    selected components alone;
@@ -53,6 +57,7 @@ import { arrangement, boxBetween, groupMembers, lockedAmong, movedTogether,
 import { clickOfSmallBox, componentAt, dragged, handleAt, handlePoints, idleTouchCaptures,
   imageSources, loadImage, NAME_COLOURS, NAME_FONT, nudged, onGrid, paint, paintNames,
   paintPadlocks, paintPageLock, pressStarts } from "./preview-model.mjs";
+import { ArrangingToolbar } from "./arranging-toolbar.mjs";
 import { element } from "./elements.mjs";
 import { ZoomBar } from "./zoom.mjs";
 import { inView, shownPart } from "./zoom-model.mjs";
@@ -69,6 +74,8 @@ const namesToggle = document.getElementById("names");
 const strip = document.getElementById("strip");
 const notes = document.getElementById("notes");
 const zoom = new ZoomBar(document.getElementById("zoom"), canvas, vscode, () => sizeOverlay());
+const arrangingToolbar = new ArrangingToolbar(document.getElementById("arranging"), canvas,
+                                              runToolbarButton);
 const SELECTION_COLOUR = "#3794ff";
 // The wash over the members of the selected components' groups, a khaki
 // near the Editor's.
@@ -339,6 +346,10 @@ function toggle(name) {
 
 function showSelection() {
   paintOverlay();
+  arrangingToolbar.update(drawing && {
+    components: selectedComponents().length, placed: placedSelection().length,
+    pageLocked: pageLocked(),
+  });
   const names = selection();
   for (const tile of strip.children) {
     tile.classList.toggle("selected", names.includes(tile.dataset.name));
@@ -592,14 +603,27 @@ canvas.addEventListener("keydown", (event) => {
   }
 });
 
-// Arranges the selected components with a place, as the right-click
-// menu's command `how` says (src/preview.ts): an alignment of arranging.mjs,
-// "sameWidth", "sameHeight", "sameSize", "spaceAcross", or "spaceDown".
+// Arranges the selected components that have a place on the page. `how` is
+// one of the arrangements that arranging.mjs's `arrangement` takes, and
+// comes from a right-click menu command (src/preview.ts) or a toolbar button.
 function arrange(how) {
   const rects = placedSelection().map((name) => rectOf(name));
   if (rects.length >= 2) {
     placeAll(arrangement(rects, how, lockedNames(placedSelection()))
       .filter((rect) => moved(rectOf(rect.name), rect)));
+  }
+}
+
+// Runs the command of an arranging toolbar button. The webview does an
+// arrangement itself, and sends a move up or down the ID order to the
+// extension, which reorders the components the same way as the right-click
+// menu's commands (src/preview.ts).
+function runToolbarButton(entry) {
+  const names = selectedComponents();
+  if (entry.how) {
+    arrange(entry.how);
+  } else if (names.length > 0 && !pageLocked()) {
+    vscode.postMessage({ type: "reorder", direction: entry.direction, names });
   }
 }
 

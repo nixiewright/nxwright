@@ -602,12 +602,32 @@
       },
       {
         "command": "nxwright.spaceAcross",
-        "title": "Across",
+        "title": "Make horizontal spacing equal",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.increaseHorizontalSpacing",
+        "title": "Increase horizontal spacing",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.decreaseHorizontalSpacing",
+        "title": "Decrease horizontal spacing",
         "category": "nxwright"
       },
       {
         "command": "nxwright.spaceDown",
-        "title": "Down",
+        "title": "Make vertical spacing equal",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.increaseVerticalSpacing",
+        "title": "Increase vertical spacing",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.decreaseVerticalSpacing",
+        "title": "Decrease vertical spacing",
         "category": "nxwright"
       },
       {
@@ -1140,7 +1160,23 @@
           "when": "false"
         },
         {
+          "command": "nxwright.increaseHorizontalSpacing",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.decreaseHorizontalSpacing",
+          "when": "false"
+        },
+        {
           "command": "nxwright.spaceDown",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.increaseVerticalSpacing",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.decreaseVerticalSpacing",
           "when": "false"
         },
         {
@@ -1458,8 +1494,8 @@
           "group": "4_arrange@2"
         },
         {
-          "submenu": "nxwright.spaceEvenly",
-          "when": "webviewId == 'nxwright.pagePreview' && spaceable && !pageLocked",
+          "submenu": "nxwright.spacing",
+          "when": "webviewId == 'nxwright.pagePreview' && several && !pageLocked",
           "group": "4_arrange@3"
         },
         {
@@ -1637,12 +1673,32 @@
           "command": "nxwright.sameSize"
         }
       ],
-      "nxwright.spaceEvenly": [
+      "nxwright.spacing": [
         {
-          "command": "nxwright.spaceAcross"
+          "command": "nxwright.spaceAcross",
+          "when": "spaceable",
+          "group": "1_horizontal@1"
         },
         {
-          "command": "nxwright.spaceDown"
+          "command": "nxwright.increaseHorizontalSpacing",
+          "group": "1_horizontal@2"
+        },
+        {
+          "command": "nxwright.decreaseHorizontalSpacing",
+          "group": "1_horizontal@3"
+        },
+        {
+          "command": "nxwright.spaceDown",
+          "when": "spaceable",
+          "group": "2_vertical@1"
+        },
+        {
+          "command": "nxwright.increaseVerticalSpacing",
+          "group": "2_vertical@2"
+        },
+        {
+          "command": "nxwright.decreaseVerticalSpacing",
+          "group": "2_vertical@3"
         }
       ]
     },
@@ -1660,8 +1716,8 @@
         "label": "Make the same size"
       },
       {
-        "id": "nxwright.spaceEvenly",
-        "label": "Space evenly"
+        "id": "nxwright.spacing",
+        "label": "Spacing"
       }
     ]
   },

@@ -60,9 +60,10 @@ class PreviewNames {
 }
 
 // The commands of the preview's right-click menu that arrange the selected
-// components, by the name the webview knows each by (media/preview.mjs's
-// arrange): aligning them with the anchor, the component selected first,
-// giving them its size, and spacing them evenly.
+// components, each mapped to the name that media/preview.mjs's `arrange`
+// takes. They align the components with the anchor (the component selected
+// first), give them its size, space them evenly, or widen or narrow the
+// gaps between them by a pixel.
 const ARRANGEMENTS: Record<string, string> = {
   "nxwright.alignLeft": "left",
   "nxwright.alignRight": "right",
@@ -75,6 +76,10 @@ const ARRANGEMENTS: Record<string, string> = {
   "nxwright.sameSize": "sameSize",
   "nxwright.spaceAcross": "spaceAcross",
   "nxwright.spaceDown": "spaceDown",
+  "nxwright.increaseHorizontalSpacing": "increaseSpacingAcross",
+  "nxwright.decreaseHorizontalSpacing": "decreaseSpacingAcross",
+  "nxwright.increaseVerticalSpacing": "increaseSpacingDown",
+  "nxwright.decreaseVerticalSpacing": "decreaseSpacingDown",
 };
 
 // What the preview's right-click menu passes its commands (media/preview.mjs).
@@ -307,6 +312,10 @@ class PagePreview {
       }
     } else if (message.type === "showNames") {
       await this.names.show(message.shown === true);
+    } else if (message.type === "reorder") {
+      // A toolbar button moves components up or down the ID order the same
+      // way as the right-click menu's commands.
+      await editing.reorderComponents(this.toml, names, message.direction as string);
     }
   }
 
@@ -381,9 +390,27 @@ class PagePreview {
       allowImages: true,
       styles: `
   body { padding: 8px; }
-  #toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  #toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 6px;
+  }
   #toolbar label { display: flex; align-items: center; gap: 4px; user-select: none; }
   ${ZOOM_STYLES}
+  #arranging { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  #arranging .group {
+    display: flex; align-items: center; gap: 2px; padding-left: 6px;
+    border-left: 1px solid var(--vscode-widget-border, #808080);
+  }
+  #arranging button {
+    display: flex; padding: 3px; border: none; cursor: pointer;
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+  }
+  #arranging button:hover:enabled { background: var(--vscode-button-secondaryHoverBackground); }
+  #arranging button:disabled { opacity: 0.4; cursor: default; }
+  #arranging svg {
+    width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
   #stage { position: relative; width: fit-content; }
   #page { display: block; background: #404040; outline: none; }
   #page.transparent {
@@ -404,7 +431,7 @@ class PagePreview {
   .tile.idle { opacity: 0.5; }
   #notes { color: var(--vscode-editorWarning-foreground); padding-left: 16px; }`,
       body: `<div id="toolbar"><label><input type="checkbox" id="names"> Names</label>
-<span id="zoom" class="zoom"></span></div>
+<span id="zoom" class="zoom"></span><span id="arranging"></span></div>
 <div id="stage"><canvas id="page" tabindex="0"></canvas><canvas id="overlay"></canvas></div>
 <div id="strip" hidden></div>
 <ul id="notes"></ul>`,
