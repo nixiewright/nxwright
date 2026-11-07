@@ -35,8 +35,6 @@ export interface TftMeans {
   workingFolder(): string | undefined;
   // The app's name, which a new TFT file is named after.
   appName(folder: vscode.Uri): Promise<string>;
-  // Whether the current project is known to be in nxlang.
-  usesNxlang(): boolean;
   // Shows that a file chosen for a folder, or the link, changed.
   changed(): void;
 }
@@ -122,8 +120,7 @@ class Compiler {
     const context = this.means.context;
     const projectFile = withProjectFile && projectFileLinked(context, folder)
       ? context.workspaceState.get<string>(projectFileKey(folder)) : undefined;
-    if (projectFile && !await projectFileMayBeReplaced(context, projectFile,
-                                                       this.means.usesNxlang())) {
+    if (projectFile && !await projectFileMayBeReplaced(context, projectFile, folder.fsPath)) {
       return undefined;
     }
     return this.compile(folder.fsPath, tft, projectFile, answer);

@@ -13,13 +13,16 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 - `nxwright rescue` writes a TFT file for an SD card, to recover a screen that a bad setting has left black or unresponsive.
 - `nxwright decompile` turns a TFT file back into a source folder, in case you no longer have the project.
 - `nxwright tft-read`, `tft-listing`, and `tft-compare` show what is inside TFT files.
+- `nxwright diff` shows what differs between a source folder and a project file, or between two project files.
 - `compile`, `upload`, and `ports` can print JSON with `--json`, so that programs such as the VS Code extension can read their results.
 
-Existing commands also behave differently:
+Existing commands also changed:
 
-- `extract` and `import` now refuse a source folder in nxlang, because the code the build writes cannot faithfully be turned back into nxlang and the conversion would be lossy. An nxlang project can still be extracted into a new folder.
-- A project file built from a folder in nxlang now has its pages locked, with no password, to show in the Nextion Editor that it is not meant for editing. `--no-lock` turns this off, and unlocking from the Nextion Editor takes a couple of clicks if you need to.
-- `build`, `write`, `compile`, and `rescue` now keep a file they replace as a backup beside the new one, such as `app.HMI.2026-11-06-143205.bak`, if it changed since nxwright wrote it. `--no-backup` turns this off.
+- `extract` and `import` are simpler: they now write only to a new or empty folder, and no longer update an existing source folder, which could cause data loss.
+- Project files that nxwright builds now have their pages locked (no password) to show that they are not meant to be edited: edit the nxwright project folder and rebuild the HMI instead (or simply compile and upload directly from nxwright).
+- `dump` can now replace an earlier dump.
+- Extracted code now uses a picture's or font's name where a number can only mean that picture or font.
+- Replacing a project file or TFT file that changed outside nxwright now keeps a backup.
 
 ### 0.1.0
 

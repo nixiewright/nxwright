@@ -119,87 +119,43 @@ class RoundTripTest(SourceFolderTestCase):
         self.assertEqual((self.folder / "other" / "program.nx").read_text(encoding="utf-8"),
                          "sys0=1\nsys1=2\n")
 
-    def test_refuses_non_empty_folder_that_is_not_a_source_folder(self):
+    def test_refuses_a_folder_that_is_not_empty(self):
         other = self.folder / "other"
         other.mkdir()
         (other / "notes.txt").write_text("keep", encoding="utf-8")
-        with self.assertRaisesRegex(NxwrightError, "neither empty nor a source folder"):
+        with self.assertRaisesRegex(NxwrightError, "the folder is not empty"):
             import_dump(self.dump, other)
         self.assertEqual([path.name for path in other.iterdir()], ["notes.txt"])
 
+    def test_refuses_a_source_folder_in_strict_nextion_syntax(self):
+        before = {path: path.read_bytes() for path in self.source.rglob("*") if path.is_file()}
+        with self.assertRaisesRegex(NxwrightError, "the folder is not empty"):
+            import_dump(self.dump, self.source)
+        with self.assertRaisesRegex(NxwrightError, "the folder is not empty"):
+            extract(self.project, self.source)
+        self.assertEqual({path: path.read_bytes() for path in self.source.rglob("*")
+                          if path.is_file()}, before)
 
-class ImportUpdateTest(SourceFolderTestCase):
-    """Importing into an existing source folder, as after an edit in the Editor."""
+    def test_refuses_a_path_that_is_a_file(self):
+        file = self.folder / "file.txt"
+        file.write_text("keep", encoding="utf-8")
+        with self.assertRaisesRegex(NxwrightError, "the folder is not empty"):
+            import_dump(self.dump, file)
+        self.assertEqual(file.read_text(encoding="utf-8"), "keep")
 
-    # Comfortable code, with spaces, a blank line, and "{" on the line of its
-    # "if". The build turns it into Editor code. Import keeps it as written while
-    # the Editor leaves the event unchanged.
-    COMFORTABLE = "on first.down:\n  if (sys0 == 1) {\n\n    sys0 = 2\n  }\n"
-    # A program with spaces, which the Editor's code would not have, kept as
-    # written while the Editor leaves it unchanged. It declares sys0, as the
-    # Editor requires.
-    PROGRAM = "int sys0=0\nsys0 = 1"
+    def test_an_empty_folder_gets_a_source_folder(self):
+        empty = self.folder / "empty"
+        empty.mkdir()
+        extract(self.project, empty)
+        self.assertTrue((empty / "app.toml").is_file())
+
+
+class BuildRefusalTest(SourceFolderTestCase):
+    """Refusing code when building, in a page whose first event has code."""
 
     def setUp(self):
         super().setUp()
         edit_text(self.source / "pages" / "first.page.toml", 'events = []', 'events = ["down"]')
-        (self.source / "pages" / "first.nx").write_text(self.COMFORTABLE, encoding="utf-8",
-                                                         newline="\n")
-        (self.source / "program.nx").write_text(self.PROGRAM, encoding="utf-8", newline="\n")
-        # The project as the Editor would save it: built from the comfortable source.
-        built = self.folder / "built.HMI"
-        build(self.source, built)
-        self.dump = self.folder / "built-dump"
-        ProjectDumper(built, self.dump).dump()
-
-    def test_keeps_code_the_editor_did_not_change(self):
-        import_dump(self.dump, self.source)
-        self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"),
-                         self.COMFORTABLE)
-        self.assertEqual((self.source / "program.nx").read_text(encoding="utf-8"), self.PROGRAM)
-
-    def test_extract_from_the_project_file(self):
-        extract(self.folder / "built.HMI", self.source)
-        self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"),
-                         self.COMFORTABLE)
-        with self.assertRaisesRegex(NxwrightError, "neither empty nor a source folder"):
-            other = self.folder / "other"
-            other.mkdir()
-            (other / "notes.txt").write_text("keep", encoding="utf-8")
-            extract(self.folder / "built.HMI", other)
-
-    def test_replaces_code_the_editor_changed(self):
-        edit_text(self.dump / "pages" / "00-first.txt", "sys0=2", "sys0=3")
-        (self.dump / "program.s").write_bytes(b"int sys0=0\r\nsys0=5")
-        import_dump(self.dump, self.source)
-        self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"),
-                         "on first.down:\n  if(sys0==1)\n  {\n    sys0=3\n  }\n")
-        self.assertEqual((self.source / "program.nx").read_text(encoding="utf-8"),
-                         "int sys0=0\nsys0=5")
-
-    def test_deletes_only_files_the_old_app_file_lists(self):
-        (self.dump / "pages" / "01-second.txt").unlink()
-        (self.dump / "images" / "0001.png").unlink()
-        (self.dump / "fonts" / "01.zi").unlink()
-        (self.source / "notes.txt").write_text("keep", encoding="utf-8")
-        (self.source / "pages" / "draft.nx").write_text("keep", encoding="utf-8")
-        import_dump(self.dump, self.source)
-        pages = sorted(path.name for path in (self.source / "pages").iterdir())
-        self.assertEqual(pages, ["draft.nx", "first.nx", "first.page.toml"])
-        self.assertEqual(sorted(path.name for path in (self.source / "pictures").iterdir()),
-                         ["picture-0000.png"])
-        self.assertEqual(sorted(path.name for path in (self.source / "fonts").iterdir()),
-                         ["font-00.zi"])
-        self.assertTrue((self.source / "notes.txt").is_file())
-
-    def test_stops_on_code_it_cannot_preprocess(self):
-        broken = 'on first.down:\n  x = "open\n'
-        (self.source / "pages" / "first.nx").write_text(broken, encoding="utf-8", newline="\n")
-        before = {path: path.read_bytes() for path in self.source.rglob("*") if path.is_file()}
-        with self.assertRaisesRegex(NxwrightError, "first.nx line 2: a string is not closed"):
-            import_dump(self.dump, self.source)
-        self.assertEqual({path: path.read_bytes() for path in self.source.rglob("*")
-                          if path.is_file()}, before)
 
     def test_build_names_the_line_of_code_it_cannot_preprocess(self):
         (self.source / "pages" / "first.nx").write_text("on first.down:\n  x = 1 {\n",
@@ -281,18 +237,6 @@ class TrailingSpacesTest(SourceFolderTestCase):
         # Built again, it gives the project back, without them.
         export_dump(extracted, self.folder / "again")
         assert_same_dump_files(self, self.folder / "plain", self.folder / "again")
-
-    def test_extracting_keeps_a_folders_code_where_only_they_differ(self):
-        # A folder written without them, the project saved with them.
-        self.write_code("on first.down:\n  sys0 = 2\n", "int sys0=0\nsys0 = 1\n")
-        before = self.source_texts()
-        import_dump(self.spaced_dump("spaced"), self.source)
-        self.assertEqual(self.source_texts(), before)
-        # A folder written with them, the project built without them.
-        self.write_code("on first.down:\n  sys0 = 2 \n", "int sys0=0\t\nsys0 = 1 \n")
-        before = self.source_texts()
-        import_dump(self.project_dump("built"), self.source)
-        self.assertEqual(self.source_texts(), before)
 
     def test_switching_to_nxlang(self):
         self.write_code("// Sets it \non first.down:\n  sys0=2 \n", "int sys0=0 \nsys0=1\n")
@@ -542,17 +486,12 @@ class ProjectNameTest(SourceFolderTestCase):
         self.assertEqual(app_name(read_app(self.source), self.source), "source")
 
     def test_extracting(self):
-        # Into a new folder: the project file's name; into a folder: its own.
+        # A new folder gets the project file's name.
         fresh = self.folder / "fresh"
         built = self.folder / "Living room.HMI"
         build(self.source, built)
         extract(built, fresh)
         self.assertEqual(read_app(fresh)["name"], "Living room")
-        app = self.source / "app.toml"
-        app.write_text(app.read_text(encoding="utf-8").replace(
-            "format = 1\n", 'format = 1\nname = "Kept"\n', 1), encoding="utf-8")
-        extract(built, self.source)
-        self.assertEqual(read_app(self.source)["name"], "Kept")
 
 
 class LanguageSettingTest(SourceFolderTestCase):
@@ -698,80 +637,17 @@ class NamesTest(SourceFolderTestCase):
         self.rename_picture("picture-0001", "mono-dark/toast")
         assert_same_dump_files(self, self.dump, self.build_and_dump())
 
-    def test_import_keeps_names_also_when_pictures_move(self):
-        self.rename_picture("picture-0000", "dot")
-        self.rename_picture("picture-0001", "grid")
-        dump = self.build_and_dump()
-        first, second = (dump / "images" / "0000.png").read_bytes(), (dump / "images" / "0001.png").read_bytes()
-        (dump / "images" / "0000.png").write_bytes(second)
-        (dump / "images" / "0001.png").write_bytes(first)
-        import_dump(dump, self.source)
-        app = tomllib.loads((self.source / "app.toml").read_text(encoding="utf-8"))
-        self.assertEqual(app["pictures"], ["grid", "dot"])
-
     def test_new_names_from_font_headers_and_placeholders(self):
-        self.rename_picture("picture-0000", "picture-0002")
         dump = self.build_and_dump()
-        (dump / "images" / "0002.png").write_bytes((dump / "images" / "0001.png").read_bytes()
-                                                   + b"\0")
         (dump / "fonts" / "02.zi").write_bytes(named_font(b"Impact16"))
         (dump / "fonts" / "03.zi").write_bytes(named_font(b"impact16"))
-        import_dump(dump, self.source)
-        app = tomllib.loads((self.source / "app.toml").read_text(encoding="utf-8"))
-        # Picture 0 already holds the placeholder name of the new picture 2, so it
-        # gets a suffix. Font 3's header name differs from font 2's only in
-        # letter case, so font 3 gets a placeholder.
-        self.assertEqual(app["pictures"], ["picture-0002", "picture-0001", "picture-0002-2"])
+        fresh = self.folder / "fresh"
+        import_dump(dump, fresh)
+        app = tomllib.loads((fresh / "app.toml").read_text(encoding="utf-8"))
+        # Font 3's header name differs from font 2's only in letter case, so
+        # font 3 gets a placeholder.
+        self.assertEqual(app["pictures"], ["picture-0000", "picture-0001"])
         self.assertEqual(app["fonts"], ["font-00", "font-01", "Impact16", "font-03"])
-
-    def test_new_file_differing_from_a_stale_one_only_in_case_is_kept(self):
-        # Windows file names ignore case: deleting the stale "impact16.zi" must
-        # not delete the new "Impact16.zi".
-        edit_text(self.source / "app.toml", '"font-00"', '"impact16"')
-        (self.source / "fonts" / "font-00.zi").rename(self.source / "fonts" / "impact16.zi")
-        # Font 1 moves to ID 0, and a new font named Impact16 takes ID 1, so the
-        # old "impact16" matches nothing and is not edited in place either.
-        fonts = self.dump / "fonts"
-        fonts.joinpath("00.zi").write_bytes(fonts.joinpath("01.zi").read_bytes())
-        fonts.joinpath("01.zi").write_bytes(named_font(b"Impact16"))
-        import_dump(self.dump, self.source)
-        app = tomllib.loads((self.source / "app.toml").read_text(encoding="utf-8"))
-        self.assertEqual(app["fonts"], ["font-01", "Impact16"])
-        self.assertEqual((self.source / "fonts" / "Impact16.zi").read_bytes(), named_font(b"Impact16"))
-
-    def test_new_name_avoids_the_folder_of_a_kept_name(self):
-        # picture-0002 would be the folder of the kept name picture-0002/dot.
-        self.rename_picture("picture-0000", "picture-0002/dot")
-        dump = self.build_and_dump()
-        (dump / "images" / "0002.png").write_bytes((dump / "images" / "0001.png").read_bytes()
-                                                   + b"\0")
-        import_dump(dump, self.source)
-        app = tomllib.loads((self.source / "app.toml").read_text(encoding="utf-8"))
-        self.assertEqual(app["pictures"], ["picture-0002/dot", "picture-0001", "picture-0002-2"])
-
-    def test_picture_edited_in_place_keeps_its_name(self):
-        self.rename_picture("picture-0001", "grid")
-        dump = self.build_and_dump()
-        (dump / "images" / "0001.png").write_bytes((dump / "images" / "0001.png").read_bytes() + b"\0")
-        import_dump(dump, self.source)
-        app = tomllib.loads((self.source / "app.toml").read_text(encoding="utf-8"))
-        self.assertEqual(app["pictures"], ["picture-0000", "grid"])
-
-    def test_code_naming_a_removed_picture_counts_as_changed(self):
-        edit_text(self.source / "pages" / "first.page.toml", "events = []", 'events = ["down"]')
-        (self.source / "pages" / "first.nx").write_text("on first.down:\n  sys0 = @pic(picture-0001)\n",
-                                                         encoding="utf-8", newline="\n")
-        dump = self.build_and_dump()
-        (dump / "images" / "0001.png").unlink()
-        edit_text(dump / "pages" / "00-first.txt", "sys0=1", "sys0=0")
-        import_dump(dump, self.source)
-        self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"),
-                         "on first.down:\n  sys0=0\n")
-
-    def test_missing_old_picture_file_does_not_block_import(self):
-        (self.source / "pictures" / "picture-0001.png").unlink()
-        import_dump(self.dump, self.source)
-        self.assertTrue((self.source / "pictures" / "picture-0001.png").is_file())
 
 
 

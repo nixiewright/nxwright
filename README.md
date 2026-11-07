@@ -78,7 +78,7 @@ on celsius.up:
   unit = 0
 ```
 
-`nxwright build app screen.HMI` turns the folder back into a project file, which you can open in the Nextion Editor as usual. If you change something in the Nextion Editor and save it, `nxwright extract` brings the change back into the folder, and keeps your code wherever the Nextion Editor didn't change it. This works until you switch the folder to [nxlang](#nxlang). To skip the Nextion Editor entirely, `nxwright compile app screen.tft` compiles the folder into the TFT file the screen runs.
+`nxwright build app screen.HMI` turns the folder back into a project file, which you can open in the Nextion Editor to compile and upload. To skip the Nextion Editor entirely, `nxwright compile app screen.tft` compiles the folder into the TFT file the screen runs.
 
 ## Write Nextion code comfortably
 
@@ -373,7 +373,7 @@ Shared code lives in one place, so a fix to a function reaches every page that i
 
 To switch a folder to nxlang, run `nxwright language app nxlang`, or use "Switch to nxlang" in VS Code. The switch adds parentheses to any line of your code that would calculate differently in nxlang, so that the line keeps giving the same result.
 
-From then on, make your changes in the source folder. You can still open the HMI file nxwright builds in the Nextion Editor, and compile it there. But `nxwright extract` can't bring changes made in the Nextion Editor back into the folder, because the strict Nextion syntax the build writes can't be faithfully turned back into nxlang. There is no command to switch back, but you can always extract that HMI file into a new folder of plain Nextion code.
+There is no command to switch back, but you can always extract the HMI file nxwright builds into a new folder of plain Nextion code.
 
 See [docs/language.md](https://github.com/nixiewright/nxwright/blob/main/docs/language.md) for the whole language.
 
@@ -416,6 +416,7 @@ You can rename the `app` folder whenever you like, without changing the app's na
 ```
 nxwright extract screen.HMI app       # turns your project into a source folder, and names the app after the file
 nxwright build app screen.HMI         # and back, after you edit it
+nxwright diff app screen.HMI          # shows what differs between the folder and the project file
 ```
 
 nxwright is tested with projects saved by Nextion Editor 1.68.2. A project saved by a newer version may contain things nxwright does not know, and the next build may lose some of them. `nxwright extract` warns you about each one. To tell nxwright's maintainers about these things, `nxwright report` writes a report that leaves out your project's own content ([commands.md](https://github.com/nixiewright/nxwright/blob/main/docs/commands.md#report)).

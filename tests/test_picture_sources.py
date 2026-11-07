@@ -57,13 +57,6 @@ class ExtractTest(PatchedDemoTestCase):
         self.assertEqual(HmiContainer.from_file(self.folder / "again.HMI").blocks
                          [self.source_block], SOURCE_BLOCK)
 
-    def test_an_update_deletes_a_source_the_project_no_longer_has(self):
-        extract(self.resized, self.target("updated"))
-        extract(self.demo, self.target("updated"))
-        pictures = self.target("updated") / "pictures"
-        self.assertFalse((pictures / "picture-0000.source.png").exists())
-        self.assertTrue((pictures / "picture-0000.png").is_file())
-
     def test_a_source_without_its_picture_may_be_lost(self):
         project = self.patched("alone.HMI", blocks={"99.ib": SOURCE_BLOCK})
         with self.assertRaises(UnknownContentError) as raised:

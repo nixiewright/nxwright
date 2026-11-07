@@ -544,7 +544,7 @@ def _built(probe: Probe, work: Path) -> Path:
     # The pages stay as the probe's folder sets them, with no added locks. A
     # probe's change may edit the project, and the unit tests make the same
     # pages in memory.
-    build(source, project, lock_nxlang_pages=False)
+    build(source, project)
     if probe.built_change is not None:
         probe.built_change(project)
     return project

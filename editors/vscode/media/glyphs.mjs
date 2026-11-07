@@ -24,9 +24,6 @@ export const GLYPHS = {
   // Two links of a chain, joined on a slant.
   link: '<path d="M6.5 9.5l3-3"/><path d="M7.5 4.5l1.2-1.2a2.5 2.5 0 0 1 3.5 3.5L11 8"/>' +
     '<path d="M8.5 11.5l-1.2 1.2a2.5 2.5 0 0 1-3.5-3.5L5 8"/>',
-  // A document with an arrow pointing down out of it.
-  extract: '<path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3"/>' +
-    '<path d="M8 6v6M5.5 9.5L8 12l2.5-2.5"/>',
   // A document with a small gear.
   projectFile: '<path d="M8.5 14.5h-5v-13h6l3 3v3"/><path d="M9.5 1.5v3h3"/>' +
     '<circle cx="12" cy="12" r="1.7"/>' +

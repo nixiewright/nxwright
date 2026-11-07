@@ -8,7 +8,9 @@ import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
-import { EXTRACT_NEW_FOLDER, changedProjectFileDetail } from "./projectFileText";
+import {
+  EXTRACT_NEW_FOLDER, SHOW_CHANGES, changedProjectFileDetail, showChangesArguments,
+} from "./projectFileText";
 
 // The TFT file chosen for a source folder.
 export function tftFileKey(folder: vscode.Uri): string {
@@ -44,8 +46,8 @@ async function hashOf(file: string): Promise<string | undefined> {
   }
 }
 
-// Remembers the project file `file` as nxwright just wrote it, or read it,
-// as extract does, so that a later change made elsewhere shows.
+// Remembers the project file `file` as nxwright just wrote it, so that a later
+// change made elsewhere can be detected.
 export async function rememberProjectFile(context: vscode.ExtensionContext,
                                           file: string): Promise<void> {
   const hash = await hashOf(file);
@@ -55,14 +57,15 @@ export async function rememberProjectFile(context: vscode.ExtensionContext,
 }
 
 // Returns whether nxwright may replace `file`, the project file of a source
-// folder. `nxlang` is whether that folder is in nxlang. nxwright may replace the
-// file when it does not exist, when nxwright has not written it before, or when
-// it is still as nxwright last wrote or read it. Otherwise it was changed
-// elsewhere, such as in the Nextion Editor, and the user can replace it, cancel,
-// or extract it. Extracting returns false, and goes into the source folder, or
-// into a new folder if the source folder is in nxlang.
+// folder. nxwright may replace the file when it does not exist, when nxwright has
+// not written it before, or when it is still as nxwright last wrote it. Otherwise
+// it was changed elsewhere, such as in the Nextion Editor, and the user can replace
+// it, cancel, see what changed since it was built from the source folder `folder`, or
+// extract it into a new folder. Only replacing it returns true. The warning blocks
+// the window, so it does not ask again after showing the changes: the user reads them,
+// then builds or compiles again.
 export async function projectFileMayBeReplaced(context: vscode.ExtensionContext, file: string,
-                                               nxlang: boolean): Promise<boolean> {
+                                               folder: string): Promise<boolean> {
   const remembered = context.workspaceState.get<string>(hashKey(file));
   const hash = await hashOf(file);
   if (remembered === undefined || hash === undefined || hash === remembered) {
@@ -70,12 +73,13 @@ export async function projectFileMayBeReplaced(context: vscode.ExtensionContext,
   }
   const answer = await vscode.window.showWarningMessage(
     `${path.basename(file)} was changed outside nxwright since nxwright last wrote it.`,
-    { modal: true, detail: changedProjectFileDetail(nxlang, backupsAreOn()) },
-    "Replace", nxlang ? EXTRACT_NEW_FOLDER : "Extract First");
-  if (answer === "Extract First") {
-    await vscode.commands.executeCommand("nxwright.extract");
+    { modal: true, detail: changedProjectFileDetail(backupsAreOn()) },
+    "Replace", SHOW_CHANGES, EXTRACT_NEW_FOLDER);
+  if (answer === SHOW_CHANGES) {
+    await vscode.commands.executeCommand("nxwright.showChanges",
+                                         showChangesArguments(folder, file, locksAreOn()));
   } else if (answer === EXTRACT_NEW_FOLDER) {
-    await vscode.commands.executeCommand("nxwright.extractIntoNewFolder", file);
+    await vscode.commands.executeCommand("nxwright.extract", { project: file });
   }
   return answer === "Replace";
 }
@@ -84,10 +88,13 @@ function backupsAreOn(): boolean {
   return vscode.workspace.getConfiguration("nxwright").get<boolean>("backups", true);
 }
 
+function locksAreOn(): boolean {
+  return vscode.workspace.getConfiguration("nxwright").get<boolean>("lockPages", true);
+}
+
 // Returns the options of a build or a compile that the user's settings decide.
 export function settingsArguments(): string[] {
-  const locks = vscode.workspace.getConfiguration("nxwright").get<boolean>("lockNxlangPages", true);
-  return [...(backupsAreOn() ? [] : ["--no-backup"]), ...(locks ? [] : ["--no-lock"])];
+  return [...(backupsAreOn() ? [] : ["--no-backup"]), ...(locksAreOn() ? [] : ["--no-lock"])];
 }
 
 // The screen Upload sends to: its serial port, the rate of the upload, and

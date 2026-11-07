@@ -1281,10 +1281,7 @@ class ExtractingOverNxlangTest(NxlangFolderTestCase):
     """A project cannot be extracted or imported over a folder in nxlang, and
     can be extracted into a new one."""
 
-    REFUSAL = ("uses nxlang, so nxwright cannot extract or import over it: the code the build "
-               "writes cannot turn back into nxlang. Make code changes in the source folder. To "
-               "see what the project contains, extract it into a new folder, and compare that "
-               "folder with your source folder.")
+    REFUSAL = "the folder is not empty. Choose a new or empty folder"
 
     def setUp(self):
         super().setUp()
@@ -1300,15 +1297,15 @@ class ExtractingOverNxlangTest(NxlangFolderTestCase):
         dump = self.folder / "built-dump"
         ProjectDumper(self.built, dump).dump()
         before = self.files()
-        with self.assertRaisesRegex(NxwrightError, "^%s %s$" % (re.escape(str(self.source)),
-                                                               re.escape(self.REFUSAL))):
+        with self.assertRaisesRegex(NxwrightError, "^failed to write into %s: %s$"
+                                    % (re.escape(str(self.source)), re.escape(self.REFUSAL))):
             import_dump(dump, self.source)
         self.assertEqual(self.files(), before)
 
     def test_extract_changes_nothing(self):
         before = self.files()
-        with self.assertRaisesRegex(NxwrightError, "^%s %s$" % (re.escape(str(self.source)),
-                                                               re.escape(self.REFUSAL))):
+        with self.assertRaisesRegex(NxwrightError, "^failed to write into %s: %s$"
+                                    % (re.escape(str(self.source)), re.escape(self.REFUSAL))):
             extract(self.built, self.source)
         self.assertEqual(self.files(), before)
 
@@ -1338,14 +1335,6 @@ class ExtractingOverNxlangTest(NxlangFolderTestCase):
         again = self.folder / "again.HMI"
         build(recovered, again)
         self.assertEqual(again.read_bytes(), self.built.read_bytes())
-
-    def test_extract_over_the_recovered_strict_folder_still_works(self):
-        recovered = self.folder / "recovered"
-        extract(self.built, recovered)
-        before = {path: path.read_bytes() for path in recovered.rglob("*") if path.is_file()}
-        extract(self.built, recovered)
-        self.assertEqual({path: path.read_bytes() for path in recovered.rglob("*")
-                          if path.is_file()}, before)
 
     def test_build_of_an_nxlang_folder_with_no_device_settings_does_not_advise_extracting(self):
         app = self.source / "app.toml"
@@ -1676,8 +1665,9 @@ class EventCommentTest(NxlangFolderTestCase):
         page = (dump / "pages" / "00-first.txt").read_text(encoding="utf-8")
         self.assertIn("| // ### Doubles a.\n    | // ###\n    | // ###  Twice.\n"
                       "    | x.val=a.val+a.val*2", page)
-        import_dump(dump, self.source)
-        self.assertEqual(self.events(), self.PLAIN)
+        fresh = self.folder / "fresh"
+        import_dump(dump, fresh)
+        self.assertEqual((fresh / "pages" / "first.nx").read_text(encoding="utf-8"), self.PLAIN)
 
     def test_plain_import_of_comments_the_editor_changed(self):
         self.write_events(self.PLAIN)
@@ -1686,17 +1676,11 @@ class EventCommentTest(NxlangFolderTestCase):
         # A marked line after the code is an ordinary comment.
         edit_text(dump / "pages" / "00-first.txt", "| x.val=a.val+a.val*2",
                   "| x.val=a.val+a.val*2\n    | // ### later")
-        import_dump(dump, self.source)
-        self.assertEqual(self.events(), self.PLAIN.replace("Doubles a.", "Doubles a, twice.")
+        fresh = self.folder / "fresh"
+        import_dump(dump, fresh)
+        self.assertEqual((fresh / "pages" / "first.nx").read_text(encoding="utf-8"),
+                         self.PLAIN.replace("Doubles a.", "Doubles a, twice.")
                          + "  // ### later\n")
-
-    def test_plain_import_keeps_the_code_when_only_the_comment_changed(self):
-        text = "// Doubles a.\non first.down:\n  x.val=a.val\n\n  x.val+=a.val\n"
-        self.write_events(text)
-        dump = self.build_and_dump("plain-comments")
-        edit_text(dump / "pages" / "00-first.txt", "| // ### Doubles a.", "| // ### Twice a.")
-        import_dump(dump, self.source)
-        self.assertEqual(self.events(), text.replace("Doubles a.", "Twice a."))
 
     def test_nxlang_build(self):
         switch_to_nxlang(self.source)
@@ -1732,17 +1716,6 @@ class EventCommentTest(NxlangFolderTestCase):
         # A comment right after an event's code, at the file's end, alike.
         self.write_events("on first.down:\n  x.val=1\n// The end.\n")
         self.build_and_dump("comment-at-the-end")
-
-    def test_import_keeps_a_comment_above_no_heading(self):
-        # Where the project changed the code of the event after it, too.
-        self.set_events("first", ["down", "up"])
-        self.write_events(self.STRAY)
-        dump = self.build_and_dump("stray-comments")
-        import_dump(dump, self.source)
-        self.assertEqual(self.events(), self.STRAY)
-        edit_text(dump / "pages" / "00-first.txt", "| x.val=2", "| x.val=3")
-        import_dump(dump, self.source)
-        self.assertEqual(self.events(), self.STRAY.replace("x.val=2", "x.val=3"))
 
     def test_switching_to_nxlang_keeps_a_comment_above_no_heading(self):
         # nxlang reads the line otherwise, so the switch writes the file again.

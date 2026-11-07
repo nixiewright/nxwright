@@ -66,8 +66,8 @@ from nxwright.project.component_defaults import DEFAULTS_FILE, defaults_from_tom
 from nxwright.project.dump_folder import (MACROS_FILE, check_dump_format,
                                           check_ids_without_gaps, copied_contents,
                                           copied_file_name, dump_device_settings, dump_encoding,
-                                          dump_format_line, dump_header_bytes,
-                                          dump_picture_sources, dump_pictures, page_text_files)
+                                          dump_format_line, dump_picture_sources, dump_pictures,
+                                          page_text_files)
 from nxwright.project.page_file_names import page_file_stem
 from nxwright.project.resources import (COPIED_KINDS, FONTS, MEDIA, PICTURE_SUFFIXES,
                                         SOURCE_SUFFIX, decodes_picture)
@@ -76,24 +76,22 @@ from nxwright.project.device_settings import (DEFAULT_ENCODING, ENCODINGS, Devic
                                               is_unknown_encoding)
 from nxwright.source.device_keys import (DEVICE_KEYS, app_encoding, device_keys, screen_model,
                                          settings_from_keys)
-from nxwright.source.unknown_content import (MAY_BE_LOST, UNKNOWN_MODEL_PLACE, checked,
-                                             unknown_in_dump)
+from nxwright.source.unknown_content import checked, unknown_in_dump
 from nxwright.source.nx_files import (blank_lines_dropped, included_path, read_nx_file,
                                       read_page_files, resolve)
 from nxwright.source.macros_source import (MACROS_PATH, block_of_compiled, callable_macros,
                                            compiled_macros, followed_macros,
-                                           keep_comfortable_macros,
                                            macros_from_block, macros_to_source,
                                            read_macros_text)
 from nxwright.source.page_source import (PAGE_FILE_SUFFIX, PageSource, code_text_limits,
                                          editor_code_of_file, page_components, page_from_source,
                                          page_nx_path, page_to_source, page_toml_path,
                                          table_limits, table_types)
-from nxwright.source.editor_code_merge import keep_comfortable_events, switch_events_to_nxlang
+from nxwright.source.asset_names_in_code import with_asset_names
+from nxwright.source.nxlang_switch import switch_events_to_nxlang
 from nxwright.project.page_text import page_from_text, page_to_text
 from nxwright.language.resource_names import (ANIMATION, LISTS, SOUND, VIDEO, ResourceNames,
-                                              UnknownNameError, check_names, font_header_name,
-                                              is_valid_name)
+                                              check_names, font_header_name, is_valid_name)
 from nxwright.language.editor_code import (editor_equivalent, global_declarations,
                                            keep_editor_meaning)
 from nxwright.language.nxlang import (MOST_GLOBALS, ProgramNames, compile_program,
@@ -159,138 +157,46 @@ def language_of_value(value) -> str | None:
     return None
 
 
-def removes_screen_settings(lost: list, source_folder: Path) -> bool:
-    """Returns whether going on past `lost`, the UnknownContent that may be
-    lost, would remove the screen settings from the app.toml of
-    `source_folder`. That is the case if the project's screen model is one
-    nxwright does not know, and app.toml has screen settings."""
-    app = Path(source_folder) / "app.toml"
-    unknown_model = any(each.where == UNKNOWN_MODEL_PLACE for each in lost)
-    return unknown_model and app.is_file() and any(
-        key in parse_app(app.read_text(encoding="utf-8")) for key in DEVICE_KEYS)
-
-
-def refuse_nxlang_folder(source_folder: Path):
-    """Raises NxwrightError when `source_folder` is a source folder in nxlang.
-    The code its build writes cannot turn back into nxlang, so a project is
-    never extracted or imported over it. The check writes nothing, and comes before
-    anything else that extract or import does."""
-    app = Path(source_folder) / "app.toml"
-    if app.is_file() and parse_app(read_text(app))["language"] == NXLANG:
-        raise NxwrightError("%s uses nxlang, so nxwright cannot extract or import over it: "
-                            "the code the build writes cannot turn back into nxlang. Make code "
-                            "changes in the source folder. To see what the project contains, "
-                            "extract it into a new folder, and compare that folder with your "
-                            "source folder." % source_folder)
+def refuse_unless_new_folder(source_folder: Path):
+    """Raises NxwrightError unless `source_folder` does not exist yet, or is an empty
+    folder. extract and import write only new folders, so that they can never replace
+    work in a source folder. The check writes nothing."""
+    source_folder = Path(source_folder)
+    if source_folder.exists() and (not source_folder.is_dir() or any(source_folder.iterdir())):
+        raise NxwrightError("failed to write into %s: the folder is not empty. Choose a new or "
+                            "empty folder" % source_folder)
 
 
 def import_dump(dump_folder: Path, source_folder: Path, name: str = None,
                 continue_with_unknown: bool = False, check_unknown: bool = True) -> list:
-    """Imports the dump's project into `source_folder`, and returns the
-    warnings of what the source files leave out: blank lines of the code,
-    which the build would drop.
+    """Imports the dump's project into `source_folder`, a new or empty folder,
+    in strict Nextion syntax (the language "nextion"). The app is named `name` if
+    that is a valid app name (_is_app_name). Returns warnings for what the source
+    files leave out: blank lines in the code, which the build would drop.
 
-    A new or empty folder gets a fresh import, in the Editor's own language
-    ("nextion"), its app named `name` where that is a name an app may have
-    (_is_app_name). A folder in strict Nextion syntax holding app.toml is
-    updated and keeps its name, or its lack of one:
-      - pictures and fonts keep their names when their bytes match;
-      - every event, and program.nx, keeps its existing text when that turns
-        into the dump's Editor code;
-      - everything else is rewritten;
-      - files the old app.toml lists that the project no longer has are
-        deleted, one by one.
-    Folders are never deleted, and files the old app.toml does not list are
-    never touched.
+    Raises NxwrightError, before writing anything, when `source_folder` is not
+    new or empty (refuse_unless_new_folder), or the dump contains something the
+    source folder cannot represent.
 
-    Raises NxwrightError, before writing or deleting anything, when
-    `source_folder` is in nxlang (refuse_nxlang_folder), the dump holds
-    something the source folder cannot represent, the folder's own code
-    cannot be turned into Editor code, or `source_folder` is neither empty nor
-    a source folder.
-
-    If `check_unknown` is true, the function first checks the content that
-    the dump shows and nxwright does not know, as extract checks a project's
-    (unknown_content.checked). It raises NxwrightError for content nxwright
+    If `check_unknown` is true, the function first checks the dump's content for
+    anything nxwright does not know (unknown_content.checked). It raises NxwrightError for content nxwright
     cannot keep. It raises UnknownContentError for content the next build
     may lose, unless `continue_with_unknown` is true. The notes and warnings
     on the rest of that content come first in the warnings it returns.
     """
     dump_folder, source_folder = Path(dump_folder), Path(source_folder)
-    refuse_nxlang_folder(source_folder)
-    updating = (source_folder / "app.toml").is_file()
-    if not updating and source_folder.exists() and any(source_folder.iterdir()):
-        raise NxwrightError("%s is neither empty nor a source folder (it has no app.toml)"
-                            % source_folder)
+    refuse_unless_new_folder(source_folder)
     check_dump_format(dump_folder)
-    notes = []
-    if check_unknown:
-        found = unknown_in_dump(dump_folder)
-        lost = [each for each in found if each.sort == MAY_BE_LOST]
-        notes = checked(dump_folder, found, continue_with_unknown, None,
-                        source_folder if removes_screen_settings(lost, source_folder) else None)
-    old_app = parse_app(read_text(source_folder / "app.toml")) if updating else None
-    if updating:
-        name = old_app.get("name")
-    elif name is not None and not _is_app_name(name):
+    notes = checked(dump_folder, unknown_in_dump(dump_folder),
+                    continue_with_unknown) if check_unknown else []
+    if name is not None and not _is_app_name(name):
         name = None
-    files, names, warnings = _source_files_from_dump(dump_folder, source_folder, old_app, name)
-    # A dump that does not show a header, such as one written from a source
-    # folder, does not give the screen model.
-    if (updating and dump_header_bytes(dump_folder) is not None
-            and dump_device_settings(dump_folder) is None
-            and any(key in old_app for key in DEVICE_KEYS)):
-        warnings.append("app.toml's screen settings are removed, as the project's screen model "
-                        "is not one nxwright knows; the build refuses the folder until "
-                        "nxwright knows the model")
-    stale = _keep_existing_code(source_folder, files, names, old_app) if updating else []
+    files, warnings = _source_files_from_dump(dump_folder, name)
     for relative, content in files.items():
         path = source_folder / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
-    # Windows file names ignore case: a stale path that differs from a new one
-    # only in case is the new file, and must stay.
-    written = {relative.lower() for relative in files}
-    for relative in stale:
-        if relative.lower() not in written:
-            (source_folder / relative).unlink(missing_ok=True)
     return notes + warnings
-
-
-def _keep_existing_code(source_folder: Path, files: dict, names: ResourceNames,
-                        old_app: dict) -> list:
-    """Puts the existing folder's code into `files` wherever it preprocesses to
-    the same Editor code, and returns the files the old app.toml lists that
-    `files` no longer has."""
-    old_program = source_folder / "program.nx"
-    old_text = read_text(old_program) if old_program.is_file() else None
-    new_app = parse_app(files["app.toml"].decode("utf-8"))
-    for page_name in new_app["pages"]:
-        relative = page_nx_path(page_name)
-        old = source_folder / relative
-        if not old.is_file():
-            continue
-        object_names = _page_components(files[page_toml_path(page_name)].decode("utf-8"),
-                                        page_name)[0]
-        kept = keep_comfortable_events(files[relative].decode("utf-8"), read_text(old), page_name,
-                                       names, object_names)
-        files[relative] = kept.encode("utf-8")
-    if old_text is not None:
-        encoding = new_app.get("encoding", DEFAULT_ENCODING)
-        new_program = _program_from_source(files["program.nx"].decode("utf-8"), names,
-                                           encoding=encoding)
-        try:
-            unchanged = _program_from_source(old_text, names, encoding=encoding) == new_program
-        except UnknownNameError:
-            unchanged = False   # it names a picture or font the app no longer lists
-        if unchanged:
-            files["program.nx"] = old_text.encode("utf-8")
-    old_macros = source_folder / MACROS_PATH
-    if MACROS_PATH in files and old_macros.is_file():
-        files[MACROS_PATH] = keep_comfortable_macros(files[MACROS_PATH].decode("utf-8"),
-                                                     read_text(old_macros), names).encode("utf-8")
-    return [relative for relative in _layout_files(old_app, source_folder)
-            if relative not in files]
 
 
 def program_names(program_text: str, read) -> ProgramNames:
@@ -628,27 +534,6 @@ def resource_problems(kind: str, name: str, exists, listed=None) -> list:
             if not exists(path)]
 
 
-def _layout_files(app: dict, source_folder: Path) -> list:
-    """Returns the files of `source_folder`, by relative path, that `app`
-    lists. Among them are the pictures' source files, and the pictures'
-    files of a type nxwright does not decode with their screen copies
-    (kept_picture_paths). A .screen file beside a picture's PNG is not
-    nxwright's, so it is not listed."""
-    # macros.nx is the folder's whenever it has macros: an update of a
-    # project without them removes it.
-    listed = ["app.toml", "defaults.toml", "program.nx", MACROS_PATH]
-    for page_name in app["pages"]:
-        listed += [page_toml_path(page_name), page_nx_path(page_name)]
-    for kind, suffixes in RESOURCE_FILES.items():
-        listed += ["%s/%s%s" % (kind, name, suffix) for name in app[kind] for suffix in suffixes]
-    listed += [path for name in app["pictures"] for path in picture_source_paths(name)]
-    for name in app["pictures"]:
-        kept = kept_picture_paths(name, folder_file_exists(source_folder),
-                                  folder_lister(source_folder))
-        listed += kept + ([screen_copy_path(name)] if kept else [])
-    return listed
-
-
 # What nxwright new writes: the Editor's blank project, as extracting it
 # gives, but for the comments of its program.
 _NEW_PROGRAM = """// Runs once at power-on: the variables every page shares, settings, then
@@ -891,7 +776,7 @@ def name_part(text: str) -> str:
 
 
 def export_dump(source_folder: Path, dump_folder: Path, refuse_by_table: bool = True,
-                lock_nxlang_pages: bool = False) -> tuple:
+                lock_pages: bool = False) -> tuple:
     """Writes the dump files the project writer reads, built from a source
     folder, into the new or empty folder `dump_folder`. Returns (the
     pictures it wrote, {the dump's file, as "images/0000.png": the folder's,
@@ -904,14 +789,14 @@ def export_dump(source_folder: Path, dump_folder: Path, refuse_by_table: bool = 
     and the first page whose memory the Editor's compile refuses
     (memory_refusal). Without `refuse_by_table`, the pages are not checked
     against the memory table (FolderSource.refuse_by_table). With
-    `lock_nxlang_pages`, a folder in nxlang gets its pages locked in the dump
-    (page_header.with_lock). The folder's own files do not change.
+    `lock_pages`, the dump has its pages locked (page_header.with_lock). The
+    folder's own files do not change.
     """
     source_folder, dump_folder = Path(source_folder), Path(dump_folder)
     if dump_folder.exists() and any(dump_folder.iterdir()):
         raise NxwrightError("%s exists and is not empty" % dump_folder)
     files, pictures, memory = _dump_files_from_source(source_folder, refuse_by_table,
-                                                      lock_nxlang_pages)
+                                                      lock_pages)
     for relative, content in files.items():
         path = dump_folder / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -919,14 +804,11 @@ def export_dump(source_folder: Path, dump_folder: Path, refuse_by_table: bool = 
     return pictures, memory
 
 
-def _source_files_from_dump(dump_folder: Path, source_folder: Path, old_app,
-                            project_name: str = None) -> tuple:
+def _source_files_from_dump(dump_folder: Path, project_name: str = None) -> tuple:
     """Returns the source folder's files for a dump, as a tuple of:
       - {relative path: bytes} of every file;
-      - the ResourceNames chosen for the pictures, fonts, and media;
       - the warnings of what the source files leave out, in the order met.
-    `old_app` is the app.toml of the folder being updated, or None, and
-    `project_name` the app's name its app.toml gives, or None."""
+    `project_name` is the app's name to write in app.toml, or None."""
     # A dump missing one of these would import as a project without it.
     for required in ("pages", "images") + tuple(kind.folder for kind in COPIED_KINDS):
         if not (dump_folder / required).is_dir():
@@ -936,8 +818,7 @@ def _source_files_from_dump(dump_folder: Path, source_folder: Path, old_app,
     pictures = dump_pictures(dump_folder)
     resources = {"pictures": [(data,) for _, data, _ in pictures],
                  **{kind.folder: copied_contents(dump_folder, kind) for kind in COPIED_KINDS}}
-    chosen = {kind: _choose_names(kind, contents, source_folder, old_app)
-              for kind, contents in resources.items()}
+    chosen = {kind: _choose_names(kind, contents) for kind, contents in resources.items()}
     names = ResourceNames.of_app(chosen)
     defaults_text = DEFAULTS_FILE.read_bytes()
     defaults = defaults_from_toml(defaults_text.decode("utf-8"), DEFAULTS_FILE.name)
@@ -976,13 +857,14 @@ def _source_files_from_dump(dump_folder: Path, source_folder: Path, old_app,
         warnings += source.warnings
         pages.append(page.name)
         files[page_toml_path(page.name)] = source.toml.encode("utf-8")
-        files[page_nx_path(page.name)] = source.events.encode("utf-8")
+        files[page_nx_path(page.name)] = with_asset_names(source.events, names).encode("utf-8")
     if len(set(pages)) != len(pages):
         raise NxwrightError("two pages share a name")
     # The spaces and tabs ending a line are dropped first, as for the events.
     program = b"\r\n".join(line.rstrip(b" \t")
                            for line in (dump_folder / "program.s").read_bytes().split(b"\r\n"))
-    files["program.nx"], dropped = _program_to_source(program, encoding)
+    program_text, dropped = _program_to_source(program, encoding)
+    files["program.nx"] = with_asset_names(program_text.decode("utf-8"), names).encode("utf-8")
     warnings += dropped
     if (dump_folder / MACROS_FILE).is_file():
         try:
@@ -990,13 +872,13 @@ def _source_files_from_dump(dump_folder: Path, source_folder: Path, old_app,
         except NxwrightError as error:
             raise NxwrightError("%s: %s" % (MACROS_FILE, error)) from None
         warnings += dropped
-        files[MACROS_PATH] = macros_to_source(macros).encode("utf-8")
+        files[MACROS_PATH] = with_asset_names(macros_to_source(macros), names).encode("utf-8")
     app = {"format": SOURCE_FORMAT, "name": project_name, "language": NEXTION, "pages": pages,
            **chosen}
     if settings is not None:
         app.update(device_keys(settings))
     files["app.toml"] = app_text(app).encode("utf-8")
-    return files, names, warnings
+    return files, warnings
 
 
 def line_naming(text: str, name: str) -> int:
@@ -1042,46 +924,23 @@ def app_text(app: dict) -> str:
     return text
 
 
-def _choose_names(kind: str, contents: list, source_folder: Path, old_app) -> list:
-    """Returns a name for each resource of `kind`, its list in app.toml, in
-    `contents`, in ID order, each one given as the bytes of its files
-    (RESOURCE_FILES).
-
-    One whose bytes match one of the folder being updated keeps its name
-    (byte-identical ones in ID order). One whose bytes changed keeps the
-    name of the old one at the same ID, if that matched nothing: it was
-    edited in place. A new font is named after the name in its header.
-    Anything else gets a placeholder name; no name repeats one already taken,
-    even in different letter case.
+def _choose_names(kind: str, contents: list) -> list:
+    """Returns the names of the resources of `kind`, in ID order, the order
+    app.toml lists them in. `contents` gives each resource as the bytes of its files
+    (RESOURCE_FILES). A font is named after the name in its header. Anything
+    else gets a placeholder name. No name repeats one already taken, even in
+    different letter case.
     """
-    old_list = old_app[kind] if old_app else []
-    old_names = {}
-    for name in old_list:
-        paths = [source_folder / path for path in resource_paths(
-            kind, name, lambda path: (source_folder / path).is_file(),
-            folder_lister(source_folder))]
-        # A missing file matches nothing; the import writes it again.
-        if all(path.is_file() for path in paths):
-            old_names.setdefault(tuple(path.read_bytes() for path in paths), []).append(name)
-    names = [old_names[content].pop(0) if old_names.get(content) else None
-             for content in contents]
-    matched = set(names)
-    for resource_id in range(min(len(names), len(old_list))):
-        if names[resource_id] is None and old_list[resource_id] not in matched:
-            names[resource_id] = old_list[resource_id]
-    # New names have no "/", so they only clash with a kept name or its folders.
-    taken = {name.lower() for name in names if name}
-    taken |= {name.lower().split("/")[0] for name in names if name and "/" in name}
+    names, taken = [], set()
     for resource_id, content in enumerate(contents):
-        if names[resource_id] is None:
-            header_name = font_header_name(content[0]) if kind == "fonts" else None
-            name = header_name if header_name and header_name.lower() not in taken \
-                else _PLACEHOLDERS[kind] % resource_id
-            base, number = name, 2
-            while name.lower() in taken:
-                name, number = "%s-%d" % (base, number), number + 1
-            names[resource_id] = name
-            taken.add(name.lower())
+        header_name = font_header_name(content[0]) if kind == "fonts" else None
+        name = header_name if header_name and header_name.lower() not in taken \
+            else _PLACEHOLDERS[kind] % resource_id
+        base, number = name, 2
+        while name.lower() in taken:
+            name, number = "%s-%d" % (base, number), number + 1
+        names.append(name)
+        taken.add(name.lower())
     check_names(names, kind)
     return names
 
@@ -1386,11 +1245,11 @@ def code_files(app: dict, read) -> dict:
 
 
 def _dump_files_from_source(source_folder: Path, refuse_by_table: bool,
-                            lock_nxlang_pages: bool) -> tuple:
+                            lock_pages: bool) -> tuple:
     """Returns ({relative path: bytes} of the dump files the writer reads,
     {the dump's file of each picture: the folder's}, the project's memory),
-    checking the pages against the memory table and locking the pages of a
-    folder in nxlang, as export_dump says."""
+    checking the pages against the memory table and locking the pages, as
+    export_dump says."""
     folder = read_folder_source(folder_reader(source_folder), refuse_by_table=refuse_by_table)
     app = folder.app
     check_page_count(app, folder.read("app.toml"))
@@ -1399,7 +1258,7 @@ def _dump_files_from_source(source_folder: Path, refuse_by_table: bool,
     measured = {}       # {page name: what page_memory.measure_page found}
     for page_id, page_name in enumerate(app["pages"]):
         page = folder.build_page(page_id, globals_used)
-        if lock_nxlang_pages and app["language"] == NXLANG:
+        if lock_pages:
             page = with_lock(page)
         files["pages/%02d-%s.txt" % (page_id, page_file_stem(page_name))] = \
             page_to_text(page).encode("utf-8")

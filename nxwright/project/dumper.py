@@ -1,11 +1,13 @@
 """Writing a Nextion Editor project (.HMI) out as a dump folder of text and asset files.
 
 The project file is only read. The output folder must not exist yet, or be
-empty. Nothing is ever deleted; clearing an old dump is left to the user. The
-folder layout and the page text format are described in docs/dumps.md.
+empty, unless it contains an earlier dump to replace (replace_dump). The folder
+layout and the page text format are described in docs/dumps.md.
 """
-from pathlib import Path
 import hashlib
+import os
+from pathlib import Path, PurePath
+import tempfile
 
 from nxwright import NxwrightError
 from nxwright.project.container import HmiContainer, numbered_block
@@ -65,20 +67,93 @@ def kept_picture_sources(blocks: dict, manifest) -> dict:
     return kept
 
 
+# What a dump is made of: these files at its top, and the files directly inside
+# these folders.
+_DUMP_FILES = ("project.txt", "program.s", MACROS_FILE)
+_DUMP_FOLDERS = ("pages", "images", FONTS.folder) + tuple(kind.folder for kind in MEDIA)
+
+
+def replace_dump(project_path: Path, output: Path, **options):
+    """Replaces the dump in the folder `output` with a dump of `project_path`.
+    `options` are those of ProjectDumper. The new dump is written beside the old
+    one first, so a dump that fails leaves the old one as it was."""
+    output = Path(output)
+    with tempfile.TemporaryDirectory(dir=output.parent, prefix="nxwright-dump-") as work:
+        new = Path(work) / "dump"
+        ProjectDumper(project_path, new, output_is_temporary=True, **options).dump()
+        replace_dump_files(new, output)
+
+
+def refuse_folder_to_delete_from(folder: PurePath):
+    """Raises NxwrightError unless `folder` is a path that can safely have files
+    deleted from it. A mistake in a path must never delete files from a folder nobody
+    meant. A path is rejected if:
+      - it has no parts, such as ".";
+      - any of its parts is "..";
+      - it is a drive or share root;
+      - it is relative to a drive's current folder, or to the current drive."""
+    if (not folder.parts or ".." in folder.parts or folder.parts == (folder.anchor,)
+            or (folder.anchor and not folder.is_absolute())):
+        raise NxwrightError("failed to replace the dump in %r: the path is a drive's root, or "
+                            "has \"..\". Give the folder's own path" % str(folder))
+
+
+def replace_dump_files(new: Path, folder: Path):
+    """Moves each file of the finished dump `new` into `folder`, an earlier dump,
+    then deletes the earlier dump's files that the new one does not have. Only the
+    files of a dump are deleted, one by one, and never a folder. Before changing
+    anything, raises NxwrightError if `folder` is not safe to delete from, or if one
+    of its folders is a link to a folder elsewhere. If a step fails later, `folder`
+    contains parts of both dumps, and the error says to run the command again."""
+    refuse_folder_to_delete_from(folder)
+    for name in _DUMP_FOLDERS:
+        if (folder / name).is_symlink():
+            raise NxwrightError("failed to replace the dump in %s: %s is a link to another "
+                                "folder" % (folder, name))
+    try:
+        files = [path.relative_to(new) for path in new.rglob("*") if path.is_file()]
+        for relative in files:
+            (folder / relative).parent.mkdir(parents=True, exist_ok=True)
+            os.replace(new / relative, folder / relative)
+        by_lower_case = {str(relative).lower(): relative for relative in files}
+        for path in _files_of_a_dump(folder):
+            relative = path.relative_to(folder)
+            twin = by_lower_case.get(str(relative).lower())
+            # File names may ignore case. Then a file whose name differs only in
+            # case is the new one, and must stay.
+            if twin is None or (twin != relative and not os.path.samefile(path, folder / twin)):
+                path.unlink()
+    except OSError as error:
+        raise NxwrightError("failed to replace the dump in %s fully (%s): it may contain parts "
+                            "of two dumps. Run the command again" % (folder, error)) from None
+
+
+def _files_of_a_dump(folder: Path) -> list:
+    """Returns the paths of the files in `folder` that a dump is made of."""
+    found = [folder / name for name in _DUMP_FILES if (folder / name).is_file()]
+    for name in _DUMP_FOLDERS:
+        if (folder / name).is_dir():
+            found += [path for path in (folder / name).iterdir() if path.is_file()]
+    return found
+
+
 class ProjectDumper:
     """Writes one project's dump folder."""
 
     def __init__(self, project_path: Path, output: Path, leave_out_unknown_blocks: bool = False,
-                 write_differing_pages: bool = False):
+                 write_differing_pages: bool = False, output_is_temporary: bool = False):
         """If `leave_out_unknown_blocks` is true, the dump leaves out each
         block of a kind this tool does not handle, and does not refuse it. A
         caller sets it when the user chose to go on anyway
         (source/unknown_content.py). If `write_differing_pages` is true, a
         page whose text form does not give back its bytes is written from its
         text form, and is not refused (page_text_difference). A caller sets
-        it, too, when the user chose to go on anyway."""
+        it, too, when the user chose to go on anyway. If `output_is_temporary`
+        is true, an error does not point at a partly written dump, which will
+        be gone."""
         self._leave_out_unknown_blocks = leave_out_unknown_blocks
         self._write_differing_pages = write_differing_pages
+        self._output_is_temporary = output_is_temporary
         self._project_path = Path(project_path)
         self._output = Path(output)
         self._container = None
@@ -112,6 +187,8 @@ class ProjectDumper:
             for kind in MEDIA:
                 self._write_copied(kind)
         except NxwrightError as error:
+            if self._output_is_temporary:
+                raise
             raise NxwrightError("%s (the partly written dump is in %s)"
                                 % (error, self._output)) from None
 

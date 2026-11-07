@@ -8,8 +8,7 @@
 Builds a source folder with nxwright, whose build decides what a project
 may hold, or reads a project file as it is. With --project-file, the
 project file built from a source folder is written there too. Its pages are
-locked if the folder is in nxlang, unless --no-lock is given. The TFT file
-is the same either way.
+locked, unless --no-lock is given. The TFT file is the same either way.
 
 The command then checks everything in the project, and the firmware's
 version (tft/matching.py). It refuses what nxwright cannot compile, such as a value
@@ -131,7 +130,7 @@ def main(arguments: list) -> int:
                         help="do not keep a backup of a TFT file or project file that "
                         "changed since nxwright wrote it")
     parser.add_argument("--no-lock", action="store_true",
-                        help="for a folder in nxlang, keep each page's lock in the "
+                        help="keep each page's lock in the "
                         "--project-file as its page file sets it")
     parser.add_argument("--json", action="store_true",
                         help="print JSON objects, one a line, for programs; never prompt")
@@ -182,13 +181,13 @@ class FirmwareMissing(NxwrightError):
 def compile_folder(source: Path, output: Path, firmware_file: Path = None,
                    ffmpeg_file: Path = None, editor_folder: Path = None,
                    asker: DownloadAsker = None, project_file: Path = None,
-                   overwrite: bool = False, lock_nxlang_pages: bool = True) -> Compiled:
+                   overwrite: bool = False, lock_pages: bool = False) -> Compiled:
     """Returns the compile of `source`, a source folder or a project file,
     to be written as `output`. With `project_file`, which needs a source
     folder, the result also has the project file built on the way, to be
-    written there, with the pages of a folder in nxlang locked if
-    `lock_nxlang_pages`. The firmware comes from the TFT file `firmware_file` or
-    the Nextion Editor folder `editor_folder`, when one is given, or else
+    written there, with its pages locked if `lock_pages`. The firmware comes
+    from the TFT file `firmware_file` or the Nextion Editor folder
+    `editor_folder`, when one is given, or else
     from the cache, the installed Nextion Editor, or a download that `asker`
     lets the user allow (firmware.find_firmware). Without `asker`, nothing is
     downloaded. The ffmpeg is `ffmpeg_file`, or else the PATH's, for a
@@ -205,7 +204,7 @@ def compile_folder(source: Path, output: Path, firmware_file: Path = None,
     if not source.exists():
         raise NxwrightError("%s does not exist" % source)
     if source.is_dir():
-        project, built = project_and_file_of_folder(source, lock_nxlang_pages)
+        project, built = project_and_file_of_folder(source, lock_pages)
     elif is_project_file(source):
         if project_file is not None:
             raise NxwrightError("--project-file writes the project file built from a source "
@@ -364,19 +363,18 @@ def _no_firmware_message(skipped: tuple) -> str:
 
 def project_of_folder(source_folder: Path) -> Project:
     """Returns the project nxwright builds from `source_folder`. Raises
-    NxwrightError when its build refuses the folder."""
+    NxwrightError when its build fails."""
     return project_and_file_of_folder(source_folder)[0]
 
 
-def project_and_file_of_folder(source_folder: Path, lock_nxlang_pages: bool = True) -> tuple:
+def project_and_file_of_folder(source_folder: Path, lock_pages: bool = False) -> tuple:
     """Returns the project nxwright builds from `source_folder`, and the
-    bytes of its project file, with the pages of a folder in nxlang locked if
-    `lock_nxlang_pages`. Raises NxwrightError when its build refuses the
-    folder."""
+    bytes of its project file, with its pages locked if `lock_pages`. Raises
+    NxwrightError when its build fails."""
     # A folder of Python's own, which it deletes after.
     with tempfile.TemporaryDirectory(prefix="nxwright-compile-") as folder:
         project_file = Path(folder) / "project.HMI"
-        build(source_folder, project_file, lock_nxlang_pages=lock_nxlang_pages)
+        build(source_folder, project_file, lock_pages=lock_pages)
         return Project.from_file(project_file), project_file.read_bytes()
 
 

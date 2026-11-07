@@ -39,9 +39,8 @@ nxwright language <source-folder> nxlang
 
 Always switch with this command, and never by changing the `language` line in `app.toml` by hand. The two languages read some code differently: the Nextion Editor computes `a+b*c` strictly from left to right, as `(a+b)*c`, while nxlang uses the more usual precedence, as `a+(b*c)`. If you only changed the setting, that line would compute something else, with no warning. The command instead rewrites every line that the two read differently, adding the parentheses that keep the Nextion Editor's meaning: `(a+b)*c`. It also writes a hexadecimal number such as `0X10` as `0x10`, the only form nxlang has.
 
-- The rewritten code builds to exactly the same project, apart from the locks on its pages ([Working with the Nextion Editor](#working-with-the-nextion-editor)). If any code would not, the command stops before writing anything.
-- After the switch, `nxwright extract` and `nxwright import` refuse the folder, so changes made in the Nextion Editor can't come back into it ([Working with the Nextion Editor](#working-with-the-nextion-editor)).
-- There is no command to switch back. If you must, build the project, then extract it into a new folder. You get a folder in strict Nextion syntax that builds the same project. It contains the code the build wrote, with the compiler's hidden variables and hotspots ([nxlang-compiled.md](nxlang-compiled.md)), instead of the nxlang you wrote.
+- The rewritten code builds to exactly the same project. If any code would not, the command stops before writing anything.
+- There is no command to switch back. If you must, build the project, then extract it into a new folder. That folder is in strict Nextion syntax and builds the same project, but it contains the code the build wrote, with the compiler's hidden variables and hotspots ([nxlang-compiled.md](nxlang-compiled.md)), instead of the nxlang you wrote.
 
 In VS Code, "Switch the source folder to the nxwright language" shows what nxlang adds and each line the switch will rewrite, before you make it. The switch is one edit, so one undo takes it back.
 
@@ -255,8 +254,6 @@ The build writes your nxlang into strict Nextion syntax, adding hidden variables
 
 ## Working with the Nextion Editor
 
-A project in nxlang goes one way: from the source folder, optionally through the Nextion Editor, to a TFT file. You can open the project file nxwright builds in the Nextion Editor and compile it there, but make your code changes in the source folder, because the code the build writes cannot turn back into nxlang ([nxlang-compiled.md](nxlang-compiled.md)). If you do save changes in the Nextion Editor, the next build replaces them, and keeps the old file as a backup ([build](commands.md#build)).
+You can open the project file nxwright builds in the Nextion Editor and compile it there. Its pages are locked, to show that it is not meant for editing ([build](commands.md#build)). If you need to, you can easily unlock the pages in the Nextion Editor.
 
-To show that the project file is not meant for editing, the build locks every page, with no password. You can unlock a page in the Nextion Editor if you need to, and `--no-lock` turns the locks off ([build](commands.md#build)).
-
-`nxwright extract` and `nxwright import` refuse a folder in nxlang, and change nothing. To see what a project file contains, such as changes saved in the Nextion Editor, extract it into a new folder, and compare that folder with your source folder. The new folder is in strict Nextion syntax, and contains the code the build wrote, with the compiler's hidden variables and hotspots. Its page files say `locked = true`, because the project file's pages were locked. You can remove those lines.
+To see what changed in a project file, use `nxwright diff` ([diff](commands.md#diff)). To see what it contains, extract it into a new folder. The new folder is in strict Nextion syntax, and contains the code the build wrote, with the compiler's hidden variables and hotspots ([nxlang-compiled.md](nxlang-compiled.md)).

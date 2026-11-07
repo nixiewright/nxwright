@@ -22,9 +22,8 @@ import re
 
 from nxwright import MissingFileError, NxwrightError
 from nxwright.language.code_checks import ObjectNames
-from nxwright.language.code_preprocessor import preprocess, preprocess_with_places
+from nxwright.language.code_preprocessor import preprocess_with_places
 from nxwright.language.nxlang import Macro
-from nxwright.source.editor_code_merge import keep_comfortable_blocks
 from nxwright.source.nx_files import (CODE_INDENT, EVENT_COMMENT_MARKER, blank_lines_dropped,
                                       macro_blocks)
 
@@ -174,18 +173,3 @@ def block_of_compiled(macros: dict) -> bytes:
     """Returns the comcode.sn block of macros compiled_macros returns."""
     return block_from_macros([(name, [line for _, line in lines])
                               for name, lines in macros.items()])
-
-
-def keep_comfortable_macros(fresh: str, old: str, names) -> str:
-    """Returns `fresh`, macros.nx as an extract writes it, with each macro's
-    block taken from `old` instead when its code turns into the same Editor
-    code, as for events (editor_code_merge.keep_comfortable_blocks)."""
-    def editor_code(_, block) -> list:
-        try:
-            return block.marked_comment() + preprocess(block.code_lines(), names)
-        except NxwrightError as error:
-            raise error.in_file(MACROS_PATH) from None
-    old_end = []
-    return keep_comfortable_blocks(macro_blocks(fresh, MACROS_PATH),
-                                   macro_blocks(old, MACROS_PATH, old_end), editor_code,
-                                   lambda name: "macro %s:" % name, old_end)

@@ -29,7 +29,7 @@ Either way, you then work in a cycle:
 
 You can also skip the Nextion Editor, and compile and upload with nxwright ([screens.md](screens.md)).
 
-If you change a project in the Nextion Editor, save it, then extract it to bring the changes back into the source folder. This only works for a folder in strict Nextion syntax ([Working with the Nextion Editor](language.md#working-with-the-nextion-editor)). nxwright refuses to extract over a folder in nxlang, because that would lose your functions, includes, and other extended syntax. You can still extract the project file into a new folder.
+A build replaces the project file, so make your changes in the source folder. If you had made changes to your HMI file in the Nextion Editor, a backup will be made so that you do not lose your edits.
 
 The rest of this page describes the folder's files. See [commands.md](commands.md) for each command, including [the options of `nxwright new` and what it creates](commands.md#new), and [build-rules.md](build-rules.md) for what the build refuses.
 
@@ -101,7 +101,7 @@ fonts = [
 - `name` is the app's name. nxwright shows it in its VS Code sections and its prompts, and uses it to name simulations and their launch configurations.
   - The name must be one line of text, not empty, with no spaces at its start or end. Any other character is fine, as in "Thermostat: v2".
   - If `name` is missing, nxwright uses the folder's name.
-  - `nxwright new` writes the name. Extracting into a new folder names the app after the project file.
+  - `nxwright new` writes the name. Extracting names the app after the project file.
 - `language` is the language of the folder's code: `"nextion_do_not_change_manually"` for strict Nextion syntax, or `"nxlang_do_not_change_manually"` for the nxwright language ([language.md](language.md)).
   - A newly extracted folder starts in strict Nextion syntax. A folder started with `nxwright new` starts in nxlang, unless you choose another language.
   - Switch to nxlang with `nxwright language`, never by editing the `language` line ([commands.md](commands.md#language)). nxlang uses the usual operator precedence, so the command adds parentheses where your code relies on the Nextion Editor's unusual left-to-right order.
@@ -225,8 +225,7 @@ The Nextion Editor keeps comments only inside an event's code. So:
 
 - The build puts the comment first in the event, with each `//` written `// ###`: `// Save button` becomes `// ### Save button`.
 - Extracting moves the `// ###` lines an event starts with back above its heading. A `// ###` line further down stays an ordinary comment.
-- When the Nextion Editor changed only an event's comment, extracting keeps the event's code as it was in the source folder.
-- A comment that is not right above a heading, such as one that sorts the file into sections, has no event to go into. It stays in the source folder only: the built project leaves it out, and extracting into the folder keeps it where it is.
+- A comment that is not right above a heading, such as one that sorts the file into sections, has no event to go into, so it stays in the source folder only.
 - A comment line that is not indented, in the middle of an event's code, stops the build, since it may have been meant as code. Indent it like the code around it, or move it right above a heading.
 
 ### An attribute of the event's own object
@@ -300,7 +299,7 @@ The Nextion Editor itself accepts less than it seems to:
 
 - Extracting writes the texts as the characters they are, in any of the Nextion Editor's encodings, so you can type text in the project's own script. It stops at bytes that are not text in the encoding, or that would not come back as the same bytes.
 - The build stops at a character the encoding cannot store.
-- A folder extracted by an older nxwright, from a project in another encoding than `iso-8859-1`, has its texts one character per byte. Extract it again.
+- A folder that an older nxwright extracted from a project in an encoding other than `iso-8859-1` has its texts one character per byte. Extract the project again, into a new folder.
 - `nxwright device --encoding` changes the encoding, and converts the fonts ([commands.md](commands.md#device)). If you change `encoding` in `app.toml` by hand instead, the next build stores the texts in the new encoding, but the fonts stay as they are.
 
 ## Names
@@ -313,12 +312,10 @@ The name of a picture, font, animation, video, or sound has one or more parts, s
 
 How resources get their names:
 
-- Extracting names a new font after the name its generator stored in it, such as `NotoSans16`, and anything else with a placeholder: `picture-0012`, `font-03`, `animation-00`, `video-01`, `sound-02`.
-- When extracting updates a folder, each resource keeps its name by matching its bytes, so a picture keeps its name when it moves.
-- A resource you edited in the Nextion Editor takes the name of the old resource at the same ID, unless another resource of its kind already matched that old one. nxwright cannot tell an edited picture from a replaced one, so if you both edit and reorder resources in one Nextion Editor session, check their names after extracting.
+- Extracting names a font after the name its generator stored in it, such as `NotoSans16`. Anything else gets a placeholder: `picture-0012`, `font-03`, `animation-00`, `video-01`, `sound-02`.
 - To rename a resource, change its name in `app.toml`, and rename its file, or an animation's two files.
 
-Only references by name follow a reorder or a removal. An ID written as a number, in an attribute or in code, keeps pointing at whatever now has that ID.
+Only references by name follow a reorder or a removal. An ID written as a number, in an attribute or in code, keeps pointing at whatever now has that ID. So extracted code uses a picture's or font's name in place of its ID where the number can only mean that resource, as in `t0.font=@font(NotoSans16)` or `pic 0,0,@pic(picture-0012)`. Any other number stays as it is, such as the `9` in `sys0=9`.
 
 ## Animations, videos, and sounds
 
@@ -340,33 +337,22 @@ The source folder keeps each animation, video, and sound in the Nextion Editor's
   - The build refuses a sound at 22050 samples a second that is not 16-bit, or that has more than two channels.
   - `nxwright sound` makes a sound's samples 16-bit, and `--mono` makes it mono ([commands.md](commands.md#sound)).
 
-## Extracting into an existing folder
+## What extracting keeps
 
-Extracting into a folder in strict Nextion syntax that already has an `app.toml` updates it:
+Extracting keeps everything a build needs, so a folder extracted from a project builds the same pages, code, pictures, fonts, animations, videos, and sounds. These are the exceptions:
 
-- Each event, each macro, and `program.nx` keeps its existing text if that text builds to the same code, so comfortable code and comments survive an edit made in the Nextion Editor.
-- Everything else is rewritten, so comments in `.toml` files are not kept.
-- The files that the old `app.toml` lists, and that the project no longer has, are deleted.
+- The build locks the pages, unless you give `--no-lock` ([build](commands.md#build)).
+- Blank lines, and spaces at the end of a code line, are dropped, with a warning for the blank lines.
+- The build makes each picture's screen copy again from the picture's file. So a copy may differ slightly from the one the Nextion Editor made in the details of its encoding.
+- A project that the Nextion Editor saved but would not compile, such as one with a text whose font the project lacks, extracts, but its folder does not build.
 
-Extracting never deletes a folder, and never touches a file that the old `app.toml` does not list. It refuses a folder in nxlang, and a folder that is not empty and has no `app.toml`.
-
-Extracting stops with an error, before writing anything, at anything a source folder cannot represent, such as a control character in code.
-
-### The round trip
-
-Extracting a project, then building it, gives back the same project: the same pages, code, pictures, fonts, animations, videos, and sounds. These are the exceptions:
-
-- Spaces at the end of a code line are dropped. The Nextion Editor's compile drops them too.
-- Blank lines in the project's code are dropped, with a warning. The Nextion Editor compiles them to nothing.
-- A comment that is not right above a heading stays in the source folder only ([Comments](#comments)).
-- The build makes each picture's screen copy again from the picture's file. So a copy may differ slightly from the one the Nextion Editor made.
-- The build refuses a project that the Nextion Editor's compile would refuse, such as one with a text whose font the project lacks, which the Nextion Editor saves but does not compile.
+A project built from nxlang is extracted in strict Nextion syntax, with the code the build wrote, not the nxlang you wrote ([nxlang-compiled.md](nxlang-compiled.md)).
 
 ## Component defaults
 
 `defaults.toml` lists what a newly added component of each type has, so that page files can leave it out.
 
-- A new source folder gets a copy of nxwright's own, `nxwright/project/component_defaults.toml`. Extracting always writes it again.
+- A new source folder gets a copy of nxwright's own, `nxwright/project/component_defaults.toml`.
 - The build reads the folder's copy.
 - nxwright's own copy comes from a sample project made with the Nextion Editor 1.68.2: one page with one newly added component of each type. `nxwright defaults` writes a defaults file from such a sample ([commands.md](commands.md#defaults)).
 

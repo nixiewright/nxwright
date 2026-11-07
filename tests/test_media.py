@@ -75,6 +75,13 @@ def folder_files(folder: Path) -> dict:
             for path in folder.rglob("*") if path.is_file()}
 
 
+def files_of_kind(folder: Path, kind: str) -> list:
+    """Returns the bytes of each file in the folder `kind` of a source folder, in
+    order. Extracting gives files new names, so a test compares their bytes."""
+    return [content for path, content in sorted(folder_files(folder).items())
+            if path.startswith(kind + "/")]
+
+
 class MediaFolderTestCase(unittest.TestCase):
     """A new source folder holding the fixtures `media` names, as `nxwright
     new` starts one, its page holding the `players` tables, an animation, a
@@ -153,11 +160,13 @@ class BuildAndExtractTest(MediaFolderTestCase):
                                 self.source / kind / (name + "2" + suffix))
         self.assertEqual(self.build().blocks["main.HMI"], (FIXTURES / "editor.main").read_bytes())
 
-    def test_extract_leaves_the_folder_as_it_was(self):
-        before = folder_files(self.source)
+    def test_extract_gives_back_the_same_files(self):
         self.build()
-        extract(self.folder / "built.HMI", self.source)
-        self.assertEqual(folder_files(self.source), before)
+        extracted = self.folder / "extracted"
+        extract(self.folder / "built.HMI", extracted)
+        for kind in ("animations", "videos", "sounds"):
+            with self.subTest(kind=kind):
+                self.assertEqual(files_of_kind(extracted, kind), files_of_kind(self.source, kind))
 
     def test_extract_into_a_new_folder_names_them_by_id(self):
         self.build()
@@ -176,14 +185,6 @@ class BuildAndExtractTest(MediaFolderTestCase):
         page = (fresh / "pages" / "page0.page.toml").read_text(encoding="utf-8")
         for value in ('vid = "animation-00"', 'vid = "video-00"', 'vid = "sound-01"'):
             self.assertIn(value, page)
-
-    def test_identical_ones_keep_their_names_in_order(self):
-        shutil.copyfile(FIXTURES / "beep.wav", self.source / "sounds" / "beep2.wav")
-        self.edit_app(sounds=["beep", "chirp", "beep2"])
-        before = folder_files(self.source)
-        self.build()
-        extract(self.folder / "built.HMI", self.source)
-        self.assertEqual(folder_files(self.source), before)
 
     def test_a_folder_without_media_lists_none(self):
         plain = self.folder / "plain"

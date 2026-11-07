@@ -241,17 +241,6 @@ class ExtractUnknownTest(PatchedDemoTestCase):
                                                    "as a PNG, JPEG, BMP, or GIF file"):
             build(folder, built)
 
-    def test_a_screen_file_beside_a_png_survives_extracting_again(self):
-        # It is not nxwright's: only a picture without a PNG, JPEG, BMP, or
-        # GIF file has its screen copy kept.
-        folder = self.target("own-screen")
-        extract(self.demo, folder)
-        png = sorted((folder / "pictures").glob("*.png"))[0]
-        own = png.with_suffix(".screen")
-        own.write_bytes(b"mine")
-        extract(self.demo, folder)
-        self.assertEqual(own.read_bytes(), b"mine")
-
     def test_the_project_writer_keeps_the_screen_copy_of_such_a_picture(self):
         # Picture 0 changes from a PNG file to a TIFF file of the same bytes,
         # so it is written as a new picture, with the dump's screen copy.
@@ -346,20 +335,6 @@ class ExtractUnknownTest(PatchedDemoTestCase):
         app = (self.target("model") / "app.toml").read_text(encoding="utf-8")
         self.assertNotIn("screen", app)
 
-    def test_an_unknown_model_warns_that_its_screen_settings_will_be_removed(self):
-        target = self.target("model-update")
-        extract(self.utf8_project(), target)
-        self.assertIn("screen", (target / "app.toml").read_text(encoding="utf-8"))
-        project = self.patched("model-update.HMI", header={16: 0xEE, 17: 0xEE},
-                               base=self.utf8_project())
-        # The error, before anything is written, warns that they will be removed.
-        with self.assertRaises(UnknownContentError) as raised:
-            extract(project, target)
-        self.assertIn("will remove the screen settings", str(raised.exception))
-        messages = extract(project, target, continue_with_unknown=True)
-        self.assertTrue(any("screen settings" in message and "removed" in message
-                            for message in messages), messages)
-
     def test_an_unknown_type_and_event_are_kept_exactly_with_a_note(self):
         # Object 1 of the first page, a text, given a type nxwright does not
         # know, and an event whose name nxwright does not know.
@@ -399,14 +374,12 @@ class ExtractUnknownTest(PatchedDemoTestCase):
             extract(project, self.target("entry"))
         self.assertIn("(manifest entry %d)" % count, str(raised.exception))
 
-    def test_a_refused_extract_leaves_an_existing_folder_as_it_was(self):
+    def test_a_refused_extract_leaves_an_empty_folder_empty(self):
         target = self.target("existing")
-        extract(self.demo, target)
-        before = {path: path.read_bytes() for path in target.rglob("*") if path.is_file()}
+        target.mkdir()
         with self.assertRaises(UnknownContentError):
             extract(self.patched("existing.HMI", blocks={"2.xb": b"?"}), target)
-        after = {path: path.read_bytes() for path in target.rglob("*") if path.is_file()}
-        self.assertEqual(after, before)
+        self.assertEqual(list(target.iterdir()), [])
 
     def test_a_project_without_unknown_content_extracts_as_before(self):
         target = self.target("plain")

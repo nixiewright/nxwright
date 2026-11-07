@@ -22,7 +22,8 @@ from nxwright.language_server.server import serve
 from nxwright.mcp_server import server as mcp_server
 from nxwright.project.device_settings import (DEFAULT_ENCODING, ENCODINGS, DeviceSettings,
                                               password_hash)
-from nxwright.project.dumper import ProjectDumper
+from nxwright.project.dump_folder import is_dump_folder
+from nxwright.project.dumper import ProjectDumper, replace_dump
 from nxwright.project.media_files import CARD_PICTURE_QUALITIES
 from nxwright.project.page_file import write_page_file
 from nxwright.project.project_writer import ProjectWriter
@@ -34,6 +35,7 @@ from nxwright.source.device_change import change_device
 from nxwright.source.folder_check import check_folder
 from nxwright.source.formatting import format_folder
 from nxwright.source.lint import ERROR
+from nxwright.source.project_diff import diff_projects
 from nxwright.source.project_files import build, extract, write_defaults
 from nxwright.source.report import SHOWN_BYTES, write_report
 from nxwright.source.unknown_content import (UnknownContentError, report_hint,
@@ -57,7 +59,7 @@ def _run_build(arguments) -> str:
     if not arguments.overwrite:
         refuse_unless_replacing(arguments.output, _terminal_asker())
     memory = build(arguments.source_folder, arguments.output,
-                   keep_backup=not arguments.no_backup, lock_nxlang_pages=not arguments.no_lock)
+                   keep_backup=not arguments.no_backup, lock_pages=not arguments.no_lock)
     if memory.warning is not None:
         print("nxwright build: warning: %s" % memory.warning, file=sys.stderr)
     for warning in kept_screen_copy_warnings(arguments.source_folder):
@@ -72,13 +74,13 @@ def _run_build(arguments) -> str:
 
 def refuse_unless_replacing(output: Path, ask, kind: str = "project file",
                             made: str = "built"):
-    """Raises NxwrightError unless a command may write `output`: it is no
-    `kind` of file ("project file" or "page file", which _REPLACEABLE tells
-    apart), or `ask(question)` answers that it may be replaced. Otherwise
-    nothing was `made`, as "built" or "written". Without `ask` (nobody at
-    the terminal), or once its input ends, it is refused, naming
-    --overwrite. A file of another kind is left to the command, which
-    refuses it."""
+    """Raises NxwrightError unless a command may write `output`. It may if `output`
+    is not of the kind `kind` ("project file", "page file", or "dump folder", which
+    _REPLACEABLE tells apart), or if `ask(question)` answers that it may be replaced.
+    If the answer is no, the error says that nothing was `made`, such as "built" or
+    "written". Without `ask` (nobody at the terminal), or once its input ends, the
+    error says to pass --overwrite. A file of another kind is left to the command,
+    which fails for it."""
     if not _REPLACEABLE[kind](output):
         return
     while ask is not None:
@@ -94,8 +96,9 @@ def refuse_unless_replacing(output: Path, ask, kind: str = "project file",
     raise NxwrightError("%s exists; pass --overwrite to replace it" % output)
 
 
-# The kinds of file a command replaces, and how each is told from another file.
-_REPLACEABLE = {"project file": is_project_file, "page file": is_page_file}
+# The kinds of file or folder a command replaces, and how each is told from others.
+_REPLACEABLE = {"project file": is_project_file, "page file": is_page_file,
+                "dump folder": is_dump_folder}
 # The exit code when extract or import stops because of content that
 # nxwright does not know and the next build may lose. This happens when
 # there is no terminal to answer the prompt, and --continue-with-unknown was
@@ -361,14 +364,31 @@ def _run_dump(arguments) -> str:
     # The dump only warns about content that nxwright does not know, and
     # never prompts. A dump is how a user looks inside a project that
     # nxwright does not fully know.
+    output = arguments.output_folder
+    replacing = is_dump_folder(output)
+    if replacing and not arguments.overwrite:
+        refuse_unless_replacing(output, _terminal_asker(), "dump folder", "written")
     found = unknown_in_project_file(arguments.project)
     for each in found:
         print("nxwright dump: warning: %s (%s)" % (each.what, each.where), file=sys.stderr)
     if found:
         print("nxwright dump: warning: %s" % report_hint(arguments.project), file=sys.stderr)
-    ProjectDumper(arguments.project, arguments.output_folder,
-                  leave_out_unknown_blocks=True).dump()
-    return "Wrote %s" % arguments.output_folder
+    if replacing:
+        replace_dump(arguments.project, output, leave_out_unknown_blocks=True)
+    else:
+        ProjectDumper(arguments.project, output, leave_out_unknown_blocks=True).dump()
+    return "Wrote %s" % output
+
+
+def _run_diff(arguments) -> str:
+    lines, warnings = diff_projects(arguments.first, arguments.second,
+                                    lock_pages=not arguments.no_lock)
+    for warning in warnings:
+        print("nxwright diff: warning: %s" % warning, file=sys.stderr)
+    for line in lines:
+        print(line)
+    return "" if lines else "No differences between %s and %s" % (arguments.first,
+                                                                   arguments.second)
 
 
 def _run_report(arguments) -> str:
@@ -515,7 +535,7 @@ _SUBCOMMANDS = [
      "the new one is written in full. The command asks first, unless --overwrite is given, and "
      "refuses when there is no terminal to ask at. Any other file there is refused. If the old "
      "project file changed since nxwright wrote it, it is kept as a backup beside the new one. "
-     "A project built from a folder in nxlang has its pages locked, with no password.",
+     "The built project has its pages locked, with no password.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
       ("output", {"type": Path, "help": "the project file (.HMI) to write"}),
       ("--overwrite", {"action": "store_true",
@@ -523,8 +543,7 @@ _SUBCOMMANDS = [
                                "asking"}),
       _NO_BACKUP,
       ("--no-lock", {"action": "store_true",
-                     "help": "for a folder in nxlang, keep each page's lock as its page file "
-                             "sets it"})]),
+                     "help": "keep each page's lock as its page file sets it"})]),
     ("check", _run_check, "check a source folder as the build does, writing nothing",
      "Prints each error the build would stop at, the first of each page, and warnings about "
      "likely mistakes the build accepts, as `<file> line <n>: error: <message>`. Exits with 1 "
@@ -719,14 +738,11 @@ _SUBCOMMANDS = [
      [("source_folder", {"type": Path, "help": "the source folder"}),
       ("name", {"nargs": "?", "help": "the page's name (default: the first free pageN)"})]),
     ("extract", _run_extract, "bring a project file into a source folder",
-     "Use it to start from a project made in the Nextion Editor, or to bring back changes "
-     "made there later. A new or empty folder gets a fresh source folder. An existing one in "
-     "strict Nextion syntax keeps its code, names, and comfortable syntax wherever the project "
-     "did not change them. One in nxlang is refused, because the code the build writes cannot "
-     "turn back into nxlang. The project file is only read.",
+     "Use it to start from a project made in the Nextion Editor. The source folder must not "
+     "exist yet, or be empty. The project file is only read.",
      [("project", {"type": Path, "help": "the project file (.HMI)"}),
       ("source_folder", {"type": Path, "nargs": "?",
-                         "help": "the source folder to update or create"}),
+                         "help": "the source folder to create"}),
       ("--continue-with-unknown", {"action": "store_true",
                                    "help": "extract without prompting, even when the next "
                                    "build may lose content nxwright does not know"}),
@@ -734,10 +750,22 @@ _SUBCOMMANDS = [
                           "help": "print the content nxwright does not know, one JSON object "
                           "per line, and write nothing"})]),
     ("dump", _run_dump, "write a project file out as a dump folder of text and asset files",
-     "The project file is only read. The output folder must not exist yet, or be empty. "
-     "Nothing is ever deleted; clear an old dump yourself.",
+     "The project file is only read. The output folder must not exist yet, or be empty, or "
+     "contain an earlier dump. For any other folder, the command fails. It prompts before it "
+     "replaces a dump, unless --overwrite is given, and fails when there is no terminal.",
      [("project", {"type": Path, "help": "the project file (.HMI)"}),
-      ("output_folder", {"type": Path, "help": "the dump folder to write"})]),
+      ("output_folder", {"type": Path, "help": "the dump folder to write"}),
+      ("--overwrite", {"action": "store_true",
+                       "help": "replace an earlier dump at the output without asking"})]),
+    ("diff", _run_diff, "show what differs between a source folder and a project file, "
+     "or two project files",
+     "Each side is a source folder or a project file. A source folder is built first, the "
+     "same way build builds it. Both sides are then extracted the same way, and the diff "
+     "shows the files that differ, in the form extract writes. Nothing is written.",
+     [("first", {"type": Path, "help": "a source folder or a project file (.HMI)"}),
+      ("second", {"type": Path, "help": "a source folder or a project file (.HMI)"}),
+      ("--no-lock", {"action": "store_true",
+                     "help": "build a source folder without locking its pages"})]),
     ("report", _run_report, "write a report on the things in a project file that nxwright "
      "does not know",
      "The report leaves out the project's code, texts, names, pictures, fonts, sounds, and "
@@ -747,13 +775,10 @@ _SUBCOMMANDS = [
      [("project", {"type": Path, "help": "the project file (.HMI)"}),
       ("output", {"type": Path, "help": "the report to write, a Markdown file that does not "
                   "exist yet"})]),
-    ("import", _run_import, "turn a dump folder into a source folder, or update one",
-     "A new or empty source folder gets a fresh import. A source folder in strict Nextion "
-     "syntax that already has an app.toml is updated, keeping its code wherever the dump has "
-     "the same code. One in nxlang is refused, because the code the build writes cannot turn "
-     "back into nxlang. Any other folder is refused.",
+    ("import", _run_import, "turn a dump folder into a source folder",
+     "The source folder must not exist yet, or be empty.",
      [("dump_folder", {"type": Path, "help": "a dump folder written by nxwright dump"}),
-      ("source_folder", {"type": Path, "help": "the source folder to update or create"}),
+      ("source_folder", {"type": Path, "help": "the source folder to create"}),
       ("--continue-with-unknown", {"action": "store_true",
                                    "help": "import without prompting, even when the next "
                                    "build may lose content nxwright does not know"})]),

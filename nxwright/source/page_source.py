@@ -38,9 +38,8 @@ Code lines are indented by two spaces. The build turns them into Editor syntax
 with code_preprocessor.py, which also drops blank lines.
 
 This module also builds a page back from its source files (page_from_source),
-compiling its events first when the folder uses nxlang. Which events keep
-their source text when a project is extracted into an existing folder is
-editor_code_merge.py's, and the screen's colours are screen_colours.py's.
+compiling its events first when the folder uses nxlang. The screen's colours
+are in screen_colours.py.
 """
 from dataclasses import dataclass
 import re

@@ -27,7 +27,7 @@ from nxwright.source.project_files import build, extract
 from nxwright.source.source_folder import new_source_folder
 from nxwright.source.resource_adding import add_animation
 from tests.pictures import read_jpeg, rgba_image
-from tests.test_media import FIXTURES, SETTINGS, folder_files
+from tests.test_media import FIXTURES, SETTINGS, files_of_kind
 
 def segments(jpeg: bytes) -> dict:
     """Returns {marker: [body]} of a JPEG picture's segments up to its scan."""
@@ -341,10 +341,10 @@ class AnimationCommandTest(unittest.TestCase):
 
     def test_a_folder_with_a_made_animation_builds_and_extracts_back(self):
         add_animation(self.source, self.pictures, 100)
-        before = folder_files(self.source)
         build(self.source, self.folder / "made.HMI")
-        extract(self.folder / "made.HMI", self.source)
-        self.assertEqual(folder_files(self.source), before)
+        extracted = self.folder / "extracted"
+        extract(self.folder / "made.HMI", extracted)
+        self.assertEqual(files_of_kind(extracted, "animations"), files_of_kind(self.source, "animations"))
 
 
 if __name__ == "__main__":

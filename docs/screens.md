@@ -19,8 +19,6 @@ Screens run a TFT file, which nxwright can compile from your source folder and u
   nxwright build app thermostat.HMI
   ```
 
-  If your source folder is in strict Nextion syntax, you can use `nxwright extract` to bring changes made in the Nextion Editor back into it.
-
 You can mix the two. With `--project-file`, `nxwright compile` also writes the project file, so that you can open the same app in the Nextion Editor. In VS Code, the link button beside the project file turns this on for Compile TFT.
 
 ## Compiling

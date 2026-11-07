@@ -1,6 +1,6 @@
-"""Locked pages: a project file built from a folder in nxlang has its pages
-locked, with no password, to show in the Nextion Editor that it is not meant
-for editing (project/page_header.py, with_lock)."""
+"""Locked pages: a project file that a command builds has its pages locked, with
+no password, to show in the Nextion Editor that it is not meant for editing
+(project/page_header.py, with_lock)."""
 from contextlib import redirect_stderr, redirect_stdout
 import io
 from pathlib import Path
@@ -124,11 +124,28 @@ class StrictBuildTest(LockedPagesTestCase):
 
     LANGUAGE = "nextion"
 
-    def test_the_pages_stay_unlocked_with_or_without_the_flag(self):
-        for options in ((), ("--no-lock",)):
-            for name, header in self.build_headers(*options).items():
-                with self.subTest(options=options, page=name):
-                    self.assertIs(header.locked, False)
+    def test_every_page_is_locked_with_no_password(self):
+        for name, header in self.build_headers().items():
+            with self.subTest(page=name):
+                self.assertIs(header.locked, True)
+                self.assertEqual(header.lock_password_hash, NO_LOCK_PASSWORD)
+
+    def test_no_lock_leaves_the_pages_unlocked(self):
+        for name, header in self.build_headers("--no-lock").items():
+            with self.subTest(page=name):
+                self.assertIs(header.locked, False)
+
+    def test_a_library_build_adds_no_lock(self):
+        build(self.source, self.project)
+        for name, header in headers_of(self.project).items():
+            with self.subTest(page=name):
+                self.assertIs(header.locked, False)
+
+    def test_a_page_with_a_password_stays_as_it_is(self):
+        self.add_to_page_table("second", 'lock_password_hash = "%s"' % PASSWORD_HASH)
+        header = self.build_headers()["second"]
+        self.assertIs(header.locked, False)
+        self.assertEqual(header.lock_password_hash.hex(), PASSWORD_HASH)
 
     def test_a_locked_page_stays_locked_with_the_flag(self):
         self.add_to_page_table("second", "locked = true")
@@ -138,7 +155,8 @@ class StrictBuildTest(LockedPagesTestCase):
 
 
 class CompileTest(LockedPagesTestCase):
-    """compile with --project-file, with firmware of the tests' own."""
+    """compile with --project-file of a folder in nxlang, with firmware of the
+    tests' own."""
 
     def compile(self, name: str, *options: str) -> Path:
         """Compiles the folder into the TFT file `name`, and returns it."""
@@ -166,6 +184,12 @@ class CompileTest(LockedPagesTestCase):
             self.assertEqual(run(["compile", str(self.project), str(self.folder / "from.tft"),
                                   "--firmware", str(firmware), "--no-lock"]), 0)
         self.assertIs(headers_of(self.project)["page0"].locked, True)
+
+
+class StrictCompileTest(CompileTest):
+    """The same, for a folder in strict Nextion syntax."""
+
+    LANGUAGE = "nextion"
 
 
 if __name__ == "__main__":

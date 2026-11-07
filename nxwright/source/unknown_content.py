@@ -49,9 +49,7 @@ from nxwright.project.screen_models import model_with_id
 # Other modules import the sorts from this module.
 from nxwright.source.content_sorts import CANNOT_BE_KEPT, KEPT, MAY_BE_LOST, WRITTEN_OTHERWISE
 from nxwright.source.page_source import object_irregularities, reference_kind
-# The place given for an unknown screen model. Extract looks for this place
-# among the content that may be lost, to find out whether going on would
-# remove app.toml's screen settings (source_folder.removes_screen_settings).
+# The place given for an unknown screen model.
 UNKNOWN_MODEL_PLACE = "manifest header, bytes 16 to 19"
 
 # The bytes of the manifest header that the build writes as constants
@@ -365,23 +363,16 @@ class UnknownContentError(NxwrightError):
     from other refusals, so that a command can prompt the user to go on or
     to stop."""
 
-    def __init__(self, origin: Path, found: list, project: Path = None,
-                 removed_settings: Path = None):
+    def __init__(self, origin: Path, found: list, project: Path = None):
         """`origin` is the project file or the dump that contains `found`.
         `project` is the project file, if known, for `nxwright report` to
-        read. `removed_settings` is the source folder whose app.toml would
-        lose its screen settings if the user goes on, because the project's
-        screen model is one nxwright does not know. Otherwise,
-        `removed_settings` is None."""
+        read."""
         self.found = found
-        removal = ("" if removed_settings is None else
-                   "Going on will remove the screen settings of %s.\n"
-                   % (Path(removed_settings) / "app.toml"))
         super().__init__(
-            "%s contains things nxwright does not know, which the next build may lose:\n%s\n%s"
+            "%s contains things nxwright does not know, which the next build may lose:\n%s\n"
             "The built project may then lack parameters that the Nextion Editor needs, and may "
             "not be the same as this one. %s"
-            % (origin, listed(found), removal, report_hint(project)))
+            % (origin, listed(found), report_hint(project)))
 
 
 def report_hint(project: Path = None) -> str:
@@ -397,16 +388,16 @@ def listed(found: list) -> str:
     return "\n".join("  - %s (%s)" % (each.what, each.where) for each in found)
 
 
-def checked(origin: Path, found: list, continue_with_unknown: bool, project: Path = None,
-            removed_settings: Path = None) -> list:
+def checked(origin: Path, found: list, continue_with_unknown: bool,
+            project: Path = None) -> list:
     """Checks `found`, the UnknownContent of `origin`, by sort. Raises
     NxwrightError for content nxwright cannot keep. Raises
     UnknownContentError for content the next build may lose, unless
     `continue_with_unknown` is true. Otherwise returns a note for each thing
     kept exactly, and a warning for each thing written otherwise, which
     does not need a question. It also returns a warning for each thing that
-    may be lost, when the user chose to go on past it. `project` and
-    `removed_settings` are passed to UnknownContentError."""
+    may be lost, when the user chose to go on past it. `project` is passed to
+    UnknownContentError."""
     cannot = [each for each in found if each.sort == CANNOT_BE_KEPT]
     if cannot:
         raise NxwrightError("%s contains things nxwright cannot keep:\n%s\nA newer Nextion "
@@ -414,7 +405,7 @@ def checked(origin: Path, found: list, continue_with_unknown: bool, project: Pat
                                                        report_hint(project)))
     lost = [each for each in found if each.sort == MAY_BE_LOST]
     if lost and not continue_with_unknown:
-        raise UnknownContentError(origin, lost, project, removed_settings)
+        raise UnknownContentError(origin, lost, project)
     notes = ["%s (%s), which the source folder keeps exactly" % (each.what, each.where)
              for each in found if each.sort == KEPT]
     notes += ["%s (%s), which the next build writes as nxwright knows it" % (each.what, each.where)

@@ -1,18 +1,24 @@
 # Dumps: a project file as text
 
-A **dump** is a project file (HMI) written out as a folder of plain text and asset files, exact enough to write the project back from. You can compare two projects by comparing their dumps with any folder diff tool.
+A **dump** is a project file (HMI) written out as a folder of plain text and asset files, exact enough to write the project back from. You can compare two projects by comparing their dumps with any folder diff tool. To compare them as source files instead, use `nxwright diff` ([commands.md](commands.md#diff)).
 
 See [format.md](format.md) for the terms used below, such as block, manifest, ID, and screen copy.
 
 ## Writing a dump
 
 ```
-nxwright dump <project.HMI> <output-folder>
+nxwright dump <project.HMI> <output-folder> [--overwrite]
 ```
 
+If you work in the Nextion Editor and want your project's history in git, you can keep a dump in your repository, and replace it each time you save. Its diffs show what changed.
+
+You can also use a dump to look inside a project that nxwright does not fully know, such as one a newer Nextion Editor saved. `dump` warns about each thing it does not know and writes the rest, without prompting you to go on ([commands.md](commands.md#extract)). It leaves out any block of a kind nxwright does not handle.
+
 - The project file is only read.
-- The output folder must be empty or not exist yet. nxwright never deletes anything, so to replace an old dump, clear its folder first. A failed run leaves its partial folder in place.
-- You can use a dump to look inside a project that nxwright does not fully know, such as one a newer Nextion Editor saved. `dump` warns about each thing it does not know and writes the rest, without prompting you to go on ([commands.md](commands.md#extract)). It leaves out any block of a kind nxwright does not handle.
+- The output folder must be empty, not exist yet, or contain an earlier dump. For any other folder, `dump` fails.
+- `dump` prompts you before it replaces an earlier dump, unless you pass `--overwrite`. Without that option, it fails when there is no terminal, such as in a script.
+- Replacing a dump deletes any files you added to its folders, such as `pages`. Files you added at the top of the folder stay.
+- If the new dump cannot be written, an earlier dump stays as it was. In a new or empty folder, a failed run leaves its partial dump in place.
 
 ## Layout
 
@@ -78,12 +84,9 @@ The text is exact: on every dump, nxwright checks that each page's text converts
 nxwright import <dump-folder> <source-folder>
 ```
 
-`nxwright import` turns a dump into a source folder ([source-folder.md](source-folder.md)).
+`nxwright import` turns a dump into a new source folder ([source-folder.md](source-folder.md)).
 
-- A new or empty folder gets a fresh source folder.
-- A source folder in strict Nextion syntax that already has an `app.toml` is updated. Each event keeps its text, comments included, unless the project changed that event's code ([Extracting into an existing folder](source-folder.md#extracting-into-an-existing-folder)).
-- A source folder in nxlang is refused, and nothing changes ([Working with the Nextion Editor](language.md#working-with-the-nextion-editor)).
-- Any other folder is refused.
+- The source folder must not exist yet, or be empty. For any other folder, `import` fails and changes nothing.
 - `import` checks the dump's manifest header and pages for things nxwright does not know. For each one, it warns and goes on, prompts you to choose whether to go on, or refuses. The rules are the same as for `extract`, and `import` also takes `--continue-with-unknown` ([commands.md](commands.md#extract)).
 
 ## Page files

@@ -7,6 +7,5 @@ export function switchConfirmationDetail(lines: number): string {
   const changes = lines === 0
     ? "Your project does not require any changes to switch to nxlang."
     : `${lines} line(s) of code will change, so that they keep calculating the same way.`;
-  return `${changes} There is no command to switch back, and you will not be able to extract ` +
-    "changes made in the Nextion Editor into this folder.";
+  return `${changes} There is no command to switch back.`;
 }

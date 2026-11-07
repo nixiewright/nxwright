@@ -134,14 +134,14 @@ class OwnAttributeTest(SourceFolderTestCase):
             "first", "pages/first.nx")
         self.assertEqual((title, [code for _, code in lines]),
                          ("on n0.down", ["'&val&'+=10", "sys1='&id&'"]))
-        # The project as the Editor would save it, imported again: the
-        # event's source is kept, as the Editor left it unchanged.
+        # Extracting the built project into a new folder gives the form '&name&' as the
+        # project has it, without the spaces.
         built = self.folder / "built.HMI"
         build(self.source, built)
         ProjectDumper(built, self.folder / "built-dump").dump()
-        import_dump(self.folder / "built-dump", self.source)
-        self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"),
-                         comfortable)
+        import_dump(self.folder / "built-dump", self.folder / "fresh")
+        self.assertEqual((self.folder / "fresh" / "pages" / "first.nx").read_text(encoding="utf-8"),
+                         "on n0.down:\n  '&val&'+=10\n  sys1='&id&'\n")
 
     def test_switching_to_nxlang_keeps_it(self):
         # A line nxlang reads as the Editor does is kept; one it would read

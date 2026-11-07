@@ -50,6 +50,15 @@ def check_dump_format(dump_folder: Path):
                             "again with nxwright dump" % dump_folder)
 
 
+def is_dump_folder(folder: Path) -> bool:
+    """Returns whether `folder` is a dump in the current format."""
+    try:
+        check_dump_format(Path(folder))
+    except (NxwrightError, OSError, UnicodeDecodeError):
+        return False
+    return True
+
+
 def dump_device_settings(dump_folder: Path):
     """Returns the DeviceSettings of the dump's project, from the manifest
     header bytes its project.txt shows, or None when it shows none or the

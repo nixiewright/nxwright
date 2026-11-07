@@ -15,7 +15,7 @@ class ProjectMatchesSourceTest(unittest.TestCase):
     def test_building_the_source_folder_gives_the_project_file(self):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / "built.HMI"
-            build(APP, output)
+            build(APP, output, lock_pages=True)
             self.assertTrue(output.read_bytes() == PROJECT.read_bytes(),
                             "the build differs from %s; build it again" % PROJECT.name)
 

@@ -1,27 +1,24 @@
-// The text of what the extension says about a source folder's project file:
-// the warning before a changed file is replaced, and the notice when Extract
-// is run on a folder in nxlang. It is kept apart from VS Code's API so that the
-// tests can check it.
+// The text of the warning before a source folder's changed project file is
+// replaced. It is kept apart from VS Code's API so that the tests can check it.
 
 // The button that extracts a project file into a new folder.
 export const EXTRACT_NEW_FOLDER = "Extract into a New Folder";
-
-// The notice when Extract is run on the source folder `folder` in nxlang.
-export function nxlangExtractNotice(folder: string): string {
-  return `nxwright: ${folder} uses nxlang, so nxwright cannot extract over it: the code the ` +
-    "build writes cannot turn back into nxlang. Make code changes in the source folder. To see " +
-    "what the project contains, extract it into a new folder, and compare that folder with " +
-    "your source folder.";
-}
+// The button that shows what changed in a project file.
+export const SHOW_CHANGES = "Show Changes";
 
 // The detail of the warning shown before nxwright replaces a project file that
-// was changed outside nxwright. `nxlang` is whether the source folder is in
-// nxlang, and `backups` is whether the setting nxwright.backups is on.
-export function changedProjectFileDetail(nxlang: boolean, backups: boolean): string {
+// was changed outside nxwright. `backups` is whether the setting nxwright.backups
+// is on.
+export function changedProjectFileDetail(backups: boolean): string {
   const backup = backups ? "The old file will be kept as a backup." : "No backup will be kept.";
-  return nxlang
-    ? "The new file will not have those changes, and they cannot come back into the source " +
-      `folder. ${backup} To see those changes, you can extract the old file into a new folder.`
-    : `The new file will not have those changes. ${backup} Extract First brings those changes ` +
-      "into the source folder.";
+  return `The new file will not have those changes. ${backup} Show Changes lists those ` +
+    "changes, and Extract into a New Folder gives them as files.";
+}
+
+// Returns the arguments of nxwright that show what changed in the project file
+// `file` since it was built from the source folder `folder`. The folder comes first,
+// so that the changes show as added lines. `locks` is whether the setting
+// nxwright.lockPages is on.
+export function showChangesArguments(folder: string, file: string, locks: boolean): string[] {
+  return ["diff", folder, file, ...(locks ? [] : ["--no-lock"])];
 }

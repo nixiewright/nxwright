@@ -37,7 +37,7 @@ from nxwright.source.source_folder import folder_byte_reader, folder_reader, new
 from nxwright.source.resource_adding import add_animation, add_sound, add_video
 from tests.pictures import read_jpeg, rgba_image
 from tests.test_making_media import gradient, mean_difference
-from tests.test_media import FIXTURES, SETTINGS, folder_files
+from tests.test_media import FIXTURES, SETTINGS, files_of_kind
 
 SOURCES = FIXTURES / "sources"
 # Each source WAV, by its name, and the Editor's file of it.
@@ -402,10 +402,10 @@ class SoundCommandTest(MediaCommandTestCase):
 
     def test_a_folder_with_a_made_sound_builds_and_extracts_back(self):
         add_sound(self.source, SOURCES / "short11k-stereo8.wav")
-        before = folder_files(self.source)
         build(self.source, self.folder / "made.HMI")
-        extract(self.folder / "made.HMI", self.source)
-        self.assertEqual(folder_files(self.source), before)
+        extracted = self.folder / "extracted"
+        extract(self.folder / "made.HMI", extracted)
+        self.assertEqual(files_of_kind(extracted, "sounds"), files_of_kind(self.source, "sounds"))
 
 
 class VideoCommandTest(MediaCommandTestCase):
@@ -520,10 +520,10 @@ class VideoCommandTest(MediaCommandTestCase):
 
     def test_a_folder_with_a_made_video_builds_and_extracts_back(self):
         add_video(self.source, self.pictures)
-        before = folder_files(self.source)
         build(self.source, self.folder / "made.HMI")
-        extract(self.folder / "made.HMI", self.source)
-        self.assertEqual(folder_files(self.source), before)
+        extracted = self.folder / "extracted"
+        extract(self.folder / "made.HMI", extracted)
+        self.assertEqual(files_of_kind(extracted, "videos"), files_of_kind(self.source, "videos"))
 
     def test_a_rotated_folder_gets_files_turned_for_its_screen(self):
         # A picture 24 by 8 is padded to 32 by 16, then turned to 16 by 32.

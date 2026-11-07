@@ -5,12 +5,11 @@ debugger, as the Editor's simulator ran them."""
 import unittest
 
 from nxwright import NxwrightError
-from nxwright.language.resource_names import ResourceNames
 from nxwright.project.dumper import ProjectDumper
 from nxwright.project.editor_language import EDITOR_PROGRAM_DECLARATION
 from nxwright.source.folder_check import check_folder
 from nxwright.source.formatting import format_folder
-from nxwright.source.macros_source import (block_from_macros, keep_comfortable_macros,
+from nxwright.source.macros_source import (block_from_macros,
                                            macros_from_block, macros_to_source)
 from nxwright.source.source_folder import (export_dump, folder_reader, import_dump,
                                            switch_to_nxlang)
@@ -82,12 +81,6 @@ class SourceTest(unittest.TestCase):
         self.assertEqual(macros_to_source([("noted", ["// ### Says M", "printh 4D"])]),
                          "// Says M\nmacro noted:\n  printh 4D\n")
 
-    def test_comfortable_text_kept_where_it_builds_alike(self):
-        old = "macro newcall:\n  printh 4D\n  prints \"café\", 0\n\nmacro my name:\n  sys0 = 8\n"
-        kept = keep_comfortable_macros(SOURCE, old, ResourceNames([], []))
-        self.assertEqual(kept, 'macro newcall:\n  printh 4D\n  prints "café", 0\n\n'
-                               "macro newcall1:\n\nmacro my name:\n  sys0=7\n")
-
 
 class FolderTest(SourceFolderTestCase):
     """The small test project, its first page given a text t0 of local scope
@@ -122,12 +115,11 @@ class FolderTest(SourceFolderTestCase):
                          SOURCE)
 
     def test_a_project_without_macros(self):
-        # Its folder has no macros.nx, and an update removes one the folder had.
+        # Its folder has no macros.nx.
         export_dump(self.source, self.folder / "again")
         self.assertFalse((self.folder / "again" / "macros.s").exists())
-        self.write_macros(SOURCE)
-        import_dump(self.dump_with_macros(None), self.source)
-        self.assertFalse((self.source / "macros.nx").exists())
+        import_dump(self.dump_with_macros(None), self.folder / "fresh")
+        self.assertFalse((self.folder / "fresh" / "macros.nx").exists())
 
     def test_a_macros_file_without_macros(self):
         # The Editor removes the block once every macro is deleted.
@@ -158,26 +150,6 @@ class FolderTest(SourceFolderTestCase):
         import_dump(self.dump_with_macros(b"my name\r\n1\r\nsys0=7 \t\r\n"), self.folder / "fresh")
         self.assertEqual((self.folder / "fresh" / "macros.nx").read_text(encoding="utf-8"),
                          "macro my name:\n  sys0=7\n")
-
-    def test_a_comment_above_no_heading_is_kept_in_the_folder_only(self):
-        # Where the project changed the code of the macro after it, too.
-        text = ("macro a:\n  sys0 = 1\n\n// --- More ---\n\nmacro b:\n  sys0 = 2\n\n"
-                "// The end.\n")
-        self.write_macros(text)
-        export_dump(self.source, self.folder / "built")
-        macros = (self.folder / "built" / "macros.s").read_bytes()
-        self.assertNotIn(b"More", macros)
-        self.assertNotIn(b"The end", macros)
-        import_dump(self.dump_with_macros(b"a\r\n1\r\nsys0=1\r\nb\r\n1\r\nsys0=3\r\n"),
-                    self.source)
-        self.assertEqual((self.source / "macros.nx").read_text(encoding="utf-8"),
-                         text.replace("sys0 = 2", "sys0=3"))
-
-    def test_an_update_keeps_comfortable_text(self):
-        self.write_macros("macro my name:\n  sys0 = 7\n")
-        import_dump(self.dump_with_macros(b"my name\r\n1\r\nsys0=7\r\n"), self.source)
-        self.assertEqual((self.source / "macros.nx").read_text(encoding="utf-8"),
-                         "macro my name:\n  sys0 = 7\n")
 
     def add_to_program(self, line: str):
         """Adds `line` at the end of program.nx."""

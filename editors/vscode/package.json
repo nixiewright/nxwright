@@ -63,10 +63,10 @@
             "default": true,
             "markdownDescription": "When a build or a compile replaces a project file or a TFT file that changed since nxwright wrote it, keeps the old file as a backup beside the new one, such as `app.HMI.2026-11-06-143205.bak`."
           },
-          "nxwright.lockNxlangPages": {
+          "nxwright.lockPages": {
             "type": "boolean",
             "default": true,
-            "markdownDescription": "Locks the pages of a project file built from nxlang, with no password, to show in the Nextion Editor that the file is not meant for editing."
+            "markdownDescription": "Locks the pages of a project file nxwright builds, with no password, to show in the Nextion Editor that the file is not meant for editing."
           }
         }
       },
@@ -271,12 +271,8 @@
       },
       {
         "command": "nxwright.extract",
-        "title": "Extract the project file into the source folder",
-        "category": "nxwright",
-        "icon": {
-          "light": "media/icons/extract-light.svg",
-          "dark": "media/icons/extract-dark.svg"
-        }
+        "title": "Extract a project file into a new folder",
+        "category": "nxwright"
       },
       {
         "command": "nxwright.chooseProjectFile",
@@ -1056,11 +1052,6 @@
           "command": "nxwright.addComponent",
           "when": "view == nxwright.components",
           "group": "navigation"
-        },
-        {
-          "command": "nxwright.extract",
-          "when": "view == nxwright.project && nxwright.hasProject && nxwright.projectLanguage != nxlang",
-          "group": "navigation@1"
         },
         {
           "command": "nxwright.chooseProjectFile",

@@ -6,8 +6,8 @@
 import { GLYPHS } from "./glyphs.mjs";
 
 // The glyphs written as icon files.
-export const ICON_GLYPHS = ["build", "extract", "projectFile", "importProject",
-                            "launchConfiguration", "sdCard"];
+export const ICON_GLYPHS = ["build", "projectFile", "importProject", "launchConfiguration",
+                            "sdCard"];
 
 // The colour of icons in VS Code's light and dark themes (its
 // icon.foreground).

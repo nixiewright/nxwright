@@ -186,7 +186,7 @@ export class CurrentProject {
 }
 
 // The key under which the workspace's state keeps the project file (.HMI)
-// chosen for a source folder, which Build writes and Extract reads.
+// chosen for a source folder, which Build writes.
 export function projectFileKey(folder: vscode.Uri): string {
   return `nxwright.projectFile:${folder.fsPath}`;
 }

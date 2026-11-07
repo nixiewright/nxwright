@@ -227,20 +227,6 @@ class SourceFolderTest(SourceFolderTestCase):
         build(again, self.folder / "again.HMI")
         self.assertEqual(HmiContainer.from_file(self.folder / "again.HMI").blocks, built)
 
-    def test_a_picture_whose_suffix_changed_loses_its_old_file(self):
-        self.picture(".png", write_png(160, 96, bytes(160 * 96 * 4)))
-        self.built("png.HMI")
-        jpeg_folder = self.folder / "jpeg"
-        extract(self.folder / "png.HMI", jpeg_folder)
-        (picture,) = (jpeg_folder / "pictures").iterdir()
-        picture.unlink()
-        (jpeg_folder / "pictures" / (picture.stem + ".jpg")).write_bytes(jpeg("baseline.jpg"))
-        build(jpeg_folder, self.folder / "jpeg.HMI")
-        # Extracted over the folder of the PNG, the JPEG keeps its name.
-        extract(self.folder / "jpeg.HMI", self.source)
-        self.assertEqual(sorted(path.name for path in (self.source / "pictures").iterdir()),
-                         ["photo.jpg"])
-
     def test_a_picture_of_two_files_is_refused(self):
         self.picture(".png", write_png(160, 96, bytes(160 * 96 * 4)))
         self.picture(".jpg", jpeg("baseline.jpg"))

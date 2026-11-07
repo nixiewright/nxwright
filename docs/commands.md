@@ -6,6 +6,7 @@ Most of nxwright's commands work on a source folder: your project as files ([sou
 nxwright new <source-folder>
 nxwright extract <project.HMI> <source-folder> [--continue-with-unknown]
 nxwright extract --list-unknown <project.HMI>
+nxwright diff <source-folder or project.HMI> <source-folder or project.HMI> [--no-lock]
 nxwright report <project.HMI> <report.md>
 nxwright build <source-folder> <output.HMI>
 nxwright compile <source-folder or project.HMI> <output.tft> [--firmware <file.tft> | --editor <folder>] [--download]
@@ -66,13 +67,13 @@ Details:
 nxwright extract thermostat.HMI app
 ```
 
-`extract` brings a project file into a source folder, so that you can start from a project made in the Nextion Editor. If your folder is in strict Nextion syntax, you can also extract again to bring back changes made later in the Nextion Editor. The project file does not change.
+`extract` turns a project file into a new source folder, so that you can start from a project made in the Nextion Editor. The project file does not change.
 
-- A new or empty folder becomes a fresh source folder, with the app named after the project file: `thermostat.HMI` gives `thermostat`.
-- A source folder in strict Nextion syntax is updated, and keeps the app's name. Wherever the project did not change them, your code and names stay as you wrote them, comfortable code included ([Extracting into an existing folder](source-folder.md#extracting-into-an-existing-folder)).
-- A source folder in nxlang is rejected and does not change, because the code the build writes cannot be faithfully turned back into nxlang. To see what the project contains, extract it into a new folder, and compare that folder with your source folder ([Working with the Nextion Editor](language.md#working-with-the-nextion-editor)).
+- The folder must not exist yet, or be empty. For any other folder, extract fails and changes nothing.
+- The app is named after the project file: `thermostat.HMI` gives `thermostat`.
 - Close the project in the Nextion Editor before you extract it, because the Nextion Editor locks a project it has open.
 - Extract drops blank lines from the project's code, and warns about each event, macro, or `program.s` that had any. This does not change the app, because the Nextion Editor compiles blank lines to nothing.
+- If the project contains something a source folder cannot represent, such as a control character in code, extract stops with an error before writing anything.
 - A project saved by a newer Nextion Editor may contain things nxwright does not know. Before writing anything, extract puts each one in one of four groups:
   - **Kept exactly**, such as a component type nxwright does not know, or an attribute it does not know. A page file keeps such an attribute as its stored bytes ([source-folder.md](source-folder.md#page-files)). A warning gives each thing kept.
   - **Written otherwise** by the next build, in a form nxwright knows. For example, the build writes a page header of an unfamiliar form in the current form, and puts an object's records back in their usual order. A warning gives each thing, and extract goes on without prompting.
@@ -83,6 +84,18 @@ nxwright extract thermostat.HMI app
 - `nxwright extract --list-unknown thermostat.HMI` prints each thing in the project that nxwright does not know, one JSON object per line, and writes nothing. Each object gives what the thing is, where it is, its group from the list above (as `sort`), its size, and its first 16 bytes in hexadecimal.
 
 `nxwright dump`, then `nxwright import`, do the same as `extract` in two steps ([dumps.md](dumps.md)).
+
+## diff
+
+```
+nxwright diff app thermostat.HMI
+nxwright diff thermostat.HMI.2026-11-06-143205.bak thermostat.HMI
+```
+
+Use `diff` to see what someone changed in a project file, for instance after an edit in the Nextion Editor and before a build replaces it. Give your source folder first and the modified project file second, so that the latter's changes show as added lines. You can also compare two project files, such as a backup and the current one. `diff` does not modify either projects.
+
+- To bring a change into your folder, copy it by hand. The diff shows code the way it would be extracted, so its spacing may differ from yours.
+- If you build with `--no-lock`, pass it to `diff` too, so that the locks do not show as changes.
 
 ## report
 
@@ -109,9 +122,9 @@ nxwright build app thermostat.HMI
 
 - The build first checks the folder, and stops at the first problem it finds ([What the build refuses](build-rules.md)).
 - The build prompts before it replaces an existing project file, and replaces it only once the new one is written in full and checked. `--overwrite` skips the prompt. A script must give it, because with no terminal to answer the prompt, the build fails. If the output exists and is not a project file, the build fails even with `--overwrite`.
-- If the old project file changed since nxwright wrote it, for example in the Nextion Editor, it is kept as a backup beside the new one, such as `thermostat.HMI.2026-11-06-143205.bak`. `--no-backup` turns this off. nxwright never deletes a backup, so delete those you no longer need yourself. If your project is in git, you may want to ignore `*.bak`.
+- If the old project file changed since nxwright wrote it, for example in the Nextion Editor, it is kept as a backup beside the new one, such as `thermostat.HMI.2026-11-06-143205.bak`, and `nxwright diff` shows what changed ([diff](#diff)). `--no-backup` turns the backup off. nxwright never deletes a backup, so delete those you no longer need yourself. If your project is in git, you may want to ignore `*.bak`.
 - A project file counts as changed if nxwright has no record of writing it, such as after you move it or use another computer. The record is in the same folder as [the picture cache](source-folder.md#the-picture-cache). With `NXWRIGHT_CACHE=off`, there is no record, so each build that changes the file keeps a backup.
-- When you build a folder in nxlang, the build locks every page with no password, even if its page file has `locked = false`, to show that the project is not meant to be edited in the Nextion Editor. A page with its own password stays as it is. You can still unlock a page in the Nextion Editor, and `--no-lock` leaves each page as its page file sets it.
+- The build locks every page with no password, even if its page file has `locked = false`, to show that the project is not meant to be edited in the Nextion Editor. A page with its own password stays as it is. You can still unlock a page in the Nextion Editor, and `--no-lock` leaves each page as its page file sets it.
 - Close the project in the Nextion Editor before you build over it, because the Nextion Editor locks a project it has open.
 - The build prints each page's memory, such as `page0: 292 of 524288 bytes`. If nxwright could not count all the memory of any page, every page's line says `at least` ([Memory](build-rules.md#memory)).
 - The screen copies of your pictures are kept in a cache, so that later builds are faster ([The picture cache](source-folder.md#the-picture-cache)).
@@ -130,7 +143,7 @@ nxwright compile thermostat.HMI thermostat.tft
 - The compile first builds a source folder, and stops at any error the build finds. A project file is compiled as it is.
 - If the project has something nxwright cannot compile, such as a number too large for its attribute, the compile lists every problem, and does not write any file.
 - A sound at 22050 samples a second must be 16-bit, mono or stereo, or the compile fails. A sound at any other rate needs ffmpeg to convert it: either the ffmpeg on your PATH, or the program you give with `--ffmpeg`. Without ffmpeg, the compile fails.
-- `--project-file <file.HMI>` also saves the project file that the compile builds from a source folder, so that you have one that always matches the TFT file. For a folder in nxlang, the pages of that project file are locked ([build](#build)), unless you give `--no-lock`. The locks do not change the TFT file.
+- `--project-file <file.HMI>` also saves the project file that the compile builds from a source folder, so that you have one that always matches the TFT file. The pages of that project file are locked ([build](#build)), unless you give `--no-lock`. The locks do not change the TFT file.
 - If an output file already exists, the compile fails unless you give `--overwrite`. Even then, it only replaces a TFT file with a TFT file, and a project file with a project file.
 - An output file that changed since nxwright wrote it is kept as a backup ([build](#build)), unless you give `--no-backup`.
 
@@ -622,7 +635,6 @@ nxwright language app nxlang
 `language` switches a folder in strict Nextion syntax to nxlang ([language.md](language.md)). nxlang reads `a+b*c` as `a+(b*c)`, where the Nextion Editor computes `(a+b)*c`. So the switch rewrites every line that the two would read differently, with the parentheses that keep the Nextion Editor's meaning, then changes the `language` line in `app.toml`.
 
 - Switch only this way, never by editing `app.toml`.
-- After the switch, `nxwright extract` and `nxwright import` reject the folder, so changes made in the Nextion Editor can't come back into it ([Working with the Nextion Editor](language.md#working-with-the-nextion-editor)).
 - The command writes nothing if any code would not build to the same project.
 
 ## password-hash
