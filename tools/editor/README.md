@@ -1,20 +1,22 @@
 # Driving the Nextion Editor
 
-The Editor tool is an optional script that drives the Nextion Editor for you, so that you can see what the Nextion Editor does without clicking through it by hand. The tool opens projects, compiles them, writes their TFT files, takes screenshots of the Nextion Editor's windows, and reports what the Nextion Editor shows. The tool is for contributors who have the Nextion Editor: nxwright itself never runs the tool, and neither do nxwright's tests.
+The Editor tool is an optional script for contributors who have the Nextion Editor. It opens projects, compiles them, writes their TFT files, takes screenshots, and reports what the Nextion Editor shows, so you can see how the Nextion Editor behaves without clicking through it by hand. nxwright and its tests never run the tool.
 
 You need Windows and the Nextion Editor 1.68.2, the version nxwright is tested with.
 
-## Its rules
+## The tool's rules
 
 - **A dedicated Editor.** The tool starts its own Nextion Editor, called the dedicated Editor, and reuses it on every later run. The tool never touches a Nextion Editor you opened yourself.
-- **No keyboard or mouse input.** The tool drives the dedicated Editor through UI Automation, the Windows interface for controlling another program, and by sending messages to its windows. Your mouse and keyboard are not used.
+- **No keyboard or mouse input.** The tool drives the dedicated Editor through UI Automation, the Windows interface for controlling another program, and by sending messages to its windows.
 - **The Nextion Editor comes to the front** during `open` and `simulate`, so anything you type would go to the Nextion Editor. Click back into your own window before you type. Bringing the Nextion Editor to the front yourself, to watch, does not disturb the tool.
-- **Copies only.** The tool opens a copy of each project. `save` saves that copy, never a project of yours, and writes the result to a new file.
+- **Copies only.** The tool opens a copy of each project, and a new copy replaces the old copy of the same name. The Nextion Editor locks the project it shows, though, so a copy of that project goes next to the locked one, under a name like `demo (2).HMI`. `save` saves the copy, never a project of yours, and writes the result to a new file. The tool never deletes a folder.
 - **The tool stops rather than guess.** A command stops and reports what it found when it meets a control it cannot drive, the Nextion Editor's unhandled exception dialog, or a window over the simulator.
-- **A command gives up after five minutes without progress,** for example when a call into the Nextion Editor never returns. The command then prints "Timeout" and where each of its threads was, and releases the lock.
-- **The tool never deletes a folder.** A new copy of a project replaces the old copy of the same name. The Nextion Editor locks the project it shows, though, so a copy of that project goes next to the locked one, under a name like `demo (2).HMI`.
-- **Make a data record's folder first.** If a data record's `path` points to a folder missing from its SD card, such as `sd0/probe/d.data` when `sdcard0` has no `probe` folder, the Nextion Editor hangs while opening the project: it draws no page, and does not close when asked. Create the folder on the card before you open the project.
-- **Give a data record its file.** If a data record's file is missing and its `mode` is 0, which creates no file, the simulator stops responding when the record's page opens. The simulator's window stays up, and the Nextion Editor does not close until you end its process. Give the record a file, or set its `mode` to 1.
+- **A command gives up after five minutes without progress,** for example when a call into the Nextion Editor never returns. The command then prints "Timeout" and where each of its threads was, and releases the lock that lets only one command at a time drive the Nextion Editor.
+
+Two problems with a data record can hang the Nextion Editor, so fix them before you open the project:
+
+- **A missing folder.** If a data record's `path` points to a folder missing from its SD card, such as `sd0/probe/d.data` when `sdcard0` has no `probe` folder, the Nextion Editor hangs while opening the project, does not draw a page, and cannot be closed normally. Create the folder on the card first.
+- **A missing file.** If a data record's file is missing and its `mode` is 0, the simulator stops responding when the record's page opens, and the Nextion Editor does not close until you end its process. Give the record a file, or set its `mode` to 1, which creates one.
 
 ### Several Nextion Editors
 
@@ -27,16 +29,9 @@ NXWRIGHT_EDITOR_NAME=agent-c python tools/editor/editor.py open demo.HMI
 - A name is up to 32 letters, digits, `-`, or `_`. The tool refuses any other name before doing anything.
 - Scripts that run the tool's commands, such as `catalog_variants.py`, pass the name on.
 - Without a name, the tool drives the shared Editor. Each Windows user has one shared Editor, used by the scripts of every checkout.
-- `status`, and every command that stops, says which Nextion Editor it used, such as "agent-c's Editor" or "the shared Editor".
+- `status` and every command that stops print which Nextion Editor they used, such as "agent-c's Editor" or "the shared Editor".
 
-Each dedicated Editor keeps its records in `%LOCALAPPDATA%\nxwright\editor-<name>\`, or in `%LOCALAPPDATA%\nxwright\editor\` for the shared one:
-
-- `editor.json` records the Nextion Editor's process;
-- `lock` lets only one command at a time drive the Nextion Editor, and `holder.json` records which command has the lock;
-- `hold.json` records a hold that lasts across commands;
-- `work\` contains the copy of the project being shown, and `open` deletes older copies once a new one opens;
-- `shown.json` records the copy opened last, and its screen size;
-- `placement.json` records where the window was, so that a restarted Nextion Editor opens in the same place instead of filling the screen.
+Each dedicated Editor keeps its records in `%LOCALAPPDATA%\nxwright\editor-<name>\`, or in `%LOCALAPPDATA%\nxwright\editor\` for the shared one. The `work\` folder inside contains the copy of the project being shown.
 
 All the Nextion Editors of one Windows user still share the Nextion Editor's own files, in `%APPDATA%\Nextion Editor\`:
 
@@ -47,9 +42,11 @@ All the Nextion Editors of one Windows user still share the Nextion Editor's own
 
 Name any files your probe writes on a card after yourself, so that they do not clash with anyone else's. Tell the others before you probe the EEPROM or a kept value.
 
-Each Nextion Editor compiles into its own folder. A Nextion Editor can grow to 1.1 GB of memory before `open` restarts it. Apart from that restart, the tool closes a Nextion Editor only for `save` and `quit`. When you are done with one, run `quit`, or close its window yourself.
+Each Nextion Editor compiles into its own folder.
 
-## Setting it up
+A Nextion Editor stays open until `save` or `quit` closes it, except that `open` restarts one that has grown past 1.1 GB of memory. When you are done with one, run `quit`, or close its window yourself.
+
+## Setting up the tool
 
 The tool's packages are pinned in `requirements.txt`, and go in their own virtual environment, separate from nxwright's:
 
@@ -61,15 +58,15 @@ python tools/editor/bootstrap.py
 
 From then on, run the tool with that environment's Python, called the tool's Python below. Either activate the environment, or call `tools/editor/build/venv/Scripts/python`. The commands below just write `python`.
 
-`requirements.txt` also pins the packages needed by the nxwright modules the tool imports. Whenever `requirements.txt` changes, update the environment with the tool's Python:
+Whenever `requirements.txt` changes, update the environment with the tool's Python:
 
 ```
 python -m pip install -r tools/editor/requirements.txt
 ```
 
-The tool looks for the Nextion Editor at the path in the environment variable `NXWRIGHT_EDITOR`, if set, and otherwise where the Nextion Editor's installer recorded it. `NXWRIGHT_EDITOR` can name an older release unpacked from its zip, such as `NextionEditor.exe` in the folder of `nextion-setup-v1-63-3.zip`. Give each release an Editor name of its own. If the dedicated Editor of that name already runs another program, `open` and the other commands that would reuse it stop, and say to close it first with `quit`.
+The tool looks for the Nextion Editor at the path in the environment variable `NXWRIGHT_EDITOR`, if set, and otherwise where the Nextion Editor's installer recorded it. To use an older release, unpack it from its zip and set `NXWRIGHT_EDITOR` to its program, such as `NextionEditor.exe` in the folder unpacked from `nextion-setup-v1-63-3.zip`. Give each release its own `NXWRIGHT_EDITOR_NAME`, because `open` and the other commands that would reuse a dedicated Editor stop if it is already running another program.
 
-## Its commands
+## The tool's commands
 
 Run the commands with the tool's Python, from nxwright's folder:
 
@@ -100,8 +97,7 @@ If another command has the lock, a command waits for it, then gives up and print
 
 `open` copies the project into the work folder, then opens the copy with the Nextion Editor's Open button.
 
-- `open` records the copy and its screen size, which `simulate --touch` needs.
-- Once the copy is open, `open` deletes the other `.HMI` files in the work folder, which are copies of earlier projects. A copy the Nextion Editor still has open is kept, as is every file that is not an `.HMI` file.
+- Once the copy is open, `open` deletes the other `.HMI` files in the work folder, which are copies of earlier projects. A copy the Nextion Editor still has open is kept, and so is every file that is not an `.HMI` file.
 - If the project shown has unsaved changes, the Nextion Editor first asks whether to save them. When that project is one of the tool's own copies, `open` answers No, and the changes are dropped. Otherwise `open` stops before pressing Open, so that nobody's changes are lost. Any other question stops `open` without an answer.
 - If the dedicated Editor uses more than 1.1 GB, `open` restarts it first, since the Nextion Editor runs out of memory near 1.4 GB. `open` skips the restart if a window is open over the main window, or if there are unsaved changes.
 
@@ -114,7 +110,7 @@ If another command has the lock, a command waits for it, then gives up and print
 `attributes` prints, as JSON, what the Nextion Editor's Attribute panel lists for one component of the project shown: `{"page", "component", "type", "attributes": [{"name", "value", "hint", "code_can_change"}]}`.
 
 - `type` is the name of the component's type, such as `"Text"`.
-- Each attribute comes with its value, the hint the Nextion Editor shows for it, and `code_can_change`. `code_can_change` is true when the attribute's name is green, meaning code can change the attribute, and false when the name is black.
+- `code_can_change` is true when the attribute's name is green, meaning code can change the attribute, and false when the name is black.
 - To get a page's own attributes, give the page's name as the component.
 - Reading takes about a second per attribute.
 
@@ -123,10 +119,10 @@ If another command has the lock, a command waits for it, then gives up and print
 `simulate` starts the simulator on the project shown with the toolbar's Debug button, saves a picture of the simulator's window, and closes the simulator.
 
 - With `--send`, `simulate` first types the instruction into the simulator's instruction box, line by line, and runs it.
-- To know when the instruction has finished, the command adds a last line, `get 1`, and waits for the first answer. If an earlier line answers too, as `get` and `print` do, the wait can end at that answer, before the later lines have run.
+- To know when the instruction has finished, the command adds a last line, `get 1`, and waits for the first answer. If an earlier line such as `get` or `print` also answers, the wait can end at that answer, before the later lines have run.
 - An instruction that resets the simulator, such as `rest`, can lose the answer to `get 1`. The command then stops once its wait runs out.
 - With `--hex` as well, each line is hexadecimal bytes, such as `68 65 6C 6C 6F`, sent exactly as written, without the FF FF FF that ends a line of text. Use `--hex` for bytes that are not an instruction, such as the data of a transfer. If the bytes leave an instruction unfinished or a transfer short, the final `get 1` is swallowed into them, and the command stops once its wait runs out.
-- If a simulator is already open, the command stops. Whenever the command stops, it closes any simulator still showing.
+- If a simulator is already open, the command stops, and leaves that simulator open. If the command stops for any other reason, it closes the simulator, unless a window has appeared over it.
 - If a window appears over the simulator, such as "File Header Data Error" for a data record's file, the command stops at once and prints the window's text. The simulator cannot close until someone answers that window, so the command leaves both open. Answer the window, then run `close-simulator`.
 
 ### `simulate <file.png> --touch <steps>`
@@ -140,7 +136,7 @@ If another command has the lock, a command waits for it, then gives up and print
 
 For example, `"press 200,150; picture held.png; release; wait 500"` takes a picture of a component while it is held down, then lets go.
 
-- The steps are checked before the simulator starts, against the screen size `open` recorded. The command stops, and says which step is wrong, for a point off the screen, a press while another press is held, or a release with no press held. The command also stops if `open` did not open the project shown.
+- The command checks the steps against the screen size `open` recorded, before the simulator starts. It stops for a point off the screen, a press while another press is held, or a release with no press held. The command also stops if `open` did not open the project shown.
 - The command pauses 50 ms after each press and release. Before each picture, the command waits until the simulator has run what the earlier touches set off, by typing `get 1` the way `--send` does.
 - No step can move a held press, because the simulator does not accept drags through window messages. Drag in the simulator by hand.
 - Typing in the instruction box slows the simulator's timers. To time an interval with `wait`, keep `--send` lines and `picture` steps out of that interval, since a picture waits by typing `get 1`.
@@ -150,7 +146,7 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 `catalog` reads the attributes of every component on every page of the project shown, and of the pages themselves, the same way `attributes` does. The result is written as JSON: `{"variant", "project", "editor_version", "objects": [{"page", "component", "type", "attributes"}]}`. `editor_version` is the version that the Nextion Editor's program file gives, such as `1.68.2.3035`, and `type` is the number the project stores for the component's type.
 
 - `--variant` names the catalog, so that merged catalogs can be told apart.
-- `--known` takes an earlier catalog. Rows whose hint that catalog already has for the same type are not clicked, and get no hint.
+- `--known` takes an earlier catalog. If that catalog already has the hint for an attribute of the same component type, the tool does not click the attribute's row, and the new catalog leaves out the hint.
 - Keep catalogs under `tools/editor/build/`, which git ignores, because they contain the Nextion Editor's hints, and those are not nxwright's to publish.
 - Cataloguing a project of 32 objects takes about 12 minutes, and nearly as long with `--known`, which saves only the clicks for hints.
 
@@ -161,8 +157,8 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 - A project must be open, since the Device button is greyed out otherwise.
 - UI Automation does not give a model's name, only the text of its tile. So each model is given by its series, its diagonal in inches, and its size in pixels, along with its memory and frequency. The Nextion Editor 1.68.2 lists NX3224T024 as series `T`, 2.4 inches, 240 by 320.
 - The settings' series buttons show only pictures, so the command takes the series from their order: Basic (T), Discovery (F), Enhanced (K), Intelligent (P), and Edge (E). If the settings show another number of series, or a tile whose text is not in the form the tool expects, the command stops, and its error gives that number or text.
-- From the second series on, the command stops if pressing a series' button leaves the previous series' tiles on screen, as happens when the press does not register. In the Nextion Editor 1.68.2, no series has the same tiles as the one before it. The first press is not checked, as the settings may open on its series already.
-- The device settings of the Nextion Editor 1.63.3 are laid out otherwise, and the command stops on them.
+- From the second series on, the command stops if pressing a series' button leaves the previous series' tiles on screen, which happens when the press does not register.
+- The device settings of the Nextion Editor 1.63.3 are laid out differently, and the command stops on them.
 
 ### `compile`
 
@@ -186,47 +182,43 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 
 - The command refuses a file that already exists, before it touches the Nextion Editor.
 - The Nextion Editor saves into the work folder, under the copy's name with " (saved)" added.
-- Save As also writes the project's settings into the file the project was opened from. That file is the tool's own copy, so no project of yours changes.
-- The Nextion Editor keeps the file it shows locked against reading until it closes, so the command closes it, as `quit` does, before copying the file.
+- The dedicated Editor has to close first, because the Nextion Editor keeps the file it shows locked against reading until it closes.
 
 ### `quit`
 
 `quit` closes the dedicated Editor. If the project shown is one of the tool's own copies and has unsaved changes, the Nextion Editor asks whether to save them, and `quit` answers No.
 
-- The command stops, leaving the Nextion Editor open, if the project shown is not one of the tool's copies and has unsaved changes, or if a dialog or message is open. Any other question the Nextion Editor asks as it closes stops the command too, unanswered.
-- `quit` never starts a Nextion Editor.
+The command stops, leaving the Nextion Editor open, if the project shown is not one of the tool's copies and has unsaved changes, or if a dialog or message is open. Any other question the Nextion Editor asks when it closes stops the command too, unanswered.
 
 ### `status`
 
-`status` reports whether the dedicated Editor is running, which Nextion Editor program it runs, with the version the program's file gives, which project it shows, and who has a hold on it, if anyone.
+`status` reports whether the dedicated Editor is running, the program it runs and that program's version, the project it shows, and any hold on it.
 
 ### `hold <name> [--minutes N]` and `release <name>`
 
 `hold` reserves the dedicated Editor for one holder across several commands. A probe that runs `open` and then `simulate` needs a hold, because each command takes the lock only for itself, and someone else's command could slip in between the two.
 
-- Every command except `hold` and `release` gives its holder's name with `--as <name>`.
-- While the hold lasts, the holder's commands run, and each one renews the hold for its full length: 10 minutes by default, at most 60, set with `--minutes`.
+- To run any command except `hold` and `release` as the holder, add `--as <name>`.
+- A hold lasts 10 minutes by default and at most 60, set with `--minutes`. Each of the holder's commands renews the hold for its full length.
 - Everyone else's commands are refused with the holder's name and the time the hold ends, and exit with 3, so that a script can wait and retry. `status` still works for everyone.
-- `release <name>` ends the hold early. Otherwise the hold ends when its time runs out.
-- Anyone can release a hold by giving its holder's name, for example to end a forgotten hold. A hold keeps two probes from colliding, but does not protect against misuse.
+- `release <name>` ends the hold early. Anyone can do this by giving the holder's name, for example to end a forgotten hold. A hold keeps two probes from colliding, but does not protect against misuse.
 
 ### `close-simulator`
 
-`close-simulator` closes a simulator that the dedicated Editor is showing. A simulator can be left behind when `simulate` is stopped from outside, for example by closing its terminal, or when the simulator appears only after `simulate` has stopped. If the simulator will not close, the command lists the windows over it. The command never starts a Nextion Editor.
+`close-simulator` closes a simulator that the dedicated Editor is showing. A simulator can be left behind when `simulate` is stopped from outside, for example by closing its terminal, or when the simulator appears only after `simulate` has stopped. If the simulator will not close, the command lists the windows over it.
 
 ### `close-file-dialog`
 
-`close-file-dialog` cancels a file dialog left open in the dedicated Editor by an `open` or a `save` that was stopped from outside, for example by closing its terminal. While a file dialog is open, every other command stops on it. If `open` or `save` fails after its file dialog appears, the command cancels the dialog itself. The command never starts a Nextion Editor.
+`close-file-dialog` cancels a file dialog left open in the dedicated Editor by an `open` or a `save` that was stopped from outside, for example by closing its terminal. While a file dialog is open, every other command stops on it.
 
 ### `close-message`
 
-`close-message` closes the messages the dedicated Nextion Editor has left open, and prints each message's text. When a command stops on a message, such as "First character of a Name can not be number" as a project opens, it leaves the message open. Every later command then stops on that message too, until you close it.
+`close-message` closes any messages left open in the dedicated Editor, and prints each message's text. When a command stops on a message, such as "First character of a Name can not be number" as a project opens, it leaves the message open. Every later command then stops on that message too, until you close it.
 
 - The command also closes the Nextion Editor's other dialogs. It leaves a file dialog to `close-file-dialog`, which cancels it.
 - The command closes each message with its close box, and never presses a button such as OK or Yes.
 - A message still open after 15 seconds is listed with "(still open)" after its text.
 - A window over the simulator, such as "File Header Data Error", has not been tried with this command.
-- `close-message` never starts a Nextion Editor.
 
 ## Every attribute of every type
 
@@ -244,12 +236,12 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 4. Finally, nxwright's own attribute descriptions (`nxwright/project/attribute_descriptions.toml`) are checked against the Nextion Editor's hints. Any description that matches a hint is listed, to catch a hint pasted in by mistake.
 
 - Everything is written to `tools/editor/build/catalog/`, or to the folder given.
-- If another command opened another project in the dedicated Editor between two of the script's steps, it stops.
+- If another command opened another project in the dedicated Editor between two of the script's steps, the script stops.
 - The script reuses any project or catalog that a stopped run left in the folder. Delete a project or catalog to have the script make a fresh one.
 
 ## The memory each page takes
 
-`tools/editor/memory_probe.py` measures how much memory the Nextion Editor's compile counts on each series of screens. Run the script with the tool's Python, from nxwright's folder. The results go in `nxwright/project/memory_costs.toml`, the table that nxwright's build checks pages against. `docs/format.md` explains the table, under The Nextion Editor's memory.
+`tools/editor/memory_probe.py` measures how much memory the Nextion Editor's compile counts on each series of screens. Run the script with the tool's Python, from nxwright's folder. The results go in `nxwright/project/memory_costs.toml`, the table that nxwright's build checks pages against. See [The Nextion Editor's memory](../../docs/format.md#the-nextion-editors-memory) for what the compile counts, and `memory_table.py`'s docstring for how the table works.
 
 The script builds probe projects with nxwright, compiles each one in the dedicated Editor, and fits a rule to each attribute's costs. `memory_probe.py`'s docstring lists what is measured. Only the series whose rules match every page and project compiled go in the table, and anything that could not be measured is reported.
 
@@ -257,7 +249,6 @@ The script builds probe projects with nxwright, compiles each one in the dedicat
 - Each project and its compile output are kept in `tools/editor/build/memory/`, or in the folder given, so that a stopped run picks up where it left off. Delete a project's folder to compile it again.
 - The script holds the dedicated Editor for its whole run, as `memory-probe-<process ID>`, and stops at once if someone else holds it.
 - If the script's process is killed, the script cannot release its hold. Release the hold yourself with `editor.py release memory-probe-<process ID>`, using the name `status` shows.
-- Because the script opens many projects, `open` may restart the Nextion Editor along the way, once it passes 1.1 GB.
 
 ## New Nextion Editor releases
 
@@ -271,64 +262,62 @@ python tools/editor/latest_release.py
 - The script prints the version Nextion offers, with the release notes of a new one. It exits with 0 when Nextion offers the version tested with, and with 1 when it offers another. It exits with 2 when the server cannot be reached, or its answer is not in the form the script reads.
 - A GitHub workflow runs `latest_release.py` every Monday (`.github/workflows/release-check.yml`). The run fails when the script exits with 1 or 2, and its log shows what the script printed.
 
-The comparisons below show how a new release differs from the one nxwright is tested with. [RELEASES.md](RELEASES.md) gives the steps for moving nxwright to a new release, from the check to the version recorded.
+The comparisons below show how a new release differs from the one nxwright is tested with. Run them with nxwright's own Python, from nxwright's folder. A run of the Nextion Editor 1.68.2 against itself has no findings in the round trip, catalog, or models report, so anything they find comes from the new release. See [RELEASES.md](RELEASES.md) for the steps to move nxwright to a new release.
 
 ### The round trip
 
-`tools/editor/release_pass.py round-trip` shows how a new Nextion Editor treats the projects nxwright builds, beside the Nextion Editor nxwright is tested with. Run it with nxwright's own Python, from nxwright's folder, giving each Editor's program:
+`tools/editor/release_pass.py round-trip` shows how a new Nextion Editor treats the projects nxwright builds, compared with the Nextion Editor nxwright is tested with:
 
 ```
 python tools/editor/release_pass.py round-trip --old <old program> --new <new program> <output folder>
 ```
 
 - The projects are the demo, a fixture of the tests, a project of one component of each type, and one small project for each screen series. `tools/editor/round_trip/` contains their pictures and sound, which nothing else uses.
-- Each Editor opens each project, compiles it in its simulator, and saves it, under an Editor name of its own, `release-old` or `release-new`. A step that fails is tried once more, in a fresh Nextion Editor.
+- Each Nextion Editor, named `release-old` or `release-new`, opens each project, compiles it in its simulator, and saves it. A step that fails is tried once more, in a fresh Nextion Editor.
 - The script then extracts each saved project into a new folder, and compares it with the project as nxwright built it, extracted the same way: the folders file by file, and the project files block by block.
-- `report.md` in the output folder lists what the old Editor's save changes, then what the new Editor alone changes, which are the findings. A run of the Nextion Editor 1.68.2 against itself lists nothing.
+- `report.md` in the output folder lists what the old Nextion Editor's save changes, then the findings: what only the new Nextion Editor changes.
 - The Nextion Editor comes to the front during each `open` and `simulate`, so the run is best left to itself.
 
-### The catalogs of two Editors
+### The catalogs of two Nextion Editors
 
-`tools/editor/release_pass.py catalog` shows how the Attribute panel of a new Nextion Editor differs from the old one's. Run it with nxwright's own Python, from nxwright's folder, giving each Editor's program:
+`tools/editor/release_pass.py catalog` shows how the Attribute panel of a new Nextion Editor differs from the old one's:
 
 ```
 python tools/editor/release_pass.py catalog --old <old program> --new <new program> <output folder>
 ```
 
-- The script runs `catalog_variants.py` under each Editor in turn, under the Editor names `release-old` and `release-new` ([Every attribute of every type](#every-attribute-of-every-type)). Each run takes about two hours.
-- Each Editor's catalogs, and the log of its run, are written to `old` and `new` in the output folder.
-- `report.md` in the output folder lists the component types and the attributes added or removed. For an attribute both Editors show, it also lists a changed hint, a changed list of choices, and a name that changed colour. A green name means code may change the attribute. A run of the Nextion Editor 1.68.2 against itself lists nothing.
+- The script runs `catalog_variants.py` on each Nextion Editor in turn, named `release-old` and `release-new`. Each run takes about two hours. See [Every attribute of every type](#every-attribute-of-every-type) for what `catalog_variants.py` does.
+- Each Nextion Editor's catalogs, and the log of its run, are written to `old` and `new` in the output folder.
+- `report.md` in the output folder lists the component types and the attributes added or removed. For an attribute both Nextion Editors show, it also lists a changed hint, a changed list of choices, and a name that changed colour.
 
-### The screen models of two Editors
+### The screen models of two Nextion Editors
 
-`tools/editor/release_pass.py models` compares each Nextion Editor's list of screen models with nxwright's table of them, `nxwright/project/screen_models.py`. Run it with nxwright's own Python, from nxwright's folder, giving each Editor's program:
+`tools/editor/release_pass.py models` compares each Nextion Editor's list of screen models with nxwright's table of them, `nxwright/project/screen_models.py`:
 
 ```
 python tools/editor/release_pass.py models --old <old program> --new <new program> <output folder>
 ```
 
-- Each Editor opens a small project, under the Editor names `release-old` and `release-new`, and lists its models with the tool's `models` command. The lists are written to `old.json` and `new.json` in the output folder.
-- `report.md` in the output folder lists, for each Editor, the models it adds to nxwright's table, and the table's models it lacks. If the Editor lacks a model of the table, but lists one other model of the same series and inches at another size, that model is listed as resized.
-- If one Editor's list cannot be read, the report gives the error, and the other Editor's list is still compared.
-- A run of the Nextion Editor 1.68.2 against itself lists nothing.
+- Each Nextion Editor, named `release-old` or `release-new`, opens a small project, and lists the screen models it offers with the tool's `models` command. The lists are written to `old.json` and `new.json` in the output folder.
+- `report.md` in the output folder lists, for each Nextion Editor, the models missing from nxwright's table, and the table's models that Nextion Editor does not list. If a table's model is missing from a Nextion Editor, and that Nextion Editor lists one other model of the same series and diagonal at another size, the report lists that other model as resized.
+- If one Nextion Editor's list cannot be read, the report gives the error, and the other's list is still compared.
 
 ### The files of two releases
 
-`tools/editor/release_pass.py files` lists the files that differ between the folders of two releases, each unpacked from its zip. Run it with nxwright's own Python:
+`tools/editor/release_pass.py files` lists the files that differ between the folders of two releases, each unpacked from its zip:
 
 ```
 python tools/editor/release_pass.py files --old <old folder> --new <new folder> <report.md>
 ```
 
-- Each file added, removed, or changed is listed by its path in the folder. Two files differ when their SHA-256 digests differ.
-- A changed `model0.sa` or `model1.sa` points at a change to the list of screen models. Between 1.60.1 and 1.63.3, for example, both changed, and the keyboards gained a fourth page for each screen size.
+A changed `model0.sa` or `model1.sa` points at a change to the list of screen models. Between 1.60.1 and 1.63.3, for example, both changed, and the keyboards gained a fourth page for each screen size.
 
-## Its tests
+## The tool's tests
 
-The tests of the tool's records, its lock, the logic of its catalog, list of screen models, and memory probe, its release check, the comparisons of a release pass, and how it finds a Nextion Editor window need neither the Nextion Editor nor pywinauto. These tests run with nxwright's own Python, on Windows. The tests of the `open` and `tft` commands import the tool itself and run against stand-ins for the Nextion Editor's windows, so they also need the tool's packages from `requirements.txt`:
+The tool's tests do not need the Nextion Editor. Run them on Windows, from nxwright's folder:
 
 ```
 python -m unittest discover -s tools/editor/tests -t .
 ```
 
-The memory probe's tests run the probe against a stand-in Nextion Editor, whose compile counts memory from a known table. The probe must find that table again.
+Most of them run with nxwright's own Python. The tests that import the tool itself, such as those of the `open` and `tft` commands, run against stand-ins for the Nextion Editor's windows, and also need the tool's packages from `requirements.txt`.

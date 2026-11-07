@@ -87,7 +87,7 @@ from tools.editor.catalog import choices_of, with_values  # noqa: E402
 # apart, so that the demo and the test fixtures stay free to change.
 RESOURCES = Path(__file__).resolve().with_name("round_trip")
 # The Editor tool, and the Python that runs it. README.md explains how to
-# make that Python, under "Setting it up".
+# make that Python, under "Setting up the tool".
 EDITOR_SCRIPT = Path(__file__).resolve().with_name("editor.py")
 TOOL_PYTHON = Path(__file__).resolve().parent / "build" / "venv" / "Scripts" / "python.exe"
 # The script that catalogs every attribute the Editor shows. It runs with

@@ -2,7 +2,7 @@
 
 What is known about the project file (`.HMI`) of the Nextion Editor, the vendor's Windows program for designing Nextion screens. The vendor does not document it. The facts here were checked against Nextion Editor 1.68.2.
 
-The byte-by-byte layouts live in the modules that read and write each part, so that the code and its description cannot drift apart. This page explains how the parts fit together.
+The full byte-by-byte layouts are in the modules that read and write each part, so that the code and its description cannot drift apart. This page explains how the parts fit together.
 
 The [community format notes by vladtsvetkov880-hub](https://github.com/vladtsvetkov880-hub/nextion-hmi-format) (MIT license) were the starting point for the container and the checksum. nxwright does not copy or call that project's code.
 
@@ -10,9 +10,9 @@ The [community format notes by vladtsvetkov880-hub](https://github.com/vladtsvet
 
 A project file is a container of named **blocks**. A **directory** at the start of the file lists each block's name, its position in the file, its size, and flags. `nxwright/project/container.py` describes the layout.
 
-- **Saving appends.** When the Nextion Editor saves, it does not overwrite a changed block. It writes the new copy at the end of the file, adds an entry for it at the end of the directory, and marks the old entry **stale**: bit 0 of its flags, and the first byte of its name set to zero. Only the **live** blocks, the ones not stale, make up the project. A file that has been saved often is therefore much bigger than its content.
+- **Saving appends.** When the Nextion Editor saves, it does not overwrite a changed block. It writes the new copy at the end of the file, adds an entry for it at the end of the directory, and marks the old entry **stale** by setting bit 0 of its flags and setting the first byte of its name to zero. Only the **live** blocks, the ones not stale, make up the project. A file that has been saved often is therefore much bigger than its content.
 - **Order matters.** The directory is kept in the order of the blocks in the file, and the last block ends at the end of the file. The Nextion Editor relies on that order to find free space. If a file's directory is out of order, the Nextion Editor still opens the file, but its next save may write over one of the blocks.
-- **A checksum follows the directory.** An exact copy of the directory and its checksum sits further into the file. The Nextion Editor writes the copy.
+- **A checksum follows the directory.** The Nextion Editor also writes an exact copy of the directory and its checksum further into the file.
 - **The reserved area.** The space between the directory and the first block is reserved, mostly zeros. Besides the directory's copy, at 0x80000, a new project contains four `ff` bytes at 0x380000, and the text `ver21234` at 0x6ffff8. Its blocks start at 0x700000. That layout is the same for every screen model. `nxwright/project/new_project.py` writes it.
 
 ## Blocks
@@ -21,38 +21,38 @@ A project file is a container of named **blocks**. A **directory** at the start 
 | --- | --- | --- |
 | `main.HMI` | The **manifest**: the list of the project's pages, pictures, fonts, animations, videos, and sounds. | `resources.py` |
 | `Program.s` | The program code that runs once at power-on: global `int` declarations, settings such as the baud rate, and the first page. Plain text with Windows line endings, no header, no checksum. | |
-| `comcode.sn` | The project's **macros**, which `call <name>` runs, when it has any (see Macros, below). Plain text in UTF-8, whatever the project's encoding. The manifest does not list it. | `macros_source.py` |
+| `comcode.sn` | The project's **macros**, if it has any, run with `call <name>` (see Macros, below). Plain text in UTF-8, whatever the project's encoding. The manifest does not list it. | `macros_source.py` |
 | `N.pa` | A page and its components. | `page_block.py`, `page_text.py` |
 | `N.is` | A picture's file, as the Nextion Editor shows it. | `resources.py` |
 | `N.i` | The same picture as compiled into the screen: its **screen copy**. | `screen_copy.py` |
 | `N.ib` | A resized picture's **source**: the file it had before (see Pictures, below). The manifest does not list it. | `resources.py` |
 | `N.zi` | A font, as the Nextion Editor's font generator made it. | `zi_font.py` |
 | `N.gmovs` | An animation, as GmovMaker, the Nextion Editor's animation tool, wrote it. | `resources.py` |
-| `N.gmov` | The same animation in the form the screen shows, which the Nextion Editor made of it. | `resources.py` |
+| `N.gmov` | The same animation, converted by the Nextion Editor into the form the screen shows. | `resources.py` |
 | `N.v` | A video, as VideoBox, the Nextion Editor's video tool, wrote it. | `resources.py` |
 | `N.wav` | A sound, as the Nextion Editor's Audio panel wrote it. | `resources.py` |
 
 ### IDs
 
-Code and attributes refer to pages, pictures, fonts, animations, videos, and sounds by number: `page 2`, `pic=5`, `font=3`, `vid=1`. That number, the **ID**, is the resource's position among the manifest's entries of its kind.
+Code and attributes refer to pages, pictures, fonts, animations, videos, and sounds by number: `page 2`, `pic=5`, `font=3`, `vid=1`. That number, the **ID**, is the resource's position among the manifest's entries of its kind. The manifest lists its entries in this order: the pictures, the fonts, the animations, the videos, the sounds, then the pages.
 
-- A `vid` is an animation's ID in an animation component (gmov), a video's in a video, and a sound's in an audio component.
-- The blocks of these resources are named with a number, as the table above shows: `0.pa`, `1.pa`, and so on for pages. In a new project, that number is the resource's ID. In projects edited over time, the numbers seen no longer matched the IDs: in one, page 0 was stored in block `23.pa`. The ID always comes from the manifest, which lists the blocks of each kind in ID order.
+- A component's `vid` is the ID of an animation in an animation component (gmov), of a video in a video component, and of a sound in an audio component.
+- The blocks of these resources are named with a number: `0.pa`, `1.pa`, and so on for pages. In a new project, that number is the resource's ID. In projects edited over time, the numbers seen no longer matched the IDs: in one, page 0 was stored in block `23.pa`. The ID always comes from the manifest, which lists the blocks of each kind in ID order.
 
 ### Pages
 
 A page block is a header, a table of objects, then the objects. Object 0 is the page itself. The others are its **components**: text fields, buttons, variables, timers, and so on. Each object's name is its `objname` attribute.
 
-- The Nextion Editor 1.68.2 refuses a component's name of more than 14 bytes, one that starts with a digit or a space, and one that another component of the page has already. It also refuses one with any of `" % & ' * + , - . / = [ \ ]`.
-- It takes other punctuation, such as `(`, `)`, or `:`, and a space inside the name, as in `b 0`. Code cannot then refer to the component, but its events run.
+- The Nextion Editor 1.68.2 refuses a component's name if it is longer than 14 bytes, starts with a digit or a space, is already used on the page, or contains any of `" % & ' * + , - . / = [ \ ]`.
+- The Nextion Editor accepts other punctuation, such as `(`, `)`, or `:`, and a space inside the name, as in `b 0`. Code cannot refer to a component named this way, but the component's events still run.
 - A page's name may have a space or punctuation too, as in `p 0` or `p(0)`, but not `"`, `/`, or `\`.
 
 An object is a run of **records**:
 
 - a record of 16 bytes or more is an **attribute**: a name, then a value, such as `w` (the width) or `txt`;
-- a shorter one is a **marker**, such as `att-39`, which gives the component's class, or `codesdown-3`, which says the next three records are the lines of the component's Touch Press event.
+- a shorter record is a **marker**, such as `att-39`, which gives the component's class, or `codesdown-3`, which means the next three records are the lines of the component's Touch Press event.
 
-The **events** contain the screen's own script, line by line: `load` (Preinitialize), `loadend` (Postinitialize), `down` (Touch Press), `up` (Touch Release), `unload` (Page Exit), `timer` (a timer's tick), and `slide` (a slider moving). An event can exist with no code; it is kept as it is.
+The **events** contain the screen's own script, line by line: `load` (Preinitialize), `loadend` (Postinitialize), `down` (Touch Press), `up` (Touch Release), `unload` (Page Exit), `timer` (a timer's tick), and `slide` (a slider moving). An event can exist with no code.
 
 Some attributes have a different width on different component types: `val` takes 4 bytes on some, and 1 or 2 on others. `page_text.py` lists the widths found.
 
@@ -60,12 +60,12 @@ The page header:
 
 - **Byte 23 marks the Nextion Editor's system pages**, the stock keyboards it adds for a component's `key`. Its value is the same number as the `key`: 1 for the full qwerty keyboard (keybdA), 2 for the numeric keyboard (keybdB), 3 for the speed dial (keybdC), 4 for Chinese input (keybdAP), and 0 for any other page. The Nextion Editor shows system pages with their own icon, and can reset one to its stock version. A project may change them.
 - **Byte 20 is 1 while the page is locked.** The Nextion Editor will not let a locked page be changed until it is unlocked, and it adds its keyboards locked.
-  - A lock may have a password. Bytes 16 to 19 contain its hash, the same as the project password's (`password_hash` in `project/device_settings.py`), and are zero without one.
-  - Bytes 21 and 22 are `4f 21` on every page.
+  - A lock may have a password. Bytes 16 to 19 contain the password's hash, calculated like the project password's (`password_hash` in `project/device_settings.py`), and are zero when the lock has no password.
+- **Bytes 21 and 22** are `4f 21` on every page seen.
 - **Bytes 40 to 43 repeat the project's character encoding.** Whenever the Nextion Editor writes a page, it starts them with `01 44 02` and the encoding's number (3 for iso-8859-1).
-  - A page the Nextion Editor has not written since it was updated keeps an older form, `01 43 01 00` or `01 44 01 00`, with no encoding. The second was seen in 32 of the 38 pages of one project, whose other 6 had the newer form.
+  - A page last written by an older Nextion Editor keeps an older form, `01 43 01 00` or `01 44 01 00`, with no encoding. One project had the second form on 32 of its 38 pages, and the newer form on the rest.
   - Changing the encoding rewrites every page.
-  - The build writes the newer form into every page. A source folder keeps none of these header bytes but the system page mark, the lock, and bytes 21 and 22 when they are not `4f 21` (`source-folder.md`). `project/page_header.py` gives the forms.
+  - The build writes the newer form into every page. `project/page_header.py` gives the forms.
 
 ### Page files
 
@@ -73,23 +73,22 @@ The Nextion Editor can export one page to a `.page` file, and import one into an
 
 - **It carries the fonts the page uses**, as extra entries in its object table, in the order the page first uses them. Each `font` attribute is renumbered to its font's place in that list. Importing adds any font the target project lacks.
 - **It carries no pictures.** Picture attributes keep their IDs, so the target project needs the same pictures with the same IDs.
-- **Its header is written anew** in bytes 40 to 55, in the newer form, whatever form the page itself had, with the project's encoding.
+- **Bytes 40 to 55 of its header are written anew**, in the newer form (Pages, above) and with the project's encoding, whatever form the page itself had.
 
 ### Pictures
 
 Each picture is two blocks with the same number: its file (`N.is`), and its screen copy (`N.i`). A picture resized in the Nextion Editor has a third, its source (below).
 
 - **The file is kept as it is given**: a PNG, a JPEG, a BMP, or a GIF, whatever its suffix says. The Picture panel offers `.png`, `.jpg`, and `.bmp` files, and takes a `.jpeg` or `.gif` file typed in.
-- **The record's header ends with the suffix the file had**, in lower case: `png`, `jpg`, `jpeg`. The header's size grows with it.
+- **The `N.is` block's header ends with the suffix the file had**, in lower case: `png`, `jpg`, `jpeg`. A longer suffix makes the header bigger.
 - **The two blocks must agree.** The Nextion Editor checks them, and reports a damaged resource when they do not.
-- **The screen copy is made from the file's pixels**, without applying an orientation a JPEG's EXIF data gives.
-- **A picture resized in the Nextion Editor's picture viewer has a third block, its source (`N.ib`).** The viewer opens on a double-click in the Picture panel, and sets a new width and height. The Nextion Editor then writes a PNG of the new size as the picture's file, and keeps the file the picture had before as its source, in the layout of an `N.is` block, its header giving that file's own width and height. The viewer's "Restore to source size" goes back to it. The compile does not use the source: a project compiles to the same TFT file with it or without it.
+- **The screen copy is made from the file's pixels**, ignoring any orientation in a JPEG's EXIF data.
+- **A picture resized in the Nextion Editor's picture viewer has a third block, its source (`N.ib`).** You can open the viewer by double-clicking a picture in the Picture panel. After a resize, the Nextion Editor writes a PNG of the new size as the picture's file, and keeps the previous file as the source. The source has the layout of an `N.is` block, and its header gives that file's own width and height. The viewer's "Restore to source size" goes back to the source. A project compiles to the same TFT file with or without it.
 - **A PNG of 16 bits a channel, keyed on one colour by its `tRNS` chunk**, has that colour transparent in the Nextion Editor's copy, matched on all 16 bits. A colour sharing only the key's high bytes stays opaque.
-  - A grey PNG of this kind works the same way in nxwright.
-  - A colour one is refused. Pillow, the library nxwright reads pictures with, gives each channel at only 8 bits. At 8 bits, the key cannot be told apart from a colour that shares only its high bytes.
-  - To use such a picture, save it with 8 bits a channel, or with an alpha channel.
+  - nxwright treats a grey PNG of this kind the same way, but refuses a colour one. Pillow, the library nxwright reads pictures with, gives each channel at only 8 bits, too few to tell the key apart from a colour that shares only its high bytes.
+  - To use a colour PNG of this kind, save it with 8 bits a channel, or with an alpha channel.
 
-The screen copy's format depends on the **screen model's series**, and its pixel order on the **rotation**, both chosen in the Nextion Editor's device settings. The Nextion Editor offers 27 screen models, each at 0, 90, 180, or 270 degrees:
+The screen copy's format depends on the **screen model's series**, and its pixel order on the **rotation**, both chosen in the Nextion Editor's device settings. The Nextion Editor offers 27 screen models, each at 0, 90, 180, or 270 degrees. Each series uses one of three formats:
 
 | Format | Series | Pixels |
 | --- | --- | --- |
@@ -102,7 +101,7 @@ The rotation decides the order the pixels are stored in, and a marker in the scr
 Colours are stored as **RGB565**: 5 bits of red, 6 of green, 5 of blue.
 
 - Opaque pixels are the picture's colours, with their lowest bits dropped.
-- Partly transparent pixels are often one step off in a channel. No exact rule is known, and the Nextion Editor accepts either.
+- Partly transparent pixels are often one step off in a channel. No exact rule is known, and the Nextion Editor accepts a pixel with either value.
 - Saving the same project twice can give different screen copies for unchanged pictures. So the Nextion Editor does not need a screen copy to match its own encoding byte for byte.
 
 ### The device settings
@@ -117,9 +116,9 @@ The header also gives the manifest's stamp (bytes 0 to 3), its own size (bytes 4
 
 ### Fonts
 
-A font block is a `.zi` file, as the Nextion Editor's font generator writes it, stored for a rotation (Rotation, below). It contains the font's height, its characters' widths, and their pixels. The generator also stores the name it was given, such as `NotoSans16`.
+A font block is the `.zi` file the Nextion Editor's font generator writes, stored for a rotation (Rotation, below). It contains the font's height, its characters' widths, and their pixels. The generator also stores the name it was given, such as `NotoSans16`.
 
-The [community notes by hagronnestad](https://github.com/hagronnestad/nextion-font-editor/tree/master/Docs) describe versions 3, 5, and 6 of the format. They were the starting point for the glyph codes, and they are the only source for what is marked "(published notes)" below. nxwright does not copy that project's code.
+The [community notes by hagronnestad](https://github.com/hagronnestad/nextion-font-editor/tree/master/Docs) describe versions 3, 5, and 6 of the format. These published notes were the starting point for the glyph codes, and this page says wherever a fact comes from them alone. nxwright does not copy that project's code.
 
 Every font the Nextion Editor made in the files sampled is **version 6**. A version 6 font is four parts, back to back:
 
@@ -128,15 +127,15 @@ Every font the Nextion Editor made in the files sampled is **version 6**. A vers
 3. the **character table**: 10 bytes per character, in increasing order of character code;
 4. each character's **glyph**: its pixels, compressed.
 
-Zero bytes follow the table, up to the next multiple of 8 bytes from its start: two after a table of 95 characters, none after one of 224. A reader needs neither fact, since the table gives each glyph's place.
+Zero bytes follow the table, up to the next multiple of 8 bytes from its start: two after a table of 95 characters, none after one of 224. A program reading the font can skip them, since the table gives each glyph's place.
 
 The generator's **Range** choice sets which characters a font contains:
 
 - "ASCII Character": U+0020 to U+007E;
 - "All characters": every character of the encoding;
-- "Specified character": those typed in its box, to which it adds the space, sorted by code.
+- "Specified character": the characters typed in its box, plus the space, sorted by code.
 
-Byte 5 of the header seems to record the choice: 0, 1, and 2, in that order, as the published notes' "2 for a subset" has it. It decides how the screen finds a character's entry:
+Byte 5 of the header seems to record the choice: 0, 1, and 2, in that order. The published notes also give "2 for a subset". Byte 5 decides how the screen finds a character's entry:
 
 - **With byte 5 at 1**, as in a font of every character of its encoding, the font must not skip any character. If one is missing, the characters after it show as the wrong ones. For example, in a font without the capitals A to Z, "Hello abc XYZ" shows as "b", three missing-character boxes, " {|} rst".
 - **With byte 5 at 2**, the table contains the chosen characters alone, each entry giving its code, and the screen searches it by code. Bytes 10 and 11 still give the encoding's first and last character, such as `20` and `ff`.
@@ -147,9 +146,9 @@ Byte 5 of the header seems to record the choice: 0, 1, and 2, in that order, as 
 - A font can start before the space. In a utf-8 font of U+0001, the space, and `A`, a missing character shows as U+0001's glyph, which is a missing-character box.
 - A character whose code comes before the font's first character is drawn the same way. For example, a font of every iso-8859-1 character starts at the space, so byte `01` shows as a space.
 
-`zi_font.py`'s docstring gives the byte layout of the header, the character table, and the glyph codes. Facts that come only from the published notes are marked as such. In short:
+`zi_font.py`'s docstring gives the byte layout of the header, the character table, and the glyph codes, and marks the facts that come only from the published notes. In short:
 
-- The header gives the **orientation** (byte 3), the **encoding**, numbered as a project's encoding is (`ENCODINGS` in `device_settings.py`), the **height** in pixels, the version, the number of characters, and whether the font is **smoothed** (byte 30): 1 when the generator's "Anti-aliasing of fonts" was ticked, 0 when not.
+- The header gives the **orientation** (byte 3), the **encoding**, with the same numbers as a project's encoding (`ENCODINGS` in `device_settings.py`), the **height** in pixels, the version, the number of characters, and whether the font is **smoothed** (byte 30): 1 when the generator's "Anti-aliasing of fonts" was ticked, 0 when not.
 - The character table gives, for each character:
   - its code. In a one-byte encoding, that is its byte: `°` is `b0` in iso-8859-1;
   - its **advance**: how far the pen moves right after it;
@@ -161,7 +160,7 @@ Most characters have no overhang. In the demo's `Sans100`, the hook of `J` reach
 
 #### Glyphs
 
-A glyph is a rectangle of pixels. It is as wide as the advance plus both overhangs, and as tall as the font. Its left edge lies the left overhang before the pen, and its top is the top of the line of text.
+A glyph is a rectangle of pixels. It is as wide as the advance plus both overhangs, and as tall as the font. Its left edge is the left overhang's width to the left of the pen, and its top is the top of the line of text.
 
 - Each pixel has a **coverage**, from 0 (empty) to 7 (full): how much of the text colour it takes.
 - The pixels are listed row by row from the top, each row from left to right, as one stream: a run of pixels may go on into the next row.
@@ -182,7 +181,7 @@ Each glyph's pixel stream is coded anew, in a turned order:
 
 The character table keeps its advances and overhangs, which still describe the upright character.
 
-The Nextion Editor also takes a font stored for another rotation. It shows the font's text the same, as seen for fonts at 0 and at 270 in a project at 270, and turns the font as it compiles. When it turns a project to a new rotation, it turns each font to the new rotation, or keeps it upright on the F series.
+The Nextion Editor also takes a font stored for another rotation, and turns it when it compiles. The font's text looks no different, as seen for fonts at 0 and at 270 in a project at 270. When it turns a project to a new rotation, it turns each font to the new rotation, or keeps it upright on the F series.
 
 #### Writing a font
 
@@ -200,49 +199,49 @@ One of these choices is easy to miss. After at most 7 empty pixels, a partly cov
 
 The Nextion Editor's generator draws a font from a typeface installed in Windows, at a height in pixels, in an encoding.
 
-- The vendor's description of it says that the height is 16 to 254 pixels, and the generator's list of heights offers those. But a height can be typed, and the generator takes one from 12 to 254. Typed lower, it makes a font of 12 pixels. Typed as 255, it makes one of 254.
-- The description says too that a font made without "Anti-aliasing of fonts" has one bit per pixel, as its glyphs of two levels show, and that a font can be limited to a range of characters.
+- The vendor's description of the generator gives heights of 16 to 254 pixels, and the generator's list offers those. You can also type a height, and the generator accepts 12 to 254. A lower typed height makes a font of 12 pixels, and 255 makes one of 254.
+- The vendor's description also says that a font made without "Anti-aliasing of fonts" has one bit per pixel. Such a font's glyphs do use two levels.
 
 Fonts the generator made from Noto Sans, at 12, 16, 20, and 100 pixels, show how it draws:
 
 - **The scale.** The outlines are scaled so that the typeface's ascender and descender, from its `hhea` table, span the height: in Noto Sans, 1069 and 293 units of 1000. Each advance is then within a pixel of the typeface's, scaled the same way.
-- **Hints.** The generator draws with the hints a TrueType file contains for small sizes. At 16 and 20 pixels, the baseline falls on a whole pixel, and the letters' stems on whole columns. At 100 pixels, the glyphs are nearly as the outlines fall.
+- **Hints.** The generator draws with the hints a TrueType file contains for small sizes. At 16 and 20 pixels, the baseline falls on a whole pixel, and the letters' stems on whole columns. At 100 pixels, the glyphs nearly follow the unhinted outlines.
 - **The characters.** Every byte from `20` is a character: to `7e` in ascii, and to `ff` in iso-8859-1.
   - The control characters `80` to `9f` show the typeface's missing-character glyph, a box, at its own advance, except two: `84` shows the box at the space's advance, and `85`, the next-line control, is empty, a pixel wide.
   - DEL (`7f`) is empty, about as wide as a letter.
   - The soft hyphen (`ad`) is empty, a pixel wide.
-- **A character the typeface lacks** is drawn from another typeface that Windows picks, such as the Hebrew letters Noto Sans lacks.
+- **A character the typeface lacks**, such as a Hebrew letter in Noto Sans, is drawn from another typeface that Windows picks.
 
 #### Placing text
 
-How the Nextion Editor's simulator lays a text out in its component (`tests/fixtures/placing/`; `text_pictures.py` follows it):
+The Nextion Editor's simulator lays out a text in its component by these rules:
 
 - **Lines.** The glyphs sit on a line by their advances and overhangs, with `spax` pixels between two characters. A line break, a carriage return and a line feed (`\r\n`), starts a new line, `spay` pixels below the last.
-- **A lone carriage return or line feed** breaks no line, and shows as a space. This is true in a text, a sliding text, a select's lines, and a combo box's items alike (`tests/fixtures/drawing-assumptions/`).
+- **A lone carriage return or line feed** does not break the line, and shows as a space. This is true in a text, a sliding text, a select's lines, and a combo box's items alike.
 - **Wrapping.** With `isbr` 1, a line wider than the component wraps before the first character that does not fit, inside a word or not: "one two three fo" then "ur".
 - **Alignment.** The lines are aligned as one block, as wide as the widest line. `xcen` puts the block at the left (0), the centre (1), or the right (2), and `ycen` at the top, the centre, or the bottom. Each line starts at the block's left: right-aligned, a short line does not end where a long one does. Centring rounds down.
 - **Passwords.** With `pw` 1, each character shows as `*`.
 - **Clipping.** What falls outside the component is cut off.
 - **Borders.** A text of `style` 1 on a colour background (`sta` 1) has a border `borderw` pixels wide, inside its rectangle, in the colour `borderc`.
-  - The block is placed, and cut, inside the border, as within a rectangle that much smaller: at the left and top, it starts `borderw` pixels in; at the right and bottom, it ends as far in.
+  - The block of lines is placed and cut off as if the component were `borderw` pixels smaller on each side.
   - A 3D style's edge, a pixel wide, is a border too.
-  - Borders were seen on texts, buttons, numbers, xfloats, dual-state buttons, and combo boxes (`tests/fixtures/borders/`).
-  - On a crop, a picture, or no background, a text of `style` 1 has no border, and its block is placed as without one (`tests/fixtures/drawing-assumptions/`).
+  - Borders were seen on texts, buttons, numbers, xfloats, dual-state buttons, and combo boxes.
+  - On a crop, a picture, or no background, a text of `style` 1 has no border, and its block is placed the same way as in a text without a border.
 
-Not known: how lines of different widths are centred, and what happens to a space where a line wraps.
+Not known: what happens to a space where a line wraps.
 
 #### A font in another encoding than the project's
 
 The Nextion Editor accepts a font in another encoding than the project's: a project in utf-8 or in gb2312 with an iso-8859-1 font compiles, with no error or warning, and its text shows. The font draws each byte of the text as its own character.
 
-- ascii text shows as it should, since both encodings write it as ascii does.
+- ascii text shows correctly, because both encodings store it as the same bytes.
 - Other text does not: "Hello é°" shows as "Hello Ã©Â°" in utf-8, and as "Hello ¨¦¡ã" in gb2312.
 
 #### utf-8 fonts
 
 A utf-8 font's table is of one of two kinds:
 
-- **A table of chosen characters**, which the generator writes for its Range choices "ASCII Character" and "Specified character" (Fonts, above). It is laid out as a one-byte font's: an entry for each character chosen, its code its code point, glyph places counted in bytes (byte 33 is 0), and the glyphs back to back after the zero bytes that end the table. Bytes 12 to 15 and 36 to 39 both count its entries, and bytes 8 to 11 are `ff ff 00 ff`.
+- **A table of chosen characters**, which the generator writes for its Range choices "ASCII Character" and "Specified character" (Fonts, above). It has the same layout as a one-byte font, with an entry for each character chosen. Each entry's code is the character's code point, and glyph places are counted in bytes (byte 33 is 0). The glyphs follow back to back, after the zero bytes that end the table. Bytes 12 to 15 and 36 to 39 both count the entries, and bytes 8 to 11 are `ff ff 00 ff`.
 - **A full table**, which the rest of this section describes, has an entry for every code point to U+FFFF.
 
 Noto Sans at 20 pixels, of U+0000 to U+00FF, is 664,052 bytes long in a full table, and about 10 KB in a table of chosen characters.
@@ -255,27 +254,25 @@ A full table:
   - the encoding (byte 4) is 24, utf-8's number;
   - bytes 8 to 11 are `ff ff 00 ff`;
   - bytes 12 to 15 count 65,536 characters, every code point to U+FFFF;
-  - byte 33 is 1, and the glyphs' places count in units of 8 bytes, as the published notes say of fonts over 16 MB;
+  - byte 33 is 1, and the glyphs' places count in units of 8 bytes, which the published notes give for fonts over 16 MB;
   - bytes 36 to 39 count the characters chosen: 256, or 384 with Cyrillic.
 - **The character table** has a 10-byte entry for every code point to U+FFFF, in order, whatever was chosen: 655,360 bytes.
-  - A chosen character's entry is laid out as in a one-byte font, its code its code point.
+  - A chosen character's entry has the same layout as in a one-byte font, with its code point as its code.
   - Every other entry has code 0, an advance of half the height, rounded down (8, 8, 10, and 16 at 16, 17, 20, and 32 pixels), and a glyph 0 bytes long.
   - Every chosen character has a glyph, even an empty one.
-- **The glyphs** follow the table, in the order of their code points, each starting on a multiple of 8 bytes from the table's start, the last one ending the file. They are coded as in a one-byte font: those of U+0020 to U+00FF are byte for byte the demo's iso-8859-1 Sans20's, drawn from the same typeface at the same height.
+- **The glyphs** follow the table, in the order of their code points, each starting on a multiple of 8 bytes from the table's start, the last one ending the file. They are coded the same way as in a one-byte font: those of U+0020 to U+00FF are byte for byte the same as the glyphs of the demo's iso-8859-1 Sans20, drawn from the same typeface at the same height.
 - **The control characters** U+0000 to U+001F, which Basic Latin includes, are the same at each height.
   - U+0000, U+0009, U+000B, U+000D, and U+001C to U+001F are empty, a pixel wide.
   - U+0002 is empty, as wide as DEL (U+007F).
   - U+000A is empty, and U+000C shows the typeface's missing-character box, each at a width of its own.
   - The others show the box at its own advance.
-- **Turned** to another rotation, a utf-8 font is stored as a one-byte font is (Rotation, above): byte 3 gives the rotation, the table is unchanged, and each glyph is turned.
+- **Turned** to another rotation, a utf-8 font is stored the same way as a one-byte font (Rotation, above): byte 3 gives the rotation, the table is unchanged, and each glyph is turned.
   - The Nextion Editor turns a utf-8 font when it saves a project after a change, not as it opens one.
-  - U+0000 has no glyph of its own in a turned font. Its entry keeps its glyph's length, and gives the place of the next glyph, U+0001's. Read that way, it seems a run of 20 to 62 pixels, the first bytes of U+0001's glyph. It looks as if the Nextion Editor takes a code of 0 for a code point not chosen as it writes the glyphs.
-  - No text shows U+0000, as a 0 byte ends a text.
-  - A table of chosen characters is turned as a one-byte font is, as seen at 90 degrees: its header changes only at byte 3 and in the length after it, and its table keeps its layout.
-  - None of the fonts seen with such a table contained U+0000.
+  - A turned font has no glyph of its own for U+0000. The entry for U+0000 keeps its old glyph length, but gives the place of U+0001's glyph. Read as U+0000's glyph, the first bytes of U+0001's glyph decode to a run of 20 to 62 pixels. The Nextion Editor seems to take U+0000 for a code point not chosen when it writes the glyphs, because such a code point's entry has code 0. No text can show U+0000, because a 0 byte ends a text.
+  - A table of chosen characters is turned the same way as a one-byte font, as seen at 90 degrees: its header changes only at byte 3 and in the length after it, and its table keeps its layout. None of the fonts seen with such a table contained U+0000.
 - **Text** in a utf-8 font is drawn a character per code point, each of one to four bytes.
-  - In a full table, the Nextion Editor's simulator draws a code point not chosen as nothing, at the advance its table entry gives. It draws U+1F600, past U+FFFF, the same, at half the height (`tests/fixtures/utf-8-text/`).
-  - In a table of chosen characters, it draws a code point the table lacks, and U+1F600, as the table's first character (Fonts, above; `tests/fixtures/chosen-characters-text/`).
+  - In a full table, the Nextion Editor's simulator draws nothing for a code point not chosen, and moves on by the advance its table entry gives. For U+1F600, which is past U+FFFF, it also draws nothing, and moves on by half the height.
+  - In a table of chosen characters, the simulator draws a code point the table lacks, and U+1F600, as the table's first character (Fonts, above).
 
 #### Two-byte fonts
 
@@ -294,18 +291,18 @@ A font in gb2312, big5, shift-jis, or ks_c_5601-1987 has a glyph for every pair 
   - byte 4, the encoding: 2, 16, 23, or 15;
   - byte 5 is 1;
   - bytes 8 and 9 are the first byte's first and last value, and bytes 10 and 11 the second byte's;
-  - bytes 1 and 2 are the second byte's gap: the last value before it, and how many values it skips, as `7e 22` in big5. Bytes 28 and 29 are the first byte's, as `9f 40` in shift-jis. `ff 00` means no gap;
+  - bytes 1 and 2 give the second byte's gap: the last value before the gap, and how many values it skips, such as `7e 22` in big5. Bytes 28 and 29 give the first byte's gap the same way, such as `9f 40` in shift-jis. `ff 00` means no gap;
   - bytes 12 to 15, and 36 to 39, both count the entries.
 - **Character table:**
   - an entry for every position, row by row, each row's columns in order, then one for each of the 95 ascii characters, from the space to `~`;
-  - an entry's code is its character's two bytes, in the order a text stores them, as `d6 d0` for 中 in gb2312;
-  - the glyphs follow, back to back, as in a one-byte font.
-- **Empty positions:** a position its encoding gives no character may still have a glyph, or be empty, as wide as the font is tall.
+  - an entry's code is its character's two bytes, in the order a text stores them, such as `d6 d0` for 中 in gb2312;
+  - the glyphs follow, back to back, the same as in a one-byte font.
+- **Empty positions:** a position with no character in its encoding may still have a glyph, or be empty, as wide as the font is tall.
 - **The Nextion Editor's own gb2312 font** shows each position as the character GBK gives it. Other GB2312 tables differ from GBK at a few positions: GBK reads `a1 a4` as the middle dot, U+00B7, where some read U+30FB, the katakana middle dot.
-- **Turned** to another rotation, as a one-byte font is (Rotation, above), its table kept in its order.
+- **Turned** to another rotation, a two-byte font is stored the same way as a one-byte font (Rotation, above), and its table keeps its order.
 - **Text:**
   - a byte below `80` is a character of its own, and a byte from `80` starts a pair;
-  - each byte's index counts from its range's first value, less the gap when the byte is past the value before it;
+  - each byte's index is its distance from its range's first value, minus the size of the gap if the byte comes after the gap;
   - the screen draws the entry at the first byte's index times the row's length, plus the second byte's index, even for a byte outside its range or in its gap;
   - a place outside the table, before it or past its end, draws the table's first entry;
   - a lone first byte at the text's end draws nothing.
@@ -315,7 +312,7 @@ A font in gb2312, big5, shift-jis, or ks_c_5601-1987 has a glyph for every pair 
 
 #### Other versions and encodings
 
-These come from the published notes alone. The Nextion Editor-made files sampled contain none of them.
+These versions are known from the published notes alone. None of the files sampled that the Nextion Editor made use them.
 
 - **Version 3**, written by Nextion Editor 0.53: a 28-byte header, the name, then every character at one fixed width, 1 bit per pixel, uncompressed, with no character table. [The vendor's guide](https://nextion.tech/editor_guide/) says fonts from the newer generator do not work in Nextion Editor 0.53.
 - **Version 5**, written by TJC's editor 0.55: as version 6, but bytes 36 to 39 are 0. In the notes' sample files, no bytes follow a table of 95 characters.
@@ -325,69 +322,69 @@ These come from the published notes alone. The Nextion Editor-made files sampled
 - What byte 5 of the header means beyond the fonts seen (Fonts, above), and how the screen finds an entry in a table of byte 5 at 0.
 - How the Nextion Editor's generator turns coverage into its eight levels, which pixels it makes full without anti-aliasing, and what its Bold option does to a typeface.
 - How the screen mixes colours for partly covered pixels over a background other than white.
-- Two-byte fonts of the generator's other Range choices; and of utf-8 fonts, what fonts of characters past U+FFFF contain.
+- What the generator writes for a two-byte font with its other Range choices.
+- What a utf-8 font with characters past U+FFFF contains.
 
 ### Animations, videos, and sounds
 
-The Nextion Editor lists them in the manifest after the fonts and before the pages: the pictures, the fonts, the animations, the videos, the sounds, then the pages.
+An animation's `N.gmov` and a video's `N.v` list their frames, which are JPEG pictures, in a table after the header. In `N.gmov`, the table also gives each frame's duration.
 
 **An animation** is two blocks with the same number.
 
 - `N.gmovs` is the file GmovMaker wrote, byte for byte. It starts with `GMOV`, the rotation's marker, and `V`, and stores each frame as the picture it was made from. GmovMaker has no rotation of its own: every one of its files seen has the marker of 0, `0a`.
-- `N.gmov` is a form the Nextion Editor makes of it when it is added, for the project's rotation. It starts with `GMOV`, that rotation's marker, and `R`. It stores each frame as a JPEG picture, coded at the IJG's quality 82, after a header giving the JPEG picture's size.
+- The Nextion Editor makes `N.gmov` from that file when the animation is added, for the project's rotation. It starts with `GMOV`, that rotation's marker, and `R`. It stores each frame as a JPEG picture, coded at quality 82 on the scale of the Independent JPEG Group (IJG), after a header giving the JPEG picture's size.
   - The frame is padded with black, at its right and bottom, to whole blocks of 16 pixels: a frame of 33 by 17 becomes a JPEG picture of 48 by 32, of which the screen shows the first 33 by 17.
-  - For a turned screen, the frame is then turned, as a screen copy's pixels are: a frame of 72 by 40, at 90 degrees, is a JPEG picture of 48 by 80.
-  - The JPEG picture has no transparency. A pixel keeps its own colour, however transparent, but a wholly transparent one becomes black.
+  - For a turned screen, the frame is then turned the same way as a screen copy's pixels: a frame of 72 by 40, at 90 degrees, is a JPEG picture of 48 by 80.
+  - The JPEG picture has no transparency. A partly transparent pixel keeps its own colour, and a wholly transparent one becomes black.
 - Both forms end with a chunk of 4,096 bytes: `hmic`, its size, and zeros. The header of `N.gmov` gives that size too. What the chunk is for is not known.
-- The manifest lists only `N.gmov`, as it lists only a picture's `N.i`.
+- The manifest lists only `N.gmov`, the same way it lists only a picture's `N.i`.
 
 **A video**'s `N.v` is the file VideoBox wrote, byte for byte.
 
-- It starts with `VIDE`, the rotation's marker, `P`, the frame rate in a byte, and a zero byte.
-- Its header is laid out as an animation's, except the word at +48, which is 0, and the word at +36: the number of frames × 1,000 / the rate, rounded down.
+- `N.v` starts with `VIDE`, the rotation's marker, `P`, the frame rate in a byte, and a zero byte.
+- The header is laid out as an animation's, except the word at +48, which is 0, and the word at +36: the number of frames × 1,000 / the rate, rounded down.
 - Each entry gives the frame's place, its width and height, and its size, and no duration.
 - Each frame is a baseline JPEG picture alone, coded at the IJG's quality 80, and padded with white to whole blocks of 16 pixels: a frame of 160 by 120 is a JPEG picture of 160 by 128.
-- For a turned screen, VideoBox's display direction, the frame is then turned, as an animation's frame is.
+- For a turned screen, chosen with VideoBox's display direction, the frame is then turned the same way as an animation's frame.
 - The file ends with the same 4,096 bytes as an animation's.
 
-**The rotation's marker** of an animation's and a video's files is a screen copy's: `0a` plus the rotation / 90, so `0b` at 90 degrees.
+**The rotation's marker** in animation and video files is the same as in a screen copy: `0a` plus the rotation divided by 90, so `0b` at 90 degrees.
 
-- It is byte 4 of the file, and the low byte of each frame's entry's kind. The kind's high byte gives the file's form: 2 in GmovMaker's file, 4 in the Nextion Editor's form, and 1 in a video.
-- The header's and the entries' width and height stay the frame's own, unturned.
+- The marker is byte 4 of the file, and the low byte of the **kind** in each frame's entry. The kind's high byte gives the file's form: 2 in GmovMaker's file, 4 in the Nextion Editor's form, and 1 in a video.
+- The width and height in the header and the entries stay the frame's own, before any turning.
 - The Nextion Editor refuses to compile a video made for another rotation than the project's ("The direction of the file is inconsistent with the current engineering display direction").
-- It takes an animation's form made for another rotation, and makes it again for the project's as it compiles.
+- The Nextion Editor accepts an `N.gmov` made for another rotation, and makes it again for the project's rotation when it compiles.
 
-**A sound**'s `N.wav` is the WAV file the Nextion Editor's Audio panel wrote of the one it was given.
+**A sound**'s `N.wav` is a rewritten copy of the WAV file given to the Nextion Editor's Audio panel.
 
 - The panel converts nothing. It keeps every rate from 8,000 to 48,000 samples a second, 8 and 16 bits, mono and stereo, and even 24-bit and float samples, as they were.
 - The panel rewrites the file: the RIFF header; the format chunk, cut to its first 16 bytes; a chunk of its own, `hmic`, of 504 bytes; then the samples, padded with zeros to a whole number of 4 bytes. Other chunks are left out.
-- `hmic` contains `crc`, the length 4, and a check value; then `name`, the name's length, and the name of the file it was given, without its extension; then zeros.
-- The check value is the CRC of the stamps (Checksums, below), fed 32-bit little-endian words, as the screen's chip computes it. It runs from the `data` chunk's header, for as many bytes as the samples take, so the samples' last 8 bytes are left out.
-- The Nextion Editor takes a sound without `hmic`, and one whose check value is zeroed. Its simulator plays a sound without `hmic` in just the sound's length, where it takes about 400 ms to play a sound of 50 ms with `hmic`.
+- `hmic` contains `crc`, the length 4, and a check value. Then come `name`, the name's length, and the name of the file given to the panel, without its extension. Zeros fill the rest.
+- The check value uses the same CRC as the stamps (Checksums, below), fed 32-bit little-endian words, the way the screen's chip computes it. It starts at the `data` chunk's header and covers as many bytes as the samples take, so the samples' last 8 bytes are left out.
+- The Nextion Editor takes a sound without `hmic`, and one whose check value is zeroed. Its simulator plays a sound without `hmic` in just the sound's length, but takes about 400 ms to play a sound of 50 ms with `hmic`.
 - A screen plays only 16-bit sounds of 22050 samples a second, mono or stereo. The Nextion Editor's compile converts a sound of any other rate to that form, whatever its bits and channels.
-- The compile does not convert a sound of 22050 samples a second. It refuses any sound that is not 16-bit ("Data bits exceed the valid range (only 16 bits are supported)"), and any sound with more than two channels ("Vocal Track Number Out of Effective Range (1/2)").
+- The compile does not convert a sound that is already at 22050 samples a second. It refuses such a sound if it is not 16-bit ("Data bits exceed the valid range (only 16 bits are supported)"), or if it has more than two channels ("Vocal Track Number Out of Effective Range (1/2)").
 
-An animation's `N.gmov` and a video's `N.v` list their frames, JPEG pictures, in a table after the header. In `N.gmov`, the table also gives each frame's duration. `nxwright/project/media_files.py` gives the byte layout of all these files.
+`nxwright/project/media_files.py` gives the byte layout of all these files.
 
 ### Macros
 
 The Nextion Editor 1.68.2 added macros, in a "macro" tab beside Program.s.
 
 - A project with macros has the block `comcode.sn`. Deleting every macro in the tab removes it.
-- The block contains each macro in the tab's order: its name, then its number of lines, then its lines, each line ending in CR LF, in UTF-8. Three macros, of two lines, none, and one: `newcall\r\n2\r\nprinth 4D\r\nprints "café",0\r\nnewcall1\r\n0\r\nmy name\r\n1\r\nsys0=7\r\n`.
+- The block contains each macro in the tab's order: its name, then its number of lines, then its lines, each line ending in CR LF, in UTF-8. For example, here are three macros, of two lines, no lines, and one line: `newcall\r\n2\r\nprinth 4D\r\nprints "café",0\r\nnewcall1\r\n0\r\nmy name\r\n1\r\nsys0=7\r\n`.
 - The tab drops a blank line typed in a macro, and saves a macro with no code with a count of 0.
 
-Macros' names, as the tab takes them:
+In the tab, a macro's name can contain letters, digits, underscores, and spaces. Names are case-sensitive.
 
-- letters, digits, underscores, and spaces, not a digit first, and not a name another macro has. Names are told apart by case.
 - The tab refuses a hyphen ("Illegal character in Name-"), a digit first ("First character of a Name can not be number"), and a name another macro has ("duplicate name").
-- The compiler takes a name with a digit first, written into the block by hand. It refuses two macros of one name ("macro crc invalid").
+- The compiler accepts a name with a digit first, if it was written into the block by hand. It refuses two macros with the same name ("macro crc invalid").
 
 Compiling:
 
 - A `call` of a macro the project lacks fails to compile: "the macro is invalid".
-- A macro's code reaches components only of global scope, with their page's name: `page0.t1.txt`. `t1.txt`, and a component of local scope even with its page's name, fail to compile ("Invalid Variables").
-- A command naming a component, as `vis`, `tsw`, `ref`, and `click` do, takes the component's number in a macro, written or stored in a variable or a value. `vis 1,0`, `vis sys0,0`, and `vis page0.n0.val,0` compile. `vis t0,0`, and `click page0.b0,1` with b0 of global scope, fail ("Invalid Component ID").
+- A macro's code can reach only components of global scope, and must use their page's name, as in `page0.t1.txt`. Both `t1.txt` and a component of local scope, even with its page's name, fail to compile ("Invalid Variables").
+- In a macro, a command that refers to a component, such as `vis`, `tsw`, `ref`, or `click`, needs the component's number, written out or stored in a variable or a value. `vis 1,0`, `vis sys0,0`, and `vis page0.n0.val,0` compile. `vis t0,0` fails ("Invalid Component ID"), and so does `click page0.b0,1`, even with b0 of global scope.
 
 ## Pictures for the SD card
 
@@ -401,12 +398,12 @@ PictureBox, the Nextion Editor's tool for SD card pictures, writes `.xi` files. 
   - the picture's own width and height;
   - the size of what follows;
   - where its alpha section starts, from the header's end, or 0 for none.
-- Then comes a baseline JPEG picture, its colour at half the width and height, at a quality PictureBox names, on the IJG's scale: Highest 100, Very High 96, High 80, Middle 70, Low 50, Very Low 30.
-  - The picture is padded with black, at its right and bottom, to whole blocks of 16 pixels, then turned for the screen's rotation, as a screen copy's pixels are: a picture 80 by 60, for a screen turned 90 degrees, is a JPEG of 64 by 80.
-  - A pixel keeps its own colour; a wholly transparent one is black.
-- When some pixel is not opaque, an alpha section follows, over the turned picture, the padding wholly transparent, coded as a screen copy's.
+- Then comes a baseline JPEG picture, with its colour at half the width and height. PictureBox's quality settings correspond to these values on the IJG's scale: Highest 100, Very High 96, High 80, Middle 70, Low 50, Very Low 30.
+  - The picture is padded with black, at its right and bottom, to whole blocks of 16 pixels, then turned for the screen's rotation, the same way as a screen copy's pixels: a picture 80 by 60, for a screen turned 90 degrees, is a JPEG of 64 by 80.
+  - A partly transparent pixel keeps its own colour, and a wholly transparent one is black.
+- If any pixel is not opaque, an alpha section follows. It covers the turned picture, with the padding wholly transparent, and is coded the same way as in a screen copy.
 
-The screen ignores the rotation the header gives. It draws the file's pixels as they are stored, turned back by its own rotation, from the component's top left corner. So a file for another rotation shows turned, its padding too, and so does a PNG or a JPEG stored upright on a turned screen.
+The screen ignores the rotation the header gives. It draws the file's pixels as they are stored, turned back by its own rotation, from the component's top left corner. So a file for another rotation shows turned, including its padding, and so does a PNG or a JPEG stored upright on a turned screen.
 
 `nxwright/project/media_files.py` gives the layout.
 
@@ -428,22 +425,14 @@ All three are CRCs with the polynomial `0x04C11DB7`, starting at `0xFFFFFFFF`.
 
 ## Writing a project file the Nextion Editor accepts
 
-The build writes the whole file anew, laid out as the Nextion Editor lays out a new project, whatever the screen model: the directory, its copy, two fixed markers, then the blocks back to back, with the manifest last. `new_project.py` gives the offsets.
+nxwright writes project files in two ways. Files written either way open in the Nextion Editor, survive its later saves, and compile.
 
-- Screen copies are generated in the format of the model's series, and the pixel order of the rotation.
-- After writing, nxwright reads the file back, and checks the directory checksum and the manifest stamp.
-
-`nxwright write`, which applies an edited dump to the project it came from, writes the way the Nextion Editor saves instead:
-
-- an old entry is marked stale and its name blanked;
-- the new block goes at the end of the file, and its entry at the end of the directory;
-- after writing, it reads the file back, and checks every checksum, and that each new screen copy decodes back to its picture.
-
-Files written both ways open in the Nextion Editor, survive its later saves, and compile.
+- The build writes the whole file anew, with the layout of a new project for any screen model: the directory, its copy, two fixed markers, then the blocks back to back, with the manifest last. It generates screen copies in the format of the model's series and the pixel order of the rotation. `new_project.py` gives the offsets.
+- `nxwright write`, which applies an edited dump to the project it came from, saves the way the Nextion Editor does (The container, above).
 
 ## The Nextion Editor's memory
 
-The Nextion Editor's compile counts the memory each page takes on the screen, and refuses a page that passes the screen's memory. Its Output panel shows it:
+The Nextion Editor's compile counts the memory each page takes on the screen, and refuses a page that needs more than the screen has. The Output panel shows the counts:
 
 ```
 Available Memory:3584
@@ -453,32 +442,26 @@ Error:Page:p26 Error! Memory overflow:16+4072=4088
 ```
 
 - `Available Memory` is the screen's memory, by its model: 3,584 bytes on a basic screen, 524,288 on an Intelligent one.
-- `Global Memory` is the project's global memory, which every page's total includes.
-- Each page's total is the global memory and the page's own memory.
+- `Global Memory` is the project's global memory. Each page's total is this plus the page's own memory, as in `16+20=36`.
 - The compile checks the components' types and attributes first, then counts the pages in order. It stops at the first component, value, or page it refuses.
 
-What it counts, per series of screens (measured by `tools/editor/memory_probe.py`):
+The compile counts these, with numbers that differ between series of screens:
 
-- **A page's own memory** is a fixed number of bytes, a part for how many objects it has, the page among them, and each component's cost. On a basic screen: 16 bytes, and 1 for each object, rounded up to 4.
-- **A component's cost** is its type's, with a part for each attribute whose value changes it.
-  - Most such attributes are buffers: `txt_maxl`, the most bytes a text's `txt` can store, the `_m` attributes, and `molloc`. On a basic screen, a text costs 8 bytes and its `txt_maxl` plus 2, rounded up to 4.
+- **A page's own memory** is the sum of a fixed number of bytes, a part for how many objects it has, counting the page itself, and each component's cost. On a basic screen, the first two come to 16 bytes, plus 1 for each object, rounded up to a multiple of 4.
+- **A component's cost** is a fixed amount for its type, plus a part for each attribute whose value changes it.
+  - Most such attributes are buffers: `txt_maxl` (the most bytes a text's `txt` can store), the `_m` attributes, and `molloc`. On a basic screen, a text costs 8 bytes, plus its `txt_maxl` plus 2, rounded up to a multiple of 4.
   - Other attributes may count too: a waveform keeps, for each channel, 1.3 bytes for each pixel of its width.
   - A sliding text's `path_m` keeps room for its lines. When `path_m` is 0, that room is `txt_maxl` bytes instead. So on the Intelligent and Edge series, each byte of `txt_maxl` counts twice while `path_m` is 0.
 - **A component of global scope** (`vscope` 1) keeps a few bytes on its page, 4 on an Intelligent screen and none on a basic one, and the rest of its cost in global memory.
-- **Global memory** is a fixed number of bytes, 4 for each `int` of `program.s`, and the global components' parts. The Intelligent and Edge screens take a data record of global scope only, which keeps there the most of its 11,776 bytes, and a file stream of local scope only.
-- **Event code** costs nothing: it is kept with the program, not in memory.
-- **A QR code needs temporary memory besides**, which must fit in what the page's total leaves of the screen's memory.
-  - It steps up with the QR code's `txt_maxl`. On a basic or Enhanced screen: nothing at 0, 586 bytes up to 17, 851 up to 32, and so on to 3,382 up to 192, the most `txt_maxl` they take. On a Discovery screen, less: 295 bytes up to 17, and so on to 1,745 up to 230.
-  - Two QR codes on a page need the larger of their needs.
+- **Global memory** is the sum of a fixed number of bytes, 4 for each `int` in `Program.s`, and the parts that global components keep there. On the Intelligent and Edge screens, a data record must be of global scope, and keeps most of its 11,776 bytes in global memory, while a file stream must be of local scope.
+- **Event code** does not use any of this memory, because it is stored with the program.
+- **A QR code also needs temporary memory**, which must fit in the screen memory that the page's total leaves free.
+  - The amount rises in steps with the QR code's `txt_maxl`. On a basic or Enhanced screen, it is 0 bytes when `txt_maxl` is 0, 586 up to 17, 851 up to 32, and so on to 3,382 up to 192, the largest `txt_maxl` these screens accept. On a Discovery screen, it is less: 295 bytes up to 17, and so on to 1,745 up to 230.
+  - Two QR codes on a page need only the larger of their two amounts.
   - If the page leaves too little memory for it, the compile refuses the page. The error gives how many bytes are missing, such as 443 here: `Error:Page:p013 The remaining memory is not enough to run the temporary use of QR code(-443)`.
-  - The Intelligent and Edge screens, of far more memory, take a QR code on a page filled to the last byte.
+  - The Intelligent and Edge screens have far more memory, and accept a QR code on a page filled to the last byte.
 
-nxwright keeps what the probe measured in `nxwright/project/memory_costs.toml`, read by `nxwright/project/memory_table.py`:
-
-- each model's memory;
-- per series, the page's costs, global memory's, and each type's, with a rule for each attribute that changes it. A rule takes the attribute's value, times so many bytes for so many units of it, then a number of bytes added, rounded up to a multiple, and times another attribute's value where one multiplies it, as a waveform's channels do its width's part;
-- a type that needs temporary memory, with its steps, up to the largest value measured;
-- per series, the types its compile refuses, and the values it was seen to refuse, such as a gauge's `sta` 3 on a basic screen.
+`nxwright/project/memory_costs.toml` contains the measured numbers for each screen model and series, including the types and values each series' compile refuses. `nxwright/project/memory_table.py`'s docstring explains the table.
 
 ## The Nextion Editor's quirks
 
@@ -492,4 +475,3 @@ nxwright keeps what the probe measured in `nxwright/project/memory_costs.toml`, 
 - The 2-byte value that the compressed variant of format 3 keeps for each row of a picture. Decoding does not need it, and new format 3 pictures are written uncompressed.
 - The exact rule for the colour of partly transparent pixels.
 - How the Nextion Editor takes a GIF of several frames.
-- The compiled screen file (`.tft`) that the Nextion Editor makes from a project. nxwright stops at the project file; the Nextion Editor compiles it.
