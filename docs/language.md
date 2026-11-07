@@ -188,7 +188,7 @@ switch (mode.val) {
 
 `break`, `continue`, and `switch` work as in C, and a `switch` can also compare texts. Each `case` gives a number, a text, or a constant of the same kind, each value once. Code between `switch (...) {` and the first `case` could never run, so it is refused.
 
-`switch`, `case`, `default`, `break`, and `continue` are keywords only in these forms: `switch (`, `case <value>:`, `default:`, and `break` or `continue` alone on a line. A component can still have one of these names, as in `case.val = 1`. A constant, local, function, or parameter cannot.
+`switch`, `case`, `default`, `break`, and `continue` are keywords only in these forms: `switch (`, `case <value>:`, `default:`, and `break` or `continue` alone on a line. A component can still have one of these names, as in `case.val = 1`, but a constant, local, function, or parameter cannot.
 
 ## Includes
 
@@ -242,7 +242,7 @@ The build writes your nxlang into strict Nextion syntax, adding hidden variables
   - **nxlang does not give more room to a text whose length it cannot know in advance**, such as a component's text, because the screen has little memory. A text built from short texts with several `+=` also has room for only 255 bytes.
   - **You get a warning where a component's text may be cut.** `nxwright check` and the live checks warn on the line (`text-cut`) when a component's text, or a variable that nxlang gave more room, may not fit in one of these texts. For example, `if (t1.txt == "Total: " + t0.txt)` gives a warning when `t0`'s `txt_maxl` is 1000.
   - **To keep a longer text, put it in a variable component** whose `txt_maxl` is large enough.
-  - A `print` of joined texts keeps every part whole, as it prints each part in turn.
+  - A `print` of joined texts keeps every part whole, because it prints each part in turn.
 - **At most 8,000 hidden global variables.** That many are known to work, and the build refuses more.
 - **`program.nx` has no hidden variables, and no locals.** The build stops at an expression there that would need a hidden variable, so write it as simpler steps. It also stops at a text assignment that uses its own target anywhere but first, such as `t0.txt = "-" + t0.txt`.
 - **A page with functions needs its `load` event.** The build turns off the touches of the hidden hotspots in that event. A page file's `events` list contains `load` by default.

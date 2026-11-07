@@ -102,7 +102,7 @@ All your tests appear in Test Explorer and can be debugged using the VS Code deb
 
 ### Switch to nxlang
 
-The extension can switch a project to nxlang, nxwright's version of the Nextion language that adds powerful new functionality, and show you the lines of your code that will change as a result. Once you have switched, you can start using nxlang's extended syntax: functions, includes, local variables, standard operator precedence, and more ([nxlang](https://github.com/nixiewright/nxwright/blob/main/README.md#nxlang)). Changes made in the Nextion Editor can no longer be extracted over your source folder as that conversion would now be lossy, but an the HMI file can still be extracted into a new folder.
+The extension can switch a project to nxlang, nxwright's version of the Nextion language that adds powerful new functionality, and show you the lines of your code that will change as a result. Once you have switched, you can start using nxlang's extended syntax: functions, includes, local variables, standard operator precedence, and more ([nxlang](https://github.com/nixiewright/nxwright/blob/main/README.md#nxlang)). Changes made in the Nextion Editor can no longer be extracted over your source folder, because that conversion would now be lossy, but the HMI file can still be extracted into a new folder.
 
 ## Getting started
 
@@ -125,7 +125,7 @@ All commands are in the command palette, under "nxwright:". Most of them do what
 | Import a Nextion Editor project | Extracts a `.HMI` file into a new folder, and remembers the file for Build. |
 | Choose the project | Chooses which project the side bars show, when the workspace has several. |
 | Compile a project file into a TFT file | Compiles a `.HMI` file you choose, such as one made in the Nextion Editor, into a TFT file you name. |
-| Upload the TFT file to the screen | Compiles, then uploads the TFT file, as Upload TFT does. |
+| Upload the TFT file to the screen | Compiles, then uploads the TFT file, the same as Upload TFT. |
 | Upload a TFT file to the screen | Uploads a TFT file you choose, such as one made in the Nextion Editor, without compiling. |
 | Decompile a TFT file into a new source folder | Turns a TFT file back into a source folder, to recover a project you no longer have. |
 | Extract the project file into the source folder | Brings changes made in the Nextion Editor back into a source folder in strict Nextion syntax. For a folder in nxlang, it offers to extract the file into a new folder instead. A project saved by a newer Nextion Editor may contain things nxwright does not know. If nxwright cannot keep one of them, nothing is extracted. |

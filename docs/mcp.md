@@ -60,7 +60,7 @@ After the page's line, each line gives a visible component's name, type, box, an
 
 ## How the app runs
 
-By default, the app runs inside `nxwright mcp`, without VS Code. It behaves as it does in the simulator ([Simulating your app](simulator.md)), with these differences:
+By default, the app runs inside `nxwright mcp`, without VS Code. It behaves the same way as in the simulator ([Simulating your app](simulator.md)), with these differences:
 
 - The app's time moves only when the agent calls `wait`. A `wait` of 500 ms immediately runs everything the app's timers would do in 500 ms.
 - The app has no serial port.

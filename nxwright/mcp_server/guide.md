@@ -1,6 +1,6 @@
 # About nxwright's MCP tools
 
-You are connected to `nxwright mcp`. Its tools run a Nextion screen app that nxwright keeps as text files, and use the app's screen as a person would. Read this before you change the app or start a simulation.
+You are connected to `nxwright mcp`. Its tools run a Nextion screen app that nxwright keeps as text files, and use the app's screen the way a person would. Read this before you change the app or start a simulation.
 
 ## The app's files
 
@@ -12,7 +12,7 @@ The app is a source folder: the folder that contains `app.toml`. The files you w
 | `program.nx` | The code that runs when the screen starts, and the `int` variables that every page shares. |
 | `pages/<page>.page.toml` | A page and its components. Each has a table with its name, type, position and size (`x`, `y`, `w`, `h`), and the attributes that differ from its type's defaults, such as a text's `txt`. |
 | `pages/<page>.nx` | The page's event code. |
-| `macros.nx` | Macros, if the app has any. Code runs them with `call`. |
+| `macros.nx` | Macros, if the app has any, run with `call`. |
 
 - The `language` setting in `app.toml` is `"nextion_do_not_change_manually"` for strict Nextion syntax, the Nextion Editor's own language, or `"nxlang_do_not_change_manually"` for the nxwright language. A folder from an older nxwright may have just `"nextion"` or `"nxlang"`, with the same meanings. Read the setting before you write code, and never change it by hand. Only when the user asks, switch a folder to nxlang with `nxwright language`, which rewrites the folder's code to match. Macros are always in strict Nextion syntax.
 - In strict Nextion syntax, arithmetic has no parentheses, and operators run left to right: `sys0=a+b*c` computes `(a+b)*c`. Spaces around operators are fine in `.nx` files.
@@ -80,7 +80,7 @@ b0  button  20,400  160x60  "Next"
 - After the page's line, each line is a visible component. The lines come in the order the components are drawn, so a later component lies on top of an earlier one.
 - The component lines are followed by anything the code painted on the page, such as with `xstr`, and by the names of the components that are not visible.
 - A picture from the app appears as its ID and its name: `picture 9 "state/heating"`. Code uses the ID, and page files use the name from `app.toml`.
-- Read the text for what the screen shows, and pass `picture` as false when the text is enough. Look at the PNG when the appearance matters, such as colours or what overlaps. It has one pixel for each pixel of the page.
+- Read the text for what the screen shows, and pass `picture` as false when the text is enough. Look at the PNG when the appearance matters, such as colours or what overlaps.
 
 `components` lists each component of the page shown, with its box (position and size) as numbers, and whether it is visible. A component that is not placed on the page, such as a timer, has no box.
 

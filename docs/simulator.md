@@ -13,7 +13,7 @@ In nxwright's side bar, the Simulator section has two buttons:
 - **Simulate project** starts the app from `program.nx`, like a screen being switched on. The code of `program.nx` runs, then the page it opens.
 - **Simulate page** starts the app on the page shown, without running `program.nx`.
 
-The commands "nxwright: Simulate the app" and "nxwright: Simulate the app from the page shown" do the same. Above a page's preview, or its page file, the **Simulate this page** button starts the app on that page, as Simulate page does.
+The commands "nxwright: Simulate the app" and "nxwright: Simulate the app from the page shown" do the same. Above a page's preview, or its page file, the **Simulate this page** button starts the app on that page, the same as Simulate page.
 
 An AI agent can also run your app through `nxwright mcp`, on its own or in this simulator ([Letting an agent drive your app](mcp.md)).
 
@@ -32,8 +32,8 @@ A launch configuration's `page` starts the app on that page. Its `values` are th
 "values": {"step.val": 5, "page0.t0.txt": "Hello"}
 ```
 
-- A value may give the page's own component with the page's name, as the page's code may. Started on `keybdA`, `keybdA.loadcmpid.val` is its `loadcmpid.val`.
-- A value giving another page's component, as `page0.t0.txt`, is that page's. That component's scope must be global.
+- A value, like the page's code, may give the page's own component with the page's name. Started on `keybdA`, `keybdA.loadcmpid.val` is its `loadcmpid.val`.
+- A value giving another page's component, such as `page0.t0.txt`, is that page's. That component's scope must be global.
 - To start on a keyboard page, give the component that opens it with `loadpageid.val` and `loadcmpid.val`. Without them, the simulator adds a page of its own that opens the keyboard, and shows the text the keyboard returns.
 
 ### The EEPROM
@@ -90,7 +90,7 @@ The panel draws the page that is showing, the same way the page preview draws it
 
 - An event that runs long, such as one drawing a chart, is shown as it goes, every tenth of a second. When a drawing takes longer than that, it is shown less often, so that the event can go on.
 - A stream of work, such as instructions arriving faster than they run, is shown the same way. The last state is drawn once nothing is waiting.
-- The zoom bar above it shows the screen larger or smaller, as the page preview's does. The screen is sharp from 100% up, and smoothed below. Ctrl with the mouse wheel zooms about the pointer.
+- The zoom bar above it shows the screen larger or smaller, like the page preview's. Ctrl with the mouse wheel zooms about the pointer.
 - A press lands on the screen's pixel under the pointer, whatever the zoom.
 
 Closing the panel does not stop the simulation. To open the panel again, use **Show the screen** in the Simulator section, or the command "nxwright: Show the Simulator". The panel opens on the screen as it is now.
@@ -188,7 +188,7 @@ The simulation's time follows the wall clock while it runs.
 - A `delay` holds the simulation for as long as it lasts. Touches wait for it.
 - The real-time clock, `rtc0` to `rtc6`, starts at your computer's time of day. They are the year, month, day, hour, minute, second, and day of the week, from 0 for Sunday. The clock moves with the simulation's time.
 - Code setting one of `rtc0` to `rtc5` sets that part of the time. An impossible date or time, such as month 13, is ignored.
-- Starting again keeps the clock running, as a screen's clock runs on while the screen is off.
+- Starting again keeps the clock running, the same way a screen's clock runs on while the screen is off.
 
 ### Sleep
 
@@ -201,7 +201,7 @@ The simulation's time follows the wall clock while it runs.
   - In a `load` event, the new page shows, but its `loadend` event does not run.
 - When a press's event puts the screen to sleep, its release counts as a touch on a sleeping screen. The release sends 0x68, and wakes the screen when `thup` is 1. The component's Touch Release event does not run.
 - Falling asleep by `thsp` or `ussp` sends 0x86 on the serial line. Waking by a touch sends 0x87. Waking by the serial line sends nothing. `sleep` set by code sends neither.
-- However it wakes, the screen then shows the page that `wup` gives, as a `page` command would. When `wup` is 255, the screen stays on the page it was on.
+- However it wakes, the screen then shows the page that `wup` gives, the same way a `page` command does. When `wup` is 255, the screen stays on the page it was on.
 - The old page's `unload` event does not run then, whether a touch or the serial line woke it.
 - A `wup` that does not give a page leaves the page shown as it is.
 - Waking by a touch starts the `ussp` count again.
@@ -243,7 +243,7 @@ The panel draws each component with opacity `aph`, from 0 (invisible) to 127 (op
 
 - A button's `val` is 1 while it is pressed, and 0 once it is released. `val` is set before the press's and the release's events run.
 - A button of global scope whose press changes page does not get a release, and its `val` goes back to 0.
-- A `click` sets `val` as a press and a release do: `click b0,1` to 1, and `click b0,0` to 0, before the event runs.
+- A `click` sets `val` the same way as a press and a release: `click b0,1` to 1, and `click b0,0` to 0, before the event runs.
 
 ### Checkboxes, radios, dual-state buttons, and switches
 
@@ -267,7 +267,7 @@ A scrolling text that is on moves its text `dis` pixels every `tim` milliseconds
 - Code reads the text's width and height in pixels in `vvs2` and `vvs3`, as it is drawn: with `spax` between characters, `spay` between lines, and the lines `isbr` wraps. The text is measured as its page opens, and at each step before it moves.
 - Code setting `vvs0` or `vvs1` moves the text to that place, and the text moves on from that place. A new `txt` or `font` keeps it where it is. `en` 0 stops it where it is.
 - A new `txt` or `font` shows at once. Until the next step measures it, `vvs2` and `vvs3` keep the old size, and `xcen` or `ycen` aligns the new text by that old size. A stopped text keeps the old size.
-- A new `dir` the other way along the same line, as 1 after 0, turns it round where it is.
+- A new `dir` the other way along the same line, such as 1 after 0, turns it round where it is.
 - A new `dir` that switches between across and up or down takes effect at the text's next step. That step puts the text just outside its component, where it would come back in, and moves it no further. Until then, the text shows, and code reads its place, as before. A stopped text does not turn.
 - While the text moves, code setting `tim`, or setting `en` to 1, does not delay it, even when the value is the same. The text's next step comes `tim` after its last one, or at once if that time has passed. A timer is different: setting its `tim` or `en` starts its count again.
 - After `en` 0, code setting `en` to 1 counts `tim` from then.
@@ -337,7 +337,7 @@ Only one data record can use a data file at a time. When two data records give t
 - The second record's methods change nothing while the first record keeps the file. Once the file is free, its next method opens it.
 - Code setting a data record's `path` to a file another one keeps answers 0x06.
 
-Data records keep at most 8 files at once, across pages. A record that finds 8 kept by others cannot open its own, as if another record kept it. A record that keeps a file can still change its `path`, as it lets the old file go first.
+Data records keep at most 8 files at once, across pages. A record that finds 8 kept by others cannot open its own, as if another record kept it. A record that keeps a file can still change its `path`, because it lets the old file go first.
 
 A data record whose `path` is empty does not keep a file, so it does not shut out any other record. Such a record shows "File Lost:", in white on black, in its own font, but does not send an error code. The page preview shows it the same way.
 
@@ -346,7 +346,7 @@ A data record whose `init` is 1 does not open the file its page file gives:
 - It shows its titles and no records, and its `qty` is 0. It does not create a missing file.
 - It does not keep the file, so another data record can open it.
 - Its methods change nothing, and send no error code.
-- Once code sets its `path`, even to the same file, it works as when `init` is 0.
+- Once code sets its `path`, even to the same file, it works the same as when `init` is 0.
 
 ### Animations, videos, and sounds
 
@@ -371,7 +371,7 @@ A video's or a sound's `from` sets where its file comes from:
 With `from` 1:
 
 - When the card's folder lacks that file, nothing plays. The component sends the error code 0x06, an invalid file operation ([Return codes](#return-codes)). It sends it as its page opens, and when code sets its `path`.
-- When a card has no folder, the simulator keeps the card in memory, as the file commands do. A file missing from that card answers 0x06 too.
+- When a card has no folder, the simulator keeps the card in memory, the same way the file commands do. A file missing from that card answers 0x06 too.
 - With an empty `path`, nothing plays, and the component does not send an error code.
 
 Unlike a video or a sound, an animation cannot play a file from the SD card. It always plays from the project.
@@ -382,7 +382,7 @@ A waveform draws the points that code adds with `add`, each channel in its colou
 
 - When `dir` is 0, the default, a new point enters at the left and pushes the others right.
 - When `dir` is 1, a new point enters at the right and pushes the others left. The first point stays at the left edge until the points fill the waveform.
-- When `dir` is 2, the points move as they do for `dir` 1, but the last one is always at the right edge.
+- When `dir` is 2, the points move the same way as for `dir` 1, but the last one is always at the right edge.
 - A value of v is drawn v × `dis` / 100 pixels up from the bottom, cut toward zero.
 - `cle` clears the points. So does a new page.
 
@@ -446,7 +446,7 @@ On Linux, a port is named as `/dev/ttyUSB0`.
 - You set the port's rate with `baud`, in the launch configuration or in the Simulator section. Without it, the rate is 9600, the screen's rate at power-on.
 - The line is 8 data bits, no parity, and 1 stop bit.
 - Your app's code cannot change the port's rate. On a screen, setting the system variable `baud` or `bauds` changes the screen's rate. In the simulator, the port keeps the rate you set.
-- What arrives is cut into instructions at each FF FF FF, and read in the project's encoding. Each one runs in turn, as a typed instruction does.
+- What arrives is cut into instructions at each FF FF FF, and read in the project's encoding. Each one runs in turn, the same way as a typed instruction.
 - When the screen starts again, for example with `rest`, it drops what it has received but not yet run.
 - While the simulation is paused, they wait. They do not count against the screen's serial buffer ([Holding instructions](#holding-instructions)).
 - Everything the screen sends goes out, in order, its return codes included.
@@ -561,12 +561,12 @@ After this, an instruction runs only when its first two bytes are 02 01, or FF F
 
 While the app runs, the Simulator section lists the screen's 8 GPIO pins, io0 to io7. For each pin, it shows what code set the pin up as, and its level. Code reads and writes the pins as `pio0` to `pio7`.
 
-- Click an input's level to give it the other one, as a button or a switch wired to the pin would. The app reads the new level.
+- Click an input's level to give it the other one, like a button or a switch wired to the pin. The app reads the new level.
 - A pin bound to a component with `cfgpio` shows the component's name. Setting the pin to 0 presses the component, and setting it back to 1 releases it.
 - An output shows what the code last wrote to it.
 - A screen of the Basic series has no GPIO pins, and the section does not list any.
 
-Every input reads 1 until you change it, as a pull-up input that nothing drives does. To start the app with other levels, give them in the launch configuration's `gpioInputs`:
+Every input reads 1 until you change it, like a pull-up input that nothing drives. To start the app with other levels, give them in the launch configuration's `gpioInputs`:
 
 ```json
 "gpioInputs": {"pio2": 0}
@@ -632,7 +632,7 @@ What is ignored goes to the log, and to `"file errors"`.
 
 ## Starting again
 
-Starting again is a power cycle, as `rest` is. The EEPROM keeps what the app wrote. The log is not cleared, and says that the app started again.
+Starting again is a power cycle, like `rest`. The EEPROM keeps what the app wrote. The log is not cleared, and says that the app started again.
 
 ## Debugging
 
@@ -657,7 +657,7 @@ You can debug the app while it runs.
 
 - Dividing by zero stops the app with an error. The Nextion Editor's simulator gives 0, and goes on.
 - A `crcputh` whose text is not hexadecimal stops the app with an error. The Nextion Editor's simulator adds a byte, and goes on.
-- A GPIO pin works as the vendor's instruction set describes ([GPIO](screen-code.md#gpio)). An input that nothing drives reads 1, as a pull-up input does. The Nextion Editor's simulator reads 0 from every pin, inputs and outputs alike.
+- A GPIO pin works as the vendor's instruction set describes ([GPIO](screen-code.md#gpio)). An input that nothing drives reads 1, like a pull-up input. The Nextion Editor's simulator reads 0 from every pin, inputs and outputs alike.
 - `crcval` reads -1 at each start, until a `crcrest`. The Nextion Editor's simulator keeps it from one run to the next.
 - The bytes that arrive after a transfer's last byte are instructions, as the vendor's instruction set describes ([Transparent data](#transparent-data)). The Nextion Editor's simulator drops the rest of a line typed in its instruction box after the transfer's last byte.
 - `addt` or `wept` with a count of 0 sends FE FF FF FF and FD FF FF FF at once. The Nextion Editor's simulator sends FD FF FF FF only when more bytes arrive, and drops those bytes.
@@ -671,9 +671,9 @@ You can debug the app while it runs.
 - A sound plays in its own time. The Nextion Editor's simulator takes about 400 ms for each play of a 50 ms sound.
 - An animation or a video plays in its own time too. The Nextion Editor's simulator gives each frame a little longer.
 - An animation or a video whose `dis` is 0 stands still. The Nextion Editor's simulator stops answering.
-- The screen's serial buffer has room for 1024 bytes, as the vendor gives it ([Holding instructions](#holding-instructions)). The Nextion Editor's simulator held more, and did not answer 0x24.
+- The screen's serial buffer has room for 1024 bytes, the size the vendor gives ([Holding instructions](#holding-instructions)). The Nextion Editor's simulator held more, and did not answer 0x24.
 - `dims` and `bauds` go back to the vendor's defaults at each start. The screen, and the Nextion Editor's simulator, keep them.
-- `appid` keeps what code stores in it, through `rest` and a start again, as a screen does ([`appid`](screen-code.md#appid)). The Nextion Editor's simulator ignores what code stores in it: it reads 0.
+- `appid` keeps what code stores in it, through `rest` and a start again, like a screen ([`appid`](screen-code.md#appid)). The Nextion Editor's simulator ignores what code stores in it: it reads 0.
 - The real-time clock starts at your computer's time at each start. The Nextion Editor's simulator keeps a time that code set, from one start to the next.
 - Some SD card commands do less, to keep your files safe ([What the file commands do](#what-the-file-commands-do)).
 - A data record's `delete` with a count below 0 changes nothing. The Nextion Editor's simulator adds records instead, as many as the count says.

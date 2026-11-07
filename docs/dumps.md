@@ -64,13 +64,13 @@ object 0 settings
 
 - `page name` gives the page's name. If the name contains a double quote or characters outside printable ASCII, it is quoted in the same way as a string, for example `page "caf\xe9"` for `café`.
 - `object N name` labels the object with its index and name. The name is left off when it is empty or contains a space.
-- `marker` lines are short tags. `att-NN` gives the component's class.
+- `marker` lines are short tags, and `att-NN` gives the component's class.
 - Numbers are decimal. A number whose width in bytes differs from what nxwright expects for that component type shows its width, for example `val:u8 = 0`.
 - Strings are quoted. Bytes outside printable ASCII appear as `\xNN`.
 - `event <name>` is followed by its code lines, each starting with `| `.
 - `raw <hex>` gives a record or code line that cannot be shown as text exactly.
 
-The text is exact. On every dump, nxwright checks that each page's text converts back to the same page block.
+The text is exact: on every dump, nxwright checks that each page's text converts back to the same page block.
 
 ## Importing a dump into a source folder
 
@@ -96,7 +96,7 @@ nxwright page <dump-folder> <page-id> <output.page>
 
 - **Fonts:** the page file carries the fonts the page uses, so the Nextion Editor adds any the project lacks. Font numbers in `font` attributes are renumbered to the page file's own font list. Font numbers written in event code, such as `t0.font=3`, are left as they are, so that code still refers to the project's font IDs.
 - **Pictures:** the page file does not carry pictures. Picture attributes keep their IDs, so the target project needs the same pictures with the same IDs.
-- **Output:** an existing page file at the output is replaced only once the new one is written in full. Pass `--overwrite` to replace it without a prompt. Without that option, the command refuses when there is no terminal, as in a script. Any other kind of file at the output is refused.
+- **Output:** an existing page file at the output is replaced only once the new one is written in full. The command prompts first, unless you pass `--overwrite`, or aborts when there is no terminal, as in a script. If the output exists and is not a page file, the command stops with an error, even with `--overwrite`.
 
 ## Writing a project file from a dump
 
@@ -114,7 +114,7 @@ What the dump can change:
   - Pictures are matched to the project by their files' bytes and suffixes. So an edited picture, or one given another suffix, counts as a new one replacing the old one.
   - nxwright makes the screen copy of a new PNG, JPEG, BMP, or GIF picture, and does not use the dump's `.i` file for it. A new picture of another type, such as `.tif`, takes its screen copy from its `.i` file in the dump, because nxwright does not decode that type. If that `.i` file is missing, the write stops with an error.
   - A picture's source file goes with the picture's ID. If you add, replace, or delete the source file, the project's source block changes to match. When you replace a picture's file, delete its source file too, unless the new file is a resized form of that source file.
-- **Fonts:** add, remove, or reorder the font files, keeping the IDs without gaps. Fonts are matched to the project by their bytes. You can take new fonts from another dump, or from the Nextion Editor's font generator.
+- **Fonts:** add, remove, or reorder the font files, keeping the IDs without gaps. Fonts are matched to the project by their bytes, and you can take new fonts from another dump, or from the Nextion Editor's font generator.
 - **Animations, videos, and sounds:** add, remove, or reorder their files, keeping the IDs without gaps and an animation's two files together. These are matched to the project by their bytes, and you can take new ones from another dump.
 - **`program.s`:** edit it.
 - **`macros.s`:** edit it, add it, or remove it, which removes the project's macros.
@@ -134,7 +134,7 @@ Some projects limit what can be added:
 
 Writing the output file:
 
-- An existing project file at the output is replaced only once the new one is written in full and has passed the check below. Pass `--overwrite` to replace it without a prompt. Without that option, the command refuses when there is no terminal, as in a script. Any other kind of file at the output is refused.
+- An existing project file at the output is replaced only once the new one is written in full and has passed the check below. The command prompts first, unless you pass `--overwrite`, or aborts when there is no terminal, as in a script. If the output exists and is not a project file, the command stops with an error, even with `--overwrite`.
 - If the file at the output changed since nxwright wrote it, it is kept as a backup beside the new one ([`nxwright build`](commands.md#build)), unless you pass `--no-backup`.
 - The input project file is only read, unless you also give it as the output. It is then read in full first, and the new file replaces it.
 - The output survives later saves in the Nextion Editor ([format.md](format.md#writing-a-project-file-the-nextion-editor-accepts)).

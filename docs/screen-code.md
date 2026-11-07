@@ -13,7 +13,7 @@ On this page, "answers 0x1A" means that the screen sends the error code 0x1A ([R
 - `/` and `%` round toward zero.
 - Dividing by zero stops the run with an error. The Nextion Editor's simulator gives 0 instead, and goes on.
 - You can write a number in hexadecimal, with its digits in pairs: `0x1234`. The digits give all 32 bits of the number, so `0xFFFFFFFF` is -1.
-- A hexadecimal number longer than 32 bits is an error. So is one with a sign, such as `-0x10`. Subtracting a hexadecimal number is fine: `5-0x10`.
+- A hexadecimal number longer than 32 bits, or with a sign, such as `-0x10`, is an error, but subtracting one is fine: `5-0x10`.
 - The colour names `BLACK`, `BLUE`, `BROWN`, `GREEN`, `YELLOW`, `RED`, `GRAY`, and `WHITE` stand for their RGB565 numbers.
 
 ## Text
@@ -21,7 +21,7 @@ On this page, "answers 0x1A" means that the screen sends the error code 0x1A ([R
 - `+` joins two texts.
 - `t0.txt-=3`, or `t0.txt=t0.txt-3`, removes the last three characters (see operators 2.4 and 2.5 in the vendor's instruction set).
 - Subtracting from a different text, such as `t0.txt=t1.txt-3`, is an error, because the vendor's instruction set only allows subtracting from the same text.
-- A text longer than its limit is cut. The limit is in bytes, and the page files give it. A text field's limit is `txt_maxl`. Any other text attribute has its limit in an attribute called its bound, such as `path_m` for a `path`.
+- A text longer than its limit is cut. The limit is in bytes, and the page files give it: `txt_maxl` for a text field, and for any other text attribute, an attribute called its bound, such as `path_m` for a `path`.
 - In a quoted text, `\r` stands for a carriage return and a line feed. `\"` stands for a quote, and `\\` for a backslash. Any other escape is an error, such as `\n`, `\t`, or `\q`.
 
 ### The text commands
@@ -31,7 +31,7 @@ The text commands are `covx` (and its older form `cov`), `substr`, `spstr`, `str
 - `btlen` counts bytes, in the project's encoding. The others count characters. In `utf-8`, "aé温" has a `strlen` of 3 and a `btlen` of 6.
 - In gb2312, big5, shift-jis, and ks_c_5601-1987, `strlen`, `substr`, and `-=` count characters the way a real Nextion screen counts them, even where its count looks wrong:
   - In gb2312 and ks_c_5601-1987, a character whose first byte is 0xA1 or less counts as 2 characters. This affects some symbols, such as "　" and "“", and the extra characters that a source folder in those encodings can use, such as gb2312's "丂" and ks_c_5601-1987's "갂".
-  - The second byte of a character counted this way can pair up with the first byte of the next character. The characters after it are then split: in gb2312, "“好" counts as 3.
+  - The second byte of a character counted this way can pair up with the first byte of the next character, which splits the characters after it: in gb2312, "“好" counts as 3.
   - In shift-jis, a character whose first byte is 0x81, such as "、", also counts as 2.
   - A half-width katakana in shift-jis, such as "ｱ", counts as one character together with the byte after it. That byte can be half of the next character: "ｱ亜" counts as 2 characters, split in the middle of "亜".
 - `spstr` looks for its separator byte by byte. In gb2312, big5, shift-jis, and ks_c_5601-1987, it can therefore split a character whose second byte is the separator, such as shift-jis's "ァ" when the separator is "@".
@@ -69,7 +69,7 @@ In an event of `n0`, `'&val&'` runs as `n0.val`, and `'&id&'` as `n0`'s ID. This
 - In the page's own event, `'&id&'` is 0, the page's ID.
 - Spaces inside are dropped: `'& val &'` is `'&val&'`.
 - [`EditorMachine`](testing.md#running-code-directly), which runs code without a source folder, does not replace `'&name&'`.
-- On the serial line, nothing replaces `'&name&'`. Typed outside a quoted text, `'&name&'` is an invalid variable (0x1A).
+- On the serial line, nothing replaces `'&name&'`, and outside a quoted text it is an invalid variable (0x1A).
 
 ### The arrays `p[]` and `b[]`
 
@@ -220,7 +220,7 @@ values = SCREEN.run("page0", [("read", "down")],
 
 ### System variables kept as set
 
-`volume`, `audio0`, `audio1`, `eql`, `eqm`, `eqh`, `eq0` to `eq9`, `scache`, `bcpu`, `tpdir`, `runmod`, `portbusy`, `tprc`, `aph`, and `lowpower` keep the value that code sets. They have no other effect.
+`volume`, `audio0`, `audio1`, `eql`, `eqm`, `eqh`, `eq0` to `eq9`, `scache`, `bcpu`, `tpdir`, `runmod`, `portbusy`, `tprc`, `aph`, and `lowpower` keep the value that code sets, and have no other effect.
 
 A simulation starts `volume` at 100, the equalizer variables at 7, `aph` at 127, and the rest at 0.
 
@@ -267,7 +267,7 @@ move t1,0,160,600,160,5,500
 move t2,0,280,600,280,0,1000
 ```
 
-In the simulator, `t0` and `t1` move together, as they have the same priority, 5. `t2` starts once both have ended, 2 seconds later.
+In the simulator, `t0` and `t1` move together, because they have the same priority, 5. `t2` starts once both have ended, 2 seconds later.
 
 - `move` moves a component over the time it is given, and changes its `x` and `y` as it goes.
 - Moves of the same priority run together. A higher priority runs first. The next priority starts once every move of the one before has ended.
@@ -294,7 +294,7 @@ Some commands act on hardware or data that nxwright does not model, and are only
 - `touch_j`, `code_c`, `play`, `beep`, and `setlayer`
 - the undocumented commands, except `pa_q` and `pa_txt` ([Undocumented commands](#undocumented-commands))
 
-A test records `addt`, `wept`, and `twfile` in `"other commands"` too, as it has no serial line for their data. The simulator runs them ([Transparent data](simulator.md#transparent-data)).
+A test records `addt`, `wept`, and `twfile` in `"other commands"` too, because it has no serial line for their data. The simulator runs them ([Transparent data](simulator.md#transparent-data)).
 
 ### Undocumented commands
 
@@ -354,7 +354,7 @@ A data record's methods change its data file, `path`: `insert("a^b^c")`, `delete
 - A method's text can come from a variable, such as `insert(t0.txt)`.
 - If the file doesn't exist and `mode` is 1, the method creates it first.
 - The first data record to open a file keeps it, until code changes that record's `path`.
-  - Another data record with the same file does not open it. That record's methods have no effect, and are not reported. Once the file is free, the record's next method opens it.
+  - Another data record with the same file does not open it, and that record's methods have no effect and are not reported. Once the file is free, the record's next method opens it.
   - Code setting a data record's `path` to a file another one keeps answers 0x06. This is recorded in `"file errors"` as `("open", path)`.
 
 A call that the Nextion Editor refuses to compile stops the run:

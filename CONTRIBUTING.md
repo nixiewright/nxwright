@@ -17,7 +17,7 @@ Bug reports, fixes, and documentation are welcome. For a larger change, open an 
 
 - The tests compare the project files nxwright writes byte for byte. If your change alters those files, that is a change of behaviour, so say so in the pull request.
 - For standard formats and protocols (images, fonts, QR codes, TOML, the Language Server Protocol), use a well-known, maintained library, and never write your own implementation. Get the maintainers' agreement before adding a new dependency.
-- If you add a Python package to nxwright, add it to the list in `pyproject.toml` too. `tests/test_mcp_server.py` checks that list.
+- If you add a Python package to nxwright, add it to the list in `pyproject.toml` too, which `tests/test_mcp_server.py` checks.
 - Comments and documentation follow [docs/STYLE.md](docs/STYLE.md).
 - Anything about the language of `.nx` files belongs in the language server (`nxwright/language_server/`), which is tested with the rest of nxwright. The VS Code extension's client, in `editors/vscode`, is written in TypeScript, and has [its own build](#running-the-vs-code-extension-from-source) and [its own tests](#testing-the-vs-code-extension).
 - `README.md`'s nxlang examples come from `nxwright/language/nxlang_samples.py`, which also feeds the Switch to nxlang panel. After changing the samples, run `python -m tools.readme` to rewrite the README. `tests/test_readme.py` fails until you do.
@@ -80,7 +80,7 @@ Run these commands in `editors/vscode`. Both compile the client first.
 
 On Linux and macOS, see `.github/workflows/tests.yml` for how the CI workflow downloads the copy. On Linux, the tests also need a display, which you can provide with `xvfb-run npm run test:host`.
 
-The tests run nxwright with `python`. To use another Python, set `NXWRIGHT_TEST_PYTHON` to it.
+The tests run nxwright with `python`, or with the Python that `NXWRIGHT_TEST_PYTHON` points at.
 
 ## Sign-off
 

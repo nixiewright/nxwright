@@ -4,7 +4,7 @@ What nxwright will or might do next. None of it has a date, and each item may ch
 
 ## Matching the screen
 
-Tests and the simulator are meant to behave as a real Nextion screen does, but in rare cases they do not. Nextion publishes no full specification of the language, so nxwright follows the Nextion Editor's simulator. That leaves two kinds of gaps:
+Tests and the simulator are meant to behave the way a real Nextion screen does, but in rare cases they do not. Nextion publishes no full specification of the language, so nxwright follows the Nextion Editor's simulator. That leaves two kinds of gaps:
 
 - **Differences from the Nextion Editor's simulator.** nxwright has not yet compared some behaviours with the Nextion Editor's simulator, and a few are known to differ. See [How nxwright runs Nextion code](docs/screen-code.md#not-compared-yet) and [Simulating your app](docs/simulator.md#known-differences) for what is known so far.
 - **Differences from real screens.** Where the Nextion Editor's simulator differs from a real screen, nxwright likely differs too, and it may have inherited that simulator's bugs.

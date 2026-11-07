@@ -78,7 +78,7 @@ on celsius.up:
   unit = 0
 ```
 
-`nxwright build app screen.HMI` turns the folder back into a project file (HMI), which you can open in the Nextion Editor as usual. `nxwright compile app screen.tft` compiles the folder into the TFT file the screen runs. You don't need the Nextion Editor for this. If you change something in the Nextion Editor and save it, `nxwright extract` brings the change back into the folder, keeping your code wherever the Nextion Editor didn't change it. This works until you switch the folder to [nxlang](#nxlang).
+`nxwright build app screen.HMI` turns the folder back into a project file (HMI), which you can open in the Nextion Editor as usual. `nxwright compile app screen.tft` compiles the folder into the TFT file the screen runs, without the Nextion Editor. If you change something in the Nextion Editor and save it, `nxwright extract` brings the change back into the folder, keeping your code wherever the Nextion Editor didn't change it. This works until you switch the folder to [nxlang](#nxlang).
 
 ## Write Nextion code comfortably
 
@@ -130,7 +130,7 @@ Because your app is now text, you can use the tools you already use for code:
 
 ## Add functional and unit testing
 
-nxwright runs your pages' code on your PC, as the screen would, from ordinary Python tests. A test sets some values, runs events, and checks what changed. This one is from the demo, `examples/thermostat`:
+nxwright runs your pages' code on your PC, the way the screen would, from ordinary Python tests. A test sets some values, runs events, and checks what changed. This one is from the demo, `examples/thermostat`:
 
 ```python
 import unittest

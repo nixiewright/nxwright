@@ -39,7 +39,7 @@ A test checks that `thermostat.HMI` matches what `app/` builds, so build again a
 python run.py extract examples/thermostat/thermostat.HMI thermostat-extracted
 ```
 
-... or simply load the HMI it into the Nextion Editor and inspect the strict Nextion code.
+... or simply load the HMI file into the Nextion Editor and inspect the strict Nextion code.
 
 ## Testing
 
@@ -51,7 +51,7 @@ See [Testing your app](../../docs/testing.md) for how the tests run the pages' c
 
 ## Pictures
 
-Each page has two full-screen pictures: its background, and the same background with every button pressed. Text and buttons show the part of the background behind them ("crop image" in the Nextion Editor), and a button shows the pressed picture while it is touched. The pages' code also shows the pressed picture on the selected mode and unit, and on the schedule switch while it is on. The brightness slider shows the pressed picture up to its knob. All the pictures are opaque, so the smaller ones include the colour that appears behind them.
+Each page has two full-screen pictures: its background, and the same background with every button pressed. Text and buttons show the part of the background behind them ("crop image" in the Nextion Editor), and a button shows the pressed picture while it is touched. The pages' code also shows the pressed picture on the selected mode and unit, and on the schedule switch while it is on. The brightness slider shows it up to its knob. All the pictures are opaque, so the smaller ones include the colour that appears behind them.
 
 ## Fonts
 

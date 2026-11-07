@@ -87,4 +87,4 @@ The folder contains everything the screen needs, but a TFT file keeps less than 
 
 - **Names.** The file keeps only a checksum of each page, component, variable, and macro name. The decompile works out the names it can, and gives the others a readable name, such as `text3`.
 - **Code.** All code comes back in strict Nextion syntax, without comments, even if you wrote it in nxlang.
-- **Pictures.** The picture files you added do not come back. You get a PNG file of what the screen shows for each one.
+- **Pictures.** The picture files you added do not come back, only a PNG file of what the screen shows for each one.

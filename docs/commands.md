@@ -55,7 +55,7 @@ Details:
 
 - `program.nx` declares `int sys0=0,sys1=0,sys2=0`. The Nextion Editor refuses code that uses them otherwise, and its new projects declare them too.
 - The font is Noto Sans at 24 pixels, called `NotoSans24`. The Nextion Editor's new project has no font, but the Nextion Editor refuses a text whose font the project lacks.
-- In utf-8, the font has the characters U+0000 to U+00FF, as `font` draws by default.
+- In utf-8, the font has the characters U+0000 to U+00FF, the same characters `font` draws by default.
 - Noto Sans lacks some characters of some encodings, such as koi8-r's box-drawing characters or windows-874's Thai. The font leaves them out, and the command warns you.
 - In a two-byte encoding, such as gb2312 or big5, Noto Sans has none of the Chinese, Japanese, or Korean characters. They show empty until you add a font drawn from a typeface that has them ([font](#font)).
 
@@ -71,10 +71,10 @@ Brings a project file into a source folder. Use it to start from a project made 
 - Into an existing source folder in strict Nextion syntax, it updates it, and keeps the app's name. Your code, names, and comfortable syntax stay wherever the project did not change them ([Extracting into an existing folder](source-folder.md#extracting-into-an-existing-folder)).
 - Into a source folder in nxlang, it refuses and changes nothing, because the code the build writes cannot be faithfully turned back into nxlang and the conversion would be lossy. To see what the project contains, extract it into a new folder, and compare that folder with your source folder ([Working with the Nextion Editor](language.md#working-with-the-nextion-editor)).
 - The Nextion Editor locks a project it has open. If the project is open there, the command fails with "Permission denied", and advises you to close the project in the Nextion Editor first.
-- Blank lines in the project's code are dropped, as the build would drop them. A warning gives each event, macro, or `program.s` that had any. The Nextion Editor compiles them to nothing.
+- Blank lines in the project's code are dropped, the same way the build drops them. A warning gives each event, macro, or `program.s` that had any. The Nextion Editor compiles them to nothing.
 - A project saved by a newer Nextion Editor may contain things nxwright does not know. Before writing anything, extract puts each one in one of four groups:
   - **Kept exactly**, such as a component type nxwright does not know, or an attribute it does not know. A page file keeps such an attribute as its stored bytes ([source-folder.md](source-folder.md#page-files)). A warning gives each thing kept.
-  - **Written otherwise** by the next build, in a form nxwright knows. For example, the build writes a page header of a form nxwright has not seen in the current form, as the Nextion Editor does, and puts an object's records back in their usual order. A warning gives each one, and extract goes on without prompting, even with no terminal.
+  - **Written otherwise** by the next build, in a form nxwright knows. For example, the build writes a page header of a form nxwright has not seen in the current form, the same way the Nextion Editor does, and puts an object's records back in their usual order. A warning gives each one, and extract goes on without prompting, even with no terminal.
   - **May be lost** by the next build, such as a block of another kind, or a screen model nxwright does not know. Extract lists each one, and warns that the project may then miss parameters the Nextion Editor needs. Then it prompts you to choose whether to go on. If there is no terminal to answer at, as in a script, extract stops with exit code 3. `--continue-with-unknown` goes on without prompting.
   - **Cannot be kept**, such as a component without its type, ID, or name. Extract refuses the project.
 
@@ -107,12 +107,12 @@ nxwright build app thermostat.HMI
 Writes a new project file from the source folder alone: its pages, code, pictures, fonts, animations, videos, sounds, and device settings.
 
 - The build first checks the folder, and stops at the first problem it finds ([What the build refuses](build-rules.md)).
-- An existing project file at the output is replaced, but only once the new one is written in full and checked. The build asks first, unless you pass `--overwrite`, and refuses when there is no terminal to ask at, as in a script. Any other kind of file there is refused.
+- An existing project file at the output is replaced, but only once the new one is written in full and checked. The build asks first, unless you pass `--overwrite`, and refuses when there is no terminal to ask at, as in a script. If the output exists and is not a project file, the command stops with an error, even with `--overwrite`.
 - If the old project file changed since nxwright wrote it, for example in the Nextion Editor, it is kept as a backup beside the new one, such as `thermostat.HMI.2026-11-06-143205.bak`. `--no-backup` turns this off. nxwright never deletes a backup, so you can delete those you no longer need. If your project is in git, you may want to ignore `*.bak`.
 - A project file counts as changed if nxwright has no record of writing it, such as after you move it or use another computer. The record is in the same folder as [the picture cache](source-folder.md#the-picture-cache). With `NXWRIGHT_CACHE=off`, there is no record, so each build that changes the file keeps a backup.
 - A project built from a folder in nxlang has its pages locked, with no password, to show that it is not meant to be edited in the Nextion Editor. You can still unlock a page there. The build locks a page even if its page file says `locked = false`, and leaves a page with its own password as it is. `--no-lock` leaves each page as its page file sets it.
 - If the Nextion Editor has the project open, the build fails with "Permission denied", and advises you to close the project there first.
-- Once it has built the project, it prints each page's memory, as the Nextion Editor's compile lists it: `page0: 292 of 524288 bytes`. When nxwright could not count all of a page's memory, the page's line says `at least` ([Memory](build-rules.md#memory)).
+- Once it has built the project, it prints each page's memory, in the same form as the Nextion Editor's compile: `page0: 292 of 524288 bytes`. When nxwright could not count all of a page's memory, the page's line says `at least` ([Memory](build-rules.md#memory)).
 - It keeps the screen copies of your pictures in a cache, to build faster next time ([The picture cache](source-folder.md#the-picture-cache)).
 - Like `extract`, it goes through a dump in a temporary folder ([dumps.md](dumps.md)).
 
@@ -159,7 +159,7 @@ Sends a TFT file, made by nxwright or the Nextion Editor, to the screen on a ser
 
 - To find the screen, the command tries each rate a screen can use, which can take a few seconds. If you know the rate the screen uses now, you can give it with `--baud`.
 - `--yes` skips the prompt before the file is sent. A script must give it, because with no terminal to answer the prompt, the command exits with 3 and does not send the file.
-- The command cancels the upload if the file is for a different model from the screen, or if nxwright cannot tell the model of the file or of the screen. It also cancels it if the file's checksums do not match, or if it cannot read the file, such as one made by a Nextion Editor older than 1.60.1. In each case, the command exits with 1.
+- The command cancels the upload, and exits with 1, if the file is for a different model from the screen, if nxwright cannot tell the model of the file or of the screen, if the file's checksums do not match, or if it cannot read the file, such as one made by a Nextion Editor older than 1.60.1.
 - `--find` stops once the screen is found and the file is checked against it, without sending the file.
 - `--upload-baud` sets the rate of the upload. The default is 115200, which sends a megabyte in a little over a minute and a half. You can give any rate the screen supports, up to 921600, but some serial adapters lose bytes at the highest rates.
 - The screen skips the parts of the file it already has, such as the firmware when only your app changed. `--full` sends the whole file.
@@ -252,7 +252,7 @@ The check also warns of likely mistakes that the build accepts. Each warning giv
 - `unused-function`, in nxlang: a function of a page's own `.nx` file that the page never calls.
 - `number-past-32-bits`, in nxlang: a hexadecimal number too large for 32 bits, such as `0x0100000005`, or a decimal number outside -2147483648 to 2147483647, such as `4294967295`. The build keeps only the low 32 bits, as C does, so these become `0x00000005` and `-1`.
 - `event-never-runs`: code for an event that its component's type does not have, such as a page's `postinit`. The Nextion Editor keeps the code, but the screen never runs it. The warning lists the type's events. For `preinit` and `postinit`, it also gives the event that the Nextion Editor's event pane means: a page's Preinitialize Event is `load`, and its Postinitialize Event is `loadend`.
-- `page-place`: a page file gives the page an `x`, `y`, `w`, or `h` that does not match the screen. The build ignores these values and makes the page fill the screen, as the Nextion Editor does. The warning shows on each line that does not match.
+- `page-place`: a page file gives the page an `x`, `y`, `w`, or `h` that does not match the screen. The build ignores these values and makes the page fill the screen, the same way the Nextion Editor does. The warning shows on each line that does not match.
 - `text-cut`, in nxlang: a line that puts a text into one of nxlang's hidden variables, when the text may be too long for the variable and get cut. The warning shows only when a part of the text is a component's text, or a hidden variable with room for more than 255 bytes, such as a parameter that a caller gave a long text. It gives how many bytes the text may need. A variable component with a `txt_maxl` of that size keeps the whole text.
 - `sound-file-form`: a sound's file without the `hmic` chunk that the Nextion Editor's Audio panel writes, or whose check value there does not match its samples. It shows on the line of `app.toml` that gives the sound. The Nextion Editor takes such a file, but a screen might check the value. `nxwright sound` writes the chunk and its check value.
 - `memory-not-checked`: the folder has something whose memory nxwright cannot count, so the pages are checked without it ([Memory](build-rules.md#memory)). The warning shows on the page with it.
@@ -264,7 +264,7 @@ nxwright format app
 nxwright format app --check
 ```
 
-Lays out every `.nx` file in one style, in either language, as a code editor's Format Document does. `macros.nx` is laid out as strict Nextion syntax, whatever the folder's language, its macros as events.
+Lays out every `.nx` file in one style, in either language, the same way as a code editor's Format Document. `macros.nx` is laid out as strict Nextion syntax, whatever the folder's language, its macros as events.
 
 - `--check`: writes nothing, lists the files that would change, and exits with 1 when there is one.
 
@@ -359,11 +359,11 @@ A font is either drawn from a typeface file, or added from a ready-made font fil
 nxwright font app NotoSans-Regular.ttf 20
 ```
 
-Draws a font from a TrueType (`.ttf`) or OpenType (`.otf`) file, or from the first typeface of a collection (`.ttc`), as the Nextion Editor's font generator draws one ([format.md, Drawing a font](format.md#drawing-a-font)). The font is stored for the folder's rotation, or upright on the F series, as the Nextion Editor stores fonts. It is added after the folder's other fonts.
+Draws a font from a TrueType (`.ttf`) or OpenType (`.otf`) file, or from the first typeface of a collection (`.ttc`), as the Nextion Editor's font generator draws one ([format.md, Drawing a font](format.md#drawing-a-font)). The font is stored for the folder's rotation, or upright on the F series, the same way the Nextion Editor stores fonts. It is added after the folder's other fonts.
 
 - The height: from 12 to 254 pixels.
 - `--name`: the font's name. By default, the typeface's name and the height, such as `NotoSans20`.
-- `--no-smoothing`: makes each pixel empty or full, as the generator does without anti-aliasing.
+- `--no-smoothing`: makes each pixel empty or full, the same way the generator does without anti-aliasing.
 - `--characters`, in a utf-8 folder: the characters to draw, as code points in hexadecimal, and ranges of them, such as `20-7e,400-4ff`. By default `0-ff`, the generator's first two blocks.
 - `--full-table`, in a utf-8 folder: a different kind of table (below).
 
@@ -371,7 +371,7 @@ The font is in the folder's encoding:
 
 - In a one-byte encoding, such as iso-8859-1, the font has every character of the encoding.
 - In a two-byte encoding, such as gb2312 or big5, the font has every character of the encoding. A character your typeface file lacks is empty, as wide as the font is tall, and the command warns you ([format.md, Two-byte fonts](format.md#two-byte-fonts)).
-- In utf-8, the font has the characters you chose and the space, as the generator's "Specified character" does, in a table of those characters only. Noto Sans at 20 pixels, for `0-ff`, is about 10 KB.
+- In utf-8, the font has the characters you chose and the space, the same as the generator's "Specified character" choice, in a table of those characters only. Noto Sans at 20 pixels, for `0-ff`, is about 10 KB.
   - The screen shows a character such a font lacks as the font's first character. With the default `0-ff`, that is U+0000, empty and a pixel wide. When your characters start above the space, it is the space ([format.md, Fonts](format.md#fonts)).
   - With `--full-table`, the table has an entry for every code point up to U+FFFF instead. It is at least 655 KB, whatever characters it contains, and the command prints its size. The screen then shows a character the font lacks as nothing, half the font's height wide ([format.md, utf-8 fonts](format.md#utf-8-fonts)).
 
@@ -432,7 +432,7 @@ The page is laid out for the folder's screen, at its rotation, in the colours of
 
 The font is in the folder's encoding:
 
-- In utf-8, it has U+0000 to U+00FF, the characters of iso-8859-1, as `font` draws by default. A caller's text in those characters, such as "café", shows as it is. A text with any other character shows the font's first character in its place, a gap of a pixel, and the command warns you of this.
+- In utf-8, it has U+0000 to U+00FF, the characters of iso-8859-1, the same characters `font` draws by default. A caller's text in those characters, such as "café", shows as it is. A text with any other character shows the font's first character in its place, a gap of a pixel, and the command warns you of this.
 - Where Noto Sans lacks some characters of a one-byte encoding, such as koi8-r's box-drawing characters, the font leaves them out, and the command warns you. A caller's text with them shows the font's first character, the space, in their place.
 - In a two-byte encoding, such as gb2312 or big5, Noto Sans has none of the Chinese, Japanese, or Korean characters. A caller's text in them shows empty, and the command warns you. The font has room for every character of the encoding, so it is large, and the command prints its size.
 
@@ -488,11 +488,11 @@ nxwright video app intro.mp4 --size 320,240 --length 5
 nxwright video app frame1.png frame2.png --rate 10
 ```
 
-Makes a video, as VideoBox, the Nextion Editor's video tool, does, and adds it after the folder's other videos.
+Makes a video the same way as VideoBox, the Nextion Editor's video tool, and adds it after the folder's other videos.
 
 - `--rate`: frames a second, from 1 to 255. 12 by default, as in VideoBox.
 - `--name`: the video's name. By default, the first source's.
-- The video is made for the folder's rotation, as VideoBox makes one for that display direction.
+- The video is made for the folder's rotation, the same way VideoBox makes one for that display direction.
 
 From a video file, ffmpeg cuts it into frames. Without ffmpeg, the command fails.
 
@@ -528,7 +528,7 @@ Adds a sound after the folder's other sounds.
 nxwright sd-picture logo.png icons/*.png --output sdcard --rotation 90
 ```
 
-Writes, for each picture, the file an external picture shows from the screen's SD card, as PictureBox does: `<the picture's name>.xi`, in the output folder, with the picture's transparency ([format.md, Pictures for the SD card](format.md#pictures-for-the-sd-card)). It does not change a source folder.
+Writes, for each picture, the file an external picture shows from the screen's SD card, the same way as PictureBox: `<the picture's name>.xi`, in the output folder, with the picture's transparency ([format.md, Pictures for the SD card](format.md#pictures-for-the-sd-card)). It does not change a source folder.
 
 - `--output`: the folder to write in. It is made if it is missing.
 - `--quality`: PictureBox's quality, one of `highest`, `very-high`, `high`, `middle`, `low`, and `very-low`. `very-high` by default.
@@ -572,13 +572,13 @@ As it works, the command prints each step as it starts, with the file it works o
 
 - Each page takes the new screen's size, at its rotation: each page file's `w` and `h` change.
 - Every component keeps its place and its size.
-- Pictures, animations, and sounds stay as they are. The build makes the pictures' screen copies for the series and the rotation, and the Nextion Editor makes an animation's form again as it compiles.
+- Pictures, animations, and sounds stay as they are. The build makes the pictures' screen copies for the series and the rotation, and the Nextion Editor makes an animation's form again when it compiles.
 - For a picture whose file is of a type nxwright does not decode, the folder keeps the project's screen copy, such as `pictures/logo.screen` ([source-folder.md](source-folder.md#layout)). The command makes that screen copy again from the pixels it contains, in the new screen's format and rotation. If the picture is partly transparent, and the new screen's format cannot store transparency, the command stops and writes nothing. The Nextion Editor blends such a picture with white, working from the picture's file, and nxwright cannot decode that file.
 
 ### A new rotation
 
 - Each page takes the screen's size at the new rotation, as for a new screen.
-- Each font stays as it is. The Nextion Editor takes a font stored for any rotation, shows its text the same, and turns it as it compiles ([format.md, Rotation](format.md#rotation)). Turning a large font takes seconds, so leaving each one as it is keeps the change quick.
+- Each font stays as it is. The Nextion Editor takes a font stored for any rotation, shows its text the same, and turns it when it compiles ([format.md, Rotation](format.md#rotation)). Turning a large font takes seconds, so leaving each one as it is keeps the change quick.
 - A picture's `.screen` file is made again, as for a new screen.
 - A video is made for one rotation. The Nextion Editor's compile refuses a video made for another, and so does the build. nxwright does not keep the source a video was made from. So each video is made again from its own frames, each frame coded again as VideoBox codes one, which loses a little quality. The command prints a note for each video.
 
@@ -592,7 +592,7 @@ The Nextion Editor changes only the encoding: each text keeps its bytes, and eac
 
 ### After the change
 
-The command runs the folder's checks, as `nxwright check` does, and lists each error the build will now refuse. Components keep their places, so these stay until you change them:
+The command runs the folder's checks, the same way as `nxwright check`, and lists each error the build will now refuse. Components keep their places, so these stay until you change them:
 
 - a component past the edge of a smaller screen;
 - a type, choice, attribute, or line of code the new series refuses ([What a series refuses](build-rules.md#what-a-series-refuses));

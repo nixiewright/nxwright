@@ -1,6 +1,6 @@
 # TFT compile probes
 
-nxwright's compile matches one release of the Nextion Editor at a time, the one listed in `MATCHED_VERSIONS` (`nxwright/tft/firmware_versions.py`). The probes check that nxwright writes the same TFT files as that release. Each probe is a small project. The probe tool compiles it with both the Nextion Editor and nxwright, and compares the two files.
+nxwright's compile matches one release of the Nextion Editor at a time, the one listed in `MATCHED_VERSIONS` (`nxwright/tft/firmware_versions.py`). The probes check that nxwright writes the same TFT files as that release. Each probe is a small project that the probe tool compiles with both the Nextion Editor and nxwright, then compares the two files.
 
 Some probes also keep fixtures, so that nxwright's tests can make the same check without the Nextion Editor. These probes cut the Nextion Editor's file into pieces, such as one page's code, and save them in `tests/tft/fixtures/`. The tests then compare the compile's output with these pieces.
 
@@ -23,7 +23,7 @@ The weekly release check reports each new release of the Nextion Editor, with it
 ### Before you start
 
 1. Download the new release's zip. Nextion serves it at a predictable address, such as `https://nextion.tech/download/nextion-setup-v1-68-2.zip`.
-2. Unpack the zip into a new folder. Do not install the new release.
+2. Unpack the zip into a new folder, and do not install the new release.
 3. Set `NXWRIGHT_EDITOR` to the unpacked `Nextion Editor.exe`, and `NXWRIGHT_EDITOR_NAME` to a new name for its [dedicated Editor](../editor/README.md), such as `release-1691`. The probes will then drive the new release, and nxwright's compile will read its firmware from the new release's folder.
 
 ### Three ways to run the probes
@@ -83,4 +83,4 @@ An area is a subject that the probes cover. All the modules below are in `tools/
 | Attributes that every component has, and components that overlap | `shared_attribute_probes`, `overlap_probes` |
 | One series alone | `k_probes`, `p_probes`, `e_probes`, or `f_probes` |
 
-The compiler was built on the T series first, so the T series' probes are in each area's modules. The series come in two families, each with a base set of probes for a base series, called the leader. T leads K and F, and P leads E. A follower writes a project's code as its leader does, apart from a few differences. The K, F, and P modules each run T's probes on their own series, and add their own, and the E module runs P's. Run a series' module when a change concerns that series.
+The compiler was built on the T series first, so the T series' probes are in each area's modules. The series come in two families, each with a base set of probes for a base series, called the leader. T leads K and F, and P leads E. A follower writes a project's code the same way as its leader, apart from a few differences. The K, F, and P modules each run T's probes on their own series, and add their own, and the E module runs P's. Run a series' module when a change concerns that series.

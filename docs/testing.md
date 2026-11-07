@@ -2,7 +2,7 @@
 
 nxwright can run automated tests of your screen's code on your computer. A test compiles a page of your source folder, and runs its events starting from the values you give. Then it checks the values they leave, what they sent on the serial line, or which page they opened.
 
-Tests are ordinary Python `unittest` tests. They run in seconds, and work on any continuous integration server.
+Tests are ordinary Python `unittest` tests, which run in seconds and work on any continuous integration server.
 
 ## A first test
 
@@ -40,7 +40,7 @@ Put your tests in a folder of their own, in files named `test*.py`. Then run the
 nxwright test <folder> [-k <pattern>] [--list] [--report <file>]
 ```
 
-- The folder is the top of the import path, so a test can import the folder's other modules by name alone. This lets shared helpers live in a module beside the tests.
+- The folder is the top of the import path, so a test can import the folder's other modules by name alone, and shared helpers can live in a module beside the tests.
 - `-k` runs only the tests whose name matches the pattern. You may give it more than once.
   - Plain text matches anywhere in the name: `-k fahrenheit` runs `test_fahrenheit` and `test_choosing_fahrenheit_then_celsius`.
   - If the pattern contains `*`, it must match the whole name, `module.Class.method`, and `*` stands for any text: `-k "test_home.*"` runs every test in `test_home.py`.

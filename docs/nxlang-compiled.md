@@ -1,6 +1,6 @@
 # How nxlang becomes strict Nextion syntax
 
-The build compiles nxlang ([language.md](language.md)) into strict Nextion syntax, which the Nextion Editor accepts. This page describes the code the build writes. It can help when you read that code, for example with VS Code's "Show this file in strict Nextion syntax", or when you work on the compiler.
+The build command compiles nxlang ([language.md](language.md)) into strict Nextion syntax, which the Nextion Editor accepts. This page describes the code the build writes, for when you read that code, for example with VS Code's "Show this file in strict Nextion syntax", or when you work on the compiler.
 
 The compiler is `nxwright/language/nxlang.py`. `nxwright/language/editor_code.py` rewrites strict Nextion syntax when you switch a folder to nxlang.
 
@@ -68,7 +68,7 @@ tsw __f0,0
 The Nextion Editor accepts less than nxlang:
 
 - Arithmetic is computed from left to right, with no parentheses.
-- Conditions can only compare plain values. They cannot contain arithmetic, or mix `&&` and `||`.
+- Conditions can only compare plain values, and cannot contain arithmetic or mix `&&` and `||`.
 - A number cannot be joined to text.
 - `-x` is refused.
 
@@ -84,7 +84,7 @@ The Nextion Editor accepts less than nxlang:
 
 ### Long lines
 
-- A text assignment longer than 767 bytes in utf-8 is written in several lines: the first assigns, and each one after it appends with `+=`. `t0.txt = "…"` with 1000 ASCII characters becomes `t0.txt="…"`, then `t0.txt+="…"`. Every series of Nextion screen accepts lines of at least 767 bytes, and no encoding uses more bytes than utf-8 for a character. So each line fits on every screen ([build-rules.md](build-rules.md#long-lines)).
+- A text assignment longer than 767 bytes in utf-8 is written in several lines: the first assigns, and each one after it appends with `+=`. `t0.txt = "…"` with 1000 ASCII characters becomes `t0.txt="…"`, then `t0.txt+="…"`. Every series of Nextion screen accepts lines of at least 767 bytes, and no encoding uses more bytes than utf-8 for a character, so each line fits on every screen ([build-rules.md](build-rules.md#long-lines)).
   - In shift-jis, the Nextion Editor reads a text in pairs of bytes, and pairs a half-width katakana with the byte after it. So after a katakana, nxlang waits for a plain ASCII character before it splits the text.
 - A `print` of a text longer than 767 bytes becomes several `print` lines, split the same way as a long text assignment. A long `prints` is not split.
 - A number assignment longer than 767 bytes is computed in steps through a temporary, which receives the start of the value: `__g0_0=a.val+b.val+…`, then `x.val=__g0_0+…`. A compound assignment is split with its target first, because the Nextion Editor computes it in that order: `x.val += …` becomes `__g0_0=x.val+…`, then `x.val=__g0_0+…`.
@@ -92,7 +92,7 @@ The Nextion Editor accepts less than nxlang:
 ### Conditions and loops
 
 - A condition's operands are computed into temporaries just before it. A `while` loop computes them again at the end of each pass. A `for` loop whose header needs temporaries becomes a `while` loop.
-- The Nextion Editor refuses a text containing a semicolon anywhere in a `for`'s header, though it takes one in a `while`'s condition. So such a `for` loop becomes a `while` loop.
+- The Nextion Editor refuses a text containing a semicolon anywhere in a `for`'s header, though it takes one in a `while`'s condition, so such a `for` loop becomes a `while` loop.
 - `!` is removed by reversing comparisons: `!(a == b)` becomes `a != b`.
 - A condition mixing `&&` and `||` computes each inner part into a temporary set to 0 or 1.
 - When the right side of `&&` or `||` needs computing first, the whole condition goes into a temporary set to 0 or 1. Nested `if` blocks compute each part only when it is needed.
@@ -161,7 +161,7 @@ The compiler also works out what may run during a macro's `call`: the macros tha
 - The page's Preinitialize event starts with one `tsw` line for each hotspot, such as `tsw __f0,0`, to turn off its touches. `click` still runs the hotspot's event.
 - A call computes all its arguments first, then sets the parameter variables, then the "which function" global, then runs `click __f0,1`, and reads the result.
 - When a statement contains two or more calls, each result is copied into a temporary right after its call. Otherwise a later call that shares the same variables could overwrite it.
-- `click` nests at most 9 events deep, counting across components. A 10th event stops with "Endless loop was detected". The first level is the event a press or a timer runs, and each call or hand-made click nests one more. So a chain may have at most 7 calls and clicks. That leaves one level for a `page` command, which runs the new page's Preinitialize event inside the current event, where the compiler cannot see it.
+- `click` nests at most 9 events deep, counting across components. A 10th event stops with "Endless loop was detected". The first level is the event a press or a timer runs, and each call or hand-made click nests one more. So a chain may have at most 7 calls and clicks, leaving one level for a `page` command, which runs the new page's Preinitialize event inside the current event, where the compiler cannot see it.
 
 ## `break`, `continue`, and `switch`
 
