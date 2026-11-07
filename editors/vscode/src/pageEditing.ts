@@ -503,6 +503,12 @@ export class PageEditing {
     return await this.edit(toml, "nxwright/lockComponents", { names, locked });
   }
 
+  // Locks the page, with the password `password` if given, or unlocks it.
+  // Returns whether the page file changed.
+  async lockPage(toml: vscode.Uri, locked: boolean, password?: string): Promise<boolean> {
+    return await this.edit(toml, "nxwright/lockPage", { locked, password });
+  }
+
   // Gives components of the page a new group of their own, or takes them out
   // of theirs, as one edit. Returns whether the page file changed.
   async groupComponents(toml: vscode.Uri, names: string[], grouped: boolean): Promise<boolean> {

@@ -38,7 +38,8 @@ class ProjectMatchesSourceTest(unittest.TestCase):
             extracted = Path(folder) / "extracted"
             extract(PROJECT, extracted)
             output = Path(folder) / "built.HMI"
-            build(extracted, output)
+            # Extract leaves out the locks, and the build adds them again.
+            build(extracted, output, lock_pages=True)
             self.assertTrue(output.read_bytes() == PROJECT.read_bytes(),
                             "the folder extracted from %s builds another project" % PROJECT.name)
 

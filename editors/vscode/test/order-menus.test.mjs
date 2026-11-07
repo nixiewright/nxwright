@@ -15,7 +15,7 @@ test("to the front, forward, backward, and to the back, in that order", () => {
     ["nxwright.bringToFront", "5_order@1"], ["nxwright.bringForward", "5_order@2"],
     ["nxwright.sendBackward", "5_order@3"], ["nxwright.sendToBack", "5_order@4"]]);
   for (const item of items) {
-    assert.equal(item.when, "webviewId == 'nxwright.pagePreview' && component");
+    assert.equal(item.when, "webviewId == 'nxwright.pagePreview' && component && !pageLocked");
   }
 });
 

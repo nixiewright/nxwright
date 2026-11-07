@@ -558,6 +558,21 @@
         "category": "nxwright"
       },
       {
+        "command": "nxwright.lockPage",
+        "title": "Lock page",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.lockPageWithPassword",
+        "title": "Lock page with password",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.unlockPage",
+        "title": "Unlock page",
+        "category": "nxwright"
+      },
+      {
         "command": "nxwright.groupComponents",
         "title": "Group",
         "category": "nxwright"
@@ -1010,6 +1025,18 @@
           "when": "false"
         },
         {
+          "command": "nxwright.lockPage",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.lockPageWithPassword",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.unlockPage",
+          "when": "false"
+        },
+        {
           "command": "nxwright.groupComponents",
           "when": "false"
         },
@@ -1110,6 +1137,21 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "nxwright.lockPage",
+          "when": "view == nxwright.pages && viewItem == page",
+          "group": "1_lock@1"
+        },
+        {
+          "command": "nxwright.lockPageWithPassword",
+          "when": "view == nxwright.pages && viewItem == page",
+          "group": "1_lock@2"
+        },
+        {
+          "command": "nxwright.unlockPage",
+          "when": "view == nxwright.pages && viewItem == lockedPage",
+          "group": "1_lock@3"
+        },
         {
           "command": "nxwright.goToEvent",
           "when": "view == nxwright.components && viewItem == component",
@@ -1214,12 +1256,12 @@
         },
         {
           "command": "nxwright.addComponentHere",
-          "when": "webviewId == 'nxwright.pagePreview' && webviewSection == 'page'",
+          "when": "webviewId == 'nxwright.pagePreview' && webviewSection == 'page' && !pageLocked",
           "group": "1_add"
         },
         {
           "command": "nxwright.cutComponent",
-          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "when": "webviewId == 'nxwright.pagePreview' && component && !pageLocked",
           "group": "2_clipboard@1"
         },
         {
@@ -1229,87 +1271,102 @@
         },
         {
           "command": "nxwright.pasteComponents",
-          "when": "webviewId == 'nxwright.pagePreview'",
+          "when": "webviewId == 'nxwright.pagePreview' && !pageLocked",
           "group": "2_clipboard@3"
         },
         {
           "command": "nxwright.pasteHere",
-          "when": "webviewId == 'nxwright.pagePreview' && webviewSection == 'page'",
+          "when": "webviewId == 'nxwright.pagePreview' && webviewSection == 'page' && !pageLocked",
           "group": "2_clipboard@4"
         },
         {
           "command": "nxwright.pasteSpecial",
-          "when": "webviewId == 'nxwright.pagePreview'",
+          "when": "webviewId == 'nxwright.pagePreview' && !pageLocked",
           "group": "2_clipboard@5"
         },
         {
           "command": "nxwright.duplicateComponent",
-          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "when": "webviewId == 'nxwright.pagePreview' && component && !pageLocked",
           "group": "2_clipboard@6"
         },
         {
           "command": "nxwright.deleteComponent",
-          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "when": "webviewId == 'nxwright.pagePreview' && component && !pageLocked",
           "group": "3_delete@1"
         },
         {
           "command": "nxwright.clearEvents",
-          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "when": "webviewId == 'nxwright.pagePreview' && component && !pageLocked",
           "group": "3_delete@2"
         },
         {
           "submenu": "nxwright.align",
-          "when": "webviewId == 'nxwright.pagePreview' && several",
+          "when": "webviewId == 'nxwright.pagePreview' && several && !pageLocked",
           "group": "4_arrange@1"
         },
         {
           "submenu": "nxwright.makeSameSize",
-          "when": "webviewId == 'nxwright.pagePreview' && several",
+          "when": "webviewId == 'nxwright.pagePreview' && several && !pageLocked",
           "group": "4_arrange@2"
         },
         {
           "submenu": "nxwright.spaceEvenly",
-          "when": "webviewId == 'nxwright.pagePreview' && spaceable",
+          "when": "webviewId == 'nxwright.pagePreview' && spaceable && !pageLocked",
           "group": "4_arrange@3"
         },
         {
           "command": "nxwright.bringToFront",
-          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "when": "webviewId == 'nxwright.pagePreview' && component && !pageLocked",
           "group": "5_order@1"
         },
         {
           "command": "nxwright.bringForward",
-          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "when": "webviewId == 'nxwright.pagePreview' && component && !pageLocked",
           "group": "5_order@2"
         },
         {
           "command": "nxwright.sendBackward",
-          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "when": "webviewId == 'nxwright.pagePreview' && component && !pageLocked",
           "group": "5_order@3"
         },
         {
           "command": "nxwright.sendToBack",
-          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "when": "webviewId == 'nxwright.pagePreview' && component && !pageLocked",
           "group": "5_order@4"
         },
         {
           "command": "nxwright.lockComponents",
-          "when": "webviewId == 'nxwright.pagePreview' && unlocked",
+          "when": "webviewId == 'nxwright.pagePreview' && unlocked && !pageLocked",
           "group": "6_lock@1"
         },
         {
           "command": "nxwright.unlockComponents",
-          "when": "webviewId == 'nxwright.pagePreview' && locked",
+          "when": "webviewId == 'nxwright.pagePreview' && locked && !pageLocked",
           "group": "6_lock@2"
         },
         {
+          "command": "nxwright.lockPage",
+          "when": "webviewId == 'nxwright.pagePreview' && webviewSection == 'page' && !pageLocked",
+          "group": "6_lock@3"
+        },
+        {
+          "command": "nxwright.lockPageWithPassword",
+          "when": "webviewId == 'nxwright.pagePreview' && webviewSection == 'page' && !pageLocked",
+          "group": "6_lock@4"
+        },
+        {
+          "command": "nxwright.unlockPage",
+          "when": "webviewId == 'nxwright.pagePreview' && webviewSection == 'page' && pageLocked",
+          "group": "6_lock@5"
+        },
+        {
           "command": "nxwright.groupComponents",
-          "when": "webviewId == 'nxwright.pagePreview' && several",
+          "when": "webviewId == 'nxwright.pagePreview' && several && !pageLocked",
           "group": "7_group@1"
         },
         {
           "command": "nxwright.ungroupComponents",
-          "when": "webviewId == 'nxwright.pagePreview' && grouped",
+          "when": "webviewId == 'nxwright.pagePreview' && grouped && !pageLocked",
           "group": "7_group@2"
         }
       ],

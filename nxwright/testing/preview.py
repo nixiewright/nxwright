@@ -23,7 +23,7 @@ from nxwright.project.pictures import (data_url, exif_orientation, picture_size,
 from nxwright.project.screen_copy import FORMAT_COMPRESSED, OPAQUE
 from nxwright.project.screen_models import model_named
 from nxwright.project.zi_font import decode_font, read_font_header
-from nxwright.source.page_source import page_toml_path
+from nxwright.source.page_source import page_header_of_text, page_toml_path
 from nxwright.source.source_folder import picture_file, played_file, read_page_components
 from nxwright.testing.sd_cards import CardRefusal
 
@@ -46,14 +46,15 @@ class Previews:
         """Returns the drawing of the page whose file is `path`, within the
         source folder `root`, whose files `read(path)` returns: the drawing's
         dict with "page" and "pictureFiles", {picture name: what the webview
-        loads it from (_FolderResources.picture_file)}.
+        loads it from (_FolderResources.picture_file)}, and "locked", true,
+        when the page file locks the page.
         When the page's files cannot be read: {"page", "error"}. Returns None
         when `path` is not a page's own file."""
         page = page_of_file(path)
         if page is None:
             return None
         try:
-            read(page_toml_path(page))
+            text = read(page_toml_path(page))
         except NxwrightError:
             return None     # such as a .nx file of pages/ that no page owns
         try:
@@ -64,6 +65,11 @@ class Previews:
             return None
         drawing = self.drawing_of(root, app, components)
         drawing["page"] = page
+        try:
+            if page_header_of_text(text, page).locked:
+                drawing["locked"] = True
+        except NxwrightError:
+            pass    # the build's message comes with the edits the preview sends
         return drawing
 
     def drawing_of(self, root: Path, app: dict, components: list, painted=(),

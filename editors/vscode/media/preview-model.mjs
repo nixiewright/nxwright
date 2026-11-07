@@ -495,6 +495,37 @@ export function paintPadlocks(context, drawing, level = 1) {
   context.restore();
 }
 
+// The colour laid over a locked page to dim it under its padlock.
+const LOCKED_PAGE_DIM = "rgba(0, 0, 0, 0.45)";
+
+// On a locked page, dims the whole page and draws a big padlock in its
+// middle, a third as tall as the page's shorter side. Both are painted where
+// the view shows the page at zoom `level`.
+export function paintPageLock(context, drawing, level = 1) {
+  if (!drawing.locked) {
+    return;
+  }
+  const page = inView({ x: 0, y: 0, w: drawing.width, h: drawing.height }, level);
+  context.save();
+  context.fillStyle = LOCKED_PAGE_DIM;
+  context.fillRect(page.x, page.y, page.w, page.h);
+  const height = Math.round(Math.min(page.w, page.h) / 3);
+  const width = Math.round(height * 0.8);
+  const x = Math.round(page.x + (page.w - width) / 2);
+  const y = Math.round(page.y + (page.h - height) / 2);
+  const shackle = Math.round(height * 0.4);
+  // Draws the shackle, an arch, then the body, which fills the lower 60
+  // percent of the padlock.
+  context.strokeStyle = PADLOCK.edge;
+  context.lineWidth = Math.max(1.5, height / 10);
+  context.beginPath();
+  context.arc(x + width / 2, y + shackle, width * 0.3, Math.PI, 0);
+  context.stroke();
+  context.fillStyle = PADLOCK.body;
+  context.fillRect(x, y + shackle, width, height - shackle);
+  context.restore();
+}
+
 // Returns the names of the touch captures among `unplaced` (a drawing's
 // list) that never run: all but the last, since only the last touch capture
 // of a page runs, as the Editor's simulator showed.

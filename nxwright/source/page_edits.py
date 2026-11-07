@@ -1,7 +1,9 @@
-"""Editing a component's table in a page file's text: the edits that set its
-attributes, and a text with such edits applied. The page preview's
-properties panel makes them (language_server/page_editing.py), and so does
-a change of the folder's screen (device_change.py).
+"""Editing a page file's text: the edits that set a component's attributes,
+the edits that lock or unlock the page, and applying such edits to a text.
+The Attributes section makes the attribute edits
+(language_server/page_editing.py), and so does a change of the folder's
+screen (device_change.py). The commands Lock page, Lock page with password,
+and Unlock page make the lock edits (language_server/server.py).
 
 Every change is an edit of the file's text, a TextEdit of the editor's
 protocol, so that an editor applies it and its undo works. A page file's
@@ -21,10 +23,12 @@ import tomli_w
 
 from nxwright import NxwrightError
 from nxwright.project.component_defaults import PLACEMENT_ATTRIBUTES
+from nxwright.project.device_settings import password_hash
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.screen_colours import nearest_screen_colour
 from nxwright.source.page_source import (COLOUR_ATTRIBUTES, KEY_LINE, attribute_value,
-                                         component_properties, page_toml_path, stored_value)
+                                         component_properties, page_header_of_text,
+                                         page_toml_path, stored_value)
 from nxwright.source.source_folder import read_page_toml
 
 
@@ -110,6 +114,41 @@ def attribute_edits(index, read, page: str, name: str, values: dict,
                                     "end": {"line": len(table.lines) - 1, "character": end}},
                           "newText": "\n" + text[:-1]})
     return edits
+
+
+def page_lock_edits(index, read, page: str, locked: bool, password: str = None) -> list:
+    """Returns the protocol's TextEdits of the page file that lock `page`,
+    or unlock it, through the keys `locked` and `lock_password_hash` of its
+    [page] table. The lock gets the hash of `password`, or no password if
+    `password` is None. Unlocking removes both keys, and does not need the
+    password. If the page is already locked or unlocked as asked, returns
+    no edits, so a locked page keeps its password until it is unlocked.
+    Raises NxwrightError if password_hash refuses the password, or if the
+    page file cannot be read."""
+    table = ComponentTable(index, read, page, page)
+    header = page_header_of_text(table.page_toml.text, page)
+    if bool(header.locked) == locked:
+        return []
+    lines = [table.key_lines[key] for key in ("locked", "lock_password_hash")
+             if key in table.key_lines]
+    if not locked:
+        # A lock with another value, such as `locked = 2`, is removed too.
+        return [_line_edit(line, line + 1, "") for line in lines]
+    text = _key_value("locked", True)
+    if password is not None:
+        text += _key_value("lock_password_hash", password_hash(password).hex())
+    if lines:
+        # The file already has a `locked = false` line, or a password hash
+        # left over from a project file. The new lines replace the first of
+        # these, and the other is removed.
+        first, *rest = sorted(lines)
+        return [_line_edit(first, first + 1, text)] + [_line_edit(line, line + 1, "")
+                                                       for line in rest]
+    # Otherwise, the new lines go where extract writes them: after the name,
+    # the type, and the system page mark, if there is one.
+    after = max(table.key_lines[key] for key in ("name", "type", "system_page")
+                if key in table.key_lines)
+    return [_line_edit(after + 1, after + 1, text)]
 
 
 def edited_text(text: str, edits: list) -> str:

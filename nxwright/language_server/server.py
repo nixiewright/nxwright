@@ -67,7 +67,7 @@ from nxwright.language_server.media_viewer import media_frames
 from nxwright.language_server.nxlang_switch import nxlang_switch
 from nxwright.language_server.page_editing import (component_events, default_event,
                                                    key_binding, properties)
-from nxwright.source.page_edits import attribute_edits
+from nxwright.source.page_edits import attribute_edits, page_lock_edits
 from nxwright.language_server.page_components import (add_component, clear_events,
                                                        component_types, copy_components,
                                                        delete_components, group_components,
@@ -80,19 +80,22 @@ from nxwright.source.references import references
 from nxwright.language_server.symbols import file_symbols, folder_symbols
 from nxwright.language_server.rename import rename
 from nxwright.source.formatting import format_folder
-from nxwright.source.page_source import page_toml_path
+from nxwright.source.page_source import page_header_of_text, page_toml_path
 from nxwright.project.device_settings import DEFAULT_ENCODING, ENCODINGS, DeviceSettings
 from nxwright.project.screen_copy import ROTATIONS
 from nxwright.project.screen_models import MODELS, model_named
 from nxwright.language.nxlang_samples import MORE_FEATURES, panel_sections
 from nxwright.language.resource_names import LISTS
 from nxwright.source.source_folder import (LANGUAGES, NXLANG, SOURCE_FORMAT, add_page, app_name,
-                                           new_source_folder, read_app, read_folder_source)
+                                           new_source_folder, parse_app, read_app,
+                                           read_folder_source)
 from nxwright.source.keyboard_adding import add_keyboard, chinese_keyboard_fonts
 from nxwright.source.upgrade import folder_format
 
 # How long changes must pause, in seconds, before the server checks them.
 CHECK_PAUSE = 0.5
+# The error for a request that would change a locked page. %s is the page's name.
+LOCKED_PAGE = "%s is locked. Unlock it from the page preview or the Pages section."
 # The start of the names of nxwright's own requests.
 _OWN = "nxwright/"
 # Turns the protocol's objects, such as a problem a request gives, back into data.
@@ -183,6 +186,8 @@ class NxwrightServer(LanguageServer):
                                "placeComponents": self._place_components,
                                "reorderComponents": self._reorder_components,
                                "lockComponents": self._lock_components,
+                               "lockPage": self._lock_page,
+                               "pageLocks": self._page_locks,
                                "groupComponents": self._group_components,
                                "fonts": self._fonts,
                                "typefaces": self._typefaces,
@@ -479,6 +484,16 @@ class NxwrightServer(LanguageServer):
             raise NxwrightError("only a page's .page.toml or .nx file has a page")
         return found[0], page
 
+    def _unlocked_page_of(self, params: dict) -> tuple:
+        """Returns _page_of(params), (FolderIndex, page), for a request that
+        changes the page. Raises NxwrightError when the page is locked, or
+        when its page file cannot be read."""
+        index, page = self._page_of(params)
+        text = self._texts.folder_reader(index.root)(page_toml_path(page))
+        if page_header_of_text(text, page).locked:
+            raise NxwrightError(LOCKED_PAGE % page)
+        return index, page
+
     def _component_types(self, params: dict) -> dict:
         """Returns {"types"}: the types a component of the page can have
         (page_components.component_types)."""
@@ -490,7 +505,7 @@ class NxwrightServer(LanguageServer):
         component of the type `type` to the page, at `point`, {"x", "y"},
         or (0, 0) without one, and its name. Raises NxwrightError when the
         addition is refused."""
-        index, page = self._page_of(params)
+        index, page = self._unlocked_page_of(params)
         point = params.get("point") or {"x": 0, "y": 0}
         found = add_component(index, self._texts.folder_reader(index.root),
                               lambda path: (index.root / path).is_file(), page, params["type"],
@@ -502,7 +517,7 @@ class NxwrightServer(LanguageServer):
         deleting the components `names` of the page, and the places, {"uri",
         "line"}, where code that stays names one of them. Raises
         NxwrightError when the delete is refused."""
-        index, page = self._page_of(params)
+        index, page = self._unlocked_page_of(params)
         found = delete_components(index, self._texts.folder_reader(index.root), page,
                                   params["names"])
         return {"edit": self._workspace_edit(index, found["edits"]),
@@ -514,7 +529,7 @@ class NxwrightServer(LanguageServer):
         """Returns the protocol's WorkspaceEdit removing the code of the
         events of the components `names` of the page, without changes when
         none of them has code. Raises NxwrightError when it is refused."""
-        index, page = self._page_of(params)
+        index, page = self._unlocked_page_of(params)
         edits = clear_events(index, self._texts.folder_reader(index.root), page,
                              params["names"])
         return self._workspace_edit(index, edits)
@@ -530,7 +545,7 @@ class NxwrightServer(LanguageServer):
     def _place_components(self, params: dict) -> dict:
         """Returns the protocol's WorkspaceEdit placing several components
         of the page at once, `places` being {name: {"x", "y", "w", "h"}}."""
-        index, page = self._page_of(params)
+        index, page = self._unlocked_page_of(params)
         edits = place_components(index, self._texts.folder_reader(index.root), page,
                                  params["places"])
         return self._workspace_edit(index, {page_toml_path(page): edits})
@@ -539,7 +554,7 @@ class NxwrightServer(LanguageServer):
         """Returns the protocol's WorkspaceEdit moving the components `names`
         of the page `direction`: one place "forward" or "backward", or to the
         "front" or the "back" (page_components.reorder_components)."""
-        index, page = self._page_of(params)
+        index, page = self._unlocked_page_of(params)
         edits = reorder_components(index, self._texts.folder_reader(index.root), page,
                                    params["names"], params["direction"])
         return self._workspace_edit(index, {page_toml_path(page): edits})
@@ -547,16 +562,40 @@ class NxwrightServer(LanguageServer):
     def _lock_components(self, params: dict) -> dict:
         """Returns the protocol's WorkspaceEdit locking the components `names`
         of the page, or unlocking them, as `locked` says."""
-        index, page = self._page_of(params)
+        index, page = self._unlocked_page_of(params)
         edits = lock_components(index, self._texts.folder_reader(index.root), page,
                                 params["names"], params["locked"] is True)
         return self._workspace_edit(index, {page_toml_path(page): edits})
+
+    def _lock_page(self, params: dict) -> dict:
+        """Returns the protocol's WorkspaceEdit that locks the page if
+        `locked` is true, with the password `password` if given, and unlocks
+        it otherwise (page_edits.page_lock_edits)."""
+        index, page = self._page_of(params)
+        edits = page_lock_edits(index, self._texts.folder_reader(index.root), page,
+                                params["locked"] is True, params.get("password"))
+        return self._workspace_edit(index, {page_toml_path(page): edits})
+
+    def _page_locks(self, params: dict) -> dict:
+        """Returns {"locked"}: the names of the locked pages of the source
+        folder `folder`, in app.toml's order, from their page files as open
+        in the editor, unsaved changes included. A page whose file cannot be
+        read is left out."""
+        read = self._texts.folder_reader(Path(params["folder"]))
+        locked = []
+        for page in parse_app(read("app.toml"))["pages"]:
+            try:
+                if page_header_of_text(read(page_toml_path(page)), page).locked:
+                    locked.append(page)
+            except NxwrightError:
+                pass
+        return {"locked": locked}
 
     def _group_components(self, params: dict) -> dict:
         """Returns the protocol's WorkspaceEdit giving the components `names`
         of the page a new group of their own, or taking them out of theirs,
         as `grouped` says."""
-        index, page = self._page_of(params)
+        index, page = self._unlocked_page_of(params)
         edits = group_components(index, self._texts.folder_reader(index.root), page,
                                  params["names"], params["grouped"] is True)
         return self._workspace_edit(index, {page_toml_path(page): edits})
@@ -568,7 +607,7 @@ class NxwrightServer(LanguageServer):
         where they were copied from with `inPlace` true, else where
         page_components.paste_components puts them. Raises NxwrightError when
         the paste is refused."""
-        index, page = self._page_of(params)
+        index, page = self._unlocked_page_of(params)
         at = params.get("at")
         found = paste_components(index, self._texts.folder_reader(index.root),
                                  lambda path: (index.root / path).is_file(), page,
@@ -584,7 +623,7 @@ class NxwrightServer(LanguageServer):
         the code that came with it, to the components `names` of the page,
         and what was left out. Raises NxwrightError when the paste is
         refused."""
-        index, page = self._page_of(params)
+        index, page = self._unlocked_page_of(params)
         found = paste_parts(index, self._texts.folder_reader(index.root),
                             lambda path: (index.root / path).is_file(), page, params["names"],
                             params["text"], params.get("code") or [], params["parts"])
@@ -601,8 +640,10 @@ class NxwrightServer(LanguageServer):
         """Returns the protocol's WorkspaceEdit setting `values`, {attribute:
         value as typed}, of the object `name`, each colour the nearest the
         screen holds when `nearestColours` is true, as for a picked one.
-        Raises NxwrightError for a value the build would refuse."""
-        index, page, name = self._page_object(params)
+        Raises NxwrightError for a value the build would refuse, and on a
+        locked page."""
+        index, page = self._unlocked_page_of(params)
+        name = params["name"]
         edits = attribute_edits(index, self._texts.folder_reader(index.root), page, name,
                                 params["values"],
                                 nearest_colours=params.get("nearestColours") is True)

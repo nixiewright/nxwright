@@ -38,8 +38,11 @@ def diff_projects(first: Path, second: Path, lock_pages: bool = True) -> tuple:
         for number, side in enumerate((first, second)):
             project = _project_of(side, work / ("%d.HMI" % number), lock_pages)
             folder = work / str(number)
+            # Locks are kept, so that a page unlocked in the Nextion Editor
+            # shows as a difference.
             warnings += ["%s: %s" % (side, warning) for warning in extract(
-                project, folder, continue_with_unknown=True, app_name=_APP_NAME)]
+                project, folder, continue_with_unknown=True, app_name=_APP_NAME,
+                keep_locks_without_password=True)]
             folders.append(folder)
         lines = _folder_diff(folders[0], folders[1], str(first), str(second))
     return ([_FIRST_LINE] + lines if lines else []), warnings

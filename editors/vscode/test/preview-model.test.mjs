@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { backdropChoice, clickOfSmallBox, componentAt, darkness, dragged, handleAt,
   idleTouchCaptures, imageSources, NAME_COLOURS, nameBox, nudged, onGrid, paint, paintNames,
-  paintPadlocks, paintScreen, pressStarts, screenColours, withMask }
+  paintPadlocks, paintPageLock, paintScreen, pressStarts, screenColours, withMask }
   from "../media/preview-model.mjs";
 
 // A 2D context that records each call that paints, with its arguments.
@@ -379,6 +379,29 @@ test("a padlock at a locked component's top right corner, at its own size", () =
   // padlock's 9 pixels end 2 inside its right edge, 2 below its top.
   assert.deepEqual(calls.filter((call) => call[0] === "fillRect"), [["fillRect", 129, 26, 9, 7]]);
   assert.equal(calls.filter((call) => call[0] === "arc").length, 1);
+});
+
+test("a locked page is dimmed under a big padlock", () => {
+  const { context, calls } = recordingContext();
+  context.arc = (...args) => calls.push(["arc", ...args]);
+  context.stroke = () => calls.push(["stroke"]);
+  paintPageLock(context, { ...drawing, locked: true }, 2);
+  // At 200 percent, the page's view is 200 by 120. The padlock is a third of
+  // its height, 40 pixels, in its middle, and its body is the lower 60
+  // percent of that.
+  assert.deepEqual(calls.filter((call) => call[0] === "fillRect"),
+                   [["fillRect", 0, 0, 200, 120], ["fillRect", 84, 56, 32, 24]]);
+  assert.equal(calls.filter((call) => call[0] === "arc").length, 1);
+  // Another zoom level keeps it a third of the page.
+  const { context: other, calls: otherCalls } = recordingContext();
+  other.arc = other.stroke = () => {};
+  paintPageLock(other, { ...drawing, locked: true }, 0.5);
+  assert.deepEqual(otherCalls.filter((call) => call[0] === "fillRect"),
+                   [["fillRect", 0, 0, 50, 30], ["fillRect", 21, 14, 8, 6]]);
+  // An unlocked page paints nothing.
+  const { context: free, calls: freeCalls } = recordingContext();
+  paintPageLock(free, drawing, 2);
+  assert.deepEqual(freeCalls, []);
 });
 
 test("only the last touch capture of a page runs", () => {

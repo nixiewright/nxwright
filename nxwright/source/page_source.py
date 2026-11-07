@@ -41,7 +41,7 @@ This module also builds a page back from its source files (page_from_source),
 compiling its events first when the folder uses nxlang. The screen's colours
 are in screen_colours.py.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import re
 import tomllib
 
@@ -143,11 +143,16 @@ class PageSource:
 
 
 def page_to_source(page: PageBlock, names: ResourceNames, defaults: dict,
-                   encoding: str = DEFAULT_ENCODING) -> PageSource:
+                   encoding: str = DEFAULT_ENCODING,
+                   keep_locks_without_password: bool = True) -> PageSource:
     """Returns the source files of `page`. `defaults` ({type number:
     TypeDefaults}) gives what can be left out. Its texts and code are in
     `encoding`, the project's character encoding. Its warnings name each
     event whose blank lines were dropped (_event_to_text).
+
+    If `keep_locks_without_password` is false, a page locked with no password
+    is written unlocked. The build adds that lock to every page anyway, so
+    keeping it would only stop the page from being edited in VS Code.
 
     Raises NxwrightError when the page holds something the source files
     cannot represent, naming the page and object.
@@ -158,6 +163,9 @@ def page_to_source(page: PageBlock, names: ResourceNames, defaults: dict,
     if not page.objects:
         raise NxwrightError("page %s has no page object" % page.name)
     header = page_header_of(page)
+    if not keep_locks_without_password and header.locked is True \
+            and header.lock_password_hash == NO_LOCK_PASSWORD:
+        header = replace(header, locked=False)
     codec = TextCodec(encoding)
     tables, headings, warnings = [], [], []
     for index, page_object in enumerate(page.objects):
@@ -1304,6 +1312,22 @@ def _header_keys(header: PageHeader) -> dict:
     if header.header_21 != HEADER_21:
         keys["header_21"] = {RAW_KEY: header.header_21.hex()}
     return keys
+
+
+def page_header_of_text(text: str, page_name: str) -> PageHeader:
+    """Returns the page header that the [page] table of the page file `text`
+    gives, after making the same checks as the build. Raises NxwrightError,
+    naming the page's file, if `text` is not TOML, has no [page] table, or
+    has an invalid value."""
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as error:
+        raise NxwrightError("%s.page.toml: %s" % (page_file_stem(page_name), error)) from None
+    page_table, components = data.get("page"), data.get("component", [])
+    if not isinstance(page_table, dict):
+        raise NxwrightError("%s.page.toml has no [page] table" % page_file_stem(page_name))
+    return _page_header(page_table, components if isinstance(components, list) else [],
+                        page_name)
 
 
 def _page_header(page_table: dict, components: list, page_name: str) -> PageHeader:

@@ -120,3 +120,17 @@ test("the text cursor stays where it was", () => {
   assert.equal(document.activeElement, shown);
   assert.deepEqual([shown.selectionStart, shown.selectionEnd], [2, 4]);
 });
+
+test("a locked page's values show without fields, under a note", () => {
+  send({ ...properties(), pageLocked: true });
+  for (const name of ["name", "vscope", "x", "pco"]) {
+    assert.deepEqual(fields(name), [], name);
+  }
+  const values = [...document.querySelectorAll("#properties td")].map((cell) => cell.textContent);
+  assert.deepEqual(values.slice(0, 3), ["n0", "number", "local (0)"]);
+  assert.equal(document.querySelector("#properties .hint").textContent,
+               "The page is locked. Unlock it to change these attributes.");
+  send(properties());
+  assert.equal(fields("x").length, 1);
+  assert.equal(document.querySelector("#properties .hint"), null);
+});

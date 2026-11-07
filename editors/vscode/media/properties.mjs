@@ -13,7 +13,9 @@
 // screen holds, which the server works out.
 //
 // Changing a value, or the name, goes to the extension, which edits the
-// page file through the editor, so undo works there.
+// page file through the editor, so undo works there. On a locked page, the
+// name and the values show as plain text, without fields, under a note that
+// says the page is locked.
 
 import { element } from "./elements.mjs";
 import { choiceEntries, listed, rowLines, valueText } from "./properties-model.mjs";
@@ -129,15 +131,21 @@ function showProperties(properties, problems, page) {
   for (const message of general) {
     panel.appendChild(element("div", "problem", message));
   }
+  const locked = Boolean(properties.pageLocked);
+  if (locked) {
+    panel.appendChild(element("div", "hint",
+                              "The page is locked. Unlock it to change these attributes."));
+  }
   const table = element("table");
-  table.appendChild(row("name", input("text", properties.name, (value) =>
-    vscode.postMessage({ type: "rename", page, name: properties.name, newName: value }))));
+  table.appendChild(row("name", locked ? element("span", "", properties.name)
+    : input("text", properties.name, (value) =>
+      vscode.postMessage({ type: "rename", page, name: properties.name, newName: value }))));
   table.appendChild(row("type", element("span", "", properties.type)));
   for (const attribute of properties.attributes) {
     if (!listed(attribute)) {
       continue;
     }
-    const field = attribute.treatment === "value-only"
+    const field = attribute.treatment === "value-only" || locked
       ? element("span", "", valueText(attribute))
       : attributeField(attribute, (value, nearest = false) => vscode.postMessage({
         type: "setAttribute", page, name: properties.name, attribute: attribute.name, value,

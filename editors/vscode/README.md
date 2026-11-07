@@ -27,6 +27,8 @@ On an empty part of the page, or on the page in the Components list, Paste Speci
 
 Double-click a component to go to its code. If it has none yet, the extension adds its first event to the page's `.nx` file. From the right-click menu, you can also open or add any of the component's events, jump to its entry in the page file, or delete all its code.
 
+You can lock a whole page by right-clicking it in the preview or in the Pages section. A locked page can't be changed from the preview or the Attributes section until you unlock it, but its code and its page file are not protected. `Lock page with password` also sets a password that the Nextion Editor will ask for, which is useful if you share the project file without the source folder. VS Code doesn't ask for it.
+
 Every change edits the page file, so the preview and the text editor share the same undo history. To switch between the two, use the editor picker at the top right of the editor. Its "Set Default" item lets you pick whether pages open by default in the WYSIWYG preview, or as the underlying `.page.toml` file.
 
 ![Selecting the schedule page's four period names in the page preview, moving them, and aligning them, with the page side bar beside it](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/select-move-align.gif)

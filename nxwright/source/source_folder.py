@@ -168,11 +168,15 @@ def refuse_unless_new_folder(source_folder: Path):
 
 
 def import_dump(dump_folder: Path, source_folder: Path, name: str = None,
-                continue_with_unknown: bool = False, check_unknown: bool = True) -> list:
+                continue_with_unknown: bool = False, check_unknown: bool = True,
+                keep_locks_without_password: bool = False) -> list:
     """Imports the dump's project into `source_folder`, a new or empty folder,
     in strict Nextion syntax (the language "nextion"). The app is named `name` if
     that is a valid app name (_is_app_name). Returns warnings for what the source
     files leave out: blank lines in the code, which the build would drop.
+
+    A page locked with no password is imported unlocked, unless
+    `keep_locks_without_password` is true (page_source.page_to_source).
 
     Raises NxwrightError, before writing anything, when `source_folder` is not
     new or empty (refuse_unless_new_folder), or the dump contains something the
@@ -191,7 +195,7 @@ def import_dump(dump_folder: Path, source_folder: Path, name: str = None,
                     continue_with_unknown) if check_unknown else []
     if name is not None and not _is_app_name(name):
         name = None
-    files, warnings = _source_files_from_dump(dump_folder, name)
+    files, warnings = _source_files_from_dump(dump_folder, name, keep_locks_without_password)
     for relative, content in files.items():
         path = source_folder / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -804,7 +808,8 @@ def export_dump(source_folder: Path, dump_folder: Path, refuse_by_table: bool = 
     return pictures, memory
 
 
-def _source_files_from_dump(dump_folder: Path, project_name: str = None) -> tuple:
+def _source_files_from_dump(dump_folder: Path, project_name: str,
+                            keep_locks_without_password: bool) -> tuple:
     """Returns the source folder's files for a dump, as a tuple of:
       - {relative path: bytes} of every file;
       - the warnings of what the source files leave out, in the order met.
@@ -853,7 +858,7 @@ def _source_files_from_dump(dump_folder: Path, project_name: str = None) -> tupl
     for page_id in range(len(page_files)):
         page = _without_trailing_spaces(
             page_from_text(page_files[page_id].read_text(encoding="utf-8")))
-        source = page_to_source(page, names, defaults, encoding)
+        source = page_to_source(page, names, defaults, encoding, keep_locks_without_password)
         warnings += source.warnings
         pages.append(page.name)
         files[page_toml_path(page.name)] = source.toml.encode("utf-8")

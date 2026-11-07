@@ -332,7 +332,8 @@ def run_side(name: str, built: Path, baseline: Path, side: str, program: Path,
     extracted = output / "folder"
     try:
         result.findings += ["extract: %s" % warning
-                            for warning in extract(saved, extracted, continue_with_unknown=True)]
+                            for warning in extract(saved, extracted, continue_with_unknown=True,
+                                                    keep_locks_without_password=True)]
         result.folder = compare_folders(baseline, extracted)
         result.blocks = _without_save_to_save(compare_blocks(
             HmiContainer.from_file(built).blocks, HmiContainer.from_file(saved).blocks))
@@ -407,10 +408,12 @@ def round_trip(old: Path, new: Path, output: Path) -> str:
         try:
             build(source, built)
             # The extract of each side's saved file is compared with this
-            # extract of the built file, so that only the Editor's changes
-            # show.
+            # extract of the built file, so that only the Nextion Editor's
+            # changes show. Both keep the pages' locks, so that a lock the
+            # Nextion Editor adds shows too.
             baseline = output / name / "built-folder"
-            extract(built, baseline, continue_with_unknown=True)
+            extract(built, baseline, continue_with_unknown=True,
+                    keep_locks_without_password=True)
         except NxwrightError as error:
             sections.append("## %s\n\nnxwright could not build or extract the project: %s\n"
                             % (name, error))

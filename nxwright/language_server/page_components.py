@@ -606,7 +606,7 @@ def place_components(index, read, page: str, places: dict) -> list:
 def lock_components(index, read, page: str, names: list, locked: bool) -> list:
     """Returns the protocol's TextEdits of the page file locking the
     components `names` of `page`, or unlocking them."""
-    _components_named(index, page, names, "locked", " here, but by its page file's `locked`")
+    _components_named(index, page, names, "locked like a component", ": use Lock page")
     edits = []
     for name in names:
         edits += attribute_edits(index, read, page, name, {"lockobj": 1 if locked else 0})

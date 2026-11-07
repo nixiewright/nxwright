@@ -19,10 +19,13 @@ const titleOf = (command) =>
 
 test("the preview's menu lists Paste, Paste Here, and Paste Special alone", () => {
   assert.deepEqual(pasteItems("webview/context"), [
-    ["nxwright.pasteComponents", "webviewId == 'nxwright.pagePreview'", "2_clipboard@3"],
-    ["nxwright.pasteHere", "webviewId == 'nxwright.pagePreview' && webviewSection == 'page'",
+    ["nxwright.pasteComponents", "webviewId == 'nxwright.pagePreview' && !pageLocked",
+     "2_clipboard@3"],
+    ["nxwright.pasteHere",
+     "webviewId == 'nxwright.pagePreview' && webviewSection == 'page' && !pageLocked",
      "2_clipboard@4"],
-    ["nxwright.pasteSpecial", "webviewId == 'nxwright.pagePreview'", "2_clipboard@5"],
+    ["nxwright.pasteSpecial", "webviewId == 'nxwright.pagePreview' && !pageLocked",
+     "2_clipboard@5"],
   ]);
 });
 

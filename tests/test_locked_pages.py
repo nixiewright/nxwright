@@ -107,17 +107,47 @@ class NxlangBuildTest(LockedPagesTestCase):
         self.assertIs(header.locked, False)
         self.assertEqual(header.lock_password_hash.hex(), PASSWORD_HASH)
 
-    def test_a_project_extracted_into_a_new_folder_keeps_the_locks(self):
+    def page_table(self, folder: Path, page: str) -> str:
+        """Returns the [page] table of `page`'s page file in `folder`, as text."""
+        text = (folder / "pages" / (page + ".page.toml")).read_text(encoding="utf-8")
+        return text.split("[[component]]")[0]
+
+    def test_extract_leaves_out_locks_without_a_password(self):
         self.build_headers()
         recovered = self.folder / "recovered"
         extract(self.project, recovered)
         self.assertEqual(read_app(recovered)["language"], "nextion")
         for page in ("page0", "second"):
-            self.assertIn("locked = true", (recovered / "pages" / (page + ".page.toml"))
-                          .read_text(encoding="utf-8"))
+            with self.subTest(page=page):
+                self.assertNotIn("locked", self.page_table(recovered, page))
+        # The build locks the pages again.
         again = self.folder / "again.HMI"
-        build(recovered, again)
+        build(recovered, again, lock_pages=True)
         self.assertEqual(again.read_bytes(), self.project.read_bytes())
+
+    def test_extract_keeps_a_lock_with_a_password_and_another_lock_value(self):
+        self.add_to_page_table("page0", "locked = true",
+                               'lock_password_hash = "%s"' % PASSWORD_HASH)
+        self.add_to_page_table("second", "locked = 2")
+        self.build_headers("--no-lock")
+        recovered = self.folder / "recovered"
+        extract(self.project, recovered)
+        self.assertIn('locked = true\nlock_password_hash = "%s"' % PASSWORD_HASH,
+                      self.page_table(recovered, "page0"))
+        self.assertIn("locked = 2", self.page_table(recovered, "second"))
+
+    def test_extract_can_keep_locks_without_a_password(self):
+        self.build_headers()
+        recovered = self.folder / "recovered"
+        extract(self.project, recovered, keep_locks_without_password=True)
+        self.assertIn("locked = true", self.page_table(recovered, "second"))
+
+    def test_import_leaves_out_locks_without_a_password(self):
+        self.build_headers()
+        dump, recovered = self.folder / "dump", self.folder / "recovered"
+        self.assertEqual(run(["dump", str(self.project), str(dump)]), 0)
+        self.assertEqual(run(["import", str(dump), str(recovered)]), 0)
+        self.assertNotIn("locked", self.page_table(recovered, "second"))
 
 
 class StrictBuildTest(LockedPagesTestCase):

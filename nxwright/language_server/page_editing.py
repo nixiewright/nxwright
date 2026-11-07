@@ -25,7 +25,7 @@ from nxwright.source.keyboard_adding import chinese_keyboard_fonts, keyboard_pag
 from nxwright.source.nx_files import event_heading, with_code_added
 from nxwright.source.page_edits import ComponentTable
 from nxwright.source.page_source import (COLOUR_ATTRIBUTES, RAW_KEY, attribute_value,
-                                         page_nx_path, reference_kind)
+                                         page_header_of_text, page_nx_path, reference_kind)
 
 
 def properties(index, read, page: str, name: str) -> dict:
@@ -40,8 +40,9 @@ def properties(index, read, page: str, name: str) -> dict:
     order, the "line" of the table that gives it, or the table's first
     line, its "description", as plain text for the name's tooltip and the
     panel's footer, and its "treatment" in the panel: shown with a field,
-    value-only, hidden, or never-shown (attribute_descriptions.py). Raises
-    NxwrightError as the build would."""
+    value-only, hidden, or never-shown (attribute_descriptions.py); and
+    "pageLocked", whether the page is locked, in which case the panel shows
+    the values without fields. Raises NxwrightError as the build would."""
     table = ComponentTable(index, read, page, name)
     object_type = TYPES_BY_NAME.get(table.type)
     names = table.page_toml.names
@@ -69,7 +70,18 @@ def properties(index, read, page: str, name: str) -> dict:
     place = table.object.place
     return {"name": name, "type": table.type, "defaultsFalse": table.full,
             "firstLine": table.object.first_line, "lastLine": table.object.last_line,
-            "nameLine": place.line, "nameCharacter": place.start, "attributes": attributes}
+            "nameLine": place.line, "nameCharacter": place.start, "attributes": attributes,
+            "pageLocked": _page_locked(table.page_toml.text, page)}
+
+
+def _page_locked(text: str, page: str) -> bool:
+    """Whether the page file `text` locks the page. A header the build would
+    refuse counts as unlocked here: the panel still shows the page, and the
+    edits it sends get the build's message."""
+    try:
+        return bool(page_header_of_text(text, page).locked)
+    except NxwrightError:
+        return False
 
 
 def key_binding(index, read, page: str, name: str, typed) -> dict:

@@ -1,12 +1,16 @@
-// The commands adding, deleting, copying, pasting, locking, unlocking,
-// grouping, and ungrouping a page's components, going to their events and
-// clearing their code, and showing their attributes:
-// from the page preview's right-click menu, from nxwright's side bar's
-// Components list, and adding from the command palette. The edits
-// themselves are pageEditing.ts's.
+// The commands for a page's components: adding, deleting, copying,
+// pasting, locking, unlocking, grouping, and ungrouping them, going to
+// their events, clearing their code, and showing their attributes. The page
+// preview's right-click menu and the Components list of nxwright's side bar
+// run them, and the command palette can also add a component. This file
+// also registers Lock page, Lock page with password, and Unlock page, for
+// the right-click menus of the preview and of the Pages section.
+// pageEditing.ts makes the edits themselves.
 import * as vscode from "vscode";
 import { PageEditing, PastePlace } from "./pageEditing";
+import { passwordProblem } from "./pageLocking";
 import { PageObject, Pages } from "./pages";
+import { ProjectPage } from "./pagesView";
 
 // What the preview's right-click menu passes its commands: the webview's
 // data-vscode-context where the menu opened (media/preview.mjs).
@@ -56,6 +60,15 @@ export class PageComponents {
       vscode.commands.registerCommand("nxwright.unlockComponents",
                                       (target: PreviewMenuContext) =>
                                         this.lock(target, false)),
+      vscode.commands.registerCommand("nxwright.lockPage",
+                                      (target: PreviewMenuContext | ProjectPage) =>
+                                        this.lockPage(target, true)),
+      vscode.commands.registerCommand("nxwright.lockPageWithPassword",
+                                      (target: PreviewMenuContext | ProjectPage) =>
+                                        this.lockPageWithPassword(target)),
+      vscode.commands.registerCommand("nxwright.unlockPage",
+                                      (target: PreviewMenuContext | ProjectPage) =>
+                                        this.lockPage(target, false)),
       // A group moves on the page alone: those with a place alone are grouped.
       vscode.commands.registerCommand("nxwright.groupComponents",
                                       (target: PreviewMenuContext) =>
@@ -155,6 +168,34 @@ export class PageComponents {
     }
   }
 
+  // Locks the page a menu opened on, without a password, or unlocks it.
+  // Unlocking does not ask for the page's password, if it has one.
+  private async lockPage(target: PreviewMenuContext | ProjectPage, locked: boolean):
+      Promise<void> {
+    const toml = menuPageFile(target);
+    if (toml) {
+      await this.editing.lockPage(toml, locked);
+    }
+  }
+
+  // Asks for a password, then locks the page the menu was opened on with it.
+  private async lockPageWithPassword(target: PreviewMenuContext | ProjectPage): Promise<void> {
+    const toml = menuPageFile(target);
+    if (!toml) {
+      return;
+    }
+    const password = await vscode.window.showInputBox({
+      title: "Lock the page with a password",
+      prompt: "Enter a password. The Nextion Editor will ask for it to unlock the page, " +
+        "but VS Code will not.",
+      password: true,
+      validateInput: passwordProblem,
+    });
+    if (password !== undefined) {
+      await this.editing.lockPage(toml, true, password);
+    }
+  }
+
   // Gives the selected components with a place a new group of their own,
   // or takes them out of theirs.
   private async group(target: PreviewMenuContext, grouped: boolean): Promise<void> {
@@ -232,6 +273,15 @@ export class PageComponents {
 function pageOf(target: PreviewMenuContext | PageObject, pages: Pages): vscode.Uri | undefined {
   if (isPageObject(target)) {
     return pages.shown;
+  }
+  return target.page ? vscode.Uri.parse(target.page) : undefined;
+}
+
+// The page file of the page that the preview's menu or the Pages section's
+// menu opened on.
+function menuPageFile(target: PreviewMenuContext | ProjectPage): vscode.Uri | undefined {
+  if ("id" in target) {
+    return target.toml;
   }
   return target.page ? vscode.Uri.parse(target.page) : undefined;
 }

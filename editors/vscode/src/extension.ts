@@ -95,8 +95,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // A preview redraws when its page's folder changes, on disk or in an editor.
   const folderFiles = vscode.workspace.createFileSystemWatcher(
     `**/*.{${DRAWN_FILE_TYPES.join(",")}}`);
+  const pagesView = new PagesView(project, pages, getClient);
   const changed = (uri: vscode.Uri) => {
     previews.changed(uri);
+    pagesView.fileChanged(uri);
     pages.changed(uri);
     fontPanels.changed(uri);
   };
@@ -121,7 +123,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ...new PageComponents(pages, editing).register(),
     ...project.register(),
     ...projectView.register(),
-    ...new PagesView(project, pages).register(),
+    ...pagesView.register(),
     ...simulator.register(),
     ...new AgentChannel(simulator).register(),
     ...new MediaView(project).register(),

@@ -391,7 +391,7 @@ class PageHeaderTest(SourceFolderTestCase):
             with self.subTest(header=header):
                 self.set_dump_header("header_16", "00000000004f2100", header)
                 source = self.folder / header
-                import_dump(self.dump, source)
+                import_dump(self.dump, source, keep_locks_without_password=True)
                 self.assertIn('type = "page"\n' + lines,
                               (source / "pages" / "second.page.toml").read_text(encoding="utf-8"))
                 again = self.folder / (header + "-again")
@@ -399,6 +399,16 @@ class PageHeaderTest(SourceFolderTestCase):
                 self.assertIn("header_16 = " + header,
                               (again / "pages" / "01-second.txt").read_text(encoding="utf-8"))
                 self.set_dump_header("header_16", header, "00000000004f2100")
+
+    def test_a_lock_without_a_password_is_left_out_by_default(self):
+        # The build locks every page anyway. A lock with a password is kept
+        # (test_a_locked_page_round_trips).
+        self.set_dump_header("header_16", "00000000004f2100", "00000000014f2101")
+        source = self.folder / "keyboard"
+        import_dump(self.dump, source)
+        text = (source / "pages" / "second.page.toml").read_text(encoding="utf-8")
+        self.assertIn('type = "page"\nsystem_page = "keyboard"\n', text)
+        self.assertNotIn("locked", text)
 
     def test_a_header_value_not_seen_is_kept_in_its_own_field(self):
         # Each field keeps its own key, so the others are written as today.

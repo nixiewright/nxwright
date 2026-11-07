@@ -76,7 +76,7 @@ def build(source_folder: Path, output: Path, refuse_by_table: bool = True,
 
 
 def extract(project: Path, source_folder: Path, continue_with_unknown: bool = False,
-            app_name: str = None) -> list:
+            app_name: str = None, keep_locks_without_password: bool = False) -> list:
     """Extracts `project` into `source_folder`, a new or empty folder, and
     names the app `app_name`, or else after the project file. Any other folder is rejected before
     anything else (source_folder.refuse_unless_new_folder). Returns the warnings
@@ -84,6 +84,9 @@ def extract(project: Path, source_folder: Path, continue_with_unknown: bool = Fa
     the content nxwright does not know come before the warnings: one for
     each thing that is kept exactly or written otherwise, and one for each
     thing that may be lost, if extracting went on past it.
+
+    A page locked with no password is extracted unlocked, unless
+    `keep_locks_without_password` is true (page_source.page_to_source).
 
     Before it writes anything, the function raises NxwrightError for content
     nxwright cannot keep. It raises UnknownContentError for content the next
@@ -106,7 +109,8 @@ def extract(project: Path, source_folder: Path, continue_with_unknown: bool = Fa
                           write_differing_pages=bool(lost)).dump()
         # The dump's unknown content was checked above, as part of the project's.
         name = app_name if app_name is not None else project.stem.strip()
-        warnings = import_dump(dump, source_folder, name, check_unknown=False)
+        warnings = import_dump(dump, source_folder, name, check_unknown=False,
+                               keep_locks_without_password=keep_locks_without_password)
     return notes + warnings
 
 

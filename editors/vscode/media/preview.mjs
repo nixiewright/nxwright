@@ -27,6 +27,11 @@
 //  - a locked component shows a padlock, and is not moved: it has no
 //    handles, and dragging, the arrow keys, and arranging move the other
 //    selected components alone;
+//  - a locked page is dimmed under a big padlock, and cannot be changed.
+//    Components can still be selected and their code opened, but they have
+//    no handles. Dragging, the arrow keys, arranging, Delete, and the keys
+//    that cut, paste, and duplicate do nothing. The right-click menu offers
+//    Unlock page and only the items that do not change the page;
 //  - the members of the selected components' groups are tinted, and
 //    dragging or the arrow keys move them along, each once, a locked member
 //    staying where it is (arranging.mjs).
@@ -47,7 +52,7 @@ import { arrangement, boxBetween, groupMembers, lockedAmong, movedTogether,
   movingNames, overlappingBox } from "./arranging.mjs";
 import { clickOfSmallBox, componentAt, dragged, handleAt, handlePoints, idleTouchCaptures,
   imageSources, loadImage, NAME_COLOURS, NAME_FONT, nudged, onGrid, paint, paintNames,
-  paintPadlocks, pressStarts } from "./preview-model.mjs";
+  paintPadlocks, paintPageLock, pressStarts } from "./preview-model.mjs";
 import { element } from "./elements.mjs";
 import { ZoomBar } from "./zoom.mjs";
 import { inView, shownPart } from "./zoom-model.mjs";
@@ -164,10 +169,13 @@ function sizeOverlay() {
   paintOverlay();
 }
 
-// Paints the overlay: the names when shown, then the selected components'
-// frames, where a drag has them, and the box being drawn. With one
-// component selected, its frame has handles; with several, the anchor's
-// frame is solid and the others' dashed.
+// Paints the overlay, in this order: a locked page's dimming and padlock,
+// the tint of the selected components' groups, the names when shown, the
+// locked components' padlocks, the selected components' frames, and the box
+// being drawn. A single selected
+// component's frame has handles, unless the component or the page is
+// locked. With several selected, the anchor's frame is solid and the
+// others' are dashed.
 function paintOverlay() {
   if (!drawing) {
     return;
@@ -176,7 +184,9 @@ function paintOverlay() {
   overlayContext.setTransform(1, 0, 0, 1, 0, 0);
   overlayContext.clearRect(0, 0, overlay.width, overlay.height);
   overlayContext.restore();
-  // The tint goes first, so that the names and padlocks over it stay legible.
+  // The dimming and the tint go first, so that the names and padlocks over
+  // them stay legible.
+  paintPageLock(overlayContext, drawing, zoom.level);
   paintGroupTint();
   if (namesShown) {
     paintNames(overlayContext, drawing, zoom.level);
@@ -190,7 +200,7 @@ function paintOverlay() {
   // ones stay where they are.
   const rects = placedSelection().map((name) =>
     drag?.rects.find((rect) => rect.name === name) ?? rectOf(name));
-  if (aloneWithHandles() && !isLocked(selected)) {
+  if (resizable()) {
     frame(rects[0], true);
     for (const [, x, y] of handlePoints(inView(rects[0], zoom.level))) {
       overlayContext.fillRect(x - 3, y - 3, 6, 6);
@@ -252,6 +262,17 @@ function isPage(name) {
 function canMove(name) {
   const found = drawing?.components.find((component) => component.name === name);
   return Boolean(found) && found.type !== "page";
+}
+
+// Whether the page file locks the page against changes from the preview.
+function pageLocked() {
+  return Boolean(drawing?.locked);
+}
+
+// Whether the selected component has handles: it must be the only one
+// selected, and neither it nor the page may be locked.
+function resizable() {
+  return aloneWithHandles() && !isLocked(selected) && !pageLocked();
 }
 
 // Whether `name` is a locked component of the page, which does not move.
@@ -325,13 +346,16 @@ function withCommandKey(event) {
 }
 
 // Sets what VS Code passes the commands of the right-click menu opened on
-// `target`: the menu's section, "page" or "strip", the page file, the
-// selected components, the page aside ("component", the first, tells the
-// menu there are some), whether several and three or more of them have a
-// place, which arranging and grouping need, those with a place, which
-// locking and grouping take, whether some of those are locked, some
-// unlocked, and some in a group, and on the page, the point clicked, on the
-// grid (package.json's webview/context menu).
+// `target` (package.json's webview/context menu):
+//  - the menu's section, "page" or "strip", and the page file;
+//  - the selected components other than the page, with "component", the
+//    first of them, telling the menu there are some;
+//  - those with a place, which locking and grouping take, and whether two
+//    or more, or three or more, of them have a place, which arranging and
+//    grouping need;
+//  - whether some of those are locked, some unlocked, and some in a group;
+//  - whether the page is locked;
+//  - on the page, the point clicked, on the grid.
 function setMenuContext(target, section, point = undefined) {
   const names = selectedComponents();
   const placed = placedSelection();
@@ -339,6 +363,7 @@ function setMenuContext(target, section, point = undefined) {
     webviewSection: section, page: pageUri, component: names[0], components: names,
     placedComponents: placed, several: placed.length > 1, spaceable: placed.length > 2,
     locked: placed.some(isLocked), unlocked: placed.some((name) => !isLocked(name)),
+    pageLocked: pageLocked(),
     grouped: groupMembers(drawing.components, placed).length > 0, ...point,
     // Cut, copy, and paste of text have nothing to work on here.
     preventDefaultContextMenuItems: true,
@@ -409,7 +434,7 @@ canvas.addEventListener("mousedown", (event) => {
   const name = componentAt(drawing, point.x, point.y);
   const placed = placedSelection();
   // Handles keep their size in the view: one is found where the view shows it.
-  const handle = aloneWithHandles() && !isLocked(selected)
+  const handle = resizable()
     ? handleAt(inView(rectOf(selected), zoom.level), event.offsetX, event.offsetY) : undefined;
   const starts = pressStarts({ onPage: isPage(name), onSelected: placed.includes(name),
                                onHandle: handle !== undefined, shift: event.shiftKey,
@@ -419,7 +444,7 @@ canvas.addEventListener("mousedown", (event) => {
             onHandle: handle !== undefined };
   } else if (starts === "toggle") {
     toggle(name);
-  } else if (starts === "drag") {
+  } else if (starts === "drag" && !pageLocked()) {
     // Pressed on any selected component, locked or not, a drag moves those
     // not locked, and the other members of their groups; a handle resizes
     // its component alone.
@@ -519,7 +544,9 @@ canvas.addEventListener("keydown", (event) => {
   // strip; never the page.
   if ((event.key === "Delete" || (ON_A_MAC && event.key === "Backspace")) && names.length > 0) {
     event.preventDefault();
-    vscode.postMessage({ type: "delete", names });
+    if (!pageLocked()) {
+      vscode.postMessage({ type: "delete", names });
+    }
     return;
   }
   if (event.key === "Escape" && others.length > 0) {
@@ -541,7 +568,8 @@ canvas.addEventListener("keydown", (event) => {
     ? undefined : { x: "cut", c: "copy", v: "paste", d: "duplicate" }[event.key.toLowerCase()];
   if (command) {
     event.preventDefault();
-    if (command === "paste" || names.length > 0) {
+    // On a locked page, only copying works.
+    if ((command === "paste" || names.length > 0) && (command === "copy" || !pageLocked())) {
       vscode.postMessage({ type: command, names });
     }
     return;
@@ -571,9 +599,10 @@ function moved(from, to) {
 }
 
 // Shows the components' frames at their new places until the drawing that
-// follows the edit comes, and asks for the edit, one for them all.
+// follows the edit comes, and asks for the edit, one for them all. On a
+// locked page, nothing moves.
 function placeAll(rects) {
-  if (rects.length === 0) {
+  if (rects.length === 0 || pageLocked()) {
     paintOverlay();
     return;
   }
