@@ -805,6 +805,30 @@ class CompletionTest(FolderTestCase):
         self.assertIn("The screen keeps its last 2 bytes, signed: 40000 reads -25536.",
                       items["vvs0"].documentation)
 
+    def test_names_in_an_event_heading(self):
+        self.assertEqual(self.labels_after("pages/home.nx", "on "), ["home", "title", "save"])
+        # An included file's events belong to each page including it.
+        write_folder(self.root, {"pages/lib/shared.nx": "on \n" + FOLDER["pages/lib/shared.nx"]})
+        self.assertEqual(self.labels_after("pages/lib/shared.nx", "on "),
+                         ["home", "title", "save", "settings", "t0"])
+
+    def test_a_name_that_is_not_plain_is_offered_in_quotes(self):
+        write_folder(self.root, {
+            "pages/home.page.toml": FOLDER["pages/home.page.toml"].replace(
+                'name = "save"', 'name = "b 0"'),
+            "pages/home.nx": 'on "b'})
+        place = self.find("pages/home.nx", 'on "b')
+        items = completions(self.index(), "pages/home.nx", place.line, place.end)
+        item = next(item for item in items if item.label == '"b 0"')
+        self.assertEqual(item.replaces, Place("pages/home.nx", place.line, len("on "), place.end))
+        write_folder(self.root, {"pages/home.nx": 'on "b 0".'})
+        self.assertEqual(self.labels_after("pages/home.nx", 'on "b 0".'), ["down", "up"])
+
+    def test_events_in_an_event_heading(self):
+        self.assertEqual(self.labels_after("pages/home.nx", "on save."), ["down", "up"])
+        self.assertEqual(self.labels_after("pages/settings.nx", "on settings.lo"),
+                         ["load", "loadend", "down", "up", "unload"])
+
     def test_components_of_another_page(self):
         self.assertEqual(self.labels_after("pages/home.nx", "settings."), ["t0", "title"])
 

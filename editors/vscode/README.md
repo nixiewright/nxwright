@@ -37,7 +37,7 @@ Every change edits the page file, so the preview and the text editor share the s
 
 - Errors show as you type, along with warnings about likely mistakes.
 - When an error has one sure fix, you can apply it as a quick fix, such as declaring `sys0` in `program.nx`, or making a component global so that a keyboard can open from it.
-- Completion suggests attributes, components, functions, and constants. In page files, it also suggests your project's pictures and fonts.
+- Completion suggests attributes, components, events, functions, and constants. In page files, it also suggests your project's pictures and fonts.
 - Hover over a name for its description, attributes, and allowed values, such as the numbers your code may store in an attribute.
 - VS Code's usual tools work on your project: Go to Definition, Find All References, Rename, the Outline view, Go to Symbol in Workspace, and Format Document.
 - Go to Definition also works on `include` paths, on `@pic(...)` and the other media references, and on a macro's name in a `call`.

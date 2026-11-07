@@ -2,15 +2,20 @@
 parameters of the function being called.
 
 In a .nx file:
-  - after `t0.`: the attributes of `t0`'s type, as the folder's defaults.toml
-    lists them, for each page using the file that has a `t0`, each with its
-    description as documentation (attributes.py);
+  - in an event's heading, after `on `: the pages using the file, and their
+    components;
+  - in an event's heading, after `on t0.`: the events that the folder's
+    defaults.toml lists for `t0`'s type;
+  - after `t0.`: the attributes that the folder's defaults.toml lists for
+    `t0`'s type, on each page using the file that has a `t0`, with their
+    descriptions as documentation (attributes.py);
   - after `settings.`: the components of that page;
   - after `call `: the folder's macros;
   - elsewhere: the components of the pages using the file, the locals and
     parameters of the event or function, the constants, functions, and
-    `int` globals the code may use, and the system variables. In macros.nx,
-    Editor code in either language, no constant or function of nxlang.
+    `int` globals the code may use, and the system variables. Macros are in
+    strict Nextion syntax in either language, so in macros.nx, nxlang's
+    constants and functions are left out.
 Nothing is offered inside a string or a comment.
 In a page file, after a picture or font attribute's opening quotation mark:
 the folder's pictures or fonts.
@@ -32,7 +37,15 @@ from nxwright.source.macros_source import MACROS_PATH
 from nxwright.source.page_source import reference_kind
 
 # The protocol's numbers for kinds of completion.
-FUNCTION, FIELD, VARIABLE, CLASS, PROPERTY, FILE, CONSTANT = 3, 5, 6, 7, 10, 17, 21
+FUNCTION, FIELD, VARIABLE, CLASS, PROPERTY, FILE, CONSTANT, EVENT = 3, 5, 6, 7, 10, 17, 21, 23
+# The start of an event's heading, up to the cursor. A name needs quotes
+# when it has anything other than letters, digits, and underscores.
+# `_HEADING_NAME` matches `on ` and the start of a name, with its opening
+# quote if it has one. `_HEADING_EVENT` matches `on `, a whole name, a dot,
+# and the start of the event's name.
+_HEADING_NAME = re.compile(r'on ([A-Za-z0-9_]*|"[^"\x00-\x1f]*)')
+_HEADING_EVENT = re.compile(r'on (?:([A-Za-z0-9_]+)|"([^"\x00-\x1f]*)")\.[a-z]*')
+_PLAIN_NAME = re.compile(r"[A-Za-z0-9_]+")
 _AFTER_PAGE_COMPONENT = re.compile(r"([A-Za-z_]\w*)\.([A-Za-z_]\w*)\.\w*$")
 _AFTER_NAME = re.compile(r"([A-Za-z_]\w*)\.\w*$")
 _AFTER_DOT_OR_BRACKET = re.compile(r"[.\]]\w*$")
@@ -44,8 +57,11 @@ _AFTER_CALL = re.compile(r"\s*call\s+([A-Za-z0-9_ ]*)")
 @dataclass(frozen=True)
 class Item:
     """A name to offer: its text, its kind, a few words about it, and its
-    documentation, as Markdown, or "". `replaces` is the text it takes the
-    place of, when not the word at the cursor: a macro's name holds spaces."""
+    documentation in Markdown, which may be empty. `replaces` is the place of
+    the text that the item replaces, when that text is more than the word at
+    the cursor. A macro's name
+    can contain spaces, and a quoted name in an event's heading starts with
+    a quote, so neither is a single word."""
     label: str
     kind: int
     detail: str = ""
@@ -68,10 +84,14 @@ def completions(index: FolderIndex, path: str, line: int, column: int) -> list:
     before = lines[line][:column] if line < len(lines) else ""
     if page_of(path):
         found = _in_page_file(index, path, line, before)
-    elif path.endswith(".nx") and index.nx_file(path) and _in_code(before):
-        found = _in_code_line(index, path, line, before)
-    else:
+    elif not path.endswith(".nx") or not index.nx_file(path):
         found = []
+    else:
+        # Look for an event's heading first. `_in_code` would see a quoted name
+        # that is still being typed as a string that is not closed, and offer nothing.
+        found = _in_event_heading(index, path, line, before)
+        if found is None:
+            found = _in_code_line(index, path, line, before) if _in_code(before) else []
     return list(dict.fromkeys(found))
 
 
@@ -92,6 +112,19 @@ def _in_code(before: str) -> bool:
     except NxwrightError:
         return False    # a string not closed yet
     return not comment.lstrip().startswith("//")
+
+
+def _in_event_heading(index: FolderIndex, path: str, line: int, before: str):
+    """Returns the Items to offer when `before` is the start of an event's
+    heading, or None when it is not."""
+    heading_name = _HEADING_NAME.fullmatch(before)
+    if heading_name:
+        return _heading_names(index, path, Place(path, line, heading_name.start(1), len(before)))
+    heading_event = _HEADING_EVENT.fullmatch(before)
+    if heading_event:
+        return _events(index, index.page_objects_named(
+            heading_event[1] or heading_event[2], index.pages_using(path)))
+    return None
 
 
 def _in_code_line(index: FolderIndex, path: str, line: int, before: str) -> list:
@@ -135,6 +168,31 @@ def _names_in_scope(index: FolderIndex, path: str, line: int, pages: list) -> li
     found += [Item(name, VARIABLE, "system variable")
               for name in sorted(EDITOR_SYSTEM_VARIABLES - lacked)]
     found += [Item(page, CLASS, "page") for page in index.pages]
+    return found
+
+
+def _heading_names(index: FolderIndex, path: str, typed: Place) -> list:
+    """Returns the pages using the file `path`, and their components, to
+    offer after `on `. A name that needs quotes is offered in quotes. Every
+    item replaces the whole name typed so far, including any opening quote."""
+    found = []
+    for page in index.pages_using(path):
+        for page_object in index.page_objects.get(page, []):
+            name = page_object.name
+            label = name if _PLAIN_NAME.fullmatch(name) else '"%s"' % name
+            kind = CLASS if page_object.type == "page" else FIELD
+            found.append(Item(label, kind, page_object.type, replaces=typed))
+    return found
+
+
+def _events(index: FolderIndex, page_objects: list) -> list:
+    """Returns the events of the types of `page_objects`."""
+    defaults = type_defaults(index)
+    found = []
+    for page_object in page_objects:
+        found_defaults = defaults.get(TYPES_BY_NAME.get(page_object.type))
+        if found_defaults is not None:
+            found += [Item(event, EVENT, page_object.type) for event in found_defaults.events]
     return found
 
 
