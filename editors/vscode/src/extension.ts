@@ -93,8 +93,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   projectView = new ProjectView(context, project);
   const nxlangPanel = new NxlangPanel(context, getClient, project);
   // A preview redraws when its page's folder changes, on disk or in an editor.
+  // The watcher also covers .nx files, because an edit to one can change
+  // which events the Go to Event submenu marks as having code.
   const folderFiles = vscode.workspace.createFileSystemWatcher(
-    `**/*.{${DRAWN_FILE_TYPES.join(",")}}`);
+    `**/*.{${[...DRAWN_FILE_TYPES, "nx"].join(",")}}`);
   const pagesView = new PagesView(project, pages, getClient);
   const changed = (uri: vscode.Uri) => {
     previews.changed(uri);

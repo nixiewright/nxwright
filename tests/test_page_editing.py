@@ -347,6 +347,30 @@ class ServerRequestTest(EditingTestCase):
         self.assertEqual((lines[title["firstLine"]], title["lastLine"]),
                          ("[[component]]", len(lines) - 1))
 
+    def test_the_events_of_the_pages_objects(self):
+        # Code in the page's own .nx file, and in a file it includes.
+        self.write("pages/lib/shared.nx", "on title.up:\n  sys0 = 3\n")
+        self.write("pages/page0.nx", 'include "lib/shared.nx"\n\non page0.load:\n  sys0 = 1\n')
+        self.write("pages/page0.page.toml", self.text("pages/page0.page.toml")
+                   + '\n[[component]]\nname = "va0"\ntype = "variable"\n'
+                   + '\n[[component]]\nname = "odd"\ntype = "not-a-type"\n')
+        found = self.request("nxwright/pageObjects")["result"]
+        events = {entry["name"]: entry["events"] for entry in found["objects"]}
+        self.assertEqual(events["page0"], [{"event": "load", "hasCode": True},
+                                           {"event": "loadend", "hasCode": False},
+                                           {"event": "down", "hasCode": False},
+                                           {"event": "up", "hasCode": False},
+                                           {"event": "unload", "hasCode": False}])
+        self.assertEqual(events["title"], [{"event": "down", "hasCode": False},
+                                           {"event": "up", "hasCode": True}])
+        self.assertEqual((events["va0"], events["odd"]), ([], []))
+
+    def test_no_events_when_the_defaults_file_cannot_be_read(self):
+        self.write("defaults.toml", "[text\n")
+        found = self.request("nxwright/pageObjects")["result"]
+        self.assertEqual([(entry["name"], entry["events"]) for entry in found["objects"]],
+                         [("page0", []), ("title", [])])
+
     def test_the_objects_of_a_half_typed_page_file(self):
         self.write("pages/page0.page.toml", self.text("pages/page0.page.toml") + "[[component]]\nname = ")
         found = self.request("nxwright/pageObjects")["result"]

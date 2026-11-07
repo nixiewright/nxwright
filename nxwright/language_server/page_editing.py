@@ -16,6 +16,7 @@ to the editor in its own units (server.py).
 from nxwright import NxwrightError
 from nxwright.language.resource_names import FONT, NOUNS
 from nxwright.language_server.attributes import attribute_tooltip
+from nxwright.project.component_defaults import defaults_from_toml
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.page_header import SYSTEM_PAGES
 from nxwright.project.page_text import is_string_attribute
@@ -143,6 +144,29 @@ def component_events(index, read, page: str, name: str) -> list:
     blocks = _blocks_by_event(index, page, name)
     return [{"event": event, "path": blocks[event][0] if event in blocks else None}
             for event in _type_events(ComponentTable(index, read, page, name))]
+
+
+def object_events(index, read, page: str) -> list:
+    """Returns the events of each object of `page`, in the order of
+    `index.page_objects`. Each object gets a list of {"event", "hasCode"}
+    entries, one for each event of its type, in order. `hasCode` is true
+    when the event has code in one of the page's .nx files.
+
+    The objects are read line by line, so the objects of a half-typed page
+    file still get their events. An object has no events when its type has
+    none, when nxwright does not know its type, or when defaults.toml cannot
+    be read."""
+    try:
+        defaults = defaults_from_toml(read("defaults.toml"), "defaults.toml")
+    except NxwrightError:
+        defaults = {}
+    found = []
+    for entry in index.page_objects.get(page, []):
+        type_defaults = defaults.get(TYPES_BY_NAME.get(entry.type))
+        coded = set(_blocks_by_event(index, page, entry.name))
+        found.append([{"event": event, "hasCode": event in coded}
+                      for event in (type_defaults.events if type_defaults else [])])
+    return found
 
 
 def default_event(index, read, page: str, name: str, event: str = None) -> dict | None:

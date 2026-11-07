@@ -66,7 +66,7 @@ from nxwright.language_server.live_checks import LiveChecks
 from nxwright.language_server.media_viewer import media_frames
 from nxwright.language_server.nxlang_switch import nxlang_switch
 from nxwright.language_server.page_editing import (component_events, default_event,
-                                                   key_binding, properties)
+                                                   key_binding, object_events, properties)
 from nxwright.source.page_edits import attribute_edits, page_lock_edits
 from nxwright.language_server.page_components import (add_component, clear_events,
                                                        component_types, copy_components,
@@ -457,18 +457,24 @@ class NxwrightServer(LanguageServer):
         return self._previews.drawing(index.root, path, self._texts.folder_reader(index.root))
 
     def _page_objects(self, params: dict):
-        """Returns the objects of the page of the request's file, the page
-        first, with the lines of their tables, so that the cursor in a table
-        selects its object; or None when the file is not a page's own. Read
-        line by line, so a half-typed page file still lists its objects."""
+        """Returns the objects of the page that the request's file belongs
+        to, the page itself first, with the lines of each object's table and
+        its events (page_editing.object_events). The lines are used to
+        select the object whose table the cursor is in. The page file is
+        read line by line, so the objects of a half-typed one are still
+        listed. Returns None when the file is not one of a page's own
+        files."""
         found = self._folder_of(params)
         page = found and page_of_file(found[1])
         if not page or page not in found[0].pages:
             return None
+        index = found[0]
+        events = object_events(index, self._texts.folder_reader(index.root), page)
         return {"page": page,
                 "objects": [{"name": entry.name, "type": entry.type,
-                             "firstLine": entry.first_line, "lastLine": entry.last_line}
-                            for entry in found[0].page_objects[page]]}
+                             "firstLine": entry.first_line, "lastLine": entry.last_line,
+                             "events": its_events}
+                            for entry, its_events in zip(index.page_objects[page], events)]}
 
     def _page_object(self, params: dict) -> tuple:
         """Returns (FolderIndex, page, object name) of a request about an

@@ -4,6 +4,7 @@
 // lists the selected object's attributes and edits them.
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
+import { itemContextValue } from "./eventMenu";
 import { PageEditing, Properties } from "./pageEditing";
 import { PageObject, Pages, PREVIEW_VIEW_TYPE } from "./pages";
 import { chooseTab, PageTab, PageView } from "./pageTabChoice";
@@ -81,8 +82,11 @@ export class ComponentsView implements vscode.TreeDataProvider<PageObject> {
     // No id: names repeat while a table is being pasted or typed.
     const item = new vscode.TreeItem(entry.name);
     item.description = entry.type;
-    // The page is neither added nor deleted from here.
-    item.contextValue = entry.type === "page" ? "page" : "component";
+    // The context value tells the page apart from components, because the
+    // page cannot be added or deleted from here. It then lists the object's
+    // events, for the Go to Event submenu.
+    item.contextValue = itemContextValue(entry.type === "page" ? "page" : "component",
+                                         entry.events ?? []);
     // A click, and no other change of the selection, such as the list
     // following the preview's, shows the component.
     item.command = { command: SHOW_COMPONENT, title: "Show the component", arguments: [entry] };

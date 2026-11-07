@@ -12,6 +12,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import { activePreview, isInside } from "./activeFile";
+import { eventMenuKeys, ObjectEvent } from "./eventMenu";
 import { PageEditing } from "./pageEditing";
 import { isPageFile, Pages, PREVIEW_VIEW_TYPE, tomlOf } from "./pages";
 import { PictureFile, pictureSources, webviewPage, ZOOM_STYLES } from "./webviewPage";
@@ -180,6 +181,9 @@ class PagePreview {
   private refreshing: ReturnType<typeof setTimeout> | undefined;
   // How many drawings were asked for: only the latest reply counts.
   private asked = 0;
+  private refreshingEvents: ReturnType<typeof setTimeout> | undefined;
+  // How many lists of events were asked for: only the latest reply counts.
+  private eventsAsked = 0;
   private queue: Promise<void> = Promise.resolve();
   private disposed = false;
 
@@ -219,6 +223,9 @@ class PagePreview {
       if (this.refreshing) {
         clearTimeout(this.refreshing);
       }
+      if (this.refreshingEvents) {
+        clearTimeout(this.refreshingEvents);
+      }
       received.dispose();
       viewState.dispose();
       selection.dispose();
@@ -241,15 +248,25 @@ class PagePreview {
     }
   }
 
-  // Redraws after a pause, once files of the page's folder that the drawing
-  // reads change: page files, app.toml, pictures, and fonts. A hidden
-  // preview waits: its webview starts afresh when shown, and asks then.
+  // Redraws after a pause when a page file, app.toml, a picture, or a font
+  // changes in the page's folder. A change to a .nx file updates only which
+  // events the right-click menu marks as having code. A hidden preview
+  // ignores changes, because its webview starts afresh and requests a new
+  // drawing when it is shown.
   changed(uri: vscode.Uri): void {
-    if (this.panel.visible && DRAWN_FILE.test(uri.fsPath) && isInside(uri, this.sourceFolder())) {
+    if (!this.panel.visible || !isInside(uri, this.sourceFolder())) {
+      return;
+    }
+    if (DRAWN_FILE.test(uri.fsPath)) {
       if (this.refreshing) {
         clearTimeout(this.refreshing);
       }
       this.refreshing = setTimeout(() => void this.refresh(), 300);
+    } else if (uri.fsPath.endsWith(".nx")) {
+      if (this.refreshingEvents) {
+        clearTimeout(this.refreshingEvents);
+      }
+      this.refreshingEvents = setTimeout(() => void this.refreshEvents(), 300);
     }
   }
 
@@ -298,6 +315,8 @@ class PagePreview {
     if (this.disposed || !client) {
       return;
     }
+    // The page file gives the objects' types, and so their events.
+    void this.refreshEvents();
     const asked = ++this.asked;
     const reply = await client
       .sendRequest<PageDrawing | null>("nxwright/pageDrawing", {
@@ -316,6 +335,29 @@ class PagePreview {
     const grid = vscode.workspace.getConfiguration("nxwright").get<number>("previewGrid") ?? 1;
     void this.panel.webview.postMessage({ type: "drawing", drawing: reply, pictureUris,
                                           pictureMasks, grid });
+  }
+
+  // Sends the webview the right-click menu's keys for each object's events
+  // (eventMenu.ts). If the language server does not reply, the webview
+  // keeps the keys it has.
+  private async refreshEvents(): Promise<void> {
+    const client = this.services.client();
+    if (this.disposed || !client) {
+      return;
+    }
+    const asked = ++this.eventsAsked;
+    const reply = await client
+      .sendRequest<{ objects: { name: string; events?: ObjectEvent[] }[] } | null>(
+        "nxwright/pageObjects", { textDocument: { uri: this.toml.toString() } })
+      .catch(() => null);
+    if (asked !== this.eventsAsked || this.disposed || !reply) {
+      return;
+    }
+    const keys: Record<string, Record<string, true>> = {};
+    for (const entry of reply.objects) {
+      keys[entry.name] ??= eventMenuKeys(entry.events ?? []);
+    }
+    void this.panel.webview.postMessage({ type: "events", keys });
   }
 
   // The source folder of the page: two folders above its file.

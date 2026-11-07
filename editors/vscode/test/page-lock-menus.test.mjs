@@ -10,7 +10,7 @@ const menus = manifest.contributes.menus;
 const PAGE_COMMANDS = ["nxwright.lockPage", "nxwright.lockPageWithPassword",
                        "nxwright.unlockPage"];
 // What the page preview's menu still offers on a locked page.
-const READING = ["nxwright.goToEvent", "nxwright.editAttributes", "nxwright.goToDefinition",
+const READING = ["nxwright.events", "nxwright.editAttributes", "nxwright.goToDefinition",
                  "nxwright.copyComponent"];
 
 test("on a locked page, the page preview's menu hides what changes the page", () => {
@@ -25,7 +25,7 @@ test("on a locked page, the page preview's menu hides what changes the page", ()
     }
   }
   for (const name of READING) {
-    const item = menus["webview/context"].find((each) => each.command === name);
+    const item = menus["webview/context"].find((each) => (each.command ?? each.submenu) === name);
     assert.doesNotMatch(item.when, /pageLocked/, name);
   }
 });

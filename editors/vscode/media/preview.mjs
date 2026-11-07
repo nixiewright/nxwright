@@ -95,6 +95,9 @@ let drag = undefined;
 let box = undefined;
 let namesShown = false;      // whether the components' names are written on the page
 let pageUri = undefined;     // the page file's URI, for the right-click menu's commands
+// For each object, by name, the keys that show its events in the Go to
+// Event submenu.
+let eventKeys = {};
 
 window.addEventListener("message", async (event) => {
   const message = event.data;
@@ -136,6 +139,8 @@ window.addEventListener("message", async (event) => {
     showSelection();
   } else if (message.type === "page") {
     pageUri = message.uri;
+  } else if (message.type === "events") {
+    eventKeys = message.keys;
   } else if (message.type === "names") {
     namesShown = message.shown;
     namesToggle.checked = namesShown;
@@ -348,18 +353,22 @@ function withCommandKey(event) {
 // Sets what VS Code passes the commands of the right-click menu opened on
 // `target` (package.json's webview/context menu):
 //  - the menu's section, "page" or "strip", and the page file;
-//  - the selected components other than the page, with "component", the
-//    first of them, telling the menu there are some;
-//  - those with a place, which locking and grouping take, and whether two
-//    or more, or three or more, of them have a place, which arranging and
-//    grouping need;
+//  - the selected components other than the page, and the first of them as
+//    "component", which is set only when some are selected;
+//  - the selected components that have a place, for locking and grouping,
+//    and whether two or more, and three or more, of them have one, for
+//    arranging and grouping;
 //  - whether some of those are locked, some unlocked, and some in a group;
 //  - whether the page is locked;
+//  - the object the Go to Event submenu is for (the first selected
+//    component, or else the page), and the keys of its events;
 //  - on the page, the point clicked, on the grid.
 function setMenuContext(target, section, point = undefined) {
   const names = selectedComponents();
   const placed = placedSelection();
+  const eventObject = names[0] ?? drawing.components[0].name;
   target.dataset.vscodeContext = JSON.stringify({
+    ...eventKeys[eventObject], eventObject,
     webviewSection: section, page: pageUri, component: names[0], components: names,
     placedComponents: placed, several: placed.length > 1, spaceable: placed.length > 2,
     locked: placed.some(isLocked), unlocked: placed.some((name) => !isLocked(name)),

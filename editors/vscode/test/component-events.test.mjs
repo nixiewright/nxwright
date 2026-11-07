@@ -1,24 +1,8 @@
-// What "Go to Event..." lists, and what "Clear events" says
-// (src/componentEvents.ts, compiled to out/ before the tests run).
+// What "Clear events" says (src/componentEvents.ts, compiled to out/ before
+// the tests run).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clearEventsQuestion, eventChoices, noEventsNote, nothingToClearNote }
-  from "../out/componentEvents.js";
-
-test("each event in order, with the file holding its code or none yet", () => {
-  assert.deepEqual(eventChoices([
-    { event: "down", uri: null },
-    { event: "up", uri: "file:///c%3A/app/pages/lib/my%20shared.nx" },
-  ]), [
-    { label: "down", description: "no code yet", event: "down" },
-    { label: "up", description: "my shared.nx", event: "up" },
-  ]);
-});
-
-test("a type without events lists none, and says so", () => {
-  assert.deepEqual(eventChoices([]), []);
-  assert.equal(noEventsNote("va0"), "va0 has no events: its type has none.");
-});
+import { clearEventsQuestion, nothingToClearNote } from "../out/componentEvents.js";
 
 test("clearing several asks first, naming them; nothing to clear is said", () => {
   assert.equal(clearEventsQuestion(["b0", "t0"]),

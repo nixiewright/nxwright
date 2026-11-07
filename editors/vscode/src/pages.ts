@@ -4,6 +4,7 @@
 // the others.
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
+import { ObjectEvent } from "./eventMenu";
 
 // The custom editor's id of the page preview, as package.json declares it.
 export const PREVIEW_VIEW_TYPE = "nxwright.pagePreview";
@@ -32,6 +33,9 @@ export interface PageObject {
   // The lines of its table in the page file.
   firstLine: number;
   lastLine: number;
+  // Its type's events, and whether each has code. An older toolchain does
+  // not give them.
+  events?: ObjectEvent[];
 }
 
 export class Pages {
@@ -121,9 +125,11 @@ export class Pages {
     }
   }
 
-  // Lists the objects again after a pause, once the shown page's file changes.
+  // Lists the objects again after a pause, once the shown page's file or
+  // any .nx file changes. An edit to a .nx file can change which events
+  // have code.
   changed(uri: vscode.Uri): void {
-    if (uri.toString() === this.shownToml?.toString()) {
+    if (uri.toString() === this.shownToml?.toString() || uri.fsPath.endsWith(".nx")) {
       // A list asked for before the change no longer counts.
       this.asked++;
       if (this.refreshing) {

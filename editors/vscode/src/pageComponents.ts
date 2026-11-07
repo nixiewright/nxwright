@@ -7,6 +7,7 @@
 // the right-click menus of the preview and of the Pages section.
 // pageEditing.ts makes the edits themselves.
 import * as vscode from "vscode";
+import { EVENT_NAMES, eventCommand } from "./eventMenu";
 import { PageEditing, PastePlace } from "./pageEditing";
 import { passwordProblem } from "./pageLocking";
 import { PageObject, Pages } from "./pages";
@@ -26,6 +27,9 @@ interface PreviewMenuContext {
   component?: string;
   components?: string[];
   placedComponents?: string[];
+  // The object the Go to Event submenu is for: the first selected component,
+  // else the page.
+  eventObject?: string;
 }
 
 export class PageComponents {
@@ -76,10 +80,12 @@ export class PageComponents {
       vscode.commands.registerCommand("nxwright.ungroupComponents",
                                       (target: PreviewMenuContext) =>
                                         this.group(target, false)),
-      vscode.commands.registerCommand("nxwright.goToEvent",
-                                      (target: PreviewMenuContext | PageObject) =>
-                                        this.onComponents(target, (toml, names) =>
-                                          this.editing.goToEvent(toml, names[0]))),
+      // The Go to Event submenu's commands: two for each event, one shown
+      // when it has code and one when it does not.
+      ...EVENT_NAMES.flatMap((event) => [false, true].map((hasCode) =>
+        vscode.commands.registerCommand(eventCommand(event, hasCode),
+                                        (target: PreviewMenuContext | PageObject) =>
+                                          this.openEvent(target, event)))),
       vscode.commands.registerCommand("nxwright.editAttributes",
                                       (target: PreviewMenuContext | PageObject) =>
                                         this.onComponents(target, (toml, names) =>
@@ -157,6 +163,17 @@ export class PageComponents {
     const names = isPageObject(target) ? [target.name] : target.components ?? [];
     if (toml && names.length > 0) {
       await act(toml, names);
+    }
+  }
+
+  // Opens the code of `event` for the object the menu is on, and adds the
+  // event's heading if the event has no code.
+  private async openEvent(target: PreviewMenuContext | PageObject, event: string):
+      Promise<void> {
+    const toml = pageOf(target, this.pages);
+    const name = isPageObject(target) ? target.name : target.eventObject;
+    if (toml && name) {
+      await this.editing.openEvent(toml, name, event);
     }
   }
 

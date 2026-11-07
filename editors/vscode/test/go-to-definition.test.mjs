@@ -27,6 +27,6 @@ test("the preview's menu offers it on a component, and on the page alone", () =>
 
 test("the Components list's menu offers it on a component and on the page", () => {
   assert.deepEqual(itemsOf("view/item/context").map((item) => [item.when, item.group]), [
-    ["view == nxwright.components && viewItem == component || "
-     + "view == nxwright.components && viewItem == page", "0_open@3"]]);
+    ["view == nxwright.components && viewItem =~ /^component( |$)/ || "
+     + "view == nxwright.components && viewItem =~ /^page( |$)/", "0_open@3"]]);
 });

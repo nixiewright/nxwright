@@ -15,13 +15,7 @@ import {
   WorkspaceEdit as ProtocolWorkspaceEdit,
 } from "vscode-languageclient/node";
 import { chineseFontChoices, chineseFontParameters } from "./chineseKeyboard";
-import {
-  ComponentEvent,
-  clearEventsQuestion,
-  eventChoices,
-  noEventsNote,
-  nothingToClearNote,
-} from "./componentEvents";
+import { clearEventsQuestion, nothingToClearNote } from "./componentEvents";
 import { KeyBinding, keyChange, makeKeyChange } from "./keyBinding";
 import { PageObject, PREVIEW_VIEW_TYPE } from "./pages";
 import {
@@ -541,36 +535,6 @@ export class PageEditing {
     const question = `Code names ${names.join(", ")} in ${count}, which will no longer build: ` +
       `${places.slice(0, 5).join(", ")}${places.length > 5 ? ", ..." : ""}. Delete anyway?`;
     return await vscode.window.showWarningMessage(question, { modal: true }, DELETE) === DELETE;
-  }
-
-  // Lists an object's events, saying where each one's code is, and opens
-  // the one picked as openEvent does. Says so for a type without events.
-  async goToEvent(toml: vscode.Uri, name: string): Promise<void> {
-    const client = this.client();
-    if (!client) {
-      return;
-    }
-    let events: ComponentEvent[];
-    try {
-      events = await client.sendRequest<ComponentEvent[]>("nxwright/componentEvents", {
-        textDocument: { uri: toml.toString() },
-        name,
-      });
-    } catch (error) {
-      void vscode.window.showErrorMessage(`nxwright: ${errorText(error)}`);
-      return;
-    }
-    if (events.length === 0) {
-      void vscode.window.showInformationMessage(`nxwright: ${noEventsNote(name)}`);
-      return;
-    }
-    const picked = await vscode.window.showQuickPick(eventChoices(events), {
-      title: `nxwright: Go to Event of ${name}`,
-      placeHolder: "The event to open; one without code gets its heading added",
-    });
-    if (picked) {
-      await this.openEvent(toml, name, picked.event);
-    }
   }
 
   // Opens the code of an object's `event`, else of its default event: the

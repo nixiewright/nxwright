@@ -25,7 +25,7 @@ Right-click a component and choose Paste Special to give the selected components
 
 On an empty part of the page, or on the page in the Components list, Paste Special pastes new copies, and lets you choose whether they keep their original position and their code.
 
-Double-click a component to go to its code. If it has none yet, the extension adds its first event to the page's `.nx` file. From the right-click menu, you can also open or add any of the component's events, jump to its entry in the page file, or delete all its code.
+Double-click a component to go to its code. If it has none yet, the extension adds its first event to the page's `.nx` file. To open or add any other event, right-click the component or the page and use Go to Event. From the same menu, you can also jump to the component's entry in the page file, or delete all its code.
 
 You can lock a whole page by right-clicking it in the preview or in the Pages section. A locked page can't be changed from the preview or the Attributes section until you unlock it, but its code and its page file are not protected. `Lock page with password` also sets a password that the Nextion Editor will ask for, which is useful if you share the project file without the source folder. VS Code doesn't ask for it.
 

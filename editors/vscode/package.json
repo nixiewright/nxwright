@@ -458,8 +458,83 @@
         "category": "nxwright"
       },
       {
-        "command": "nxwright.goToEvent",
-        "title": "Go to Event...",
+        "command": "nxwright.event.load",
+        "title": "load",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.load.withCode",
+        "title": "load ✓",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.loadend",
+        "title": "loadend",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.loadend.withCode",
+        "title": "loadend ✓",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.down",
+        "title": "down",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.down.withCode",
+        "title": "down ✓",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.up",
+        "title": "up",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.up.withCode",
+        "title": "up ✓",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.slide",
+        "title": "slide",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.slide.withCode",
+        "title": "slide ✓",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.playend",
+        "title": "playend",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.playend.withCode",
+        "title": "playend ✓",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.timer",
+        "title": "timer",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.timer.withCode",
+        "title": "timer ✓",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.unload",
+        "title": "unload",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.event.unload.withCode",
+        "title": "unload ✓",
         "category": "nxwright"
       },
       {
@@ -941,7 +1016,67 @@
           "when": "false"
         },
         {
-          "command": "nxwright.goToEvent",
+          "command": "nxwright.event.load",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.load.withCode",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.loadend",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.loadend.withCode",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.down",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.down.withCode",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.up",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.up.withCode",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.slide",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.slide.withCode",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.playend",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.playend.withCode",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.timer",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.timer.withCode",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.unload",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.event.unload.withCode",
           "when": "false"
         },
         {
@@ -1153,28 +1288,28 @@
           "group": "1_lock@3"
         },
         {
-          "command": "nxwright.goToEvent",
-          "when": "view == nxwright.components && viewItem == component",
+          "submenu": "nxwright.events",
+          "when": "view == nxwright.components && viewItem =~ /(^| )hasEvents( |$)/",
           "group": "0_open@1"
         },
         {
           "command": "nxwright.editAttributes",
-          "when": "view == nxwright.components && viewItem == component",
+          "when": "view == nxwright.components && viewItem =~ /^component( |$)/",
           "group": "0_open@2"
         },
         {
           "command": "nxwright.goToDefinition",
-          "when": "view == nxwright.components && viewItem == component || view == nxwright.components && viewItem == page",
+          "when": "view == nxwright.components && viewItem =~ /^component( |$)/ || view == nxwright.components && viewItem =~ /^page( |$)/",
           "group": "0_open@3"
         },
         {
           "command": "nxwright.cutComponent",
-          "when": "view == nxwright.components && viewItem == component",
+          "when": "view == nxwright.components && viewItem =~ /^component( |$)/",
           "group": "1_clipboard@1"
         },
         {
           "command": "nxwright.copyComponent",
-          "when": "view == nxwright.components && viewItem == component",
+          "when": "view == nxwright.components && viewItem =~ /^component( |$)/",
           "group": "1_clipboard@2"
         },
         {
@@ -1189,17 +1324,17 @@
         },
         {
           "command": "nxwright.duplicateComponent",
-          "when": "view == nxwright.components && viewItem == component",
+          "when": "view == nxwright.components && viewItem =~ /^component( |$)/",
           "group": "1_clipboard@5"
         },
         {
           "command": "nxwright.deleteComponent",
-          "when": "view == nxwright.components && viewItem == component",
+          "when": "view == nxwright.components && viewItem =~ /^component( |$)/",
           "group": "2_delete@1"
         },
         {
           "command": "nxwright.clearEvents",
-          "when": "view == nxwright.components && viewItem == component",
+          "when": "view == nxwright.components && viewItem =~ /^component( |$)/",
           "group": "2_delete@2"
         },
         {
@@ -1240,8 +1375,8 @@
       ],
       "webview/context": [
         {
-          "command": "nxwright.goToEvent",
-          "when": "webviewId == 'nxwright.pagePreview' && component",
+          "submenu": "nxwright.events",
+          "when": "webviewId == 'nxwright.pagePreview' && hasEvents",
           "group": "0_open@1"
         },
         {
@@ -1370,6 +1505,88 @@
           "group": "7_group@2"
         }
       ],
+      "nxwright.events": [
+        {
+          "command": "nxwright.event.load",
+          "when": "noCodeLoad || viewItem =~ /(^| )noCodeLoad( |$)/",
+          "group": "1_event@1"
+        },
+        {
+          "command": "nxwright.event.load.withCode",
+          "when": "codeLoad || viewItem =~ /(^| )codeLoad( |$)/",
+          "group": "1_event@1"
+        },
+        {
+          "command": "nxwright.event.loadend",
+          "when": "noCodeLoadend || viewItem =~ /(^| )noCodeLoadend( |$)/",
+          "group": "1_event@2"
+        },
+        {
+          "command": "nxwright.event.loadend.withCode",
+          "when": "codeLoadend || viewItem =~ /(^| )codeLoadend( |$)/",
+          "group": "1_event@2"
+        },
+        {
+          "command": "nxwright.event.down",
+          "when": "noCodeDown || viewItem =~ /(^| )noCodeDown( |$)/",
+          "group": "1_event@3"
+        },
+        {
+          "command": "nxwright.event.down.withCode",
+          "when": "codeDown || viewItem =~ /(^| )codeDown( |$)/",
+          "group": "1_event@3"
+        },
+        {
+          "command": "nxwright.event.up",
+          "when": "noCodeUp || viewItem =~ /(^| )noCodeUp( |$)/",
+          "group": "1_event@4"
+        },
+        {
+          "command": "nxwright.event.up.withCode",
+          "when": "codeUp || viewItem =~ /(^| )codeUp( |$)/",
+          "group": "1_event@4"
+        },
+        {
+          "command": "nxwright.event.slide",
+          "when": "noCodeSlide || viewItem =~ /(^| )noCodeSlide( |$)/",
+          "group": "1_event@5"
+        },
+        {
+          "command": "nxwright.event.slide.withCode",
+          "when": "codeSlide || viewItem =~ /(^| )codeSlide( |$)/",
+          "group": "1_event@5"
+        },
+        {
+          "command": "nxwright.event.playend",
+          "when": "noCodePlayend || viewItem =~ /(^| )noCodePlayend( |$)/",
+          "group": "1_event@6"
+        },
+        {
+          "command": "nxwright.event.playend.withCode",
+          "when": "codePlayend || viewItem =~ /(^| )codePlayend( |$)/",
+          "group": "1_event@6"
+        },
+        {
+          "command": "nxwright.event.timer",
+          "when": "noCodeTimer || viewItem =~ /(^| )noCodeTimer( |$)/",
+          "group": "1_event@7"
+        },
+        {
+          "command": "nxwright.event.timer.withCode",
+          "when": "codeTimer || viewItem =~ /(^| )codeTimer( |$)/",
+          "group": "1_event@7"
+        },
+        {
+          "command": "nxwright.event.unload",
+          "when": "noCodeUnload || viewItem =~ /(^| )noCodeUnload( |$)/",
+          "group": "1_event@8"
+        },
+        {
+          "command": "nxwright.event.unload.withCode",
+          "when": "codeUnload || viewItem =~ /(^| )codeUnload( |$)/",
+          "group": "1_event@8"
+        }
+      ],
       "nxwright.align": [
         {
           "command": "nxwright.alignLeft",
@@ -1417,6 +1634,10 @@
       ]
     },
     "submenus": [
+      {
+        "id": "nxwright.events",
+        "label": "Go to Event"
+      },
       {
         "id": "nxwright.align",
         "label": "Align"
