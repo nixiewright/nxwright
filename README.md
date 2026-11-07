@@ -21,12 +21,12 @@ In VS Code, run **Developer: Install Extension from Location...** and pick `edit
 
 ## Why nxwright
 
-The Nextion Editor keeps your whole app in one binary `.HMI` file. You write code in small event boxes, one component at a time, and the Nextion Editor is strict about every space and brace. You can't see what changed between two versions, merge two people's work, or test a page without running it.
+The Nextion Editor keeps your whole app in one binary `.HMI` file, so you can't see what changed between two versions, or merge two people's work. You write code in small event boxes, one component at a time, and the Nextion Editor is very strict about every space and brace. There is no way to write automated tests for a page either, and automating a project content update via scripts or agents cannot be done.
 
 nxwright turns your project into ordinary text files, and back. With it, you can:
 
 - edit your app in the editor you like, with code that is easier to write;
-- work on Windows, Linux, or macOS, including compiling your app and uploading it to the screen;
+- work on Windows, Linux, or macOS, including simulating and debugging your app, compiling it, and uploading it to the screen;
 - keep it in Git, with readable diffs, branches, and reviews;
 - test your pages and functions on your PC;
 - write in nxlang, a friendlier version of the Nextion language, when you want more;
@@ -52,7 +52,7 @@ app/
   animations/, videos/, sounds/
 ```
 
-A component is a few readable lines, its font, picture, and colours by name:
+A component is a few readable lines, with its font and picture given by name:
 
 ```toml
 [[component]]
@@ -68,7 +68,7 @@ pco = "#eff3f7"
 txt = "00:00"
 ```
 
-And a page's code is one file, each event under a heading:
+And a page's code is in one file, with each event under a heading:
 
 ```
 on settings.load:
@@ -78,11 +78,11 @@ on celsius.up:
   unit = 0
 ```
 
-`nxwright build app screen.HMI` turns the folder back into a project file (HMI), which you can open in the Nextion Editor as usual. `nxwright compile app screen.tft` compiles the folder into the TFT file the screen runs, without the Nextion Editor. If you change something in the Nextion Editor and save it, `nxwright extract` brings the change back into the folder, keeping your code wherever the Nextion Editor didn't change it. This works until you switch the folder to [nxlang](#nxlang).
+`nxwright build app screen.HMI` turns the folder back into a project file, which you can open in the Nextion Editor as usual. If you change something in the Nextion Editor and save it, `nxwright extract` brings the change back into the folder, and keeps your code wherever the Nextion Editor didn't change it. This works until you switch the folder to [nxlang](#nxlang). To skip the Nextion Editor entirely, `nxwright compile app screen.tft` compiles the folder into the TFT file the screen runs.
 
 ## Write Nextion code comfortably
 
-The Nextion Editor is strict about how code is written: no spaces around `=` or `+`, no space after `if`, and no `{` on the `if` line. nxwright reads Nextion code written comfortably, and turns it into what the Nextion Editor accepts when it builds:
+The Nextion Editor is strict about how code is written: no spaces around `=` or `+`, no space after `if`, and no `{` on the `if` line. nxwright reads Nextion code written comfortably, and turns it into strict Nextion syntax when it builds the project:
 
 <table>
 <tr><th>In the Nextion Editor</th><th>In nxwright</th></tr>
@@ -116,17 +116,16 @@ if (n0.val > 100) {
 </tr>
 </table>
 
-You can also name pictures and fonts in your code instead of using their numbers: `p0.pic = @pic(icons/back)`. It is still the Nextion language you know, with the same commands. For more than that, see [nxlang](#nxlang), below.
+You can also refer to pictures and fonts in your code by name, instead of by number: `p0.pic = @pic(icons/back)`. Your code is still in the Nextion language you know, with the same commands. To enable a lot more, see [nxlang](#nxlang).
 
 ## Use your own tooling
 
 Because your app is now text, you can use the tools you already use for code:
 
-- **Any computer.** Editing, checking, building the HMI file, testing, simulating, debugging, compiling the TFT file, and uploading it to a screen all run on Windows, Linux, and macOS.
-- **Any editor.** VS Code, Neovim, Emacs, or any other. nxwright's language server, `nxwright lsp`, works in every editor that speaks the Language Server Protocol: errors as you type, quick fixes, completion, descriptions on hover, go to definition, find references, rename, and formatting.
-- **Version control.** Every change is a diff you can read. Branches merge, and changes can be reviewed before they go in.
-- **AI coding agents.** They read and write text files, and nxwright's checks and tests tell them when something is wrong. Through nxwright's MCP server, `nxwright mcp`, they can also run your app and use it: tap the screen, let time pass, and see what it shows ([docs/mcp.md](https://github.com/nixiewright/nxwright/blob/main/docs/mcp.md)).
-- **The command line.** `nxwright check app` finds what the build would refuse, without building. `nxwright format app` lays your code out in one consistent style.
+- **Any editor.** nxwright's language server, `nxwright lsp`, works in VS Code, Neovim, Emacs, and any other editor that supports the Language Server Protocol. It gives you errors as you type, quick fixes, completion, descriptions on hover, go to definition, find references, rename, and formatting.
+- **Version control.** Every change is a diff you can read, and you can review and merge branches like any other code.
+- **AI coding agents.** Agents read and write text files, and nxwright's checks and tests tell them when something is wrong. Through nxwright's MCP server, `nxwright mcp`, they can also run your app and use it: tap the screen, let time pass, and see what it shows ([docs/mcp.md](https://github.com/nixiewright/nxwright/blob/main/docs/mcp.md)).
+- **The command line.** `nxwright check app` finds what would make the build fail, without building. `nxwright format app` lays your code out in one consistent style.
 
 ## Add functional and unit testing
 
@@ -142,13 +141,13 @@ SCREEN = SourceFolderRunner("app")
 class SettingsTest(unittest.TestCase):
 
     def test_the_slider_dims_the_screen(self):
-        # Slide the brightness slider to 40: the screen dims, and its label follows.
+        # Slide the brightness slider to 40: the screen dims, and the slider's label follows.
         values = SCREEN.run("settings", [("brightness", "slide")], {"brightness.val": 40})
         self.assertEqual(values["dim"], 40)
         self.assertEqual(values["brightnessText.txt"], "40%")
 ```
 
-Run a folder of tests with `nxwright test tests`. In nxlang, you can also test a function on its own:
+In nxlang, you can also test a function on its own:
 
 ```python
     def test_clamp(self):
@@ -156,13 +155,13 @@ Run a folder of tests with `nxwright test tests`. In nxlang, you can also test a
         self.assertEqual(values["r.val"], 100)
 ```
 
-See [docs/testing.md](https://github.com/nixiewright/nxwright/blob/main/docs/testing.md) for everything a test can do.
+Run a folder of tests with `nxwright test tests`. See [docs/testing.md](https://github.com/nixiewright/nxwright/blob/main/docs/testing.md) for everything a test can do.
 
 ## nxlang
 
 The Nextion language is small. It has no functions, it calculates strictly from left to right, and it has no constants or local variables. As an app grows, the same code ends up copied across pages and hidden buttons.
 
-nxlang is nxwright's version of the Nextion language. It keeps everything you know, and adds what is missing. When you build, nxlang is compiled into ordinary Nextion code, so your HMI file and the Nextion Editor work as before.
+nxlang is nxwright's version of the Nextion language. It keeps everything you know, and adds what is missing. When you build, nxlang is compiled into strict Nextion syntax, so your HMI file and the Nextion Editor work as before.
 
 <!-- nxlang-examples: start (written by `python -m tools.readme`; edit nxwright/language/nxlang_samples.py instead) -->
 
@@ -368,13 +367,13 @@ nxlang also lets you:
 
 ### Easier to maintain
 
-Shared code lives in one place: fix a function once, and every page that includes it gets the fix. A page only gets the functions it calls, so a library costs nothing for what a page doesn't use. Errors give the file and the line they come from.
+Shared code lives in one place, so a fix to a function reaches every page that includes it. A page only gets the functions it calls, so the rest of a library adds nothing to the page. Error messages give the file and the line they come from.
 
 ### Switching a project to nxlang
 
-Run `nxwright language app nxlang`, or use "Switch to nxlang" in VS Code, which shows you the examples above and the lines that will change first. Any line of your code that would calculate differently in nxlang gets parentheses, so it keeps giving the same result.
+To switch a folder to nxlang, run `nxwright language app nxlang`, or use "Switch to nxlang" in VS Code. The switch adds parentheses to any line of your code that would calculate differently in nxlang, so that the line keeps giving the same result.
 
-From then on, make your changes in the source folder. You can still open the HMI file nxwright builds in the Nextion Editor and compile it there, but changes made there can't be extracted back into the folder, because the code the build writes can't faithfully be turned back into nxlang and the conversion would be lossy. Although there is no command to switch back, the HMI file nxwright builds can always be extracted into a new folder of plain Nextion code.
+From then on, make your changes in the source folder. You can still open the HMI file nxwright builds in the Nextion Editor, and compile it there. But `nxwright extract` can't bring changes made in the Nextion Editor back into the folder, because the strict Nextion syntax the build writes can't be faithfully turned back into nxlang. There is no command to switch back, but you can always extract that HMI file into a new folder of plain Nextion code.
 
 See [docs/language.md](https://github.com/nixiewright/nxwright/blob/main/docs/language.md) for the whole language.
 
@@ -385,14 +384,14 @@ The extension brings everything above into VS Code, with tools of its own:
 - **Edit pages from a preview.** Each page is drawn as it will appear on the Nextion screen. Select components, drag them to move or resize them, align them, and change their attributes in the Attributes section. A double click opens a component's code.
 
   ![Selecting the schedule page's four period names in the page preview, moving them, and aligning them, with the page side bar beside it](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/select-move-align.gif)
-- **Fonts.** Generate a font from any typeface installed on your computer, or from a typeface file, at the height you need, and, in a utf-8 project, with only the characters you choose. Open a font file to see it with a sample text, and create a variation of it.
+- **Fonts.** Generate a font at the height you need from any typeface installed on your computer, or from a typeface file. In a utf-8 project, you can limit the font to the characters you choose. You can also open a font file to see it with a sample text, and create a variation of it.
 
   ![The Fonts panel: a typeface chosen from those installed, its height, and a sample of the font before it is added](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/fonts-panel.png)
-- **Project management.** Two side bars: one for the project, with its settings, Build, media, and simulator; one for the page, with its pages, components, and attributes. Change the screen model, rotation, or encoding from where they show.
+- **Project management.** The nxwright side bar shows your project, and the nxwright page side bar shows the page you are working on. You can change the screen model, rotation, or encoding from the Project section of the nxwright side bar.
 - **A simulator.** Run your whole app, or start it on one page. Press the screen, watch timers and pages change, connect a real serial port, and debug the code with breakpoints, stepping, and stepping back.
 
   ![The simulator running the demo's settings page: a press on the hour's minus button stops at a breakpoint in settings.nx, and the code is then stepped through](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/debug.gif)
-- **Tests.** Your tests appear in Test Explorer, where they run and debug.
+- **Tests.** Your tests appear in Test Explorer, where you can run and debug them.
 
   ![Test Explorer listing the demo's tests, one of them failed, with its traceback shown at the failing line](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/test-explorer.png)
 
@@ -400,9 +399,7 @@ See [editors/vscode/README.md](https://github.com/nixiewright/nxwright/blob/main
 
 ## Getting started
 
-To install nxwright, follow [Quick install](#tldr-quick-install). Then `nxwright --help` lists its commands. nxwright is tested with projects of Nextion Editor 1.68.2.
-
-A project saved by a newer Nextion Editor may contain things nxwright does not know. Extract gives a warning for each one. If the next build may lose one, extract prompts you to choose whether to go on. `nxwright report` writes a report on these things to send to nxwright's maintainers, without your project's own content ([commands.md](https://github.com/nixiewright/nxwright/blob/main/docs/commands.md#report)).
+To install nxwright, follow [Quick install](#tldr-quick-install). Then `nxwright --help` lists its commands.
 
 **Start a new project:**
 
@@ -412,24 +409,26 @@ nxwright new-page app settings        # adds a blank page
 nxwright build app screen.HMI         # builds the project file, to open in the Nextion Editor
 ```
 
-`app` is only the folder's name: rename it whenever you like, and the app keeps its own name.
+You can rename the `app` folder whenever you like, without changing the app's name.
 
 **Or bring in an existing one:**
 
 ```
-nxwright extract screen.HMI app       # turns your project into a source folder, its app named after the file
+nxwright extract screen.HMI app       # turns your project into a source folder, and names the app after the file
 nxwright build app screen.HMI         # and back, after you edit it
 ```
+
+nxwright is tested with projects saved by Nextion Editor 1.68.2. A project saved by a newer version may contain things nxwright does not know, and the next build may lose some of them. `nxwright extract` warns you about each one. To tell nxwright's maintainers about these things, `nxwright report` writes a report that leaves out your project's own content ([commands.md](https://github.com/nixiewright/nxwright/blob/main/docs/commands.md#report)).
 
 **Put it on the screen:**
 
 ```
 nxwright compile app screen.tft          # compiles the TFT file the screen runs
 nxwright ports                           # lists your computer's serial ports
-nxwright upload screen.tft --port COM5   # sends it to the screen, once you confirm
+nxwright upload screen.tft --port COM5   # sends it to the screen
 ```
 
-The first compile needs the screen's firmware, which nxwright takes from your installed Nextion Editor, or downloads from Nextion's site once you agree. You can also open `screen.HMI` in the Nextion Editor, and compile and upload it there.
+The first compile needs the screen's firmware, which nxwright takes from your installed Nextion Editor, or downloads from Nextion's site once you agree.
 
 **Lost a project, but still have its TFT file?** `nxwright decompile screen.tft app` gives you back a source folder, which you can build and compile again ([Recovering a project from its TFT file](https://github.com/nixiewright/nxwright/blob/main/docs/screens.md#recovering-a-project-from-its-tft-file)).
 
@@ -440,33 +439,34 @@ A few more commands you will use:
 | `nxwright picture app logo.png` | adds pictures |
 | `nxwright font app NotoSans-Regular.ttf 20` | adds a font drawn from a typeface file |
 | `nxwright keyboard app keyboard` | adds a keyboard page, for components that open one |
-| `nxwright animation app frame1.png frame2.png` | makes an animation of pictures |
-| `nxwright video app intro.mp4 --size 320,240` | makes a video, through ffmpeg |
+| `nxwright animation app frame1.png frame2.png` | makes an animation from pictures |
+| `nxwright video app intro.mp4 --size 320,240` | makes a video with ffmpeg |
 | `nxwright sound app beep.wav` | adds a sound |
 | `nxwright device app --rotation 90` | changes the screen model, rotation, or encoding |
 | `nxwright remove app font NotoSans20` | removes a picture, font, or media file your code no longer uses |
-| `nxwright rescue rescue.tft --screen NX4832T035` | writes a file for an SD card, to recover a screen that no longer answers |
+| `nxwright rescue rescue.tft --screen NX4832T035` | writes a file for an SD card, to recover a screen that no longer responds |
 | `nxwright upgrade app` | converts a folder made by an older nxwright |
 
 `nxwright <command> --help` explains each one.
 
 ## A demo
 
-[examples/thermostat](https://github.com/nixiewright/nxwright/tree/main/examples/thermostat) is a thermostat screen written with nxwright: four pages in nxlang sharing a library of functions, and tests. Open its `thermostat.HMI` in the Nextion Editor's simulator, then read its source folder.
+[examples/thermostat](https://github.com/nixiewright/nxwright/tree/main/examples/thermostat) is a thermostat screen written with nxwright. It has tests, and four pages in nxlang that share a library of functions. Open `thermostat.HMI` in the Nextion Editor's simulator, then read the source folder.
 
 ## Learn more
 
 - [docs/source-folder.md](https://github.com/nixiewright/nxwright/blob/main/docs/source-folder.md): your project as a source folder, and the comfortable form of Nextion code.
 - [docs/commands.md](https://github.com/nixiewright/nxwright/blob/main/docs/commands.md): every command.
 - [docs/screens.md](https://github.com/nixiewright/nxwright/blob/main/docs/screens.md): compiling your app, uploading it to a screen, and recovering a project from its TFT file.
-- [docs/build-rules.md](https://github.com/nixiewright/nxwright/blob/main/docs/build-rules.md): what the build refuses.
+- [docs/build-rules.md](https://github.com/nixiewright/nxwright/blob/main/docs/build-rules.md): what makes the build fail.
 - [docs/language.md](https://github.com/nixiewright/nxwright/blob/main/docs/language.md): nxlang.
 - [docs/nxlang-compiled.md](https://github.com/nixiewright/nxwright/blob/main/docs/nxlang-compiled.md): how nxlang becomes strict Nextion syntax.
 - [docs/testing.md](https://github.com/nixiewright/nxwright/blob/main/docs/testing.md): testing your app.
 - [docs/simulator.md](https://github.com/nixiewright/nxwright/blob/main/docs/simulator.md): simulating your app.
 - [docs/mcp.md](https://github.com/nixiewright/nxwright/blob/main/docs/mcp.md): letting an AI agent drive your app.
 - [docs/screen-code.md](https://github.com/nixiewright/nxwright/blob/main/docs/screen-code.md): how tests and the simulator run Nextion code.
-- [docs/format.md](https://github.com/nixiewright/nxwright/blob/main/docs/format.md): what is known of the Nextion Editor's project file. `nxwright dump` writes one out as text, and `nxwright write` writes an edited dump back ([docs/dumps.md](https://github.com/nixiewright/nxwright/blob/main/docs/dumps.md)).
+- [docs/format.md](https://github.com/nixiewright/nxwright/blob/main/docs/format.md): what is known of the Nextion Editor's project file.
+- [docs/dumps.md](https://github.com/nixiewright/nxwright/blob/main/docs/dumps.md): writing a project file out as text with `nxwright dump`, and back with `nxwright write`.
 - [ROADMAP.md](https://github.com/nixiewright/nxwright/blob/main/ROADMAP.md): what nxwright may do next.
 - [CHANGELOG.md](https://github.com/nixiewright/nxwright/blob/main/CHANGELOG.md): what changed in each version.
 
@@ -484,4 +484,4 @@ Apache License 2.0: see [LICENSE](https://github.com/nixiewright/nxwright/blob/m
 
 nxwright ships the Noto Sans font, by the Noto Project Authors, which is under the SIL Open Font License 1.1: see [its license](https://github.com/nixiewright/nxwright/blob/main/nxwright/project/fonts/OFL.txt).
 
-nxwright is an independent project. It is not affiliated with, or endorsed by, ITEAD or Nextion. "Nextion" names the screens and the Nextion Editor it works with. See [INDEPENDENCE.md](https://github.com/nixiewright/nxwright/blob/main/INDEPENDENCE.md) for what nxwright is built on.
+nxwright is an independent project. It is not affiliated with, or endorsed by, ITEAD or Nextion. "Nextion" refers to the screens and the Nextion Editor that nxwright works with. See [INDEPENDENCE.md](https://github.com/nixiewright/nxwright/blob/main/INDEPENDENCE.md) for what nxwright is built on.

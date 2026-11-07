@@ -1,10 +1,8 @@
 # Simulating your app
 
-The simulator runs your whole app on your computer in VS Code, which draws the screen in a panel. You can press its components, and watch its timers run and its pages change. The simulator can also talk to a real serial port, and use folders of your computer as its SD cards. You can set breakpoints and step through your code while it runs, forward and back.
+The simulator runs your whole app in VS Code, and draws the screen in a panel. You can press the screen's components, and watch timers run and pages change. The simulator can also use a real serial port, and folders on your computer as the screen's SD cards. While the app runs, you can set breakpoints and step through your code, forward and back.
 
-The simulator behaves like the Nextion Editor's simulator. The few exceptions are listed under [Known differences](#known-differences).
-
-To see how it runs each command, read [How nxwright runs Nextion code](screen-code.md).
+The simulator behaves like the Nextion Editor's simulator, except for the [Known differences](#known-differences). See [How nxwright runs Nextion code](screen-code.md) for how it runs each command.
 
 ## Starting a simulation
 
@@ -13,41 +11,36 @@ In nxwright's side bar, the Simulator section has two buttons:
 - **Simulate project** starts the app from `program.nx`, like a screen being switched on. The code of `program.nx` runs, then the page it opens.
 - **Simulate page** starts the app on the page shown, without running `program.nx`.
 
-The commands "nxwright: Simulate the app" and "nxwright: Simulate the app from the page shown" do the same. Above a page's preview, or its page file, the **Simulate this page** button starts the app on that page, the same as Simulate page.
+The same two actions are also available as the commands "nxwright: Simulate the app" and "nxwright: Simulate the app from the page shown", and from the **Simulate this page** button above a page's preview or its page file.
 
 An AI agent can also run your app through `nxwright mcp`, on its own or in this simulator ([Letting an agent drive your app](mcp.md)).
 
-To keep a setup, such as the page to start on, a serial port, or SD card folders, save it as a launch configuration of type `nxwright`. The Simulator section shows a button for each one. The extension's README lists the parameters ([A simulation's launch configuration](../editors/vscode/README.md#a-simulations-launch-configuration)). If a configuration leaves out a parameter that also exists in the extension's settings, the setting's value is used ([Settings](../editors/vscode/README.md#settings)).
-
-The Debug Console lists each page compiled, with the full path of each of its `.nx` files: those it includes, and its own. Then it lists `program.nx`'s files, when its code is about to run. Each start lists them again, both when you start again and when the app's code runs `rest`.
-
-Starting again reads your files anew. If they no longer build, the debugger stops on the error, which gives the file and the line, and the app keeps running as it was. Continue, fix the file, then start again.
+To keep a setup, such as the page to start on, a serial port, or SD card folders, save it as a launch configuration of type `nxwright`. The Simulator section shows a button for each one. For the parameters, see [A simulation's launch configuration](../editors/vscode/README.md#a-simulations-launch-configuration). If a configuration leaves out a parameter that also exists in the extension's settings, the setting's value is used ([Settings](../editors/vscode/README.md#settings)).
 
 ### Starting on a page
 
-A launch configuration's `page` starts the app on that page. Its `values` are the values to start from, as if they were in the page file. So whatever starts as the page opens starts from them, such as a file browser's listing.
+A launch configuration's `page` gives the page to start on, and its `values` give attributes the values to start with. The simulator reads them as if they were in the page file, so anything the page does when it opens, such as listing a file browser's folder, already uses them.
 
 ```json
 "page": "settings",
 "values": {"step.val": 5, "page0.t0.txt": "Hello"}
 ```
 
-- A value, like the page's code, may give the page's own component with the page's name. Started on `keybdA`, `keybdA.loadcmpid.val` is its `loadcmpid.val`.
-- A value giving another page's component, such as `page0.t0.txt`, is that page's. That component's scope must be global.
-- To start on a keyboard page, give the component that opens it with `loadpageid.val` and `loadcmpid.val`. Without them, the simulator adds a page of its own that opens the keyboard, and shows the text the keyboard returns.
+- A key may include the page's own name, the same as in the page's code. When the simulation starts on `keybdA`, `keybdA.loadcmpid.val` is the same as `loadcmpid.val`.
+- A key may also give a component of another page, such as `page0.t0.txt`. That component's scope must be global.
+- To start on a keyboard page, set `loadpageid.val` and `loadcmpid.val` to the page and the ID of the component that opens it. Without them, the simulator adds a page of its own that opens the keyboard, and shows the text the keyboard returns.
 
 ### The EEPROM
 
-Without a file, the EEPROM starts empty at each simulation. A launch configuration's `eeprom` gives a file that keeps it between simulations.
+A launch configuration's `eeprom` gives a file that keeps the EEPROM between simulations. Without one, the EEPROM starts empty each time.
 
-- The simulation starts from the file.
-- Each write the app makes, by `wepo` from code or typed, reaches the file at once. So the next simulation starts from what the app wrote.
-- A file that does not exist will be made, with an empty EEPROM.
+- Each write the app makes reaches the file at once, whether it comes from `wepo` in code or from a typed instruction.
+- If the file does not exist, the simulator creates it, with an empty EEPROM.
 - A file longer than the EEPROM's 1024 bytes stops the launch, since writing it back would cut it.
 - When a write fails, for example because another program has the file open, the log shows the error. The next write puts the whole EEPROM in the file again.
-- The Nextion Editor's simulator keeps its own EEPROM in `eeprom.bin`. Give that file to share the EEPROM with it, one run after the other.
+- The Nextion Editor's simulator keeps its EEPROM in `eeprom.bin`. Give that file in `eeprom` to share the EEPROM with it, one run after the other.
 
-To start each simulation from the same EEPROM contents, copy a saved file over the EEPROM file before each launch. VS Code's `preLaunchTask` runs a task from `tasks.json` first. In `.vscode/tasks.json`:
+To start each simulation from the same EEPROM contents, add a `preLaunchTask` to the launch configuration that copies a saved file over the EEPROM file. For example, in `.vscode/tasks.json`:
 
 ```json
 {
@@ -64,8 +57,6 @@ To start each simulation from the same EEPROM contents, copy a saved file over t
 }
 ```
 
-The task uses Python so that it works on any computer. A `cp` or `Copy-Item` command works just as well.
-
 Then, in the launch configuration:
 
 ```json
@@ -75,35 +66,54 @@ Then, in the launch configuration:
 
 ### Chinese input
 
-Chinese input (`pa_q` and `pa_txt`) needs the screen's pinyin table. A launch configuration's `pinyinTable` gives it, as either of these:
+Chinese input (`pa_q` and `pa_txt`) needs the screen's pinyin table. You can give it in a launch configuration's `pinyinTable`, with one of these files:
 
 - `input.bin`, in the Nextion Editor's installation folder.
-- Any TFT file, such as one you built from your project. Every TFT file contains a copy of the table. Use one on a computer without the Nextion Editor.
+- Any TFT file, such as one you built from your project, because every TFT file contains a copy of the table. Use one on a computer without the Nextion Editor.
 
-- Without it, the simulation uses the installed Nextion Editor's table, if it finds one.
-- Without that either, the log says once that Chinese input will not show any candidates.
-- A file without a pinyin table in it stops the launch.
+A file that does not contain a pinyin table stops the launch. Without `pinyinTable`, the simulation uses the table of the installed Nextion Editor, if it finds one. Without either, Chinese input does not show any candidates.
 
 ## The panel
 
-The panel draws the page that is showing, the same way the page preview draws it. It also shows anything your code drew with drawing commands, such as `fill`, `line`, or `xstr`. The panel gets darker when your code lowers `dim`.
+The panel draws the page the same way the page preview does, along with anything your code drew with commands such as `fill`, `line`, or `xstr`. It gets darker when your code lowers `dim`.
 
-- An event that runs long, such as one drawing a chart, is shown as it goes, every tenth of a second. When a drawing takes longer than that, it is shown less often, so that the event can go on.
-- A stream of work, such as instructions arriving faster than they run, is shown the same way. The last state is drawn once nothing is waiting.
-- The zoom bar above it shows the screen larger or smaller, like the page preview's. Ctrl with the mouse wheel zooms about the pointer.
-- A press lands on the screen's pixel under the pointer, whatever the zoom.
+- While an event runs long, such as one drawing a chart, the panel is updated about every tenth of a second, or less often when drawing takes longer. The same is true while instructions arrive faster than they run.
+- A zoom bar above the panel works the same way as the page preview's, and Ctrl with the mouse wheel zooms around the pointer.
 
-Closing the panel does not stop the simulation. To open the panel again, use **Show the screen** in the Simulator section, or the command "nxwright: Show the Simulator". The panel opens on the screen as it is now.
+Closing the panel does not stop the simulation. To open it again, use **Show the screen** in the Simulator section, or the command "nxwright: Show the Simulator".
+
+## The log
+
+The log, in the Debug Console, lists what reached outside the screen, with the simulation's time:
+
+- what it sent on the serial line;
+- each EEPROM and GPIO access, with its value;
+- the SD card's commands;
+- the commands that the simulator records but does not run ([screen-code.md](screen-code.md#commands-recorded-but-not-run)).
+
+## Starting again
+
+Starting again picks up any changes to your files, and is otherwise a power cycle, like `rest`. The EEPROM keeps what the app wrote.
+
+If your files no longer build, the debugger stops on the error, and the app keeps running as it was. Continue, fix the file, then start again.
+
+## Debugging
+
+You can debug the app while it runs.
+
+- Breakpoints stop it. Stepping, the Call Stack view, and the Variables view work the same way they do for a test ([Debugging a test](testing.md#debugging-a-test)).
+- You can step back through the app's last 900,000 to a million steps.
+- Stepping forward past the last recorded step lets the app run on.
+- An error in the code, such as dividing by zero, stops the app the same way as an exception. Continuing goes on from that line.
 
 ## Touches
 
 Press the mouse on the panel to touch the screen.
 
-- The press lands on the topmost component under the pointer that shows, or on the page. Its Touch Press event runs.
+- A press lands on the topmost visible component under the pointer, or on the page if there is none, and runs that component's or the page's Touch Press event.
 - Letting go runs the Touch Release event of the component pressed.
-- A hidden component lets the touch through to what lies under it.
-- A component whose touches `tsw` turned off takes the touch, but none of its events run.
-- After `tsw 255,0`, the page itself does not take touches either: a press on it does not run any of its events.
+- When `tsw` has turned a component's touches off, the component still takes the touch, but none of its events run.
+- After `tsw 255,0`, a press on the page itself does not run any of the page's events.
 
 ### Touch captures
 
@@ -113,31 +123,29 @@ A page's touch capture runs its own Touch Press and Touch Release events before 
 - When a page has several touch captures, only the last one runs.
 - `tsw` does not turn a touch capture off.
 - A `click` does not run the touch capture's events. It runs only the clicked component's event.
-- When its event changes page, the component's own event does not run.
-- A file browser, select, sliding text, combo box, or data record takes the touch before the Touch Release event runs. So the event reads what the touch chose, such as a combo box's new `val`.
+- When the touch capture's event changes page, the touched component's own event does not run.
+- A file browser, select, sliding text, combo box, or data record acts on the touch before the touch capture's Touch Release event runs, so that event reads what the touch chose, such as a combo box's new `val`.
 
 ### Keyboards
 
-A component bound to a keyboard by its `key`, 1 to 4, opens that keyboard's page when it is released ([commands.md](commands.md#keyboard)). This happens after its Touch Release event, for a press or a `click`.
-
-- The keyboard's `loadpageid` is set to the caller's page number.
-- The keyboard's `loadcmpid` is set to the component's ID.
+A component whose `key` is 1 to 4 is bound to the keyboard of that number. When the component is released, by a press or a `click`, its Touch Release event runs, and then the keyboard's page opens. The keyboard's `loadpageid` is set to the number of the component's page, and its `loadcmpid` to the component's ID. See [keyboard](commands.md#keyboard) for how to add a keyboard page to your project.
 
 A keyboard is a page of your project, and you can change it like any other page. Keep what the screen relies on: its `system_page` marker, and its two variables of global scope, `loadpageid` and `loadcmpid`.
 
 What happens on OK or Cancel is up to the keyboard's own code. nxwright's keyboards, and the Nextion Editor's own, do this:
 
-- OK writes the typed text back to the component: its `txt`, or its `val` for a number or an xfloat. Then the keyboard opens the caller's page again, with `page loadpageid.val`.
-- Cancel opens the caller's page again without writing anything.
+- OK writes the typed text back to the component: its `txt`, or its `val` for a number or an xfloat. Then the keyboard goes back to the component's page with `page loadpageid.val`.
+- Cancel goes back to the component's page without writing anything.
 
-The keyboard reaches the component through `p[loadpageid.val].b[loadcmpid.val]`. From another page, that only reaches components of global scope. That is why a component bound to a keyboard must be of global scope. Opening the caller's page again also runs its `load` event again.
+A component bound to a keyboard must be of global scope, because the keyboard reaches it through `p[loadpageid.val].b[loadcmpid.val]`, which from another page reaches only components of global scope. Going back to the component's page also runs that page's `load` event again.
 
 ### Touch coordinates
 
-- A press puts its pixel in `tch0` and `tch1`, and in `tch2` and `tch3`, before its events run. A press sets them while the screen sleeps too.
-- Moving the press moves them.
-- A release sets `tch0` and `tch1` to 0 before its events run. `tch2` and `tch3` keep the last place.
-- A test's press gives a component, not a place, so it changes none of them.
+`tch0` and `tch1` give the place of the touch going on, and `tch2` and `tch3` the place of the last touch.
+
+- A press sets all four before its events run, even while the screen sleeps, and moving the press updates them.
+- A release sets `tch0` and `tch1` to 0 before its events run, and `tch2` and `tch3` keep the last place.
+- A press in a test is given only a component, so it changes none of the four.
 
 When `sendxy` is 1, each press and release sends its place on the serial line, before its events run:
 
@@ -151,8 +159,8 @@ While the screen sleeps, each sends 0x68 instead, whatever the value of `sendxy`
 
 The Nextion Editor's "Send Component ID" ticks are kept in `sendkey`:
 
-- `sendkey` 1, the Touch Release event's tick: as the component is released, it sends 0x65, its page's ID, its own ID, and 0.
-- `sendkey` 2, the Touch Press event's tick: as the component is pressed, it sends 0x65, its page's ID, its own ID, and 1.
+- `sendkey` 1, the Touch Release event's tick: when the component is released, it sends 0x65, its page's ID, its own ID, and 0.
+- `sendkey` 2, the Touch Press event's tick: when the component is pressed, it sends 0x65, its page's ID, its own ID, and 1.
 - These bytes are sent before the component's events run. When `sendxy` is 1, they come after the touch's coordinates (0x67).
 - The page has the same ticks. When it is touched, it sends the same bytes, with 0 as its own ID.
 - A component whose touches are off sends nothing. Neither does a `click`.
@@ -160,22 +168,19 @@ The Nextion Editor's "Send Component ID" ticks are kept in `sendkey`:
 
 ### Drawing with a touch
 
-While `thdra` is 1, a touch draws in the colour `thc`, as drawing commands paint.
+While `thdra` is 1, a touch also draws in the colour `thc`, the same way drawing commands paint.
 
-- The press draws a dot of 2 by 2 pixels, over the component drawn pressed.
-- Each move of the touch draws a line from the last place to the next.
-- The touch is handled as usual besides.
-- On a sleeping screen, which a touch only wakes, it draws nothing.
+- The press draws a dot of 2 by 2 pixels, over the component in its pressed state.
+- Each move of the touch draws a line from the last position to the new one.
+- A touch that only wakes a sleeping screen does not draw.
 
 ### Dragging components
 
-A press on a component whose `drag` is 1, which then moves, carries the component with it.
+When you press a component whose `drag` is 1 and move the pointer, the component moves with it. Its `x` and `y` follow the touch, and the whole component stays on the screen.
 
-- The component's `x` and `y` follow the touch.
-- The component's whole rectangle stays on the screen.
-- The component's press and release events run as for any press.
+- The component's press and release events run the same way as for any other press.
 - A slider, and the other types that follow a press, keep following it instead of being dragged. A page and a hotspot are never dragged.
-- `movex` and `movey` are left alone.
+- `movex` and `movey` do not change.
 
 ## Time and timers
 
@@ -184,54 +189,49 @@ The simulation's time follows the wall clock while it runs.
 - Each timer of the page shown that is on (`en` 1) runs its event every `tim` milliseconds.
 - A `move` moves its component on the same clock.
 - Timers run one at a time. Touches and the serial line take their turns between them.
-- When the app's events take longer than its timers' periods, a late timer runs once, straight away. The timer does not run once for each period it missed. The simulation's time then falls behind the wall clock. This can happen while the debugger records every step.
+- When the app's events take longer than its timers' periods, a late timer runs once, straight away, however many periods it missed, and the simulation's time falls behind the wall clock. This can happen while the debugger records every step.
 - A `delay` holds the simulation for as long as it lasts. Touches wait for it.
-- The real-time clock, `rtc0` to `rtc6`, starts at your computer's time of day. They are the year, month, day, hour, minute, second, and day of the week, from 0 for Sunday. The clock moves with the simulation's time.
-- Code setting one of `rtc0` to `rtc5` sets that part of the time. An impossible date or time, such as month 13, is ignored.
-- Starting again keeps the clock running, the same way a screen's clock runs on while the screen is off.
+
+The real-time clock starts at your computer's time of day, and moves with the simulation's time. `rtc0` to `rtc6` give its year, month, day, hour, minute, second, and day of the week, from 0 for Sunday. Code can set any of `rtc0` to `rtc5`, and the simulator ignores an impossible date or time, such as month 13. Starting again keeps the clock running, the same way a screen's clock runs on while the screen is off.
 
 ### Sleep
 
 - `sleep=1` puts the screen to sleep. The panel goes dark, and the timers stop.
-- `thsp` puts it to sleep after that many seconds without a touch. `ussp` puts it to sleep after that many seconds without serial data.
-- While the screen sleeps, events do not run. When `thup` is 1, the touch wakes the screen as the touch ends.
-- Instructions from the serial line run while it sleeps. When `usup` is 1, an instruction wakes the screen first, then runs. A `click` among them does not run any event.
-- Code that puts the screen to sleep ends its event. The rest of the event does not run, so code after the sleep in that event cannot wake the screen again. The Nextion Editor's simulator does the same in a press's event, a timer's event, and a page's `load` and `unload` events.
+- `thsp` puts the screen to sleep after that many seconds without a touch, and `ussp` after that many seconds without serial data.
+- While the screen sleeps, events do not run. When `thup` is 1, the touch wakes the screen when it ends.
+- Instructions from the serial line run while the screen sleeps. When `usup` is 1, an instruction wakes the screen first, then runs. A `click` among them does not run any event.
+- Code that puts the screen to sleep ends its event, so code after the sleep in that event cannot wake the screen again. The Nextion Editor's simulator does the same in a press's event, a timer's event, and a page's `load` and `unload` events.
   - In a page's `unload` event, the page change stops at that point. The old page stays shown.
   - In a `load` event, the new page shows, but its `loadend` event does not run.
 - When a press's event puts the screen to sleep, its release counts as a touch on a sleeping screen. The release sends 0x68, and wakes the screen when `thup` is 1. The component's Touch Release event does not run.
 - Falling asleep by `thsp` or `ussp` sends 0x86 on the serial line. Waking by a touch sends 0x87. Waking by the serial line sends nothing. `sleep` set by code sends neither.
-- However it wakes, the screen then shows the page that `wup` gives, the same way a `page` command does. When `wup` is 255, the screen stays on the page it was on.
-- The old page's `unload` event does not run then, whether a touch or the serial line woke it.
-- A `wup` that does not give a page leaves the page shown as it is.
+- However it wakes, the screen then shows the page that `wup` gives, the same way a `page` command does, except that the old page's `unload` event does not run. When `wup` is 255, or does not give a page, the screen stays on the page it was on.
 - Waking by a touch starts the `ussp` count again.
 
 ## Changing page
 
-A `page` command gives the page by its name, its number, or a value that contains its number: `page returnPage.val`, or `page appid&0x000000FF`, computed from left to right. A number that no page has answers 0x03, and the page stays.
+A `page` command takes the page's name, its number, or an expression that gives its number, such as `page returnPage.val` or `page appid&0x000000FF`. If no page has that number, the command answers 0x03, and the screen stays on the page it shows.
 
 - The command runs the old page's `unload` event, then the new page's `load` and `loadend` events, inside the event that ran the command.
-- The rest of that event does not run. Neither do the events whose clicks or calls led to it.
+- The rest of the event that ran the command does not run, and neither do the events whose clicks or calls led to it.
 - A `return` in a page's `load` event keeps its `loadend` event from running. This is also true when the simulation starts.
-- The panel keeps showing the old page until the new one's `load` event ends. A real screen also waits until then to draw the new page.
-- A page without a background, such as a dialog, is drawn over what the screen showed when it was entered: what the page before left. The first page after the screen starts is drawn over black. A page has no background when its `sta` is 0, or when it is 2 with no picture, or with a picture the folder does not have.
+- The panel keeps showing the old page until the new one's `load` event ends.
+- A page has no background when its `sta` is 0, or when `sta` is 2 and the page has no picture, or a picture the source folder does not have. Such a page, for example a dialog, is drawn over whatever the screen showed when the page opened. The first page after the screen starts is drawn over black.
 - Entering a page starts its components from its `.page.toml` file, shown and taking touches.
 - Components of global scope (`vscope` 1) keep their values instead. They also keep whether they show (`vis`) and take touches (`tsw`).
 - A `vis 255` or `tsw 255` also applies to each component of global scope on the page shown, and those components keep it. The next page's other components start from their page file.
-- Only the timers of the page shown run.
 
 ## Drawing commands
 
-Drawing commands paint over the page, in order.
+Drawing commands paint over the page, in order, until a new page clears what they painted.
 
-- A component is drawn again over them when the code changes it, even to the value it had, or shows it with `vis`.
-- So is a button that is pressed or released, a slider whose knob a press moves, and a component given to `ref`.
-- A component drawn again shows on the page's own background. What drawing commands painted under it goes. On a page without a background, it shows the screen as the page found it there.
-- The components it overlaps are drawn again with it, and those they overlap in turn, and so on, in ID order.
-- When your code moves or resizes a component, the page's background comes back where it was. The simulator draws the components in that area again, and those they overlap in turn. A `move` does the same at each of its steps, about every 16 ms, so the background comes back all along its path.
+A component is drawn again over the painting when the code changes it, even to the value it had, or shows it with `vis`. A button that is pressed or released, a slider whose knob a press moves, and a component given to `ref` are drawn again too.
+
+When a component is drawn again, it shows on the page's own background, and what drawing commands painted under it disappears. On a page without a background, the component shows over what the screen showed when the page opened. The components it overlaps are drawn again with it, and those they overlap in turn, and so on, in ID order.
+
+- When your code moves or resizes a component, the page's background comes back where the component was. The simulator draws the components in that area again, and those they overlap in turn. A `move` does the same at each of its steps, about every 16 ms, so the background comes back all along its path.
 - Between `ref_stop` and `ref_star`, a component your code changes keeps showing as it was until `ref_star`. So does a component that `vis` hides. A component that `vis` shows appears at once.
 - When your code changes page between `ref_stop` and `ref_star`, the page before keeps showing. Your code runs on the new page meanwhile, and a touch goes to the new page's components. `ref_star` shows the new page, with what your code painted on it, and starts its [opening effects](#opening-effects).
-- A new page clears what they painted.
 
 ### Opacity
 
@@ -247,16 +247,15 @@ The panel draws each component with opacity `aph`, from 0 (invisible) to 127 (op
 
 ### Checkboxes, radios, dual-state buttons, and switches
 
-- They flip their `val` when pressed, from 0 to 1 and back.
-- This happens before the press's events run, a touch capture's included, so the events read the new value.
-- They are drawn again in their new state.
-- A radio is not grouped with the page's other radios. A press turns it off when it is on.
+These components flip their `val` between 0 and 1 when pressed. The flip happens before the press's events run, a touch capture's included, so the events read the new value.
+
+A radio is not grouped with the page's other radios, so a press turns it off when it is on.
 
 ### Sliders
 
 - Pressing a slider puts its knob's middle under the pointer, and dragging moves it along.
 - The knob stays where the pointer left it, even when `ref` draws the slider again. When your code sets `val`, even to the value it has, the knob moves back to the place of that value.
-- Each move that changes its value runs its Touch Move event (`slide`).
+- Each move that changes the slider's value runs its Touch Move event (`slide`).
 
 ### Scrolling texts
 
@@ -264,27 +263,29 @@ A scrolling text that is on moves its text `dis` pixels every `tim` milliseconds
 
 - The text starts just outside its component, comes in at its first step, and comes round again once it has gone.
 - Code reads where the text is in `vvs0`, or in `vvs1` when it moves up or down.
-- Code reads the text's width and height in pixels in `vvs2` and `vvs3`, as it is drawn: with `spax` between characters, `spay` between lines, and the lines `isbr` wraps. The text is measured as its page opens, and at each step before it moves.
+- Code reads the text's width and height in pixels in `vvs2` and `vvs3`, as it is drawn: with `spax` between characters, `spay` between lines, and the lines `isbr` wraps. The text is measured when its page opens, and at each step before it moves.
 - Code setting `vvs0` or `vvs1` moves the text to that place, and the text moves on from that place. A new `txt` or `font` keeps it where it is. `en` 0 stops it where it is.
 - A new `txt` or `font` shows at once. Until the next step measures it, `vvs2` and `vvs3` keep the old size, and `xcen` or `ycen` aligns the new text by that old size. A stopped text keeps the old size.
-- A new `dir` the other way along the same line, such as 1 after 0, turns it round where it is.
+- A new `dir` the other way along the same line, such as 1 after 0, turns the text round where it is.
 - A new `dir` that switches between across and up or down takes effect at the text's next step. That step puts the text just outside its component, where it would come back in, and moves it no further. Until then, the text shows, and code reads its place, as before. A stopped text does not turn.
 - While the text moves, code setting `tim`, or setting `en` to 1, does not delay it, even when the value is the same. The text's next step comes `tim` after its last one, or at once if that time has passed. A timer is different: setting its `tim` or `en` starts its count again.
 - After `en` 0, code setting `en` to 1 counts `tim` from then.
 
 ### Sliding texts
 
-- Their lines are laid out as a text's, from the top inside the border. When `isbr` is 1, the lines wrap at the component's width.
-- `maxval_y` is how far a touch scrolls them: how much taller the lines are than the inside of the border. The simulator works out `maxval_y` as the page opens, and again when code sets `txt` or `font`.
-- Code setting `val_y` scrolls them up to 32 pixels further than that, and up to 32 pixels above their top. The last line never scrolls above the top.
-- What code sets in `val_y` reads back as set until its event ends, or until a `doevents`. The screen then settles it within these limits.
-- A drag scrolls them as far as the touch moves, up to `maxval_y`. They stay where the drag leaves them.
-- `left` sets when the scroll bar's thumb shows: never, while a touch scrolls them, or always. Pressed without scrolling, they are not drawn again until the touch ends.
+A sliding text lays out its lines the same way as a text, from the top inside the border, and wraps them at the component's width when `isbr` is 1.
+
+- `maxval_y` is how far a touch can scroll the text: how much taller the lines are than the inside of the border. The simulator works it out when the page opens, and again when code sets `txt` or `font`.
+- Code setting `val_y` can scroll the text up to 32 pixels past `maxval_y`, and up to 32 pixels above its top. The last line never scrolls above the top.
+- A `val_y` that code sets reads back unchanged until the event ends, or until a `doevents`, when the screen brings it back within these limits.
+- A drag scrolls the text as far as the touch moves, up to `maxval_y`, and the text stays where the drag leaves it.
+- `left` sets when the scroll bar's thumb shows: never, while a touch scrolls the text, or always.
+- A sliding text pressed without scrolling is not drawn again until the touch ends.
 
 ### Combo boxes
 
-- A tap on the box opens its list, as the tap ends. The next tap closes it.
-- While the list is open, it belongs to its box. A press anywhere on it runs the box's Touch Press event: on an item, a scroll mark, or a gap between items.
+- A tap on the box opens its list when the tap ends. The next tap closes it.
+- While the list is open, a press anywhere on it runs the box's Touch Press event, whether on an item, a scroll mark, or a gap between items.
 - The release chooses the item under it, sets `val` and `txt`, and closes the list. Then the box's Touch Release event runs.
 - Under the list, a component that comes before the box in ID order does not take the press.
 - A component that comes after it is drawn over the list. That component takes the press as usual, and the list stays open. The list also stays open when the page is pressed elsewhere.
@@ -296,14 +297,14 @@ A scrolling text that is on moves its text `dis` pixels every `tim` milliseconds
 ### File browsers
 
 - A file browser lists its folder, `dir`, when its page opens, and whenever code sets `dir`.
-- `up()` goes to the folder above, and lists it. `up()` goes no higher than the card's own folder.
-- The file browser lists the folders first, unless `psta` is 0. Then it lists the files its `filter` lets through. Each group is in alphabetical order, ignoring capitals.
+- `up()` goes to the folder above and lists it, but goes no higher than the card's own folder.
+- The file browser lists the folders first, unless `psta` is 0, and then the files its `filter` lets through. Each group is in alphabetical order, ignoring capitals.
 - `qty` counts the entries.
 - Each listing clears the selection (`val` -1, `txt` empty), scrolls to the top (`val_y` 0), and sets how far the entries scroll (`maxval_y`). When code sets `dir` or runs `up()`, `maxval_y` takes its new value only once that event ends.
 - Code setting `val` selects an entry. `txt` gives its name. A folder's name ends with "/".
 - Code setting `val_y` scrolls the entries, up to 32 pixels past `maxval_y`, and up to 32 pixels above their top. In the event that listed the folder, it scrolls them no further than `maxval_y`.
-- What code sets in `val_y` reads back as set until its event ends, or until a `doevents`. The screen then settles it within these limits.
-- A touch takes effect as it ends, before the `up` event runs. A tap on a file selects it. A tap on a folder opens it.
+- A `val_y` that code sets reads back unchanged until the event ends, or until a `doevents`, when the screen brings it back within these limits.
+- A touch takes effect when it ends, before the `up` event runs. A tap on a file selects it. A tap on a folder opens it.
 - A tap on an empty place, past the last entry, sets `val` to the number of entries, and `txt` to nothing.
 - A tap between two places, or right of the last column, clears the selection: `val` goes back to -1. A tap left of the first column changes nothing.
 - A tap on the border above the entries counts as a tap just inside it, scrolled or not.
@@ -314,17 +315,17 @@ A scrolling text that is on moves its text `dis` pixels every `tim` milliseconds
 - A select's `path` contains its lines, one at each line break.
 - Code setting `val` picks a line. `txt` gives its text. A `val` past the last line, or below 0, changes nothing: `val` and `txt` keep theirs.
 - Only code setting `val` sets `txt`. Opening the page, or changing `path`, does not.
-- A drag turns the lines. As the touch ends, the line left in the middle is picked, before the `up` event runs.
+- A drag turns the lines. When the touch ends, the line left in the middle is picked, before the `up` event runs.
 - A tap does nothing.
 
 ### Data records
 
-- As its page opens, a data record reads its data file. If the file doesn't exist and `mode` is 1, the data record creates it.
-- The data record shows the records in its table. When `order` is 0, the newest record is at the top.
+- When its page opens, a data record reads its data file. If the file doesn't exist and `mode` is 1, the data record creates it.
+- When `order` is 0, the newest record is at the top of the table.
 - The data record's methods change the file, and the table follows ([Data records](screen-code.md#data-records)).
 - Code setting `val_y` scrolls the records, up to 32 pixels past `maxval_y`, and up to 32 pixels above their top, which leaves an empty band under the titles.
 - Code setting `val_x` scrolls the columns, from 0 to `maxval_x`. `maxval_x` counts the line at the right of the last column.
-- What code sets in `val_y` or `val_x` reads back as set until its event ends, or until a `doevents`. The screen then settles it within these limits.
+- A `val_y` or `val_x` that code sets reads back unchanged until the event ends, or until a `doevents`, when the screen brings it back within these limits.
 - Code changing its `path`, `format`, `hig`, `gdw`, or `gdh` works out `qty`, `txt`, `maxval_y`, and `maxval_x` again. A new `dir` leaves them as they were, until one of those changes.
 - When `dis` is 1, a tap chooses the record under it, setting `val` and `txt`. This happens after the Touch Press event and before the Touch Release event.
 - A tap on the titles' row, or below the last record, chooses nothing.
@@ -332,14 +333,14 @@ A scrolling text that is on moves its text `dis` pixels every `tim` milliseconds
 
 Only one data record can use a data file at a time. When two data records give the same `path`, the first one to open the file keeps it:
 
-- The first data record keeps the file while other pages show, and opens it again when its page opens again. That record lets the file go when code changes its `path`.
-- The second data record cannot open the file. The second record shows "Cannot open file:" and the path, in white on black, in its own font. Its `qty` is 0. As its page opens, it sends the error code 0x06 twice ([Return codes](#return-codes)).
-- The second record's methods change nothing while the first record keeps the file. Once the file is free, its next method opens it.
+- The first data record keeps the file while other pages show, and opens it again when its page opens again. It lets the file go when code changes its `path`.
+- The second data record cannot open the file. It shows "Cannot open file:" and the path, its `qty` is 0, and it sends the error code 0x06 twice when its page opens ([Return codes](#return-codes)).
+- The second data record's methods change nothing while the first one keeps the file. Once the file is free, the next method opens it.
 - Code setting a data record's `path` to a file another one keeps answers 0x06.
 
-Data records keep at most 8 files at once, across pages. A record that finds 8 kept by others cannot open its own, as if another record kept it. A record that keeps a file can still change its `path`, because it lets the old file go first.
+Data records keep at most 8 files at once, across pages. A data record that finds 8 kept by others cannot open its own, the same as when another data record keeps it. A data record that keeps a file can still change its `path`, because it lets the old file go first.
 
-A data record whose `path` is empty does not keep a file, so it does not shut out any other record. Such a record shows "File Lost:", in white on black, in its own font, but does not send an error code. The page preview shows it the same way.
+A data record whose `path` is empty shows "File Lost:". It does not keep a file, so it does not shut out any other data record, and it does not send an error code.
 
 A data record whose `init` is 1 does not open the file its page file gives:
 
@@ -350,18 +351,18 @@ A data record whose `init` is 1 does not open the file its page file gives:
 
 ### Animations, videos, and sounds
 
-They play from their page's opening.
+Animations, videos, and sounds start playing when their page opens.
 
 - A run lasts the component's `stim`: the sum of an animation's frames' durations, a video's frames at its frame rate, or a sound's samples.
-- The panel draws the frame that `tim` falls on, in the frame's own colours, not the screen's 16 bits.
+- The panel draws the frame that `tim` falls on, in the frame's own colours, without reducing them to the screen's 16 bits.
 - When a run ends, `playend` runs. When `loop` is 1, a new run starts at once. Otherwise the last frame stays, and `en` becomes 0. Setting `en` to 1 then starts a new run.
-- Code setting `en` to 0 stops it, back at its start. 2 pauses it, and 1 plays it on.
+- Code setting `en` to 0 stops the component and goes back to the start. 2 pauses it, and 1 makes it play on.
 - Setting `tim` moves the run to that time.
 - Setting `vid` to another ID loads that one, at its start. It plays if the player was playing, and stays stopped or paused if not. Setting `vid` to the ID loaded changes nothing, playing or not.
-- Setting `path` plays its file from its start, even the file playing.
+- Setting `path` plays that file from its start, even if it is the file already playing.
 - An animation's or a video's `dis` is its speed, in percent. The Nextion Editor gives its range as 10 to 1000, but code may set more or less, and it plays that fast. At 0 it stands still. A sound's `dis` does not change its speed.
 - A video's `fps` always reads its file's frame rate.
-- A sound writes to the log as it starts, pauses, stops, and ends.
+- A sound writes to the log when it starts, pauses, stops, or ends.
 
 A video's or a sound's `from` sets where its file comes from:
 
@@ -370,7 +371,7 @@ A video's or a sound's `from` sets where its file comes from:
 
 With `from` 1:
 
-- When the card's folder lacks that file, nothing plays. The component sends the error code 0x06, an invalid file operation ([Return codes](#return-codes)). It sends it as its page opens, and when code sets its `path`.
+- When the card's folder does not have that file, nothing plays, and the component sends the error code 0x06 ([Return codes](#return-codes)) when its page opens and when code sets its `path`.
 - When a card has no folder, the simulator keeps the card in memory, the same way the file commands do. A file missing from that card answers 0x06 too.
 - With an empty `path`, nothing plays, and the component does not send an error code.
 
@@ -388,30 +389,30 @@ A waveform draws the points that code adds with `add`, each channel in its colou
 
 ### Opening effects
 
-As a page opens, its components whose `effect` is 1 to 8 slide in from wholly off the screen.
+When a page opens, its components whose `effect` is 1 to 8 slide in from wholly off the screen.
 
-This happens on the Edge and Intelligent series only. The Basic, Enhanced, and Discovery series do not support `effect`, so their components are drawn in place at once. The Nextion Editor's simulator did the same on a Basic screen.
+This happens on the Edge and Intelligent series only. The Basic, Enhanced, and Discovery series do not support `effect`, so their components are drawn in place at once.
 
-- They start once the page's `load` event ends, each sliding to where that event left it. The `loadend` event runs as they start.
-- A page entered between `ref_stop` and `ref_star` starts them at `ref_star`, each sliding to where your code left it by then. Its `loadend` event still runs as its `load` event ends.
+- The components start sliding once the page's `load` event ends, each to where that event left it. The `loadend` event runs when they start.
+- On a page entered between `ref_stop` and `ref_star`, the components start sliding at `ref_star`, each to where your code left it by then. The page's `loadend` event still runs when its `load` event ends.
 - Each comes from beyond the edge or corner its effect gives, in a straight line, at a steady speed, over `time` milliseconds.
 - The components with the highest `first` slide in together. Then those of the next lower `first`, once those are in place.
 - A component waiting its turn is not drawn.
-- Meanwhile, code reads each component's own `x` and `y`, and touches land at that place too.
+- While a component slides, code reads its own `x` and `y`, and touches land at that position.
 - Code hiding or showing a component puts it in its place at once.
 - Code moving a component during its slide, in `loadend` or a timer's event, changes the `x` and `y` that code reads, but the component slides on. When the slide ends, the component stays where the slide took it, and its `x` and `y` go back to that place.
 - A component sliding in over what drawing commands painted shows over it, and the page's background comes back along the path it slid.
 
 ## The serial line
 
-The log shows what the screen receives and sends on its serial line. A launch configuration's `logReceived` and `logSent` say how: as text (`text`), in hexadecimal (`hex`), or `both`.
+The log shows what the screen receives and sends on its serial line. A launch configuration's `logReceived` and `logSent` set how each is shown: as text (`text`), in hexadecimal (`hex`), or `both`.
 
 - By default, what the screen receives shows as text, and what it sends in hexadecimal.
 - As text, the FF FF FF that ends an instruction or a reply is left out. A byte that is not a character shows as `\xNN`.
 
 ### Return codes
 
-After an instruction, the screen can send a return code on the serial line, such as 0x01 for success or 0x06 for an invalid file operation. The system variable `bkcmd` decides which codes it sends:
+After an instruction, the screen can send a return code on the serial line, such as 0x01 for success or 0x06 for an invalid file operation. The system variable `bkcmd` sets which codes the screen sends:
 
 - 0: none;
 - 1: only on success;
@@ -441,27 +442,21 @@ A serial port of your computer can carry the screen's serial line, like the "Use
 "serialPort": {"name": "COM4", "baud": 115200}
 ```
 
-On Linux, a port is named as `/dev/ttyUSB0`.
+On Linux, a port has a name such as `/dev/ttyUSB0`.
 
 - You set the port's rate with `baud`, in the launch configuration or in the Simulator section. Without it, the rate is 9600, the screen's rate at power-on.
 - The line is 8 data bits, no parity, and 1 stop bit.
-- Your app's code cannot change the port's rate. On a screen, setting the system variable `baud` or `bauds` changes the screen's rate. In the simulator, the port keeps the rate you set.
+- Setting the system variable `baud` or `bauds` changes a screen's rate, but the simulator's port keeps the rate you set.
 - What arrives is cut into instructions at each FF FF FF, and read in the project's encoding. Each one runs in turn, the same way as a typed instruction.
 - When the screen starts again, for example with `rest`, it drops what it has received but not yet run.
-- While the simulation is paused, they wait. They do not count against the screen's serial buffer ([Holding instructions](#holding-instructions)).
-- Everything the screen sends goes out, in order, its return codes included.
+- While the simulation is paused, instructions that arrive wait, and do not count against the screen's serial buffer ([Holding instructions](#holding-instructions)).
 - You can connect the simulator to a program on the same computer by using a virtual pair of ports. On Windows, com0com creates one. On Linux or macOS, `socat -d -d pty,raw,echo=0 pty,raw,echo=0` creates one, and prints the two ports' names.
 - When a port cannot open, or is lost, the log shows the reason. The simulation keeps running without the port.
-- The simulator sends in pieces of 64 bytes. The port has 20 ms to take each piece, plus the time its bytes take at the port's rate: about 87 ms at 9600, and 26 ms at 115200. When a piece is not taken in time, for example because nothing reads the other end, the simulator drops the rest of the write, and logs it. So a port nobody reads cannot freeze the simulation.
+- When the port does not take what the simulator sends in time, for example because nothing reads the other end, the simulator drops the rest of the write and logs it, so that the simulation does not freeze.
 
 ### Typing an instruction
 
-While a simulation runs, the Simulator section has buttons to pause, resume, and start again, to show the screen, and to open the log. The section also shows the serial port and its rate, with a button to connect or disconnect it.
-
-The section's field sends the screen an instruction, as if it came from the serial line. The screen runs it, and the log shows what it sends back:
-
-- a reply, such as `get`'s;
-- the instruction's return code, if `bkcmd` is set to send it ([Return codes](#return-codes)).
+While a simulation runs, you can send the screen an instruction from the field in the Simulator section. The screen runs it as if it came from the serial line. The log shows what the screen sends back, such as `get`'s reply, or the instruction's return code if `bkcmd` is set to send it ([Return codes](#return-codes)).
 
 An instruction that answers, such as `get` or `sendme`, does not send a code for its success. Neither does one that changes page. A typed `click` answers its success before its event runs, and what the event sends follows.
 
@@ -479,23 +474,21 @@ A failed instruction has no effect. The screen answers it with one of these code
 | 0x1B | An operator on a text other than `+` and `-=`. |
 | 0x1C | A picture or font ID the project lacks. A `txt` given a number, or a `val` a text. An assignment to an attribute that code cannot change, such as `t0.w=10` ([build-rules.md](build-rules.md#attributes-code-cannot-change)). The attribute keeps its value. `addr` given a number other than 0, or 256 to 2815. |
 | 0x1D | An EEPROM access that does not fit in it. `wept` at a place before 0. |
-| 0x1E | A command given another number of parameters, or written alone where it takes some. |
+| 0x1E | A command given the wrong number of parameters, or none where it needs some. |
 | 0x20 | An escape the screen does not read. |
 | 0x24 | The screen's serial buffer overflowed ([Holding instructions](#holding-instructions)). |
 
 A name the screen does not know, 0x1A, includes:
 
-- an attribute its component lacks, by its choices or by the screen's series ([build-rules.md](build-rules.md#attributes-a-component-lacks)), such as a variable's `val` while the variable stores text, or `movex` on a Basic screen. A simulation's values leave these out.
+- an attribute that its component does not have, because of how the component is set up or because of the screen's series ([build-rules.md](build-rules.md#attributes-a-component-lacks)), such as a variable's `val` while the variable stores text, or `movex` on a Basic screen. The values a simulation starts from leave these attributes out.
 - an attribute the screen does not support ([Attributes the screen does not support](screen-code.md#attributes-the-screen-does-not-support)).
 - `usize` or `u[]` read while `recmod` is 0 ([Protocol reparse mode](#protocol-reparse-mode)).
 
-- A failure in an event's code answers at once, and the event goes on.
-- An ignored SD card command answers its own code ([The SD cards](#the-sd-cards)).
-- A `covx` to hexadecimal of an odd length answers 0x1B ([The text commands](screen-code.md#the-text-commands)).
+When a line of an event's code fails, the screen answers at once, and the event goes on. An ignored SD card command answers its own code ([The SD cards](#the-sd-cards)), and a `covx` to hexadecimal of an odd length answers 0x1B ([The text commands](screen-code.md#the-text-commands)).
 
 ### Holding instructions
 
-`com_stop` holds the instructions that arrive on the serial line, whether it is sent or run by code.
+`com_stop` holds the instructions that arrive on the serial line. It works the same whether it arrives on the serial line or is run by code.
 
 - Held instructions are logged. They neither run nor answer.
 - `com_star` runs them, in order.
@@ -503,7 +496,7 @@ A name the screen does not know, 0x1A, includes:
 - Neither command sends a return code, whatever `bkcmd` is set to.
 - The screen's serial buffer has room for 1024 bytes. When the held instructions would pass that, the screen drops them, keeps the instruction arriving, and answers 0x24.
 - `com_star` with nothing held changes nothing. Neither does a second `com_stop`.
-- Touches, timers, and page changes go on meanwhile.
+- While instructions are held, touches, timers, and page changes go on.
 - `rest` drops the held instructions, but the line stays held after the screen starts again, until a `com_star`. Starting the simulation again yourself frees it.
 
 ### Transparent data
@@ -553,17 +546,16 @@ addr=258
 After this, an instruction runs only when its first two bytes are 02 01, or FF FF, the address of every screen. The screen drops any other, and the log shows it.
 
 - The screen's answers do not carry an address.
-- `addr` takes 0, or 256 to 2815, and another number answers 0x1C. Setting it to 0, with the address, ends the mode.
+- `addr` can be 0, or 256 to 2815, and any other number answers 0x1C. To end the mode, set `addr` to 0 in an instruction that starts with the screen's address.
 - An instruction you type in the Simulator section runs as if it carried the screen's address.
-- `addr` goes back to 0 at each start, as in the Nextion Editor's simulator. A real screen keeps its address when it is turned off.
+- `addr` goes back to 0 at each start, the same as in the Nextion Editor's simulator. A real screen keeps its address when it is turned off.
 
 ## GPIO pins
 
 While the app runs, the Simulator section lists the screen's 8 GPIO pins, io0 to io7. For each pin, it shows what code set the pin up as, and its level. Code reads and writes the pins as `pio0` to `pio7`.
 
-- Click an input's level to give it the other one, like a button or a switch wired to the pin. The app reads the new level.
+- Click an input's level to switch it, the same as a button or a switch wired to the pin.
 - A pin bound to a component with `cfgpio` shows the component's name. Setting the pin to 0 presses the component, and setting it back to 1 releases it.
-- An output shows what the code last wrote to it.
 - A screen of the Basic series has no GPIO pins, and the section does not list any.
 
 Every input reads 1 until you change it, like a pull-up input that nothing drives. To start the app with other levels, give them in the launch configuration's `gpioInputs`:
@@ -574,22 +566,13 @@ Every input reads 1 until you change it, like a pull-up input that nothing drive
 
 The levels stay when the app starts again, because they belong to what is wired to the pins. For how code reads and writes the pins, see [GPIO](screen-code.md#gpio).
 
-## The log
-
-The log is in the Debug Console. The log lists, with the simulation's time, what reached outside the screen:
-
-- what it sent on the serial line;
-- each EEPROM and GPIO access, with its value;
-- the SD card's commands;
-- the commands it does not otherwise run.
-
 ## The SD cards
 
-The screen's SD cards can be folders of your computer. A launch configuration's `sdCard0` gives one for `sd0/`, and `sdCard1` one for `sd1/`, each by its full path. A drive's root is not taken. The Nextion Editor's simulator keeps its own cards in `sdcard0` and `sdcard1`, in its settings folder.
+The screen's SD cards can be folders of your computer. A launch configuration's `sdCard0` gives one for `sd0/`, and `sdCard1` one for `sd1/`, each by its full path. A drive's root folder is rejected. The Nextion Editor's simulator keeps its own cards in `sdcard0` and `sdcard1`, in its settings folder.
 
 - `sd0/presets/a.cfg` is then the file `presets/a.cfg` in the folder.
-- The app's file commands act on the folder's files, for real. What they change stays after the simulation, whatever stepping back or starting again does.
-- To start each simulation with the same files, replace the folder with a saved copy before each launch, with a `preLaunchTask`. See the [The EEPROM](#the-eeprom) section for an example of how to do this for a single file.
+- The app's file commands act on the folder's files, for real. What they change stays after the simulation, even if you step back or start again.
+- To start each simulation with the same files, replace the folder with a saved copy before each launch, with a `preLaunchTask`. See [The EEPROM](#the-eeprom) for an example of how to do this for a single file.
 - A card given no folder, a `ram/` file, and a path on no card are kept in memory, as in a test.
 
 ### External pictures
@@ -597,7 +580,7 @@ The screen's SD cards can be folders of your computer. A launch configuration's 
 External pictures show their images from the card: a PNG, a JPEG, or PictureBox's `.xi` file ([format.md, Pictures for the SD card](format.md#pictures-for-the-sd-card)).
 
 - They show in their own colours, and with their transparency.
-- On a turned screen, a file made for it shows upright. The screen draws a file as it is stored, so a file for a screen turned by the app's `rotation` is stored turned, and the simulator turns it back. A PNG or a JPEG you saved upright shows turned. `nxwright sd-picture --rotation` writes a `.xi` file stored turned for you.
+- The screen draws a picture's file the way it is stored, so on a screen that the app's `rotation` rotates, the file must be stored rotated to show upright. `nxwright sd-picture --rotation` writes such a `.xi` file. A PNG or a JPEG you saved upright shows rotated.
 - The picture starts at the component's top left corner. As much of it shows as the component has room for.
 - A picture whose file is missing shows nothing.
 
@@ -611,7 +594,7 @@ These folders are real folders on your computer. To keep your files safe, some c
 - `newfile` leaves a file that exists as it is.
 - `refile` and `redir` onto a name that exists are ignored.
 
-Beyond these:
+Other commands act on the folder like this:
 
 - `newdir` makes a missing parent folder.
 - `redir` renames a folder with its contents. Both its paths end with `/`.
@@ -628,24 +611,13 @@ An ignored command sends one of these error codes ([Return codes](#return-codes)
 - 0x01 for a `delfile` or `deldir` of what does not exist;
 - 0x01 for the other commands above that are ignored to keep your files safe, such as a path that leaves the card's folder, or a `deldir` of a full folder. A screen deletes a full folder, and answers 0x01 too.
 
-What is ignored goes to the log, and to `"file errors"`.
-
-## Starting again
-
-Starting again is a power cycle, like `rest`. The EEPROM keeps what the app wrote. The log is not cleared, and says that the app started again.
-
-## Debugging
-
-You can debug the app while it runs.
-
-- Breakpoints stop it. Stepping, the Call Stack view, and the Variables view work the same way they do for a test ([Debugging a test](testing.md#debugging-a-test)).
-- Moving back goes through what it recorded: its last 900,000 to a million steps. The oldest tenth is dropped at a time.
-- Moving forward past the present lets it go on.
-- An error in the code, such as dividing by zero, stops it as an exception does. Continuing goes on from that line.
+What is ignored goes to the log, and, in a test, to `"file errors"` ([testing.md](testing.md)).
 
 ## Known differences
 
 ### Not modelled
+
+The simulator does not model:
 
 - the glide after a drag, on file browsers, selects, sliding texts (`ch`), and combo boxes (`ch`);
 - a file browser's scroll bar staying for a second after a drag ends;
@@ -661,31 +633,31 @@ You can debug the app while it runs.
 - `crcval` reads -1 at each start, until a `crcrest`. The Nextion Editor's simulator keeps it from one run to the next.
 - The bytes that arrive after a transfer's last byte are instructions, as the vendor's instruction set describes ([Transparent data](#transparent-data)). The Nextion Editor's simulator drops the rest of a line typed in its instruction box after the transfer's last byte.
 - `addt` or `wept` with a count of 0 sends FE FF FF FF and FD FF FF FF at once. The Nextion Editor's simulator sends FD FF FF FF only when more bytes arrive, and drops those bytes.
-- `twfile` takes the file's bytes from the serial line, and writes the file, as the vendor's instruction set describes transparent data. This is not verified. The Nextion Editor's simulator sends FE FF FF FF, then takes none of the bytes, and never writes the file.
+- `twfile` takes the file's bytes from the serial line, and writes the file, as the vendor's instruction set describes transparent data. This has not been checked against a screen. The Nextion Editor's simulator sends FE FF FF FF, then takes none of the bytes, and never writes the file.
 - In address mode, an instruction typed in the Simulator section runs as if it carried the screen's address. The Nextion Editor's simulator drops an instruction typed as text, which has no address.
 - `u[]` and `ucopy` read 0 past the last byte of the buffer of protocol reparse mode. The Nextion Editor's simulator reads leftover bytes, which depend on what it received before.
-- A touch drawing with `thdra` draws its dot in `thc`, as the vendor's instruction set says. The Nextion Editor's simulator draws it black.
+- A touch drawing with `thdra` draws its dot in `thc`, as the vendor's instruction set documents. The Nextion Editor's simulator draws it black.
 - An opening effect takes `time` milliseconds. The Nextion Editor's simulator takes a little longer, a few percent, and now and then runs slower for a few seconds.
 - A component that code moves during its opening effect slides on at once. The Nextion Editor's simulator first shows it at its new place for a moment.
 - A press on a slider's track can give it a `val` one more, near the track's start, or one less, near its end, than the Nextion Editor's simulator gives.
-- A sound plays in its own time. The Nextion Editor's simulator takes about 400 ms for each play of a 50 ms sound.
-- An animation or a video plays in its own time too. The Nextion Editor's simulator gives each frame a little longer.
+- A sound plays for exactly its length. The Nextion Editor's simulator takes about 400 ms for each play of a 50 ms sound.
+- An animation or a video plays at its set speed. The Nextion Editor's simulator gives each frame a little longer.
 - An animation or a video whose `dis` is 0 stands still. The Nextion Editor's simulator stops answering.
 - The screen's serial buffer has room for 1024 bytes, the size the vendor gives ([Holding instructions](#holding-instructions)). The Nextion Editor's simulator held more, and did not answer 0x24.
 - `dims` and `bauds` go back to the vendor's defaults at each start. The screen, and the Nextion Editor's simulator, keep them.
 - `appid` keeps what code stores in it, through `rest` and a start again, like a screen ([`appid`](screen-code.md#appid)). The Nextion Editor's simulator ignores what code stores in it: it reads 0.
-- The real-time clock starts at your computer's time at each start. The Nextion Editor's simulator keeps a time that code set, from one start to the next.
+- The real-time clock starts at your computer's time when you launch a simulation. The Nextion Editor's simulator keeps a time that code set, from one run to the next.
 - Some SD card commands do less, to keep your files safe ([What the file commands do](#what-the-file-commands-do)).
 - A data record's `delete` with a count below 0 changes nothing. The Nextion Editor's simulator adds records instead, as many as the count says.
 
 ### Not compared yet
 
-nxwright does these things without having compared them with the Nextion Editor's simulator. A screen may behave differently.
+These behaviours have not been compared with the Nextion Editor's simulator, and a screen may behave differently:
 
-- When `thdra` is 1, a touch draws lines as it moves.
+- When `thdra` is 1, a touch draws lines while it moves.
 - Everything about [dragging components](#dragging-components).
 - How a drag scrolls a sliding text, a combo box's list, or a data record.
 - A video or a sound sends the error code 0x06 when its file is missing from a card that has no folder.
-- A select or a sliding text takes a drag before a touch capture's Touch Release event runs, as a combo box, a file browser, and a data record take a tap.
+- A select or a sliding text takes a drag before a touch capture's Touch Release event runs, the same way that a combo box, a file browser, and a data record act on a tap.
 
-Beyond these, the source code's comments list what else has not been compared, in `nxwright/testing/simulation.py` and `nxwright/drawing/page_drawing.py`.
+For what else has not been compared, see the comments in `nxwright/testing/simulation.py` and `nxwright/drawing/page_drawing.py`.
