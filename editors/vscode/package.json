@@ -1,8 +1,8 @@
 {
   "name": "nxwright-language",
   "displayName": "nxwright",
-  "description": "Design, write, simulate, and test Nextion screen apps in VS Code.",
-  "version": "0.2.0",
+  "description": "Design, write, simulate, test, compile, and upload Nextion screen apps in VS Code.",
+  "version": "0.3.0",
   "publisher": "nxwright",
   "icon": "images/icon.png",
   "license": "Apache-2.0",
@@ -198,6 +198,51 @@
           "light": "media/icons/build-light.svg",
           "dark": "media/icons/build-dark.svg"
         }
+      },
+      {
+        "command": "nxwright.compile",
+        "title": "Compile the TFT file",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.compileWithoutProjectFile",
+        "title": "Compile the TFT file without writing the project file",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.compileProjectFile",
+        "title": "Compile a project file into a TFT file",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.chooseTftFile",
+        "title": "Choose the TFT file for the source folder",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.toggleProjectFileLink",
+        "title": "Turn on or off writing the project file when compiling",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.upload",
+        "title": "Upload the TFT file to the screen",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.uploadTftFile",
+        "title": "Upload a TFT file to the screen",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.chooseScreen",
+        "title": "Choose the screen's port and upload rate",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.decompile",
+        "title": "Decompile a TFT file into a new source folder",
+        "category": "nxwright"
       },
       {
         "command": "nxwright.changeScreen",

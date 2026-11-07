@@ -1,0 +1,301 @@
+{
+ "pieces": {
+  "first-block-head": [
+   "first-block",
+   0,
+   36
+  ],
+  "global-texts": [
+   "first-block",
+   48,
+   52
+  ],
+  "int-variables": [
+   "first-block",
+   36,
+   48
+  ],
+  "padding": [
+   "records",
+   1160,
+   1163
+  ],
+  "page-index": [
+   "page-index",
+   0,
+   16
+  ],
+  "page-list": [
+   "first-block",
+   52,
+   58
+  ],
+  "page0-0-drawing": [
+   "pages",
+   0,
+   32
+  ],
+  "page0-0-entries": [
+   "data",
+   0,
+   792
+  ],
+  "page0-0-event-down": [
+   "pages",
+   32,
+   44
+  ],
+  "page0-0-event-loadend": [
+   "pages",
+   736,
+   740
+  ],
+  "page0-0-event-unload": [
+   "pages",
+   54,
+   68
+  ],
+  "page0-0-event-up": [
+   "pages",
+   44,
+   54
+  ],
+  "page0-0-memory": [
+   "pages",
+   665,
+   673
+  ],
+  "page0-0-record": [
+   "records",
+   0,
+   232
+  ],
+  "page0-1-background-fill": [
+   "pages",
+   72,
+   125
+  ],
+  "page0-1-drawing": [
+   "pages",
+   68,
+   72
+  ],
+  "page0-1-entries": [
+   "data",
+   792,
+   1440
+  ],
+  "page0-1-event-down": [
+   "pages",
+   125,
+   137
+  ],
+  "page0-1-event-up": [
+   "pages",
+   137,
+   147
+  ],
+  "page0-1-record": [
+   "records",
+   232,
+   464
+  ],
+  "page0-2-background-fill": [
+   "pages",
+   248,
+   309
+  ],
+  "page0-2-drawing": [
+   "pages",
+   147,
+   248
+  ],
+  "page0-2-entries": [
+   "data",
+   1440,
+   2424
+  ],
+  "page0-2-event-down": [
+   "pages",
+   309,
+   321
+  ],
+  "page0-2-event-up": [
+   "pages",
+   321,
+   331
+  ],
+  "page0-2-memory": [
+   "pages",
+   673,
+   697
+  ],
+  "page0-2-record": [
+   "records",
+   464,
+   696
+  ],
+  "page0-3-background-fill": [
+   "pages",
+   441,
+   503
+  ],
+  "page0-3-drawing": [
+   "pages",
+   331,
+   441
+  ],
+  "page0-3-entries": [
+   "data",
+   2424,
+   3408
+  ],
+  "page0-3-event-down": [
+   "pages",
+   503,
+   515
+  ],
+  "page0-3-event-up": [
+   "pages",
+   515,
+   525
+  ],
+  "page0-3-memory": [
+   "pages",
+   697,
+   717
+  ],
+  "page0-3-record": [
+   "records",
+   696,
+   928
+  ],
+  "page0-4-background-fill": [
+   "pages",
+   545,
+   597
+  ],
+  "page0-4-drawing": [
+   "pages",
+   525,
+   545
+  ],
+  "page0-4-entries": [
+   "data",
+   3408,
+   4080
+  ],
+  "page0-4-event-down": [
+   "pages",
+   597,
+   609
+  ],
+  "page0-4-event-up": [
+   "pages",
+   609,
+   619
+  ],
+  "page0-4-memory": [
+   "pages",
+   717,
+   721
+  ],
+  "page0-4-record": [
+   "records",
+   928,
+   1160
+  ],
+  "page0-doevents": [
+   "pages",
+   729,
+   736
+  ],
+  "page0-memory-run": [
+   "pages",
+   653,
+   665
+  ],
+  "page0-objects-table": [
+   "pages",
+   619,
+   653
+  ],
+  "page0-texts": [
+   "pages",
+   721,
+   729
+  ],
+  "program-s": [
+   "program-s",
+   0,
+   143
+  ],
+  "variables": [
+   "variables",
+   0,
+   36
+  ]
+ },
+ "places": {
+  "page0-0": {
+   "base": 24,
+   "buffer_place": null,
+   "first_entry": 0,
+   "load_place": null,
+   "object_id": 0,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-1": {
+   "base": 32,
+   "buffer_place": null,
+   "first_entry": 33,
+   "load_place": null,
+   "object_id": 1,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-2": {
+   "base": 32,
+   "buffer_place": null,
+   "first_entry": 60,
+   "load_place": null,
+   "object_id": 2,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-3": {
+   "base": 56,
+   "buffer_place": null,
+   "first_entry": 101,
+   "load_place": null,
+   "object_id": 3,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-4": {
+   "base": 76,
+   "buffer_place": null,
+   "first_entry": 142,
+   "load_place": null,
+   "object_id": 4,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  }
+ }
+}

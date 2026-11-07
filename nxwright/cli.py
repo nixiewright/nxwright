@@ -5,9 +5,12 @@ Installed, it runs as `nxwright <subcommand>`; from a checkout, as
 `nxwright <subcommand> --help` describes each subcommand.
 
 Exit codes: 0 when the subcommand succeeded, 1 when it failed (the message
-says why), and 2 when its arguments are wrong.
+says why), and 2 when its arguments are wrong. The subcommands on TFT files
+have more, such as 3 when they could not prompt for an answer. Each one's
+module docstring lists them (tft/commands/).
 """
 import argparse
+import importlib
 import json
 from pathlib import Path
 import sys
@@ -47,6 +50,7 @@ from nxwright.source.resource_adding import (VIDEO_RATE, add_animation, add_font
 from nxwright.source.keyboard_adding import add_keyboard
 from nxwright.source.upgrade import upgrade
 from nxwright.testing.reports import RecordingResult, results, test_ids
+from nxwright.tft.commands import command_summary
 
 
 def _run_build(arguments) -> str:
@@ -485,6 +489,15 @@ def _size(text: str) -> tuple:
     return int(parts[0]), int(parts[1])
 
 
+# The subcommands on TFT files, each by its name and its module in
+# nxwright/tft/commands/. Each module parses its own arguments, prints its own
+# messages, and returns its exit code, so main hands it the arguments as they
+# are. Its docstring's first line is its summary in the list of subcommands.
+_TFT_SUBCOMMANDS = {"compile": "compile", "decompile": "decompile", "upload": "upload",
+                    "ports": "ports", "rescue": "rescue", "tft-read": "read",
+                    "tft-listing": "listing", "tft-compare": "compare"}
+
+
 # Each subcommand: its name, the function running it (which returns the message
 # to print, or ""), a one-line summary, a fuller description, and its arguments
 # as (name, options for argparse's add_argument).
@@ -824,6 +837,9 @@ def _parser() -> argparse.ArgumentParser:
         for argument, options in arguments:
             sub.add_argument(argument, **options)
         sub.set_defaults(run=run)
+    # Listed for the help alone: main runs them before parsing.
+    for name, module in _TFT_SUBCOMMANDS.items():
+        subcommands.add_parser(name, help=command_summary(module), add_help=False)
     return parser
 
 
@@ -831,6 +847,11 @@ def main(arguments: list = None) -> int:
     """Runs the subcommand `arguments` names (the command line by default);
     returns the exit code. Wrong arguments, and --help, exit through argparse's
     SystemExit instead."""
+    arguments = sys.argv[1:] if arguments is None else list(arguments)
+    if arguments and arguments[0] in _TFT_SUBCOMMANDS:
+        module = importlib.import_module("nxwright.tft.commands."
+                                         + _TFT_SUBCOMMANDS[arguments[0]])
+        return module.main(arguments[1:])
     parsed = _parser().parse_args(arguments)
     try:
         message = parsed.run(parsed)

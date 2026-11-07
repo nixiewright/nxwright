@@ -246,7 +246,9 @@ SYSTEM_START = dict(
      "spax": 0, "spay": 0, "thc": 0, "thdra": 0, "thsp": 0, "thup": 0, "ussp": 0, "usup": 0,
      "wup": 255, "sendxy": 0, "delay": 0, "sleep": 0, "bkcmd": 2, "rand": 0, "recmod": 0,
      "pwmf": 1000, "lowpower": 0,
-     # As the Editor's simulator started them on an Intelligent screen.
+     # As the Editor's simulator started them on an Intelligent screen. The
+     # vendor does not document bcpu, tpdir, runmod, and portbusy: TFTTool's
+     # command tables name them (INDEPENDENCE.md, Public documents).
      "usize": 0, "volume": 100, "appid": 0, "addr": 0, "audio0": 0, "audio1": 0,
      "eql": 7, "eqm": 7, "eqh": 7, "scache": 0, "bcpu": 0, "tpdir": 0, "runmod": 0,
      "portbusy": 0, "tprc": 0, "aph": 127,

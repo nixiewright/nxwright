@@ -39,6 +39,8 @@ import { ServerKeeper } from "./serverKeeper";
 import { ComponentsView, PropertiesView } from "./sideBar";
 import { Simulator } from "./simulator";
 import { startTests } from "./tests";
+import { registerTftCommands } from "./tftCommands";
+import { projectFileMayBeReplaced, rememberProjectFile } from "./tftFiles";
 import { warnerOnce } from "./toolchainVersion";
 import { extractChoice } from "./unknownContent";
 import { appTomlUnsaved, refusedForUnsaved } from "./unsavedChanges";
@@ -142,6 +144,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }),
     vscode.commands.registerCommand("nxwright.build", () => build(context)),
+    ...registerTftCommands({
+      context, sourceFolder: activeSourceFolder, command: commandToRun,
+      workingFolder: firstWorkspaceFolder,
+      appName: async (folder) =>
+        await currentProject?.nameOf(folder) ?? path.basename(folder.fsPath),
+      changed: () => projectView?.projectFileChanged(),
+    }),
     vscode.commands.registerCommand("nxwright.extract",
       (given?: ExtractArguments) => extract(context, given)),
     vscode.commands.registerCommand("nxwright.changeScreen", () => changeDevice("screen")),
@@ -350,9 +359,14 @@ function firstWorkspaceFolder(): string | undefined {
 async function build(context: vscode.ExtensionContext): Promise<void> {
   const folder = await activeSourceFolder();
   const project = folder && (await projectFile(context, folder, "build"));
-  if (folder && project) {
-    // The user chose this file to build into, so it is replaced without asking.
-    await runSubcommand("build", ["build", folder.fsPath, project.fsPath, "--overwrite"]);
+  // The user chose this file to build into, so it is replaced without asking,
+  // unless it changed elsewhere since nxwright last wrote it (tftFiles.ts).
+  if (folder && project && await projectFileMayBeReplaced(context, project.fsPath)) {
+    const code = await runSubcommand("build",
+                                     ["build", folder.fsPath, project.fsPath, "--overwrite"]);
+    if (code === 0) {
+      await rememberProjectFile(context, project.fsPath);
+    }
   }
 }
 
@@ -382,8 +396,17 @@ async function extract(context: vscode.ExtensionContext,
     return undefined;
   }
   const unknown = await unknownContentArguments(project.fsPath, given?.goOnPastUnknown);
-  return unknown === undefined ? undefined
-    : runSubcommand("extract", ["extract", project.fsPath, folder.fsPath, ...unknown]);
+  if (unknown === undefined) {
+    return undefined;
+  }
+  const code = await runSubcommand("extract",
+                                   ["extract", project.fsPath, folder.fsPath, ...unknown]);
+  // The source folder now has the project file's changes, so the file may
+  // be replaced again without asking.
+  if (code === 0) {
+    await rememberProjectFile(context, project.fsPath);
+  }
+  return code;
 }
 
 // Says what extracting `project` into `folder` does, and returns whether the

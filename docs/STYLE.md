@@ -10,7 +10,8 @@ nxwright's words reach three kinds of readers: people using nxwright, readers lo
 
 READMEs, the guides in `docs/`, messages, and the words on VS Code's pages and side bars.
 
-- Write plain, everyday English: short sentences, common words, generally one idea each. Drop the phrasing of specs, such as "as the Nextion Editor's Device window does", "each ... takes ...", or a chain of clauses joined by commas and colons.
+- Write plain, everyday English: common words, in sentences you could say aloud. Drop the phrasing of specs, such as "as the Nextion Editor's Device window does" or "each ... takes ...".
+- Give each sentence one main point, with the facts that qualify it. A run of short sentences sounds robotic, and a long chain of clauses joined by commas and colons is hard to follow.
 - Start with what the reader wants to do or know. Then how. Details last.
 - Show an example before you explain it. Use real code that runs.
 - Talk to the reader: "you".
@@ -42,7 +43,7 @@ Written for a Python programmer who is new to nxwright and to Nextion project fi
 - Docstrings describe: "Returns the checksum of `directory`.", not "Return ...". They say what a thing does, what it refuses, and what a caller must know, in as many words as that takes but no more. Every module, class, and public function has one; a private function has one when its name is not enough.
 - Inline comments say why, not what.
 - Define nxwright's terms before using them, and use the names in the glossary below. A module's docstring defines the terms the module relies on.
-- Short sentences, one idea each, and real examples rather than shorthand.
+- Give each sentence one main point, and use real examples rather than shorthand.
 - Line length follows the surrounding file, about 100 columns.
 
 ## Facts, not how they were found unless it matters

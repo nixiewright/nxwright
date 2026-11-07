@@ -1,12 +1,13 @@
-// The page of the panel explaining the switch to nxlang and making it
-// (src/nxlangPanel.ts): a section for each thing nxlang adds, as the server
-// gives them, each with how a person writes it in strict Nextion, when there
-// is a usual way, beside how they write it in nxlang; what else nxlang lets
-// you do, as the server lists it; the lines the switch
-// will rewrite, under the section on calculation order, which is why they
-// change; for a project in strict Nextion syntax, the button making the
-// switch; and once it is made, the offer to format the project's code.
+// The page of the Switch to nxlang panel (src/nxlangPanel.ts). It shows:
+// - the sections the server gives, one for each thing nxlang adds. Each
+//   shows how a person writes that thing in nxlang, beside how they write it
+//   in strict Nextion when there is a usual way.
+// - what else nxlang lets you do, as the server lists it.
+// - for a project in strict Nextion syntax, the button that makes the
+//   switch, with the lines the switch will rewrite listed below it.
+// - once the switch is made, the offer to format the project's code.
 import { element } from "./elements.mjs";
+import { changesSummary } from "./nxlang-changes.mjs";
 
 const vscode = acquireVsCodeApi();
 const byId = (id) => document.getElementById(id);
@@ -14,8 +15,6 @@ const byId = (id) => document.getElementById(id);
 // switch is offered only with both.
 let language = undefined;
 let listed = false;
-// The section the lines the switch will rewrite go under.
-const CHANGES_SECTION = "calculations";
 
 window.addEventListener("message", (event) => {
   const message = event.data;
@@ -72,16 +71,20 @@ function showChanges(reply) {
     return;
   }
   if (reply.changes.length === 0) {
-    place.replaceChildren(element("p", "hint",
-      "None of your code calculates differently in nxlang, so no line will change."));
+    place.replaceChildren(element("p", "hint", changesSummary(reply.changes)));
     return;
   }
   const byFile = new Map();
   for (const change of reply.changes) {
     byFile.set(change.file, [...(byFile.get(change.file) ?? []), change]);
   }
-  place.replaceChildren(element("p", "", "These lines will change:"),
-                        ...[...byFile].map(([file, changes]) => {
+  // The list is folded below the button, so that the explanations above lead
+  // straight to the button. When the list is drawn again, for example after
+  // the project changes, it stays open if the reader had opened it.
+  const list = element("details");
+  list.open = place.querySelector("details")?.open ?? false;
+  list.append(element("summary", "", changesSummary(reply.changes)),
+              ...[...byFile].map(([file, changes]) => {
     const block = element("div", "file");
     const heading = element("h3");
     const open = element("button", "secondary", "Show the diff");
@@ -93,6 +96,7 @@ function showChanges(reply) {
     block.append(heading, lines);
     return block;
   }));
+  place.replaceChildren(list);
 }
 
 function showNote(text) {
@@ -114,8 +118,7 @@ function showFormatted(reply) {
   byId("formatted").replaceChildren(block);
 }
 
-// Draws the sections with code, as the server gives them, and moves the
-// lines the switch will rewrite under the one on calculation order.
+// Draws the sections with code, as the server gives them.
 function showSections(reply) {
   const place = byId("sections");
   if (reply.error !== undefined) {
@@ -138,9 +141,6 @@ function showSections(reply) {
     block.append(codes);
     if (section.after) {
       block.append(worded(section.after));
-    }
-    if (section.key === CHANGES_SECTION) {
-      block.append(byId("changes"));
     }
     return block;
   }));

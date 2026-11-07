@@ -1,0 +1,30 @@
+{
+ "pieces": {
+  "checksum": [
+   "checksum",
+   0,
+   4
+  ],
+  "header-1": [
+   "header-1",
+   0,
+   200
+  ],
+  "header-2": [
+   "header-2",
+   0,
+   200
+  ],
+  "table": [
+   "table",
+   0,
+   144
+  ],
+  "user-code": [
+   "user-code",
+   0,
+   4160
+  ]
+ },
+ "places": {}
+}

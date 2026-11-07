@@ -1,0 +1,13 @@
+format = 1
+name = "P"
+language = "nxlang"
+screen = "NX8048P050"
+rotation = 0
+encoding = "iso-8859-1"
+pages = [
+    "page0",
+]
+pictures = []
+fonts = [
+    "NotoSans24",
+]

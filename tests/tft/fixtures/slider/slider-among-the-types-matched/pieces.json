@@ -1,0 +1,437 @@
+{
+ "pieces": {
+  "first-block-head": [
+   "first-block",
+   0,
+   36
+  ],
+  "global-texts": [
+   "first-block",
+   48,
+   52
+  ],
+  "int-variables": [
+   "first-block",
+   36,
+   48
+  ],
+  "padding": [
+   "records",
+   1856,
+   1857
+  ],
+  "page-index": [
+   "page-index",
+   0,
+   16
+  ],
+  "page-list": [
+   "first-block",
+   52,
+   58
+  ],
+  "page0-0-drawing": [
+   "pages",
+   0,
+   32
+  ],
+  "page0-0-entries": [
+   "data",
+   0,
+   792
+  ],
+  "page0-0-event-down": [
+   "pages",
+   32,
+   44
+  ],
+  "page0-0-event-loadend": [
+   "pages",
+   1406,
+   1410
+  ],
+  "page0-0-event-unload": [
+   "pages",
+   54,
+   68
+  ],
+  "page0-0-event-up": [
+   "pages",
+   44,
+   54
+  ],
+  "page0-0-memory": [
+   "pages",
+   1226,
+   1234
+  ],
+  "page0-0-record": [
+   "records",
+   0,
+   232
+  ],
+  "page0-1-background-fill": [
+   "pages",
+   177,
+   206
+  ],
+  "page0-1-drawing": [
+   "pages",
+   68,
+   177
+  ],
+  "page0-1-entries": [
+   "data",
+   792,
+   1776
+  ],
+  "page0-1-event-down": [
+   "pages",
+   206,
+   218
+  ],
+  "page0-1-event-up": [
+   "pages",
+   218,
+   228
+  ],
+  "page0-1-memory": [
+   "pages",
+   1234,
+   1254
+  ],
+  "page0-1-record": [
+   "records",
+   232,
+   464
+  ],
+  "page0-2-background-fill": [
+   "pages",
+   232,
+   261
+  ],
+  "page0-2-drawing": [
+   "pages",
+   228,
+   232
+  ],
+  "page0-2-entries": [
+   "data",
+   1776,
+   2736
+  ],
+  "page0-2-event-down": [
+   "pages",
+   261,
+   273
+  ],
+  "page0-2-event-slide": [
+   "pages",
+   283,
+   296
+  ],
+  "page0-2-event-up": [
+   "pages",
+   273,
+   283
+  ],
+  "page0-2-load": [
+   "pages",
+   1358,
+   1366
+  ],
+  "page0-2-memory": [
+   "pages",
+   1254,
+   1282
+  ],
+  "page0-2-record": [
+   "records",
+   464,
+   696
+  ],
+  "page0-3-background-fill": [
+   "pages",
+   397,
+   426
+  ],
+  "page0-3-drawing": [
+   "pages",
+   296,
+   397
+  ],
+  "page0-3-entries": [
+   "data",
+   2736,
+   3720
+  ],
+  "page0-3-event-down": [
+   "pages",
+   426,
+   438
+  ],
+  "page0-3-event-up": [
+   "pages",
+   438,
+   448
+  ],
+  "page0-3-memory": [
+   "pages",
+   1282,
+   1306
+  ],
+  "page0-3-record": [
+   "records",
+   696,
+   928
+  ],
+  "page0-4-background-fill": [
+   "pages",
+   757,
+   787
+  ],
+  "page0-4-drawing": [
+   "pages",
+   448,
+   757
+  ],
+  "page0-4-entries": [
+   "data",
+   3720,
+   4728
+  ],
+  "page0-4-event-down": [
+   "pages",
+   787,
+   824
+  ],
+  "page0-4-event-up": [
+   "pages",
+   824,
+   859
+  ],
+  "page0-4-memory": [
+   "pages",
+   1306,
+   1330
+  ],
+  "page0-4-record": [
+   "records",
+   928,
+   1160
+  ],
+  "page0-5-background-fill": [
+   "pages",
+   1024,
+   1053
+  ],
+  "page0-5-drawing": [
+   "pages",
+   859,
+   1024
+  ],
+  "page0-5-entries": [
+   "data",
+   4728,
+   5472
+  ],
+  "page0-5-event-down": [
+   "pages",
+   1053,
+   1120
+  ],
+  "page0-5-event-up": [
+   "pages",
+   1120,
+   1130
+  ],
+  "page0-5-memory": [
+   "pages",
+   1330,
+   1342
+  ],
+  "page0-5-record": [
+   "records",
+   1160,
+   1392
+  ],
+  "page0-6-drawing": [
+   "pages",
+   1130,
+   1134
+  ],
+  "page0-6-entries": [
+   "data",
+   5472,
+   5736
+  ],
+  "page0-6-memory": [
+   "pages",
+   1342,
+   1346
+  ],
+  "page0-6-record": [
+   "records",
+   1392,
+   1624
+  ],
+  "page0-7-drawing": [
+   "pages",
+   1134,
+   1138
+  ],
+  "page0-7-entries": [
+   "data",
+   5736,
+   6000
+  ],
+  "page0-7-event-timer": [
+   "pages",
+   1138,
+   1162
+  ],
+  "page0-7-load": [
+   "pages",
+   1366,
+   1399
+  ],
+  "page0-7-memory": [
+   "pages",
+   1346,
+   1350
+  ],
+  "page0-7-record": [
+   "records",
+   1624,
+   1856
+  ],
+  "page0-doevents": [
+   "pages",
+   1399,
+   1406
+  ],
+  "page0-memory-run": [
+   "pages",
+   1214,
+   1226
+  ],
+  "page0-objects-table": [
+   "pages",
+   1162,
+   1214
+  ],
+  "page0-texts": [
+   "pages",
+   1350,
+   1358
+  ],
+  "program-s": [
+   "program-s",
+   0,
+   143
+  ],
+  "variables": [
+   "variables",
+   0,
+   36
+  ]
+ },
+ "places": {
+  "page0-0": {
+   "base": 24,
+   "buffer_place": null,
+   "first_entry": 0,
+   "load_place": null,
+   "object_id": 0,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-1": {
+   "base": 32,
+   "buffer_place": null,
+   "first_entry": 33,
+   "load_place": null,
+   "object_id": 1,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-2": {
+   "base": 52,
+   "buffer_place": null,
+   "first_entry": 74,
+   "load_place": null,
+   "object_id": 2,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-3": {
+   "base": 80,
+   "buffer_place": null,
+   "first_entry": 114,
+   "load_place": null,
+   "object_id": 3,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-4": {
+   "base": 104,
+   "buffer_place": null,
+   "first_entry": 155,
+   "load_place": null,
+   "object_id": 4,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-5": {
+   "base": 128,
+   "buffer_place": null,
+   "first_entry": 197,
+   "load_place": null,
+   "object_id": 5,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-6": {
+   "base": 140,
+   "buffer_place": null,
+   "first_entry": 228,
+   "load_place": null,
+   "object_id": 6,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-7": {
+   "base": 144,
+   "buffer_place": null,
+   "first_entry": 239,
+   "load_place": null,
+   "object_id": 7,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  }
+ }
+}

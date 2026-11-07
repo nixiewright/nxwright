@@ -1,23 +1,30 @@
-// The panel explaining the switch to nxlang, the nxwright language, and
-// making it, which Switch to nxlang opens for the current project: a section
-// for each thing nxlang adds, those with code from the server
-// (nxwright/nxlangSamples), each with how a person writes it in strict
-// Nextion beside how they write it in nxlang; what else nxlang lets you do,
-// also from the server (nxwright/nxlangMoreFeatures); the lines the switch will
-// rewrite (nxwright/nxlangSwitch); how the project still builds; and how to
-// go back. Its page is media/nxlang-panel.mjs. A file the switch changes
-// opens in VS Code's diff editor, both sides read-only.
+// The panel that Switch to nxlang opens for the current project. It explains
+// what nxlang, the nxwright language, adds to strict Nextion syntax, and then
+// makes the switch. It shows:
+// - a section for each thing nxlang adds, with how a person writes it in
+//   strict Nextion beside how they write it in nxlang. The sections with
+//   code come from the server (nxwright/nxlangSamples).
+// - what else nxlang lets you do, also from the server
+//   (nxwright/nxlangMoreFeatures).
+// - how the project still builds, and how to go back.
+// - the button that makes the switch, with the lines the switch will rewrite
+//   listed below it (nxwright/nxlangSwitch). Each file in the list can be
+//   opened in VS Code's diff editor, with both sides read-only.
+// The panel's page is media/nxlang-panel.mjs.
 //
-// The switch is made whole, in one workspace edit one undo takes back, not
-// through VS Code's Refactor Preview, which lets a file be left out: a folder
-// in nxlang with lines not rewritten would build differently from the
-// Editor's meaning. It is made from the files as the server gives them when
-// the button is pressed, and only when they are what the panel listed. Once
-// it is made, the panel offers to format the folder's code, through the
-// Refactor Preview, where leaving a file out is harmless.
+// The switch is made as one workspace edit, so that one Undo takes all of
+// it back. It does not go through VS Code's Refactor Preview, because the
+// preview lets the user leave a file out. A project switched to nxlang with
+// some lines not rewritten would calculate differently from how it did in
+// the Nextion Editor. When the button is pressed, the panel asks the server
+// for the switch again, and makes it only if the answer matches the list
+// the panel shows. Once the switch is made, the panel offers to format the
+// project's code. Formatting does go through the Refactor Preview, because
+// leaving a file out of it is harmless.
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import { CurrentProject, NO_PROJECT_ERROR } from "./currentProject";
+import { switchConfirmationDetail } from "./nxlangSwitchText";
 import { appName } from "./projectName";
 import { unsavedFilesIn } from "./unsavedChanges";
 import { errorText } from "./userMessages";
@@ -212,12 +219,10 @@ export class NxlangPanel implements vscode.TextDocumentContentProvider {
                 "again, then switch.");
       return;
     }
-    const lines = answer.changes.length;
     const choice = await vscode.window.showWarningMessage(
       `Switch ${appName(this.project.info, folder.fsPath)} to nxlang?`,
       { modal: true,
-        detail: `${lines} line(s) of code will get parentheses, so that they keep ` +
-          "calculating the same way. There is no command to switch back." },
+        detail: switchConfirmationDetail(answer.changes.length) },
       "Switch");
     if (choice !== "Switch") {
       return;
@@ -322,7 +327,6 @@ what strict Nextion is missing: functions, the usual calculation order, constant
 variables, and more. Your project still builds into an ordinary HMI file.</p>
 
 <div id="sections"><p class="hint">Loading the examples...</p></div>
-<div id="changes"><p class="hint">Finding the lines the switch will change...</p></div>
 
 <div id="more" hidden>
 <h2>And more</h2>
@@ -348,6 +352,7 @@ you strict Nextion code again, with some differences:</p>
 </ul>
 
 <div id="switch"></div>
+<div id="changes"><p class="hint">Finding the lines the switch will change...</p></div>
 <p id="note" class="note" hidden></p>
 <div id="after" hidden>
   <h2>Switched</h2>
@@ -380,6 +385,8 @@ const STYLES = `
   button.secondary { color: var(--vscode-button-secondaryForeground);
                      background: var(--vscode-button-secondaryBackground); }
   #switch { margin-top: 24px; }
+  #changes { margin-top: 12px; }
+  summary { cursor: pointer; }
   .file { margin: 10px 0; }
   .file h3 { font-size: 1em; margin: 0 0 4px; display: flex; gap: 12px; align-items: center; }
   .note { padding: 6px 10px; border-left: 3px solid var(--vscode-editorWarning-foreground); }

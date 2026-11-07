@@ -15,6 +15,15 @@ export const GLYPHS = {
   edit: '<path d="M10.5 2.5l3 3-7.5 7.5H3v-3z"/><path d="M9 4l3 3"/>',
   // A hammer, on a slant: its head, and its handle.
   build: '<path d="M8.6 2.4l5 5-2.1 2.1-5-5z"/><path d="M8.3 6.5l1.3 1.3-6.5 6.4-1.3-1.3z"/>',
+  // A chip, with its pins on each side.
+  compile: '<path d="M4.5 4.5h7v7h-7z"/>' +
+    '<path d="M6.5 2v2.5M9.5 2v2.5M6.5 11.5V14M9.5 11.5V14M2 6.5h2.5M2 9.5h2.5M11.5 6.5H14' +
+    'M11.5 9.5H14"/>',
+  // An arrow pointing up, off a line.
+  upload: '<path d="M2.5 13.5h11"/><path d="M8 11V2.5M4.5 6L8 2.5 11.5 6"/>',
+  // Two links of a chain, joined on a slant.
+  link: '<path d="M6.5 9.5l3-3"/><path d="M7.5 4.5l1.2-1.2a2.5 2.5 0 0 1 3.5 3.5L11 8"/>' +
+    '<path d="M8.5 11.5l-1.2 1.2a2.5 2.5 0 0 1-3.5-3.5L5 8"/>',
   // A document with an arrow pointing down out of it.
   extract: '<path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3"/>' +
     '<path d="M8 6v6M5.5 9.5L8 12l2.5-2.5"/>',

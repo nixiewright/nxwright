@@ -17,7 +17,7 @@ The commands "nxwright: Simulate the app" and "nxwright: Simulate the app from t
 
 An AI agent can also run your app through `nxwright mcp`, on its own or in this simulator ([Letting an agent drive your app](mcp.md)).
 
-To keep a setup, such as the page to start on, a serial port, or SD card folders, save it as a launch configuration of type `nxwright`. The Simulator section shows a button for each one. The extension's README lists the parameters ([A simulation's launch configuration](../editors/vscode/README.md#a-simulations-launch-configuration)). When a configuration leaves a parameter out, the extension's settings provide it ([Settings](../editors/vscode/README.md#settings)).
+To keep a setup, such as the page to start on, a serial port, or SD card folders, save it as a launch configuration of type `nxwright`. The Simulator section shows a button for each one. The extension's README lists the parameters ([A simulation's launch configuration](../editors/vscode/README.md#a-simulations-launch-configuration)). If a configuration leaves out a parameter that also exists in the extension's settings, the setting's value is used ([Settings](../editors/vscode/README.md#settings)).
 
 The Debug Console lists each page compiled, with the full path of each of its `.nx` files: those it includes, and its own. Then it lists `program.nx`'s files, when its code is about to run. Each start lists them again, both when you start again and when the app's code runs `rest`.
 

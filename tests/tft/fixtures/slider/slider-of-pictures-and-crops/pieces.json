@@ -1,0 +1,232 @@
+{
+ "pieces": {
+  "first-block-head": [
+   "first-block",
+   0,
+   36
+  ],
+  "global-texts": [
+   "first-block",
+   48,
+   52
+  ],
+  "int-variables": [
+   "first-block",
+   36,
+   48
+  ],
+  "padding": [
+   "records",
+   696,
+   698
+  ],
+  "page-index": [
+   "page-index",
+   0,
+   16
+  ],
+  "page-list": [
+   "first-block",
+   52,
+   58
+  ],
+  "page0-0-drawing": [
+   "pages",
+   0,
+   32
+  ],
+  "page0-0-entries": [
+   "data",
+   0,
+   792
+  ],
+  "page0-0-event-down": [
+   "pages",
+   32,
+   44
+  ],
+  "page0-0-event-loadend": [
+   "pages",
+   329,
+   333
+  ],
+  "page0-0-event-unload": [
+   "pages",
+   54,
+   68
+  ],
+  "page0-0-event-up": [
+   "pages",
+   44,
+   54
+  ],
+  "page0-0-memory": [
+   "pages",
+   234,
+   242
+  ],
+  "page0-0-record": [
+   "records",
+   0,
+   232
+  ],
+  "page0-1-background-fill": [
+   "pages",
+   72,
+   101
+  ],
+  "page0-1-drawing": [
+   "pages",
+   68,
+   72
+  ],
+  "page0-1-entries": [
+   "data",
+   792,
+   1704
+  ],
+  "page0-1-event-down": [
+   "pages",
+   101,
+   113
+  ],
+  "page0-1-event-slide": [
+   "pages",
+   123,
+   136
+  ],
+  "page0-1-event-up": [
+   "pages",
+   113,
+   123
+  ],
+  "page0-1-load": [
+   "pages",
+   306,
+   314
+  ],
+  "page0-1-memory": [
+   "pages",
+   242,
+   270
+  ],
+  "page0-1-record": [
+   "records",
+   232,
+   464
+  ],
+  "page0-2-background-fill": [
+   "pages",
+   140,
+   169
+  ],
+  "page0-2-drawing": [
+   "pages",
+   136,
+   140
+  ],
+  "page0-2-entries": [
+   "data",
+   1704,
+   2616
+  ],
+  "page0-2-event-down": [
+   "pages",
+   169,
+   181
+  ],
+  "page0-2-event-slide": [
+   "pages",
+   191,
+   204
+  ],
+  "page0-2-event-up": [
+   "pages",
+   181,
+   191
+  ],
+  "page0-2-load": [
+   "pages",
+   314,
+   322
+  ],
+  "page0-2-memory": [
+   "pages",
+   270,
+   298
+  ],
+  "page0-2-record": [
+   "records",
+   464,
+   696
+  ],
+  "page0-doevents": [
+   "pages",
+   322,
+   329
+  ],
+  "page0-memory-run": [
+   "pages",
+   226,
+   234
+  ],
+  "page0-objects-table": [
+   "pages",
+   204,
+   226
+  ],
+  "page0-texts": [
+   "pages",
+   298,
+   306
+  ],
+  "program-s": [
+   "program-s",
+   0,
+   143
+  ],
+  "variables": [
+   "variables",
+   0,
+   36
+  ]
+ },
+ "places": {
+  "page0-0": {
+   "base": 20,
+   "buffer_place": null,
+   "first_entry": 0,
+   "load_place": null,
+   "object_id": 0,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-1": {
+   "base": 28,
+   "buffer_place": null,
+   "first_entry": 33,
+   "load_place": null,
+   "object_id": 1,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-2": {
+   "base": 56,
+   "buffer_place": null,
+   "first_entry": 71,
+   "load_place": null,
+   "object_id": 2,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  }
+ }
+}

@@ -179,9 +179,11 @@ COMMAND_PARAMETERS = {
     "addt": 3, "wept": 2, "ucopy": 4, "udelete": 1,
     # The Editor refused two on the series that take it, and compiled one.
     "beep": 1,
-    # Undocumented, as each compiled with one number of arguments, and no
-    # other from 0 to 12, on every series that takes it; draw_h and setbrush
-    # to 16. lcd_dev's hex values are spaced, as printh's bytes.
+    # Undocumented by the vendor. TFTTool's command tables name them
+    # (INDEPENDENCE.md, Public documents). Each compiled with one number of
+    # arguments, and no other from 0 to 12, on every series that takes it;
+    # draw_h and setbrush to 16. lcd_dev's hex values are spaced, as printh's
+    # bytes.
     "lcd_dev": 1, "getpassw": 0, "lcd_refx": 0, "lhmi_cle": 0, "showqq": 0, "getv": 1,
     "init": 1, "setbaudz": 1, "pa_q": 2, "whmi_cle": 2, "fstr": 3, "nstr": 3, "rfpt": 3,
     "strsize": 3, "wfpt": 3, "pa_txt": 4, "timerset": 4, "zstr": 5, "comok": 7, "draw3d": 7,
@@ -1090,7 +1092,7 @@ def _check_condition_texts(code: str, number: int):
 # after it, as the first byte of a character of two, and so does a
 # backslash's. The first quote left ends the text. In shift-jis, a
 # half-width katakana, one byte from 0xA1 to 0xDF, then takes the byte
-# after it too (nxtft/ResearchNotes/encodings.md).
+# after it too (ResearchNotes/tft/encodings.md).
 _PAIRED_ENCODINGS = frozenset({"gb2312", "big5", "shift-jis"})
 _BACKSLASH_BYTE, _QUOTE_BYTE = 0x5C, 0x22
 # The commands among whose arguments the Nextion Editor reads a text before

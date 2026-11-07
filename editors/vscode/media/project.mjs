@@ -1,5 +1,6 @@
 // The Project section of nxwright's side bar (src/projectView.ts): the
-// current project's settings and a Build button, or, without a project,
+// current project's settings, then the chain from its source folder to the
+// screen, each file with the button that makes it, or, without a project,
 // buttons to create, import, or choose one. Drawn again each time the
 // extension sends what to show. A button or link asks the extension to run
 // its command.
@@ -29,7 +30,7 @@ function draw(shown) {
 }
 
 // The project's name, its path as the name's tooltip, its lines of
-// settings (project-lines.mjs), and the Build button.
+// settings, and its steps (project-lines.mjs).
 function projectParts(project) {
   const shown = projectLines(project);
   const name = element("h2", shown.name);
@@ -43,17 +44,46 @@ function projectParts(project) {
     drawn.append(...line.flatMap(part));
     parts.push(drawn);
   }
-  parts.push(buttons([glyphButton({ command: "nxwright.build" }, "build", "Build")]));
+  const chain = element("div", "", "chain");
+  chain.append(...shown.steps.flatMap(step));
+  parts.push(chain);
   return parts;
 }
 
-// The nodes of one part of a line of settings: words, a link, or a pencil.
-// Words are split at their " · " separators, each value kept whole, so that
-// a narrow section wraps the line only between values; a pencil follows its
-// value with no space, so it stays beside it.
+// One step of the chain, as the two cells of one row of the chain's grid
+// (styled in projectView.ts): its button, then its file or screen, with the
+// pencil and the link button kept together on one line after it.
+function step(shown) {
+  const [name, ...controls] = shown.parts;
+  const tools = element("span", "", "tools");
+  tools.append(...controls.flatMap(part));
+  const file = element("span", "", "file");
+  file.append(...part(name), tools);
+  return [stepButton(shown.button), file];
+}
+
+// A disabled button has no command, so clicking it does nothing.
+function stepButton({ command, glyph, text, disabledTitle }) {
+  if (!disabledTitle) {
+    return glyphButton({ command }, glyph, text);
+  }
+  const button = glyphButton({}, glyph, text);
+  button.disabled = true;
+  button.title = disabledTitle;
+  return button;
+}
+
+// The nodes of one part of a line of settings, or of a step's file: words,
+// a link, a pencil, or the link button. Words are split at their " · "
+// separators, each value kept whole, so that a narrow section wraps the line
+// only between values; a pencil follows its value with no space, so it
+// stays beside it.
 function part(shown) {
   if (shown.edit) {
     return [editButton(shown.edit, shown.title)];
+  }
+  if (shown.toggle) {
+    return [toggleButton(shown.toggle, shown.on, shown.title)];
   }
   if (shown.link) {
     const link = element("a", shown.text, "value");
@@ -97,6 +127,18 @@ function editButton(command, title) {
   button.title = title;
   button.setAttribute("aria-label", button.title);
   button.append(glyphDrawing("edit"));
+  return button;
+}
+
+// The link button: a toggle, highlighted when `on`, running `command`.
+function toggleButton(command, on, title) {
+  const button = document.createElement("button");
+  button.className = on ? "toggle on" : "toggle";
+  button.dataset.command = command;
+  button.title = title;
+  button.setAttribute("aria-label", title);
+  button.setAttribute("aria-pressed", on ? "true" : "false");
+  button.append(glyphDrawing("link"));
   return button;
 }
 

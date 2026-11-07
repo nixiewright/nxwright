@@ -1,0 +1,170 @@
+{
+ "pieces": {
+  "first-block-head": [
+   "first-block",
+   0,
+   36
+  ],
+  "global-texts": [
+   "first-block",
+   48,
+   52
+  ],
+  "int-variables": [
+   "first-block",
+   36,
+   48
+  ],
+  "padding": [
+   "records",
+   464,
+   467
+  ],
+  "page-index": [
+   "page-index",
+   0,
+   16
+  ],
+  "page-list": [
+   "first-block",
+   52,
+   58
+  ],
+  "page0-0-drawing": [
+   "pages",
+   0,
+   32
+  ],
+  "page0-0-entries": [
+   "data",
+   0,
+   792
+  ],
+  "page0-0-event-down": [
+   "pages",
+   32,
+   44
+  ],
+  "page0-0-event-loadend": [
+   "pages",
+   1560,
+   1564
+  ],
+  "page0-0-event-unload": [
+   "pages",
+   54,
+   68
+  ],
+  "page0-0-event-up": [
+   "pages",
+   44,
+   54
+  ],
+  "page0-0-memory": [
+   "pages",
+   289,
+   297
+  ],
+  "page0-0-record": [
+   "records",
+   0,
+   232
+  ],
+  "page0-1-background-fill": [
+   "pages",
+   214,
+   243
+  ],
+  "page0-1-drawing": [
+   "pages",
+   68,
+   214
+  ],
+  "page0-1-entries": [
+   "data",
+   792,
+   1944
+  ],
+  "page0-1-event-down": [
+   "pages",
+   243,
+   255
+  ],
+  "page0-1-event-up": [
+   "pages",
+   255,
+   265
+  ],
+  "page0-1-load": [
+   "pages",
+   353,
+   1553
+  ],
+  "page0-1-memory": [
+   "pages",
+   297,
+   333
+  ],
+  "page0-1-record": [
+   "records",
+   232,
+   464
+  ],
+  "page0-doevents": [
+   "pages",
+   1553,
+   1560
+  ],
+  "page0-memory-run": [
+   "pages",
+   281,
+   289
+  ],
+  "page0-objects-table": [
+   "pages",
+   265,
+   281
+  ],
+  "page0-texts": [
+   "pages",
+   333,
+   353
+  ],
+  "program-s": [
+   "program-s",
+   0,
+   143
+  ],
+  "variables": [
+   "variables",
+   0,
+   36
+  ]
+ },
+ "places": {
+  "page0-0": {
+   "base": 20,
+   "buffer_place": null,
+   "first_entry": 0,
+   "load_place": null,
+   "object_id": 0,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-1": {
+   "base": 28,
+   "buffer_place": null,
+   "first_entry": 33,
+   "load_place": 554,
+   "object_id": 1,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": 68,
+   "text_places": null,
+   "two_byte_start": 0
+  }
+ }
+}

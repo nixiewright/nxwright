@@ -1,0 +1,165 @@
+{
+ "pieces": {
+  "first-block-head": [
+   "first-block",
+   0,
+   36
+  ],
+  "global-texts": [
+   "first-block",
+   48,
+   52
+  ],
+  "int-variables": [
+   "first-block",
+   36,
+   48
+  ],
+  "padding": [
+   "records",
+   464,
+   466
+  ],
+  "page-index": [
+   "page-index",
+   0,
+   16
+  ],
+  "page-list": [
+   "first-block",
+   52,
+   58
+  ],
+  "page0-0-drawing": [
+   "pages",
+   0,
+   32
+  ],
+  "page0-0-entries": [
+   "data",
+   0,
+   792
+  ],
+  "page0-0-event-down": [
+   "pages",
+   32,
+   77
+  ],
+  "page0-0-event-loadend": [
+   "pages",
+   493,
+   497
+  ],
+  "page0-0-event-unload": [
+   "pages",
+   230,
+   266
+  ],
+  "page0-0-event-up": [
+   "pages",
+   77,
+   230
+  ],
+  "page0-0-memory": [
+   "pages",
+   450,
+   458
+  ],
+  "page0-0-record": [
+   "records",
+   0,
+   232
+  ],
+  "page0-1-background-fill": [
+   "pages",
+   375,
+   404
+  ],
+  "page0-1-drawing": [
+   "pages",
+   266,
+   375
+  ],
+  "page0-1-entries": [
+   "data",
+   792,
+   1776
+  ],
+  "page0-1-event-down": [
+   "pages",
+   404,
+   416
+  ],
+  "page0-1-event-up": [
+   "pages",
+   416,
+   426
+  ],
+  "page0-1-memory": [
+   "pages",
+   458,
+   478
+  ],
+  "page0-1-record": [
+   "records",
+   232,
+   464
+  ],
+  "page0-doevents": [
+   "pages",
+   486,
+   493
+  ],
+  "page0-memory-run": [
+   "pages",
+   442,
+   450
+  ],
+  "page0-objects-table": [
+   "pages",
+   426,
+   442
+  ],
+  "page0-texts": [
+   "pages",
+   478,
+   486
+  ],
+  "program-s": [
+   "program-s",
+   0,
+   139
+  ],
+  "variables": [
+   "variables",
+   0,
+   36
+  ]
+ },
+ "places": {
+  "page0-0": {
+   "base": 20,
+   "buffer_place": null,
+   "first_entry": 0,
+   "load_place": null,
+   "object_id": 0,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-1": {
+   "base": 28,
+   "buffer_place": null,
+   "first_entry": 33,
+   "load_place": null,
+   "object_id": 1,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  }
+ }
+}

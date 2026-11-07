@@ -67,6 +67,16 @@ class TestedVersionTest(unittest.TestCase):
                 others = set(re.findall(r"tested with[^.]*?(\d+\.\d+\.\d+)", text)) - {version}
                 self.assertEqual(others, set())
 
+    def test_the_tft_documents_give_only_the_recorded_version(self):
+        # These two documents give the version in several sentences, so the
+        # test looks at every version in them. The only other one allowed is
+        # 1.60.1, the oldest version whose files the decompile reads.
+        version = latest_release.tested_version()
+        for name in ("screens.md", "commands.md"):
+            with self.subTest(document=name):
+                text = (_NXWRIGHT / "docs" / name).read_text(encoding="utf-8")
+                self.assertEqual(set(re.findall(r"\b\d+\.\d+\.\d+\b", text)), {"1.60.1", version})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,13 @@
+format = 1
+name = "F"
+language = "nxlang"
+screen = "NX4832F035"
+rotation = 0
+encoding = "iso-8859-1"
+pages = [
+    "page0",
+]
+pictures = []
+fonts = [
+    "NotoSans24",
+]

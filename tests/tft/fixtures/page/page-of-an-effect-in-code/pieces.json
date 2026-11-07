@@ -1,0 +1,118 @@
+{
+ "pieces": {
+  "first-block-head": [
+   "first-block",
+   0,
+   36
+  ],
+  "global-texts": [
+   "first-block",
+   48,
+   52
+  ],
+  "int-variables": [
+   "first-block",
+   36,
+   48
+  ],
+  "padding": [
+   "records",
+   232,
+   233
+  ],
+  "page-index": [
+   "page-index",
+   0,
+   16
+  ],
+  "page-list": [
+   "first-block",
+   52,
+   58
+  ],
+  "page0-0-drawing": [
+   "pages",
+   0,
+   32
+  ],
+  "page0-0-entries": [
+   "data",
+   0,
+   840
+  ],
+  "page0-0-event-down": [
+   "pages",
+   32,
+   44
+  ],
+  "page0-0-event-loadend": [
+   "pages",
+   434,
+   438
+  ],
+  "page0-0-event-unload": [
+   "pages",
+   379,
+   393
+  ],
+  "page0-0-event-up": [
+   "pages",
+   44,
+   379
+  ],
+  "page0-0-memory": [
+   "pages",
+   411,
+   419
+  ],
+  "page0-0-record": [
+   "records",
+   0,
+   232
+  ],
+  "page0-doevents": [
+   "pages",
+   427,
+   434
+  ],
+  "page0-memory-run": [
+   "pages",
+   403,
+   411
+  ],
+  "page0-objects-table": [
+   "pages",
+   393,
+   403
+  ],
+  "page0-texts": [
+   "pages",
+   419,
+   427
+  ],
+  "program-s": [
+   "program-s",
+   0,
+   143
+  ],
+  "variables": [
+   "variables",
+   0,
+   36
+  ]
+ },
+ "places": {
+  "page0-0": {
+   "base": 20,
+   "buffer_place": null,
+   "first_entry": 0,
+   "load_place": null,
+   "object_id": 0,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  }
+ }
+}

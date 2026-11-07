@@ -1,0 +1,1404 @@
+{
+ "pieces": {
+  "attribute-names": [
+   "first-block",
+   1378,
+   1790
+  ],
+  "first-block-head": [
+   "first-block",
+   0,
+   44
+  ],
+  "global-texts": [
+   "first-block",
+   308,
+   1372
+  ],
+  "int-variables": [
+   "first-block",
+   44,
+   56
+  ],
+  "padding": [
+   "records",
+   6812,
+   6813
+  ],
+  "page-index": [
+   "page-index",
+   0,
+   16
+  ],
+  "page-list": [
+   "first-block",
+   1372,
+   1378
+  ],
+  "page0-0-drawing": [
+   "pages",
+   0,
+   4
+  ],
+  "page0-0-entries": [
+   "data",
+   0,
+   792
+  ],
+  "page0-0-event-down": [
+   "pages",
+   4,
+   16
+  ],
+  "page0-0-event-loadend": [
+   "pages",
+   6618,
+   6622
+  ],
+  "page0-0-event-unload": [
+   "pages",
+   26,
+   40
+  ],
+  "page0-0-event-up": [
+   "pages",
+   16,
+   26
+  ],
+  "page0-0-head": [
+   "pages",
+   1001,
+   1053
+  ],
+  "page0-0-memory": [
+   "pages",
+   1053,
+   1065
+  ],
+  "page0-0-record": [
+   "records",
+   0,
+   262
+  ],
+  "page0-1-drawing": [
+   "pages",
+   40,
+   44
+  ],
+  "page0-1-entries": [
+   "data",
+   792,
+   1776
+  ],
+  "page0-1-event-down": [
+   "pages",
+   44,
+   56
+  ],
+  "page0-1-event-up": [
+   "pages",
+   56,
+   66
+  ],
+  "page0-1-head": [
+   "pages",
+   1065,
+   1117
+  ],
+  "page0-1-memory": [
+   "pages",
+   1117,
+   1149
+  ],
+  "page0-1-record": [
+   "records",
+   262,
+   524
+  ],
+  "page0-10-drawing": [
+   "pages",
+   274,
+   278
+  ],
+  "page0-10-entries": [
+   "data",
+   8808,
+   9768
+  ],
+  "page0-10-event-down": [
+   "pages",
+   278,
+   290
+  ],
+  "page0-10-event-slide": [
+   "pages",
+   300,
+   313
+  ],
+  "page0-10-event-up": [
+   "pages",
+   290,
+   300
+  ],
+  "page0-10-head": [
+   "pages",
+   1745,
+   1797
+  ],
+  "page0-10-load": [
+   "pages",
+   6521,
+   6530
+  ],
+  "page0-10-memory": [
+   "pages",
+   1797,
+   1829
+  ],
+  "page0-10-record": [
+   "records",
+   2620,
+   2882
+  ],
+  "page0-11-drawing": [
+   "pages",
+   313,
+   317
+  ],
+  "page0-11-entries": [
+   "data",
+   9768,
+   10752
+  ],
+  "page0-11-event-down": [
+   "pages",
+   317,
+   329
+  ],
+  "page0-11-event-up": [
+   "pages",
+   329,
+   339
+  ],
+  "page0-11-head": [
+   "pages",
+   1829,
+   1881
+  ],
+  "page0-11-memory": [
+   "pages",
+   1881,
+   1909
+  ],
+  "page0-11-record": [
+   "records",
+   2882,
+   3144
+  ],
+  "page0-12-drawing": [
+   "pages",
+   339,
+   343
+  ],
+  "page0-12-entries": [
+   "data",
+   10752,
+   11400
+  ],
+  "page0-12-event-down": [
+   "pages",
+   343,
+   355
+  ],
+  "page0-12-event-up": [
+   "pages",
+   355,
+   365
+  ],
+  "page0-12-head": [
+   "pages",
+   1909,
+   1961
+  ],
+  "page0-12-memory": [
+   "pages",
+   1961,
+   1965
+  ],
+  "page0-12-record": [
+   "records",
+   3144,
+   3406
+  ],
+  "page0-13-drawing": [
+   "pages",
+   365,
+   369
+  ],
+  "page0-13-entries": [
+   "data",
+   11400,
+   12552
+  ],
+  "page0-13-event-down": [
+   "pages",
+   369,
+   381
+  ],
+  "page0-13-event-up": [
+   "pages",
+   381,
+   391
+  ],
+  "page0-13-head": [
+   "pages",
+   1965,
+   2017
+  ],
+  "page0-13-load": [
+   "pages",
+   6530,
+   6539
+  ],
+  "page0-13-memory": [
+   "pages",
+   2017,
+   2057
+  ],
+  "page0-13-record": [
+   "records",
+   3406,
+   3668
+  ],
+  "page0-14-drawing": [
+   "pages",
+   391,
+   395
+  ],
+  "page0-14-entries": [
+   "data",
+   12552,
+   13536
+  ],
+  "page0-14-event-down": [
+   "pages",
+   395,
+   407
+  ],
+  "page0-14-event-up": [
+   "pages",
+   407,
+   417
+  ],
+  "page0-14-head": [
+   "pages",
+   2057,
+   2109
+  ],
+  "page0-14-load": [
+   "pages",
+   6539,
+   6548
+  ],
+  "page0-14-memory": [
+   "pages",
+   2109,
+   2149
+  ],
+  "page0-14-record": [
+   "records",
+   3668,
+   3930
+  ],
+  "page0-15-drawing": [
+   "pages",
+   417,
+   421
+  ],
+  "page0-15-entries": [
+   "data",
+   13536,
+   14208
+  ],
+  "page0-15-event-down": [
+   "pages",
+   421,
+   433
+  ],
+  "page0-15-event-up": [
+   "pages",
+   433,
+   443
+  ],
+  "page0-15-head": [
+   "pages",
+   2149,
+   2201
+  ],
+  "page0-15-memory": [
+   "pages",
+   2201,
+   2209
+  ],
+  "page0-15-record": [
+   "records",
+   3930,
+   4192
+  ],
+  "page0-16-drawing": [
+   "pages",
+   443,
+   447
+  ],
+  "page0-16-entries": [
+   "data",
+   14208,
+   14928
+  ],
+  "page0-16-event-down": [
+   "pages",
+   447,
+   459
+  ],
+  "page0-16-event-up": [
+   "pages",
+   459,
+   469
+  ],
+  "page0-16-head": [
+   "pages",
+   2209,
+   2261
+  ],
+  "page0-16-memory": [
+   "pages",
+   2261,
+   2273
+  ],
+  "page0-16-record": [
+   "records",
+   4192,
+   4454
+  ],
+  "page0-17-drawing": [
+   "pages",
+   469,
+   473
+  ],
+  "page0-17-entries": [
+   "data",
+   14928,
+   15840
+  ],
+  "page0-17-event-down": [
+   "pages",
+   473,
+   485
+  ],
+  "page0-17-event-up": [
+   "pages",
+   485,
+   495
+  ],
+  "page0-17-head": [
+   "pages",
+   2273,
+   2325
+  ],
+  "page0-17-memory": [
+   "pages",
+   2325,
+   2349
+  ],
+  "page0-17-record": [
+   "records",
+   4454,
+   4716
+  ],
+  "page0-18-drawing": [
+   "pages",
+   495,
+   499
+  ],
+  "page0-18-entries": [
+   "data",
+   15840,
+   16536
+  ],
+  "page0-18-event-down": [
+   "pages",
+   499,
+   511
+  ],
+  "page0-18-event-up": [
+   "pages",
+   511,
+   521
+  ],
+  "page0-18-head": [
+   "pages",
+   2349,
+   2401
+  ],
+  "page0-18-memory": [
+   "pages",
+   2401,
+   2413
+  ],
+  "page0-18-record": [
+   "records",
+   4716,
+   4978
+  ],
+  "page0-19-drawing": [
+   "pages",
+   521,
+   525
+  ],
+  "page0-19-entries": [
+   "data",
+   16536,
+   17568
+  ],
+  "page0-19-event-down": [
+   "pages",
+   525,
+   537
+  ],
+  "page0-19-event-up": [
+   "pages",
+   537,
+   547
+  ],
+  "page0-19-head": [
+   "pages",
+   2413,
+   2465
+  ],
+  "page0-19-load": [
+   "pages",
+   6548,
+   6557
+  ],
+  "page0-19-memory": [
+   "pages",
+   2465,
+   2521
+  ],
+  "page0-19-record": [
+   "records",
+   4978,
+   5240
+  ],
+  "page0-2-drawing": [
+   "pages",
+   66,
+   70
+  ],
+  "page0-2-entries": [
+   "data",
+   1776,
+   2760
+  ],
+  "page0-2-event-down": [
+   "pages",
+   70,
+   82
+  ],
+  "page0-2-event-up": [
+   "pages",
+   82,
+   92
+  ],
+  "page0-2-head": [
+   "pages",
+   1149,
+   1201
+  ],
+  "page0-2-memory": [
+   "pages",
+   1201,
+   1229
+  ],
+  "page0-2-record": [
+   "records",
+   524,
+   786
+  ],
+  "page0-20-drawing": [
+   "pages",
+   547,
+   551
+  ],
+  "page0-20-entries": [
+   "data",
+   17568,
+   18936
+  ],
+  "page0-20-event-down": [
+   "pages",
+   551,
+   563
+  ],
+  "page0-20-event-up": [
+   "pages",
+   563,
+   573
+  ],
+  "page0-20-head": [
+   "pages",
+   2521,
+   2573
+  ],
+  "page0-20-load": [
+   "pages",
+   6557,
+   6566
+  ],
+  "page0-20-memory": [
+   "pages",
+   2573,
+   2661
+  ],
+  "page0-20-record": [
+   "records",
+   5240,
+   5502
+  ],
+  "page0-21-drawing": [
+   "pages",
+   573,
+   577
+  ],
+  "page0-21-entries": [
+   "data",
+   18936,
+   20040
+  ],
+  "page0-21-event-down": [
+   "pages",
+   577,
+   589
+  ],
+  "page0-21-event-up": [
+   "pages",
+   589,
+   599
+  ],
+  "page0-21-head": [
+   "pages",
+   2661,
+   2713
+  ],
+  "page0-21-load": [
+   "pages",
+   6566,
+   6575
+  ],
+  "page0-21-memory": [
+   "pages",
+   2713,
+   2777
+  ],
+  "page0-21-record": [
+   "records",
+   5502,
+   5764
+  ],
+  "page0-22-drawing": [
+   "pages",
+   599,
+   603
+  ],
+  "page0-22-entries": [
+   "data",
+   20040,
+   20976
+  ],
+  "page0-22-event-down": [
+   "pages",
+   603,
+   615
+  ],
+  "page0-22-event-playend": [
+   "pages",
+   625,
+   640
+  ],
+  "page0-22-event-up": [
+   "pages",
+   615,
+   625
+  ],
+  "page0-22-head": [
+   "pages",
+   2777,
+   2829
+  ],
+  "page0-22-load": [
+   "pages",
+   6575,
+   6584
+  ],
+  "page0-22-memory": [
+   "pages",
+   2829,
+   2881
+  ],
+  "page0-22-record": [
+   "records",
+   5764,
+   6026
+  ],
+  "page0-23-drawing": [
+   "pages",
+   640,
+   644
+  ],
+  "page0-23-entries": [
+   "data",
+   20976,
+   21888
+  ],
+  "page0-23-event-down": [
+   "pages",
+   644,
+   656
+  ],
+  "page0-23-event-playend": [
+   "pages",
+   666,
+   681
+  ],
+  "page0-23-event-up": [
+   "pages",
+   656,
+   666
+  ],
+  "page0-23-head": [
+   "pages",
+   2881,
+   2933
+  ],
+  "page0-23-load": [
+   "pages",
+   6584,
+   6593
+  ],
+  "page0-23-memory": [
+   "pages",
+   2933,
+   2985
+  ],
+  "page0-23-record": [
+   "records",
+   6026,
+   6288
+  ],
+  "page0-24-drawing": [
+   "pages",
+   681,
+   685
+  ],
+  "page0-24-entries": [
+   "data",
+   21888,
+   23664
+  ],
+  "page0-24-event-down": [
+   "pages",
+   685,
+   697
+  ],
+  "page0-24-event-up": [
+   "pages",
+   697,
+   707
+  ],
+  "page0-24-head": [
+   "first-block",
+   56,
+   108
+  ],
+  "page0-24-load": [
+   "pages",
+   6593,
+   6602
+  ],
+  "page0-24-memory": [
+   "first-block",
+   108,
+   308
+  ],
+  "page0-24-record": [
+   "records",
+   6288,
+   6550
+  ],
+  "page0-25-drawing": [
+   "pages",
+   707,
+   711
+  ],
+  "page0-25-entries": [
+   "data",
+   23664,
+   25104
+  ],
+  "page0-25-event-down": [
+   "pages",
+   711,
+   723
+  ],
+  "page0-25-event-up": [
+   "pages",
+   723,
+   733
+  ],
+  "page0-25-head": [
+   "pages",
+   2985,
+   3037
+  ],
+  "page0-25-load": [
+   "pages",
+   6602,
+   6611
+  ],
+  "page0-25-memory": [
+   "pages",
+   3037,
+   3145
+  ],
+  "page0-25-record": [
+   "records",
+   6550,
+   6812
+  ],
+  "page0-3-drawing": [
+   "pages",
+   92,
+   96
+  ],
+  "page0-3-entries": [
+   "data",
+   2760,
+   3768
+  ],
+  "page0-3-event-down": [
+   "pages",
+   96,
+   108
+  ],
+  "page0-3-event-up": [
+   "pages",
+   108,
+   118
+  ],
+  "page0-3-head": [
+   "pages",
+   1229,
+   1281
+  ],
+  "page0-3-memory": [
+   "pages",
+   1281,
+   1313
+  ],
+  "page0-3-record": [
+   "records",
+   786,
+   1048
+  ],
+  "page0-4-drawing": [
+   "pages",
+   118,
+   122
+  ],
+  "page0-4-entries": [
+   "data",
+   3768,
+   4512
+  ],
+  "page0-4-event-down": [
+   "pages",
+   122,
+   134
+  ],
+  "page0-4-event-up": [
+   "pages",
+   134,
+   144
+  ],
+  "page0-4-head": [
+   "pages",
+   1313,
+   1365
+  ],
+  "page0-4-memory": [
+   "pages",
+   1365,
+   1381
+  ],
+  "page0-4-record": [
+   "records",
+   1048,
+   1310
+  ],
+  "page0-5-drawing": [
+   "pages",
+   144,
+   148
+  ],
+  "page0-5-entries": [
+   "data",
+   4512,
+   5232
+  ],
+  "page0-5-event-down": [
+   "pages",
+   148,
+   160
+  ],
+  "page0-5-event-up": [
+   "pages",
+   160,
+   170
+  ],
+  "page0-5-head": [
+   "pages",
+   1381,
+   1433
+  ],
+  "page0-5-memory": [
+   "pages",
+   1433,
+   1445
+  ],
+  "page0-5-record": [
+   "records",
+   1310,
+   1572
+  ],
+  "page0-6-drawing": [
+   "pages",
+   170,
+   174
+  ],
+  "page0-6-entries": [
+   "data",
+   5232,
+   6240
+  ],
+  "page0-6-event-down": [
+   "pages",
+   174,
+   186
+  ],
+  "page0-6-event-up": [
+   "pages",
+   186,
+   196
+  ],
+  "page0-6-head": [
+   "pages",
+   1445,
+   1497
+  ],
+  "page0-6-memory": [
+   "pages",
+   1497,
+   1529
+  ],
+  "page0-6-record": [
+   "records",
+   1572,
+   1834
+  ],
+  "page0-7-drawing": [
+   "pages",
+   196,
+   200
+  ],
+  "page0-7-entries": [
+   "data",
+   6240,
+   7032
+  ],
+  "page0-7-event-down": [
+   "pages",
+   200,
+   212
+  ],
+  "page0-7-event-up": [
+   "pages",
+   212,
+   222
+  ],
+  "page0-7-head": [
+   "pages",
+   1529,
+   1581
+  ],
+  "page0-7-memory": [
+   "pages",
+   1581,
+   1593
+  ],
+  "page0-7-record": [
+   "records",
+   1834,
+   2096
+  ],
+  "page0-8-drawing": [
+   "pages",
+   222,
+   226
+  ],
+  "page0-8-entries": [
+   "data",
+   7032,
+   8016
+  ],
+  "page0-8-event-down": [
+   "pages",
+   226,
+   238
+  ],
+  "page0-8-event-up": [
+   "pages",
+   238,
+   248
+  ],
+  "page0-8-head": [
+   "pages",
+   1593,
+   1645
+  ],
+  "page0-8-memory": [
+   "pages",
+   1645,
+   1673
+  ],
+  "page0-8-record": [
+   "records",
+   2096,
+   2358
+  ],
+  "page0-9-drawing": [
+   "pages",
+   248,
+   252
+  ],
+  "page0-9-entries": [
+   "data",
+   8016,
+   8808
+  ],
+  "page0-9-event-down": [
+   "pages",
+   252,
+   264
+  ],
+  "page0-9-event-up": [
+   "pages",
+   264,
+   274
+  ],
+  "page0-9-head": [
+   "pages",
+   1673,
+   1725
+  ],
+  "page0-9-memory": [
+   "pages",
+   1725,
+   1745
+  ],
+  "page0-9-record": [
+   "records",
+   2358,
+   2620
+  ],
+  "page0-doevents": [
+   "pages",
+   6611,
+   6618
+  ],
+  "page0-memory-run": [
+   "pages",
+   893,
+   1001
+  ],
+  "page0-objects-table": [
+   "pages",
+   733,
+   893
+  ],
+  "page0-texts": [
+   "pages",
+   3145,
+   6521
+  ],
+  "program-s": [
+   "program-s",
+   0,
+   143
+  ],
+  "variables": [
+   "variables",
+   0,
+   36
+  ]
+ },
+ "places": {
+  "page0-0": {
+   "base": 12184,
+   "buffer_place": null,
+   "first_entry": 0,
+   "load_place": null,
+   "object_id": 0,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-1": {
+   "base": 12248,
+   "buffer_place": null,
+   "first_entry": 33,
+   "load_place": null,
+   "object_id": 1,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "txt": 14332
+   },
+   "two_byte_start": 0
+  },
+  "page0-10": {
+   "base": 12928,
+   "buffer_place": null,
+   "first_entry": 367,
+   "load_place": 8454,
+   "object_id": 10,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-11": {
+   "base": 13012,
+   "buffer_place": null,
+   "first_entry": 407,
+   "load_place": null,
+   "object_id": 11,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-12": {
+   "base": 13092,
+   "buffer_place": null,
+   "first_entry": 448,
+   "load_place": null,
+   "object_id": 12,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-13": {
+   "base": 13148,
+   "buffer_place": null,
+   "first_entry": 475,
+   "load_place": 8463,
+   "object_id": 13,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "txt": 14400
+   },
+   "two_byte_start": 0
+  },
+  "page0-14": {
+   "base": 13240,
+   "buffer_place": 17700,
+   "first_entry": 523,
+   "load_place": 8472,
+   "object_id": 14,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-15": {
+   "base": 13332,
+   "buffer_place": null,
+   "first_entry": 564,
+   "load_place": null,
+   "object_id": 15,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-16": {
+   "base": 13392,
+   "buffer_place": null,
+   "first_entry": 592,
+   "load_place": null,
+   "object_id": 16,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-17": {
+   "base": 13456,
+   "buffer_place": null,
+   "first_entry": 622,
+   "load_place": null,
+   "object_id": 17,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "txt": 14412
+   },
+   "two_byte_start": 0
+  },
+  "page0-18": {
+   "base": 13532,
+   "buffer_place": null,
+   "first_entry": 660,
+   "load_place": null,
+   "object_id": 18,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "path": 14440
+   },
+   "two_byte_start": 0
+  },
+  "page0-19": {
+   "base": 13596,
+   "buffer_place": null,
+   "first_entry": 689,
+   "load_place": 8481,
+   "object_id": 19,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "path": 14952,
+    "txt": 14696
+   },
+   "two_byte_start": 0
+  },
+  "page0-2": {
+   "base": 12332,
+   "buffer_place": null,
+   "first_entry": 74,
+   "load_place": null,
+   "object_id": 2,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-20": {
+   "base": 13704,
+   "buffer_place": null,
+   "first_entry": 732,
+   "load_place": 8490,
+   "object_id": 20,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "path": 16016,
+    "txt": 15980
+   },
+   "two_byte_start": 0
+  },
+  "page0-21": {
+   "base": 13844,
+   "buffer_place": null,
+   "first_entry": 789,
+   "load_place": 8499,
+   "object_id": 21,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "path": 16536,
+    "txt": 16276
+   },
+   "two_byte_start": 0
+  },
+  "page0-22": {
+   "base": 13960,
+   "buffer_place": 17976,
+   "first_entry": 835,
+   "load_place": 8508,
+   "object_id": 22,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "path": 16796
+   },
+   "two_byte_start": 0
+  },
+  "page0-23": {
+   "base": 14064,
+   "buffer_place": 29976,
+   "first_entry": 874,
+   "load_place": 8517,
+   "object_id": 23,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-24": {
+   "base": 12,
+   "buffer_place": 1324,
+   "first_entry": 912,
+   "load_place": 8526,
+   "object_id": 24,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "dir": 780,
+    "filter": 1036,
+    "format": 520,
+    "path": 264,
+    "txt": 1068
+   },
+   "two_byte_start": 0
+  },
+  "page0-25": {
+   "base": 14168,
+   "buffer_place": 93976,
+   "first_entry": 986,
+   "load_place": 8535,
+   "object_id": 25,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "dir": 17052,
+    "filter": 17308,
+    "txt": 17376,
+    "vvs2": 17632
+   },
+   "two_byte_start": 0
+  },
+  "page0-3": {
+   "base": 12412,
+   "buffer_place": null,
+   "first_entry": 115,
+   "load_place": null,
+   "object_id": 3,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "txt": 14344
+   },
+   "two_byte_start": 0
+  },
+  "page0-4": {
+   "base": 12496,
+   "buffer_place": null,
+   "first_entry": 157,
+   "load_place": null,
+   "object_id": 4,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-5": {
+   "base": 12564,
+   "buffer_place": null,
+   "first_entry": 188,
+   "load_place": null,
+   "object_id": 5,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-6": {
+   "base": 12628,
+   "buffer_place": null,
+   "first_entry": 218,
+   "load_place": null,
+   "object_id": 6,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "txt": 14356
+   },
+   "two_byte_start": 0
+  },
+  "page0-7": {
+   "base": 12712,
+   "buffer_place": null,
+   "first_entry": 260,
+   "load_place": null,
+   "object_id": 7,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-8": {
+   "base": 12776,
+   "buffer_place": null,
+   "first_entry": 293,
+   "load_place": null,
+   "object_id": 8,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": null,
+   "two_byte_start": 0
+  },
+  "page0-9": {
+   "base": 12856,
+   "buffer_place": null,
+   "first_entry": 334,
+   "load_place": null,
+   "object_id": 9,
+   "page": 0,
+   "page_entry": 0,
+   "text_place": null,
+   "text_places": {
+    "txt": 14368
+   },
+   "two_byte_start": 0
+  }
+ }
+}

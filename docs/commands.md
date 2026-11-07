@@ -1,6 +1,6 @@
 # Commands
 
-nxwright's commands work on a source folder: your project as files ([source-folder.md](source-folder.md)). Each one below has what it does, an example, its options, and then the details.
+Most of nxwright's commands work on a source folder: your project as files ([source-folder.md](source-folder.md)).
 
 ```
 nxwright new <source-folder>
@@ -8,6 +8,14 @@ nxwright extract <project.HMI> <source-folder> [--continue-with-unknown]
 nxwright extract --list-unknown <project.HMI>
 nxwright report <project.HMI> <report.md>
 nxwright build <source-folder> <output.HMI>
+nxwright compile <source-folder or project.HMI> <output.tft> [--firmware <file.tft> | --editor <folder>] [--download]
+nxwright upload <file.tft> --port <port>
+nxwright ports
+nxwright rescue <output.tft> --screen <model>
+nxwright decompile <file.tft> <source-folder>
+nxwright tft-read <file.tft>
+nxwright tft-listing <file.tft>
+nxwright tft-compare <a.tft> <b.tft>
 nxwright check <source-folder>
 nxwright format <source-folder> [--check]
 nxwright new-page <source-folder> [name]
@@ -104,7 +112,110 @@ Writes a new project file from the source folder alone: its pages, code, picture
 - It keeps the screen copies of your pictures in a cache, to build faster next time ([The picture cache](source-folder.md#the-picture-cache)).
 - Like `extract`, it goes through a dump in a temporary folder ([dumps.md](dumps.md)).
 
-To put your app on a screen, open the built project in the Nextion Editor, and compile and upload it from there.
+To put your app on a screen, compile it with [compile](#compile) and send it with [upload](#upload). You can also open the built project in the Nextion Editor, and compile and upload it from there.
+
+## compile
+
+```
+nxwright compile app thermostat.tft
+nxwright compile thermostat.HMI thermostat.tft
+```
+
+Compiles a source folder, or a project file, into a TFT file, the file a Nextion screen runs.
+
+- The compile first builds a source folder, and stops at anything `build` refuses. A project file is compiled as it is.
+- If the project has something nxwright cannot compile, such as a number too large for its attribute, the compile lists every problem, and does not write any file.
+- A sound at 22050 samples a second must be 16-bit, mono or stereo, or the compile refuses it. A sound at any other rate needs ffmpeg to convert it: either the ffmpeg on your PATH, or the program you give with `--ffmpeg`. Without ffmpeg, the compile refuses the project.
+- `--project-file <file.HMI>` also saves the project file that the compile builds from a source folder, so that you have one that always matches the TFT file.
+- If an output file already exists, the compile refuses to replace it, unless you give `--overwrite`. Even then, it only replaces a TFT file with a TFT file, and a project file with a project file.
+
+### The firmware
+
+Every TFT file contains the screen's firmware. Nextion makes the firmware, so nxwright does not ship it ([INDEPENDENCE.md](../INDEPENDENCE.md)). The compile takes the firmware from the first of these sources that has it:
+
+- a TFT file you give with `--firmware`, made for the same series of screens, or a Nextion Editor folder you give with `--editor`;
+- the firmware an earlier compile found, kept in your cache folder;
+- the Nextion Editor installed on your computer;
+- a download from Nextion's site, of about 50 MB:
+  - At a terminal, the compile prompts you first, with the download's size. To find the size, it sends one small request to Nextion's site.
+  - In a script, the compile downloads only if you give `--download`. Without `--download`, it does not send any request at all.
+  - The download needs curl, which comes with Windows 10 version 1803 and later, macOS, and most Linux systems.
+  - If the download is not available, and you are on Windows with no Nextion Editor installed, the compile offers to run the Nextion Editor's installer.
+
+The compile takes only the firmware of the Nextion Editor 1.68.2, the version nxwright is tested with. Firmware of another version may run the compiled code differently.
+
+## upload
+
+```
+nxwright upload thermostat.tft --port COM5
+```
+
+Sends a TFT file, made by nxwright or the Nextion Editor, to the screen on a serial port, such as `COM5` or `/dev/ttyUSB0`.
+
+- To find the screen, the command tries each rate a screen can use, which can take a few seconds. If you know the rate the screen uses now, you can give it with `--baud`.
+- `--yes` skips the prompt before the file is sent. A script must give it, because with no terminal to answer the prompt, the command exits with 3 and does not send the file.
+- The command cancels the upload if the file is for a different model from the screen, or if nxwright cannot tell the model of the file or of the screen. It also cancels it if the file's checksums do not match, or if it cannot read the file, such as one made by a Nextion Editor older than 1.60.1. In each case, the command exits with 1.
+- `--find` stops once the screen is found and the file is checked against it, without sending the file.
+- `--upload-baud` sets the rate of the upload. The default is 115200, which sends a megabyte in a little over a minute and a half. You can give any rate the screen supports, up to 921600, but some serial adapters lose bytes at the highest rates.
+- The screen skips the parts of the file it already has, such as the firmware when only your app changed. `--full` sends the whole file.
+
+Once the whole file is sent, the screen restarts and runs it. Do not power the screen off until your app is showing, because it may still be updating its firmware. If the screen stops answering, or you stop the upload, power the screen off and on, then upload the file again.
+
+## ports
+
+```
+nxwright ports
+```
+
+Lists your computer's serial ports, so that you can choose the one to give `upload`. It does not open any port, so it cannot tell which one a screen is on.
+
+## rescue
+
+```
+nxwright rescue rescue.tft --screen NX4832T035
+```
+
+Writes a TFT file that sets a screen's settings back to their defaults. Use it for a screen that stays black or no longer answers because of one of the settings listed below. To put the file on the screen, follow [If the screen stays black or stops responding](screens.md#if-the-screen-stays-black-or-stops-responding).
+
+- `--screen` gives the screen model. The file is only for that model.
+- The firmware comes from the same places as for [compile](#the-firmware), with the same options: `--firmware`, `--editor`, and `--download`.
+- If the output file already exists, the command refuses to replace it, unless you give `--overwrite`. Even then, it only replaces a TFT file.
+
+The file's app changes these settings, then shows a blank page:
+
+- `dims=100`: the screen starts at full brightness.
+- `bauds=9600`: the serial port starts at 9600 baud.
+- `recmod=0`: reparse mode ends, so that the screen accepts instructions again.
+- `addr=0`: the screen's address is removed, so that it accepts instructions without one.
+- `sleep=0`: the screen wakes.
+
+## decompile
+
+```
+nxwright decompile thermostat.tft app
+```
+
+Turns a TFT file back into a source folder. Use it to recover a project when you still have its TFT file but have lost the project.
+
+- The folder to write must be new or empty.
+- The command reads a file made by versions 1.60.1 to 1.68.2 of the Nextion Editor, and refuses any other.
+- For a file made by 1.68.2, the command first checks its work, by compiling the folder again with the file's own firmware and comparing the result with your file. A file made by an older version is decompiled without this check.
+  - If the result differs from your file, or the folder cannot be compiled again, the command prompts you before writing anything. In a script, with no terminal to answer the prompt, the command exits with 3 and does not write anything. `--continue-unconfirmed` writes the folder without the prompt.
+- A TFT file does not keep the names of pages, components, int variables, and macros, only a checksum of each. The command works out the names it can from those checksums, and replaces any other with a readable one, such as `text3` for the text component of ID 3.
+
+## tft-read, tft-listing, and tft-compare
+
+```
+nxwright tft-read thermostat.tft
+nxwright tft-listing thermostat.tft
+nxwright tft-compare old.tft new.tft
+```
+
+These three commands show what is inside a TFT file, whether nxwright or the Nextion Editor made it.
+
+- `tft-read` prints the file's series of screens, the Nextion Editor version it records, its table of sections, and the parts and pages of its app. It then checks the file's checksums, sizes, and places, prints each one that is wrong, and exits with 1 if it found one.
+- `tft-listing` prints what the app in the file contains: its settings, its int variables, `program.s`, its macros, each page with its components and their code, and the pictures and fonts.
+- `tft-compare` compares two TFT files part by part. For each part that differs, it prints where the difference starts, with the bytes around it. It exits with 1 when the files differ.
 
 ## check
 
@@ -541,3 +652,19 @@ Runs nxwright's MCP server, which lets an AI agent, such as Claude Code, run you
 
 - `dump`, `import`, `write`, and `page` work on dumps: a project file written out as text ([dumps.md](dumps.md)).
 - `test` runs your tests ([testing.md](testing.md)).
+
+## Output for programs
+
+`compile`, `upload`, and `ports` take `--json`, for programs such as nxwright's VS Code extension. Each then prints one JSON object per line, and its messages for people go to standard error. `compile` and `upload` never prompt with `--json`: give `--download` to allow a download, and `--yes` to upload. The objects are:
+
+- `compile`:
+  - `{"event": "download", "done": ..., "size": ...}`, in bytes, as a download goes on;
+  - `{"event": "firmware-missing", "version": "1.68.2"}`, when nothing on your computer has the firmware, and `--download` was not given;
+  - `{"event": "compiled", "tft": ..., "project_file": ..., "firmware_source": ..., "warnings": [...]}`, once the files are written. `project_file` is `null` without `--project-file`.
+- `upload`:
+  - `{"event": "found", "file": ..., "size": ..., "file_model": ..., "port": ..., "screen": ..., "screen_rate": ..., "takes_every_rate": ..., "upload_rate": ..., "warnings": [...]}`, once the screen is found;
+  - `{"event": "cancelled", "reason": ...}`, when the command cancels the upload, and then exits with 1. If the file fails its checks, this is the only object printed, because the port is never opened. Otherwise it is printed after the `found` object;
+  - `{"event": "skipped", "bytes": ...}`, when the screen skips what it has;
+  - `{"event": "progress", "sent": ..., "size": ...}`, after each packet;
+  - `{"event": "uploaded"}`, once the whole file is sent.
+- `ports`: `{"port": ..., "description": ...}` for each port, with `""` for no description.
