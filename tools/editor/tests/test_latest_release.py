@@ -58,7 +58,7 @@ class TestedVersionTest(unittest.TestCase):
         version = latest_release.tested_version()
         self.assertRegex(version, r"^\d+\.\d+\.\d+$")
         for readme, said in ((_NXWRIGHT / "README.md",
-                              "nxwright is tested with projects of Nextion Editor %s."),
+                              "nxwright is tested with projects saved by Nextion Editor %s."),
                              (_NXWRIGHT / "tools" / "editor" / "README.md",
                               "the Nextion Editor %s, the version nxwright is tested with.")):
             with self.subTest(readme=readme.name):
