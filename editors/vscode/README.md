@@ -25,7 +25,7 @@ Right-click a component and choose Paste Special to give the selected components
 
 On an empty part of the page, or on the page in the Components list, Paste Special pastes new copies, and lets you choose whether they keep their original position and their code.
 
-Double click a component to go to its code. If it has none yet, the extension adds its first event to the page's `.nx` file. The right-click menu can also open or add any of its events, jump to its entry in the page file, or delete all its code.
+Double-click a component to go to its code. If it has none yet, the extension adds its first event to the page's `.nx` file. From the right-click menu, you can also open or add any of the component's events, jump to its entry in the page file, or delete all its code.
 
 Every change edits the page file, so the preview and the text editor share the same undo history. To switch between the two, use the editor picker at the top right of the editor. Its "Set Default" item lets you pick whether pages open by default in the WYSIWYG preview, or as the underlying `.page.toml` file.
 
@@ -58,7 +58,7 @@ You can change the screen model, rotation, and character encoding from the Proje
 
 A compile needs the firmware of the Nextion Editor version that nxwright supports ([The firmware](https://github.com/nixiewright/nxwright/blob/main/docs/screens.md#the-firmware)). If you don't have that version installed, nxwright can download the firmware from Nextion's site, or you can point it at a TFT file or a Nextion Editor folder of that version.
 
-If a project file was changed outside nxwright, such as in the Nextion Editor, Build HMI and Compile TFT ask before they replace it, and keep the old file as a backup ([Settings](#settings)).
+If a project file was changed outside nxwright, such as in the Nextion Editor, Build HMI and Compile TFT prompt before they replace it, and keep the old file as a backup ([Settings](#settings)).
 
 ![The nxwright side bar: the Project section with the screen settings, then the project file, the TFT file, and the screen, each with its button, the Media section, and the Simulator section](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/project-side-bar.png)
 
@@ -76,7 +76,7 @@ The Media section lets you add pictures, and make animations, videos, and sounds
 
 ### Simulate your app
 
-The simulator can be started on the whole application, like your screen would, or on a given page if you just want to run that part of your app. A panel shows the screen, and you can press its components as on the real one. What the app sends on its serial line appears in the Debug Console.
+The simulator can be started on the whole application, like your screen would, or on a given page if you just want to run that part of your app. A panel shows the screen, and you can click its components to press them. What the app sends on its serial line appears in the Debug Console.
 
 You can also:
 
@@ -122,15 +122,15 @@ All commands are in the command palette, under "nxwright:". Most of them do what
 
 | Command | What it does |
 | --- | --- |
-| Import a Nextion Editor project | Turns a `.HMI` file into a new source folder. Build in the new folder then writes to that file. |
-| Extract a project file into a new folder | Turns a `.HMI` file into a new source folder. Build in the new folder does not write to that file. |
+| Import a Nextion Editor project | Turns a `.HMI` file into a new source folder. Build HMI in the new folder then writes to that file. |
+| Extract a project file into a new folder | Turns a `.HMI` file into a new source folder. Build HMI in the new folder does not write to that file. |
 | Choose the project | Chooses which project the side bars show, when the workspace has several. |
 | Compile a project file into a TFT file | Compiles a `.HMI` file you choose, such as one made in the Nextion Editor, into a TFT file you name. |
 | Upload the TFT file to the screen | Compiles, then uploads the TFT file, the same as Upload TFT. |
 | Upload a TFT file to the screen | Uploads a TFT file you choose, such as one made in the Nextion Editor, without compiling. |
 | Decompile a TFT file into a new source folder | Turns a TFT file back into a source folder, to recover a project you no longer have. |
-| Choose the project HMI file for the source folder | Chooses the `.HMI` file that Build writes. |
-| Change the screen model | Changes the screen, and resizes every page. |
+| Choose the project HMI file for the source folder | Chooses the `.HMI` file that Build HMI writes. |
+| Change the screen model | Changes the screen model, and resizes every page. |
 | Change the rotation | Changes the rotation, resizes every page, and rotates fonts and videos. |
 | Change the character encoding | Changes the encoding, and converts the fonts. |
 | Upgrade the source folder to the current format | Converts a folder made by an older version of nxwright. |
@@ -146,7 +146,7 @@ A launch configuration of type `nxwright` simulates the source folder given by `
 
 | Parameter | What it does |
 | --- | --- |
-| `page` | The page to start on, instead of running program.nx. |
+| `page` | The page to start on, instead of running `program.nx`. |
 | `values` | With `page`, the values to start with, such as `{"t0.txt": "Hello"}`. |
 | `eeprom` | A file that keeps the EEPROM's contents between simulations. It is created if missing. Without it, the EEPROM starts empty every time. |
 | `serialPort` | The serial port connected to the screen's serial line, such as `{"name": "COM4", "baud": 115200}`. |
@@ -173,7 +173,7 @@ If a configuration leaves out a parameter that also exists in the Simulator sett
 | Shift+arrow keys | Move the selection by 10 pixels. |
 | Delete | Deletes the selection. |
 | Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+D | Copy, cut, paste, duplicate. |
-| Double click | Opens the first of the component's events that has code, or else its first event. |
+| Double-click | Opens the first of the component's events that has code, or else its first event. |
 | F12 | Opens the page file as text at the selected component's table, or at the page's. |
 | Right-click | Opens a menu with the other actions, such as Add a component here, Align, Bring to front, Lock, and Paste Special. |
 | Ctrl+mouse wheel | Zooms in or out around the pointer. |
@@ -191,7 +191,7 @@ On a Mac, use Cmd instead of Ctrl, and the delete key to delete.
 ### Before you edit a page
 
 - Deleting a component, or moving it forward or backward, changes the IDs of the components after it. If your code or attributes use an ID as a number, that number then points to a different component.
-- You can't delete a component from the preview if its code is in an included file, because other pages may use that included code too. Deleting the component by hand in the page file doesn't help: the included file still includes the event, which is attached to a component by name. Since the page no longer has a component by that name, this will fail the build. To delete the component, first remove its events from the shared file, or move them into the `.nx` files of the pages that still need them. Clear events and Paste Special can't change that code either.
+- If a component's code is in an included file, you can't delete the component from the preview, because other pages may use that code. To delete the component, first remove its events from the included file, or move them into the `.nx` files of the pages that still need them. Deleting it from the page file by hand makes the build fail, because the included file still has events for a component of that name. Clear events and Paste Special can't change code in an included file either.
 - Components paste with their code only if they are the ones you copied last. Component tables from anywhere else, such as a text file, paste without code.
 - Setting a component's `key` to a keyboard adds nxwright's keyboard page, if the project doesn't have it yet. The keyboard files are written right away and undo will only remove the component's key (remove the keyboard page manually if you need to).
 - A keyboard only opens from a component of global scope.
@@ -201,9 +201,9 @@ On a Mac, use Cmd instead of Ctrl, and the delete key to delete.
 ### Good to know
 
 - The status bar shows how many objects the page has (its components plus the page itself), out of the 251 allowed, and its longest chain of calls and `click` commands, out of the 7 allowed.
-- Some commands need your changes saved first, such as adding a font or changing the screen.
-- Rename, adding or pasting a component, and Format Document are refused if the project would no longer build. For example, you can't rename to a name already in use, add or paste on a page that is full, or format a file with errors.
-- `.nx` files are always UTF-8. VS Code saves them in UTF-8 whatever your `files.encoding` and `files.autoGuessEncoding` settings are, and the build refuses a `.nx` file that is not valid UTF-8.
+- Some commands, such as adding a font or changing the screen model, need your changes saved first.
+- Rename, adding or pasting a component, and Format Document fail if the project would no longer build. For example, you can't rename to a name already in use, add or paste on a page that is full, or format a file with errors.
+- `.nx` files are always UTF-8. VS Code saves them in UTF-8 whatever your `files.encoding` and `files.autoGuessEncoding` settings are, and the build fails on a `.nx` file that is not valid UTF-8.
 
 ## Settings
 

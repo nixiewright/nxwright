@@ -4,9 +4,7 @@ nxwright's compile matches one release of the Nextion Editor at a time, the one 
 
 Some probes also keep fixtures, so that nxwright's tests can make the same check without the Nextion Editor. These probes cut the Nextion Editor's file into pieces, such as one page's code, and save them in `tests/tft/fixtures/`. The tests then compare the compile's output with these pieces.
 
-The probe tool is for contributors who have the Nextion Editor. It drives the Nextion Editor through the [Editor tool](../editor/README.md), so it needs Windows and the Editor tool's Python.
-
-To use it, set `NXWRIGHT_EDITOR_NAME` to a name for the [dedicated Editor](../editor/README.md) it will drive, then run every command from nxwright's folder with that Python. This command runs one module of probes:
+The probe tool is for contributors who have the Nextion Editor. It drives the Nextion Editor through the [Editor tool](../editor/README.md), so it needs Windows and the Editor tool's Python. To use it, set `NXWRIGHT_EDITOR_NAME` to a name for the [dedicated Editor](../editor/README.md) it will drive, then run every command from nxwright's folder with that Python. This command runs one module of probes:
 
 ```
 tools\editor\build\venv\Scripts\python.exe -m tools.tft.probe run first_probes
@@ -18,7 +16,7 @@ Run `python -m tools.tft.probe --help` for the list of commands, and see the doc
 
 ## Moving to a new release of the Nextion Editor
 
-The weekly release check reports each new release of the Nextion Editor, with its release notes (`tools/editor/latest_release.py`). The probes then show where nxwright's TFT files differ from the new release's. Once nxwright is fixed and every probe you ran matches, nxwright moves to the new release.
+The weekly release check (`tools/editor/latest_release.py`) reports each new release of the Nextion Editor, with its release notes. Run the probes against the new release to find where its TFT files differ from nxwright's. Once nxwright is fixed and every probe you ran matches, move nxwright to that release.
 
 ### Before you start
 
@@ -28,25 +26,25 @@ The weekly release check reports each new release of the Nextion Editor, with it
 
 ### Three ways to run the probes
 
-Start with the release sample, and run a larger set only if the release reaches further. To run a single module, give its name in place of `release_sample`.
-
-- **The release sample.** On each series, it covers every command, system variable, colour, and component type, plus the layouts, the timers, and the resources (`tools/tft/probing/release_sample.py`). Against the Nextion Editor 1.68.2, its 43 probes took about 10 minutes.
+- **The release sample.** On each series, the sample covers every command, system variable, colour, and component type, plus the layouts, the timers, and the resources (`tools/tft/probing/release_sample.py`). Against the Nextion Editor 1.68.2, its 43 probes took about 10 minutes.
 
   ```
   python -m tools.tft.probe run release_sample --again
   ```
 
-- **The probes that keep fixtures**, about 700. Run them when the sample or the release notes point at many [areas](#areas), the subjects that the probes cover.
+- **The probes that keep fixtures**, about 700. Run them when the sample or the release notes point at many [areas](#areas).
 
   ```
   python -m tools.tft.probe run --fixtures
   ```
 
-- **Every probe that compares with nxwright's compile**, about 4,000 from all the modules. Run them when a change could reach every part of a file.
+- **Every probe that compares with nxwright's compile**, about 4,000 from all the modules. Run them when a change could affect any part of a TFT file.
 
   ```
   python -m tools.tft.probe run --all
   ```
+
+To run a single module, give its name in place of `release_sample`. `--again` also runs the probes that already matched.
 
 Each run lists, by module, the probes that did not match and the probes that could not run.
 
@@ -57,14 +55,14 @@ Each run lists, by module, the probes that did not match and the probes that cou
 ### The steps
 
 1. Read the release notes that the check printed. Find each area they mention, such as the timers or a component type, in the [list of areas](#areas).
-2. Run the release sample, then the probe modules of each area the notes mention, each with `--again` so that probes already matched run again. When the release has no notes, or the notes mention no area, run the sample alone.
-3. Where a probe does not match, run every probe module of its area too. File each probe that does not match or could not run as a bug, and fix the bugs.
+2. Run the release sample, then the probe modules of each area the notes mention, each with `--again`. When the release has no notes, or the notes mention no area, run the sample alone.
+3. If a probe does not match, run every probe module of its area too. File a bug for each probe that does not match or could not run, and fix the bugs.
 4. Once the sample and every module you ran match the new release, put the new release in place of the old one in `nxwright/tft/firmware_versions.py`:
    - In `MATCHED_VERSIONS`, give the SHA-256 hash of each firmware file, read from the new release's zip.
-   - In `INSTALLER_HASHES`, give the hash of the new release's installer. nxwright's firmware download runs only an installer whose hash is listed here. Download the installer, at the address of the zip with `.exe` in place of `.zip`, only to get this hash, and never run it yourself.
+   - In `INSTALLER_HASHES`, give the hash of the new release's installer. nxwright's firmware download runs only an installer whose hash is listed here. To get this hash, download the installer from the zip's address with `.exe` in place of `.zip`. Never run the installer yourself.
 5. Move the rest of nxwright to the new release in the same change. See [tools/editor/RELEASES.md](../editor/RELEASES.md) for how.
 
-After the move, the compile takes only the new release's firmware. A user who has only the old release's firmware is offered the download of the new one, like a user who has no firmware.
+After the move, the compile takes only the new release's firmware, and nxwright offers to download it to any user who does not have it.
 
 ## Areas
 
@@ -83,4 +81,4 @@ An area is a subject that the probes cover. All the modules below are in `tools/
 | Attributes that every component has, and components that overlap | `shared_attribute_probes`, `overlap_probes` |
 | One series alone | `k_probes`, `p_probes`, `e_probes`, or `f_probes` |
 
-The compiler was built on the T series first, so the T series' probes are in each area's modules. The series come in two families, each with a base set of probes for a base series, called the leader. T leads K and F, and P leads E. A follower writes a project's code the same way as its leader, apart from a few differences. The K, F, and P modules each run T's probes on their own series, and add their own, and the E module runs P's. Run a series' module when a change concerns that series.
+The area modules probe the T series, because nxwright's compile was built for it first. The series come in two families: T with K and F, and P with E. nxwright writes a project's code for K and F almost the same way as for T, and for E almost the same way as for P. The K, F, and P modules each run T's probes on their own series and add probes of their own, and the E module runs P's probes on E. Run a series' module when a change concerns that series.

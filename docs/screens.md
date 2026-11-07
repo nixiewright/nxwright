@@ -19,29 +19,29 @@ Screens run a TFT file, which nxwright can compile from your source folder and u
   nxwright build app thermostat.HMI
   ```
 
-You can mix the two. With `--project-file`, `nxwright compile` also writes the project file, so that you can open the same app in the Nextion Editor. In VS Code, the link button beside the project file turns this on for Compile TFT.
+You can mix the two. `nxwright compile --project-file` also writes the project file, so that you can open the same app in the Nextion Editor. In VS Code, the link button beside the project file makes Compile TFT write it too.
 
 ## Compiling
 
-`nxwright compile` works for every series of screens: Basic, Enhanced, Intelligent, Discovery, and Edge. See [compile](commands.md#compile) for what it refuses, and for its options.
+`nxwright compile` works for every series of screens: Basic, Enhanced, Intelligent, Discovery, and Edge. See [compile](commands.md#compile) for its options, and for what it rejects.
 
 ### The firmware
 
-Every TFT file contains the screen's firmware, the program that runs your app on the screen. Nextion makes the firmware, so nxwright does not ship it. The compile first looks on your computer, for the firmware an earlier compile found or for an installed Nextion Editor. If it finds neither, it offers to download the Nextion Editor's zip, about 50 MB, from Nextion's site. See [The firmware](commands.md#the-firmware) for every source, and for how to choose one.
+Every TFT file contains the screen's firmware, the program that runs your app on the screen. Nextion makes the firmware, so nxwright does not ship it. The compile takes it from an installed Nextion Editor, or can download the Nextion Editor's zip, about 50 MB, from Nextion's site. See [The firmware](commands.md#the-firmware) for every source, and for how to choose one.
 
-The compile takes only the firmware of the Nextion Editor 1.68.2, the version nxwright is tested with, because the firmware of another version may run your app's code differently.
+nxwright uses only the firmware of the Nextion Editor 1.68.2, the version it is tested with, because another version's firmware may run your app's code differently.
 
 ## Uploading
 
 Connect the screen to your computer through a USB serial adapter, and give `nxwright upload` the port. `nxwright ports` lists your computer's ports. In VS Code, the first upload prompts for the port and the upload rate, and later uploads reuse them.
 
-The upload is cancelled if the file was compiled for a different model from the screen. See [upload](commands.md#upload) for the other cases, and for its options.
+nxwright will not upload a file compiled for a different model of screen. See [upload](commands.md#upload) for the other cases, and for its options.
 
 ### The rate of the upload
 
 The upload runs at 115200 baud unless you choose another rate with `--upload-baud`. At 115200, a megabyte takes a little over a minute and a half. Rates up to 921600 are much quicker, if your screen and your adapter support them. If an upload fails at a high rate, try a lower one, because some adapters lose bytes at the highest rates.
 
-This rate is separate from the one the screen uses now. You don't need to know that one, because the upload tries each rate until it finds the screen.
+You don't need to know the rate the screen uses now, because the upload tries each rate until it finds the screen.
 
 ### What is sent
 
@@ -49,15 +49,15 @@ An upload can be quicker than the size of the file suggests, because the screen 
 
 ### When the upload ends
 
-Once the whole file is sent, the screen restarts and runs your app. It may first update its own firmware, which can take a while. Do not power the screen off until your app is showing.
+After the upload, the screen may take a while to update its own firmware before it starts your app. Do not power the screen off until your app is showing.
 
 ### When an upload breaks off
 
-Once the upload has started, the screen waits for the whole file. If the upload stops early, whether you stopped it or the screen stopped answering, power the screen off and on, then upload the file again.
+If an upload ends early, because you cancelled it or because the screen stopped responding, the screen keeps waiting for the rest of the file. Power the screen off and on, then upload the file again.
 
 ### If the screen stays black or stops responding
 
-An app can leave a screen black or unresponsive through a setting it saved, such as its brightness, its rate, or its address. If the screen has a microSD slot, Nextion's rescue SD card fixes this. The card contains the TFT file of an empty app that resets those settings. The screen reads the card when it starts, and may do so even when it no longer accepts uploads over its serial port. You can make the card yourself with nxwright:
+An app can leave a screen black or unresponsive through a setting it saved, such as the screen's brightness, rate, or address. If the screen has a microSD slot, Nextion's rescue SD card fixes this. The card contains the TFT file of an empty app that resets those settings. The screen reads the card when it starts, and may do so even when it no longer accepts uploads over its serial port. You can make the card yourself with nxwright:
 
 1. Write the rescue file for your screen model:
 
@@ -69,17 +69,19 @@ An app can leave a screen black or unresponsive through a setting it saved, such
 3. Put the card in the screen, and power the screen off and on.
 4. When the screen has finished, power it off, remove the card, and power it on again. You can then upload your app.
 
-[rescue](commands.md#rescue) lists the settings the file resets. Nextion describes the card in [Developing HMI projects](https://nextion.tech/2022/07/18/developing-hmi-projects-a-way-around-these-oops-moments/).
+See [rescue](commands.md#rescue) for the settings the file resets. Nextion describes the card in [Developing HMI projects](https://nextion.tech/2022/07/18/developing-hmi-projects-a-way-around-these-oops-moments/).
 
 ## Recovering a project from its TFT file
 
-If you still have your app's TFT file, but no longer have its project, `nxwright decompile` turns the file back into a source folder. In VS Code, the command "Decompile a TFT file into a new source folder" does the same.
+If you still have your app's TFT file, but no longer have its project, `nxwright decompile` turns the file back into a source folder:
 
 ```
 nxwright decompile thermostat.tft app
 ```
 
-The decompile reads files made by the Nextion Editors 1.60.1 to 1.68.2. For a file made by 1.68.2, it checks its work by compiling the folder again and comparing the result with your file. It cannot check a file made by an older version, because nxwright compiles only with the firmware of 1.68.2. See [decompile](commands.md#decompile) for what happens if the check fails.
+In VS Code, the command "Decompile a TFT file into a new source folder" does the same.
+
+The decompile reads files made by versions 1.60.1 to 1.68.2 of the Nextion Editor. For a file made by 1.68.2, it checks its work by compiling the folder again and comparing the result with your file. It cannot check a file made by an older version, because nxwright compiles only with the firmware of 1.68.2. See [decompile](commands.md#decompile) for what happens if the check fails.
 
 The folder contains everything the screen needs, but a TFT file keeps less than a project:
 

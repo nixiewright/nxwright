@@ -14,7 +14,7 @@ Download the zip of the new release, and the zip of the release nxwright is test
 
 Unpack each zip into a new folder of its own. The Nextion Editor runs from that folder without being installed, so the copy you have installed does not change.
 
-Step 3 needs the path of the program in each folder. The program is `Nextion Editor.exe` in the zips of 1.68.1 and 1.68.2, and `NextionEditor.exe` in older zips.
+Step 3 needs the path of the program in each folder. It is `Nextion Editor.exe` in the zips of 1.68.1 and 1.68.2, and `NextionEditor.exe` in older ones.
 
 ## 3. Run the comparisons
 
@@ -27,11 +27,11 @@ python tools/editor/release_pass.py models --old <old program> --new <new progra
 python tools/editor/release_pass.py files --old <old folder> --new <new folder> <report.md>
 ```
 
-The round trip, catalog, and models comparisons start their own Nextion Editors, and do not touch yours. The files comparison does not start one. Each Nextion Editor that a comparison starts comes to the front while it runs, so do not use the computer until the comparison ends. Do not minimize it either, because the Editor tool cannot drive a minimized one. Plan ahead for the catalog comparison, which takes about two hours for each release.
+The round trip, catalog, and models comparisons start their own copies of the Nextion Editor, and leave yours alone. Each copy comes to the front while it runs, so do not use the computer until the comparison ends. Do not minimize the Nextion Editor either, because the Editor tool cannot drive a minimized one. The catalog comparison takes about two hours for each release, so plan ahead for it.
 
 Each comparison writes a `report.md`, which lists these findings about the new release:
 
-- **The round trip:** what the new release alone changes when it opens, compiles, and saves the projects nxwright builds.
+- **The round trip:** what only the new release changes when it opens, compiles, and saves the projects nxwright builds.
 - **The catalogs:** component types and attributes added or removed, and hints, lists of choices, and name colours that changed.
 - **The screen models:** models that nxwright's table of screen models lacks, models the new release lacks, and models the new release lists at another size.
 - **The files:** the files that changed in the new release. A change to `model0.sa` or `model1.sa` suggests that the screen models changed.
@@ -41,7 +41,7 @@ If the screen models report gives an error instead, the comparison could not rea
 ## 4. Deal with each finding
 
 - **A new attribute or component type:** open an issue so that nxwright can support it later. Until then, a project that uses it still comes back unchanged after extract and build, because extract keeps an unknown attribute as its stored bytes and a component of an unknown type exactly as it is.
-- **A new screen model:** save one project of that model in the new release, and add the project's manifest to `tests/fixtures/manifests/`. Then add the model to the table in `nxwright/project/screen_models.py`. Its device ID and stamp number come from the saved project, and its diagonal, flash, RAM, and frequency come from its tile in the device settings.
+- **A new screen model:** save a project for that model in the new release, and add the project's manifest to `tests/fixtures/manifests/`. Then add the model to the table in `nxwright/project/screen_models.py`. Take its device ID and stamp number from the saved project, and its diagonal, flash, RAM, and frequency from the model's tile in the device settings.
 - **Any other finding:** fix nxwright, with a test that fails before the fix.
 
 ## 5. Run the TFT compile probes
@@ -54,4 +54,4 @@ Whatever the comparisons found, run the [TFT compile probes](../tft/README.md) a
 - Put the new release's firmware and installer hashes in `nxwright/tft/firmware_versions.py`. See step 4 of [the TFT compile probes' steps](../tft/README.md#the-steps) for how.
 - Have the change reviewed, then publish it.
 
-You can install the new release of the Nextion Editor whenever you like. Until you do, the Editor tool keeps driving the copy you have installed, unless `NXWRIGHT_EDITOR` gives the path of another program.
+You can install the new release of the Nextion Editor whenever you like. Until you do, the Editor tool keeps driving the copy you have installed, unless `NXWRIGHT_EDITOR` is set to the path of another program.
