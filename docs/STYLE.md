@@ -16,9 +16,10 @@ This section covers READMEs, the guides in `docs/`, messages, and the text on th
 - Use the future tense for what has not happened yet. A question before an action says what *will* happen: "Every page will be resized", not "Every page is resized".
 - Say only what the reader needs to decide or act: what will change, what may be lost, and what to do next. Leave out how nxwright works inside, unless the reader needs it to use nxwright.
 - Call things what the user calls them: "the Nextion Editor", "strict Nextion syntax", a command by its title.
-- Use the plain word for what you mean. Two words tend to get stretched beyond their normal meaning:
+- Use the plain word for what you mean. Three words tend to get stretched beyond their normal meaning:
   - "name" is only for a name. Do not use it to mean say, list, show, give, or describe: "the terminal lists the files", not "the terminal names the files"; "the message says which event", not "the message names the event".
   - "hold" is only for keeping something back or in place, as `com_stop` holds the instructions arriving on the serial line until `com_star`. Do not use it to mean contain, have, be, or be set to: "a select's `path` contains its lines", not "holds its lines"; "a button's `val` is 1 while it is pressed", not "a button holds `val` 1"; "another program has the file open", not "another program holds the file".
+  - "refuse" hides what happened: a failure, or an arbitrary choice of ours? Say that something fails, is invalid, or is rejected. If something other than nxwright does it, prefer "rejected": "the screen rejected the TFT file".
 - Use bullet points for lists of small things, and tables to compare.
 - Write each sentence so it can be understood alone: who does what, to what, and when.
   - Say who does the action: "the test creates a data file", not "a data file is made".
@@ -33,7 +34,7 @@ This section covers READMEs, the guides in `docs/`, messages, and the text on th
 - Write negatives with "not": "events do not run", "the release does not send a code", not "a touch runs no event" or "sends no code".
   - "Has no" is fine, as in "the page has no background".
   - "Nothing" is fine in a sentence of its own, such as "A tap does nothing". Tacked onto another clause, it squeezes two sentences into one: "A drag scrolls the entries, and does not select any", not "A drag scrolls the entries, and selects nothing".
-- Avoid repeating the same words close together, above all at the start of bullet points next to each other. Turning a sentence around often helps, so that it starts with what is new: "The command exits with 1 when a test fails. Testing a folder without tests returns an error.", not "The command exits with 1 when a test fails. The command refuses a folder without tests."
+- Avoid repeating the same words close together, above all at the start of bullet points next to each other. Turning a sentence around often helps, so that it starts with what is new: "The command exits with 1 when a test fails. Testing a folder without tests returns an error.", not "The command exits with 1 when a test fails. The command returns an error for a folder without tests."
 - No em-dashes.
 
 ## Reference sections
@@ -44,7 +45,7 @@ Lists of commands, options, attributes, or file formats may be dry, but must sta
 
 Write comments and docstrings for a Python programmer who is new to nxwright and to Nextion project files.
 
-- A docstring describes the thing it documents: "Returns the checksum of `directory`.", not "Return ...". It says what the thing does, what it refuses, and what a caller must know, in as many words as that takes but no more. Every module, class, and public function has a docstring. A private function has one when its name is not enough.
+- A docstring describes the thing it documents: "Returns the checksum of `directory`.", not "Return ...". It says what the thing does, when it fails, and what a caller must know, in as many words as that takes but no more. Every module, class, and public function has a docstring. A private function has one when its name is not enough.
 - Inline comments say why, not what.
 - Define nxwright's terms before using them, and use the names in the glossary below. A module's docstring defines the terms the module relies on.
 - Give each sentence one main point, and use real examples rather than shorthand.
@@ -74,7 +75,6 @@ A doc or a comment states what its reader needs to know about how the Nextion Ed
 - **source folder:** a project as files for people and version control: TOML for pages, `.nx` for code, and the project's pictures and fonts.
 - **build:** writing a project file from a source folder.
 - **extract:** bringing a project file into a source folder.
-- **refuse:** to stop with an error. The build refuses a source folder that it cannot turn into a project file. A test or the simulator refuses code that nxwright cannot run, and the run stops.
 - **ignore (a line):** what the running screen does with some lines, such as one that sets a `val` to a text. The line has no effect but is reported, and the event carries on. Despite its name, the key `"refusals"` is where a test records an ignored line. The simulator logs the line and sends its error code on the serial line. In prose, do not call an ignored line "refused".
 - **nxlang:** the nxwright language, compiled into strict Nextion syntax by the build.
 - **generated variable:** a component or `int` the compiler adds to a page to run nxlang: a temporary, a longer-lived text, a control variable, or a function's hotspot.
