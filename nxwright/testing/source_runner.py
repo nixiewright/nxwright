@@ -393,7 +393,7 @@ def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str
             try:
                 placed[key] = preprocess_with_places(block.code_lines(), names, objects,
                                                      variables, macros, screen, owners[key],
-                                                     codec=codec)
+                                                     codec=codec, suggest_nxlang=True)
             except NxwrightError as error:
                 raise error.in_file(path) from None
         places = {key: [Place(path, number, "%s.%s" % key) for number, _ in lines]

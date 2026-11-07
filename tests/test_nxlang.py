@@ -1170,7 +1170,8 @@ class NxlangSourceFolderTest(NxlangFolderTestCase):
         before = self.folder / "before"
         export_dump(self.source, before)
         switch_to_nxlang(self.source)
-        self.assertIn('language = "nxlang"', (self.source / "app.toml").read_text(encoding="utf-8"))
+        self.assertIn('language = "nxlang_do_not_change_manually"\n',
+                      (self.source / "app.toml").read_text(encoding="utf-8"))
         self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"),
                          "on first.down:\n  x.val=(a.val+a.val)*2\n")
         export_dump(self.source, self.folder / "after")
@@ -1247,8 +1248,10 @@ class NxlangSourceFolderTest(NxlangFolderTestCase):
             source_folder.MOST_GLOBALS = limit
 
     def test_unknown_language_is_refused(self):
-        edit_text(self.source / "app.toml", 'language = "nextion"', 'language = "fancy"')
-        self.assert_export_refused("app.toml: language must be 'nextion' or 'nxlang'")
+        edit_text(self.source / "app.toml", 'language = "nextion_do_not_change_manually"',
+                  'language = "fancy"')
+        self.assert_export_refused("app.toml: language must be 'nextion_do_not_change_manually' "
+                                   "or 'nxlang_do_not_change_manually'")
 
 
 FUNCTIONS = """function twice(n: number) -> number:
@@ -1330,7 +1333,8 @@ class ExtractingOverNxlangTest(NxlangFolderTestCase):
     def test_extract_into_a_new_folder_gives_a_strict_folder_that_builds(self):
         recovered = self.folder / "recovered"
         extract(self.built, recovered)
-        self.assertIn('language = "nextion"', (recovered / "app.toml").read_text(encoding="utf-8"))
+        self.assertIn('language = "nextion_do_not_change_manually"',
+                      (recovered / "app.toml").read_text(encoding="utf-8"))
         again = self.folder / "again.HMI"
         build(recovered, again)
         self.assertEqual(again.read_bytes(), self.built.read_bytes())

@@ -35,8 +35,7 @@ from nxwright.source.references import references
 from nxwright.language_server.rename import rename
 from nxwright.source.folder_check import check_folder
 from nxwright.source.project_files import build, extract
-from nxwright.source.source_folder import folder_reader, new_source_folder
-from tests.test_folder_check import edited_app
+from nxwright.source.source_folder import app_text, folder_reader, new_source_folder, parse_app
 from tests.test_project_writer import edit_text, sample_png
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "media"
@@ -110,10 +109,10 @@ class MediaFolderTestCase(unittest.TestCase):
         self.edit_app(**lists)
 
     def edit_app(self, **values):
-        """Sets keys of the folder's app.toml, as data (edited_app)."""
+        """Sets keys of the folder's app.toml, and writes the file with app_text,
+        so that an extract gives back the same file."""
         app = self.source / "app.toml"
-        app.write_text(edited_app(app.read_text(encoding="utf-8"),
-                                  lambda data: data.update(values)),
+        app.write_text(app_text(dict(parse_app(app.read_text(encoding="utf-8")), **values)),
                        encoding="utf-8", newline="\n")
 
     def build(self, name: str = "built.HMI") -> HmiContainer:

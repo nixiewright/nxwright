@@ -27,7 +27,7 @@ from nxwright.source.macros_source import MACROS_PATH
 from nxwright.source.nx_files import (FUNCTION_HEADING, INCLUDE, MACRO_HEADING,
                                       read_event_heading, resolve)
 from nxwright.source.page_source import KEY_LINE, page_nx_path, page_toml_path
-from nxwright.source.source_folder import NXLANG, picture_file
+from nxwright.source.source_folder import NXLANG, language_of_value, picture_file
 
 APP_FILE = "app.toml"
 PROGRAM_FILE = "program.nx"
@@ -200,7 +200,7 @@ class FolderIndex:
     def uses_nxlang(self) -> bool:
         """Whether app.toml says the folder's code is in nxlang. One that does
         not read, as while it is half typed, says it is not."""
-        return self._app_settings().get("language") == NXLANG
+        return language_of_value(self._app_settings().get("language")) == NXLANG
 
     def screen_series(self):
         """The series of the screen model app.toml names, as "K", or None

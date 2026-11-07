@@ -2,8 +2,8 @@
 conversion to and from a dump folder.
 
 Layout:
-  app.toml                 format, the app's name, the language ("nextion"
-                           or "nxlang"), then pages, pictures, fonts,
+  app.toml                 format, the app's name, the language (see
+                           _LANGUAGE_VALUES), then pages, pictures, fonts,
                            animations, videos, and sounds in ID order; a
                            folder without animations, videos, or sounds may
                            leave their lists out
@@ -137,6 +137,26 @@ _PLAYED_SUFFIXES = {ANIMATION: ".screen.gmov", VIDEO: ".video", SOUND: ".wav"}
 NEXTION = "nextion"
 NXLANG = "nxlang"
 LANGUAGES = (NEXTION, NXLANG)
+# What nxwright writes in app.toml for each language. Changing the line by hand
+# skips the rewrite that `nxwright language` makes, and the code then compiles
+# to something different, so the value itself warns against it.
+_LANGUAGE_VALUES = {NEXTION: "nextion_do_not_change_manually",
+                    NXLANG: "nxlang_do_not_change_manually"}
+# The comment at the end of the language line of a folder in strict Nextion
+# syntax. A folder in nxlang does not get it, because there is no command to
+# switch back.
+_STRICT_LANGUAGE_COMMENT = "  # use `nxwright language <source-folder> nxlang` to change"
+
+
+def language_of_value(value) -> str | None:
+    """Returns NEXTION or NXLANG for `value`, the `language` setting from
+    app.toml, or None if it is anything else. Besides the values in
+    _LANGUAGE_VALUES, this accepts the plain "nextion" and "nxlang" that
+    older versions of nxwright wrote."""
+    for language, written in _LANGUAGE_VALUES.items():
+        if value in (language, written):
+            return language
+    return None
 
 
 def removes_screen_settings(lost: list, source_folder: Path) -> bool:
@@ -793,7 +813,7 @@ def read_app(source_folder: Path) -> dict:
 def switch_to_nxlang(source_folder: Path):
     """Switches a source folder to nxlang: rewrites each line of
     its code that nxlang would read differently (see
-    keep_editor_meaning), then sets `language = "nxlang"` in app.toml.
+    keep_editor_meaning), then sets the language in app.toml to nxlang.
 
     Raises NxwrightError, before writing anything, when the folder already
     uses it, or its code would not build to the same project.
@@ -999,15 +1019,27 @@ def check_page_count(app: dict, app_toml: str):
 
 
 def app_text(app: dict) -> str:
-    """Returns the text of app.toml, its keys in their usual order, leaving
-    out the empty lists it may leave out. An encoding nxwright does not
-    know is written as its number, the form that parse_app reads."""
+    """Returns the text of app.toml, with its keys in their usual order and
+    without the empty lists that may be left out. An encoding nxwright does
+    not know is written as its number, the form that parse_app reads. The
+    language is written as its value in _LANGUAGE_VALUES, followed by
+    _STRICT_LANGUAGE_COMMENT for a folder in strict Nextion syntax."""
     order = ("format", "name", "language") + DEVICE_KEYS + ("pages",) + tuple(RESOURCE_FILES)
     shown = {key: app[key] for key in order
              if app.get(key) is not None and not (key in _OPTIONAL_LISTS and not app[key])}
     if "encoding" in shown:
         shown["encoding"] = app_encoding(shown["encoding"])
-    return tomli_w.dumps(shown)
+    language = language_of_value(app.get("language"))
+    if language is not None:
+        shown["language"] = _LANGUAGE_VALUES[language]
+    text = tomli_w.dumps(shown)
+    if language == NEXTION:
+        # tomli_w does not write comments, so the comment is added to its text
+        # afterwards. Only the language line can match, because TOML escapes
+        # the quotes inside any other value.
+        line = tomli_w.dumps({"language": shown["language"]})
+        text = text.replace(line, line.rstrip("\n") + _STRICT_LANGUAGE_COMMENT + "\n", 1)
+    return text
 
 
 def _choose_names(kind: str, contents: list, source_folder: Path, old_app) -> list:
@@ -1543,8 +1575,10 @@ def parse_app(text: str) -> dict:
         raise NxwrightError("app.toml: unknown key %s" % sorted(extra)[0])
     if "name" in app and not _is_app_name(app["name"]):
         raise NxwrightError("app.toml: %s" % _APP_NAME_RULE)
-    if app.get("language") not in LANGUAGES:
-        raise NxwrightError("app.toml: language must be %r or %r" % LANGUAGES)
+    app["language"] = language_of_value(app.get("language"))
+    if app["language"] is None:
+        raise NxwrightError("app.toml: language must be %r or %r"
+                            % tuple(_LANGUAGE_VALUES.values()))
     settings_from_keys(app)
     return app
 
@@ -1584,7 +1618,7 @@ def _program_from_source(text: str, names: ResourceNames, program: ProgramNames 
             lines = compile_program(lines, program)
         lines = preprocess(lines, names, variables=variables, macros=macros, screen=screen,
                            program_pages=pages, codec=TextCodec(encoding),
-                           program_globals=page_globals)
+                           program_globals=page_globals, suggest_nxlang=program is None)
     except NxwrightError as error:
         if error.file is not None:
             raise   # a refusal at a line of macros.nx, which program.nx calls

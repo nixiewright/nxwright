@@ -14,7 +14,7 @@ The app is a source folder: the folder that contains `app.toml`. The files you w
 | `pages/<page>.nx` | The page's event code. |
 | `macros.nx` | Macros, if the app has any. Code runs them with `call`. |
 
-- The `language` setting in `app.toml` is `"nextion"` for strict Nextion syntax, the Nextion Editor's own language, or `"nxlang"` for the nxwright language. Read it before you write code, and never change it by hand. Only when the user asks, switch a folder to nxlang with `nxwright language`, which rewrites the folder's code to match. Macros are always in strict Nextion syntax.
+- The `language` setting in `app.toml` is `"nextion_do_not_change_manually"` for strict Nextion syntax, the Nextion Editor's own language, or `"nxlang_do_not_change_manually"` for the nxwright language. A folder from an older nxwright may have just `"nextion"` or `"nxlang"`, with the same meanings. Read the setting before you write code, and never change it by hand. Only when the user asks, switch a folder to nxlang with `nxwright language`, which rewrites the folder's code to match. Macros are always in strict Nextion syntax.
 - In strict Nextion syntax, arithmetic has no parentheses, and operators run left to right: `sys0=a+b*c` computes `(a+b)*c`. Spaces around operators are fine in `.nx` files.
 - An event is a heading with its code under it, indented by two spaces:
 

@@ -1,6 +1,6 @@
 format = 1
 name = "T"
-language = "nxlang"
+language = "nxlang_do_not_change_manually"
 screen = "NX4832T035"
 rotation = 0
 encoding = "iso-8859-1"

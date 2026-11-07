@@ -88,7 +88,9 @@ class SourceFolderDeviceTest(SourceFolderTestCase):
         source = self.folder / "with-settings"
         import_dump(self.dump, source)
         text = (source / "app.toml").read_text(encoding="utf-8")
-        self.assertIn('language = "nextion"\nscreen = "NX8048P050"\n', text)
+        self.assertIn('language = "nextion_do_not_change_manually"  '
+                      '# use `nxwright language <source-folder> nxlang` to change\n'
+                      'screen = "NX8048P050"\n', text)
         self.assertEqual(folder_device_settings(source), read_device_settings(header))
 
     def test_build_refuses_a_folder_without_settings(self):

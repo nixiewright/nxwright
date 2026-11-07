@@ -1650,6 +1650,33 @@ class EditorCommandTest(_CodeOnFirstTestCase):
                 self.write_code(line)
                 self.assert_line_refused(line, problem, number)
 
+    def test_a_word_nxlang_adds_in_a_strict_folder(self):
+        # The error shows the line without a "{" at its end.
+        for number, (line, shown, word) in enumerate((
+                ("var total = 1", "var total = 1", "var"),
+                ("const LIMIT = 3", "const LIMIT = 3", "const"),
+                ("function twice():", "function twice():", "function"),
+                ("switch (sys0) {", "switch (sys0)", "switch"),
+                ("switch(sys0) {", "switch(sys0)", "switch"),
+                ("case 1:", "case 1:", "case"),
+                ("break", "break", "break"),
+                ("continue", "continue", "continue"))):
+            with self.subTest(line=line):
+                self.write_code(line)
+                self.assert_line_refused(
+                    shown, r"%s is part of nxlang, but this folder uses strict Nextion syntax\. "
+                           r"To switch to nxlang, take out the lines that already use it, run "
+                           r"nxwright language <source-folder> nxlang, then put them back$" % word,
+                    number)
+
+    def test_a_word_nxlang_adds_in_a_macro(self):
+        # Macros are always in strict Nextion syntax, even in a folder in nxlang,
+        # so switching would not help.
+        (self.source / "macros.nx").write_text("macro probe:\n  var total = 1\n",
+                                               encoding="utf-8", newline="\n")
+        self.assert_line_refused("var total = 1", r"the Nextion Editor knows no command var", 0,
+                                 r"macros\.nx line 2")
+
     def test_every_command_of_the_editor_builds(self):
         self.assertEqual({first_word(line) for line in self.EVERY_COMMAND} - {None},
                          EDITOR_COMMANDS - SERIES_LACKED_COMMANDS["P"])

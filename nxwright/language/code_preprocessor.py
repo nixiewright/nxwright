@@ -69,7 +69,8 @@ class Owner:
 def preprocess(lines: list, names: ResourceNames = None, objects: ObjectNames = None,
                variables: frozenset = None, macros: frozenset = None,
                screen: ScreenModel = None, owner: Owner = None,
-               program_pages: dict = None, codec=None, program_globals: dict = None) -> list:
+               program_pages: dict = None, codec=None, program_globals: dict = None,
+               suggest_nxlang: bool = False) -> list:
     """Returns `lines`, a list of (line number, text), as lines of text in
     Editor syntax.
     `names` resolves "@pic(...)" and the other resources' names; without it
@@ -95,20 +96,25 @@ def preprocess(lines: list, names: ResourceNames = None, objects: ObjectNames = 
     declare an int.
     With `codec`, the project's TextCodec, a line may hold no more bytes
     than the Editor takes on its series (editor_limits.LONGEST_LINES).
+    With `suggest_nxlang`, if a line starts with a word that only nxlang has,
+    the error says how to switch. Pass it for code that would be in nxlang
+    after the folder switches, and not for macros, which stay in strict
+    Nextion syntax.
 
     Raises NxwrightError naming the line number of anything it cannot turn
     into Editor syntax.
     """
     return [text for _, text in preprocess_with_places(lines, names, objects, variables, macros,
                                                        screen, owner, program_pages, codec,
-                                                       program_globals)]
+                                                       program_globals, suggest_nxlang)]
 
 
 def preprocess_with_places(lines: list, names: ResourceNames = None,
                            objects: ObjectNames = None, variables: frozenset = None,
                            macros: frozenset = None, screen: ScreenModel = None,
                            owner: Owner = None, program_pages: dict = None,
-                           codec=None, program_globals: dict = None) -> list:
+                           codec=None, program_globals: dict = None,
+                           suggest_nxlang: bool = False) -> list:
     """Returns what preprocess does, each line as (line number, text): the
     number of the line it comes from. An "else" joined to the "}" before it
     keeps the "}"'s line."""
@@ -130,7 +136,7 @@ def preprocess_with_places(lines: list, names: ResourceNames = None,
             read = with_own_attributes(forms, owner)
         try:
             check_line(read, objects, variables, macros, screen, number, program_pages, codec,
-                       program_globals)
+                       program_globals, suggest_nxlang)
         except NxwrightError as error:
             if read == code:
                 raise

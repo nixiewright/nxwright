@@ -150,7 +150,8 @@ class OwnAttributeTest(SourceFolderTestCase):
         self.write_events("on n0.down:\n  '&val&'+=10\n  sys0='&val&'+2*3\n"
                           "  '&val&'=sys0+sys1*sys2\n")
         switch_to_nxlang(self.source)
-        self.assertIn('language = "nxlang"', (self.source / "app.toml").read_text(encoding="utf-8"))
+        self.assertIn('language = "nxlang_do_not_change_manually"\n',
+                      (self.source / "app.toml").read_text(encoding="utf-8"))
         self.assertEqual((self.source / "pages" / "first.nx").read_text(
             encoding="utf-8").splitlines(),
                          ["on n0.down:", "  '&val&'+=10", "  sys0=('&val&'+2)*3",
@@ -181,7 +182,8 @@ class OwnAttributeTest(SourceFolderTestCase):
         self.write_events("on n0.down:\n  '&val&'-=sys0+sys1\n")
         with self.assertRaisesRegex(NxwrightError, r"would not build to the same code"):
             switch_to_nxlang(self.source)
-        self.assertNotIn("nxlang", (self.source / "app.toml").read_text(encoding="utf-8"))
+        self.assertIn('language = "nextion_do_not_change_manually"',
+                      (self.source / "app.toml").read_text(encoding="utf-8"))
 
     def test_run_code_refuses_it(self):
         # Its code runs in no object's event.

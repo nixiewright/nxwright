@@ -614,7 +614,7 @@ Converts a source folder made by an older version of nxwright to the current for
 nxwright language app nxlang
 ```
 
-Switches a folder in strict Nextion syntax to nxlang ([language.md](language.md)). nxlang reads `a+b*c` as `a+(b*c)`, where the Nextion Editor computes `(a+b)*c`. So the switch rewrites every line that the two would read differently, with the parentheses that keep the Nextion Editor's meaning, then sets `language = "nxlang"` in `app.toml`.
+Switches a folder in strict Nextion syntax to nxlang ([language.md](language.md)). nxlang reads `a+b*c` as `a+(b*c)`, where the Nextion Editor computes `(a+b)*c`. So the switch rewrites every line that the two would read differently, with the parentheses that keep the Nextion Editor's meaning, then changes the `language` line in `app.toml`.
 
 - Switch only this way, never by editing `app.toml`.
 - After the switch, `nxwright extract` and `nxwright import` refuse the folder, so changes made in the Nextion Editor can't come back into it ([Working with the Nextion Editor](language.md#working-with-the-nextion-editor)).

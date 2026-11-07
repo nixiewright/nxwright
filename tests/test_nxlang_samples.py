@@ -89,7 +89,7 @@ class NxlangSamplesTest(unittest.TestCase):
         back = self.root / "back"
         import_dump(built, back)
         app = tomllib.loads((back / "app.toml").read_text(encoding="utf-8"))
-        self.assertEqual(app["language"], "nextion")
+        self.assertEqual(app["language"], "nextion_do_not_change_manually")
         functions = (back / "pages" / "functions.nx").read_text(encoding="utf-8")
         names = [component["name"] for component in tomllib.loads(
             (back / "pages" / "functions.page.toml").read_text(encoding="utf-8"))["component"]]

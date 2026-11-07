@@ -1,6 +1,6 @@
 """nxlang, the nxwright language, compiled into code the Nextion Editor accepts.
 
-A source folder with `language = "nxlang"` in its app.toml may use, in event code:
+A source folder in nxlang may use, in event code:
   - expressions with the usual precedence and parentheses;
   - `const NAME = <number or text>`, at the top of a page's .nx file (that
     page) or anywhere in program.nx (every page);

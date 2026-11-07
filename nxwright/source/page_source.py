@@ -689,7 +689,8 @@ def editor_code_of_block(block: EventBlock, page_name: str, names: ResourceNames
     lines' lengths (preprocess)."""
     try:
         return block.marked_comment() + preprocess(block.code_lines(), names, objects, variables,
-                                                   macros, screen, owner, codec=codec)
+                                                   macros, screen, owner, codec=codec,
+                                                   suggest_nxlang=True)
     except NxwrightError as error:
         raise error.in_file(page_nx_path(page_name),
                             shown="%s.nx" % page_file_stem(page_name)) from None

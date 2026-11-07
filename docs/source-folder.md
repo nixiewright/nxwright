@@ -80,7 +80,7 @@ About picture files:
 ```
 format = 1
 name = "Living room"
-language = "nextion"
+language = "nextion_do_not_change_manually"  # use `nxwright language <source-folder> nxlang` to change
 screen = "NX8048P050"
 rotation = 180
 encoding = "iso-8859-1"
@@ -106,9 +106,10 @@ nxwright writes its TOML files with tomli-w, which lays out each list with one n
   - It is one line of text, not empty, with no spaces at its start or end. Any other character is fine, as in "Thermostat: v2".
   - Without it, the folder's name is used.
   - `nxwright new` writes the name. Extracting into a new folder names the app after the project file.
-- `language` is the language of the folder's code: `"nextion"` for strict Nextion syntax, or `"nxlang"` for the nxwright language ([language.md](language.md)).
-  - A folder extracted anew starts with `"nextion"`. A folder started with `nxwright new` starts with `"nxlang"`, unless you choose another.
-  - Switch to nxlang with `nxwright language`, never by editing this line ([commands.md](commands.md#language)). nxlang uses the usual operator precedence, so the command adds parentheses where your code relies on the unusual Nextion Editor's left-to-right order.
+- `language` is the language of the folder's code: `"nextion_do_not_change_manually"` for strict Nextion syntax, or `"nxlang_do_not_change_manually"` for the nxwright language ([language.md](language.md)).
+  - A newly extracted folder starts in strict Nextion syntax. A folder started with `nxwright new` starts in nxlang, unless you choose another language.
+  - Switch to nxlang with `nxwright language`, never by editing the `language` line ([commands.md](commands.md#language)). nxlang uses the usual operator precedence, so the command adds parentheses where your code relies on the Nextion Editor's unusual left-to-right order.
+  - Older versions of nxwright wrote just `"nextion"` or `"nxlang"`. nxwright still reads these values, and writes the longer one the next time it changes `app.toml`. An older nxwright cannot read a folder that has the longer value.
 - `screen`, `rotation`, and `encoding` are the device settings the Nextion Editor sets for the project:
   - the screen model;
   - the rotation in degrees: 0, 90, 180, or 270;

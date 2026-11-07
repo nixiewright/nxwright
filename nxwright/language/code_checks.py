@@ -77,6 +77,10 @@ INVALID_COMMAND, INVALID_VARIABLES = "Invalid command", "Invalid Variables"
 INVALID_ARGUMENT_COUNT = "Invalid number of arguments"
 INVALID_COMPONENT_ID, INVALID_PAGE_ID = "Invalid Component ID", "Invalid Page ID"
 INVALID_VARIABLE_OPERATION = "Invalid variable operation"
+# As a command, one of these words can only be nxlang. `return` and `default:`
+# are left out because the Nextion Editor has a `return` command, and reads
+# `default:` as a label.
+_NXLANG_WORDS = frozenset({"var", "const", "function", "switch", "case", "break", "continue"})
 # "name.attribute" or "page.name.attribute", not part of a longer chain such
 # as "b[3].txt", whose component is chosen at run time.
 _DOTTED = re.compile(r"(?<![\w.\]])([A-Za-z_]\w*)\.([A-Za-z_]\w*)(?:\.([A-Za-z_]\w*))?")
@@ -267,14 +271,15 @@ class ObjectNames:
 
 def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: frozenset,
                 screen: ScreenModel, number: int, program_pages: dict = None, codec=None,
-                program_globals: dict = None):
+                program_globals: dict = None, suggest_nxlang: bool = False):
     """Raises NxwrightError for a line's code part, its resources' names
     resolved, that the Editor refuses as it compiles, as
     code_preprocessor.preprocess says. `program_pages`, for a line of
     program.nx, holds each page's objects, by page name, and
     `program_globals` each page's components of global scope. `codec`, the
     project's TextCodec, counts the line's bytes for `screen`'s series
-    (_check_length)."""
+    (_check_length). If `suggest_nxlang` is true and the line starts with a
+    word that only nxlang has, the error says how to switch."""
     if _TAB_AFTER_INT.match(code):
         raise NxwrightError("a tab after int: the Nextion Editor takes int and a space only, and "
                             "refuses this declaration (\"Invalid Variables\")", line=number,
@@ -290,6 +295,8 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
     if code.endswith("{") and code != "{":
         code = code[:-1].rstrip()
         if not (_BLOCK_HEAD.match(code) or ELSE.match(code)):
+            if suggest_nxlang:
+                _check_nxlang_word(code, number)
             raise NxwrightError("\"{\" can only end an if, while, for, or else line",
                                 line=number)
     code = compact(code)
@@ -314,7 +321,7 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
         if objects is not None:
             _check_series_assignment(code, objects, screen, number)
     # A word that is no command has no number of arguments to count.
-    _check_first_word(code, number)
+    _check_first_word(code, number, suggest_nxlang)
     _check_parameter_count(code, number)
     _check_first_argument(code, number)
     _check_xstr_text(code, number)
@@ -995,13 +1002,28 @@ def _check_xstr_text(code: str, number: int):
                             % (code, INVALID_VARIABLES), line=number)
 
 
-def _check_first_word(code: str, number: int):
-    """Raises NxwrightError for a line whose first word is no command of the
-    Editor's, with the words the Editor refuses it with as it compiles
-    (first_word_refusal)."""
+def _check_nxlang_word(code: str, number: int):
+    """Raises NxwrightError for a line that starts with a word only nxlang
+    has. `nxwright language` stops on such a line, so the error says to take
+    it out before switching."""
+    word = first_word(code) or code.split(" ", 1)[0].split("(", 1)[0]
+    if word in _NXLANG_WORDS:
+        raise NxwrightError("%s: %s is part of nxlang, but this folder uses strict Nextion "
+                            "syntax. To switch to nxlang, take out the lines that already use it, "
+                            "run nxwright language <source-folder> nxlang, then put them back"
+                            % (code, word), line=number)
+
+
+def _check_first_word(code: str, number: int, suggest_nxlang: bool = False):
+    """Raises NxwrightError for a line whose first word is not a Nextion Editor
+    command. The error quotes the words the Nextion Editor refuses the line
+    with as it compiles (first_word_refusal). If `suggest_nxlang` is true and
+    only nxlang has that word, the error says how to switch instead."""
     refusal = first_word_refusal(code)
     if refusal is None:
         return
+    if suggest_nxlang:
+        _check_nxlang_word(code, number)
     word = first_word(code)
     fix = None
     if refusal == INVALID_VARIABLES and word.lower() in EDITOR_COMMANDS:

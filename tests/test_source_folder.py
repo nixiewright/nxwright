@@ -17,8 +17,10 @@ from nxwright.project.page_block import Attribute, Event, Marker
 from nxwright.source.page_source import PageSource, page_from_source, page_to_source
 from nxwright.project.page_text import page_from_text, page_to_text
 from nxwright.language.resource_names import ResourceNames
-from nxwright.source.source_folder import (add_page, app_name, export_dump, import_dump,
-                                           read_app, switch_to_nxlang)
+from nxwright.language_server.file_texts import FileTexts
+from nxwright.source.folder_index import FolderIndex
+from nxwright.source.source_folder import (add_page, app_name, app_text, export_dump, import_dump,
+                                           parse_app, read_app, switch_to_nxlang)
 from nxwright.source.unknown_content import UnknownContentError
 from tests.test_project_writer import edit_text, sample_png, write_small_project
 from tests.test_resource_names import named_font
@@ -75,7 +77,8 @@ class RoundTripTest(SourceFolderTestCase):
 
     def test_layout(self):
         app = tomllib.loads((self.source / "app.toml").read_text(encoding="utf-8"))
-        self.assertEqual(app, {"format": 1, "language": "nextion", "screen": "NX1060P101",
+        self.assertEqual(app, {"format": 1, "language": "nextion_do_not_change_manually",
+                               "screen": "NX1060P101",
                                "rotation": 0, "encoding": "iso-8859-1",
                                "pages": ["first", "second"],
                                "pictures": ["picture-0000", "picture-0001"],
@@ -552,6 +555,54 @@ class ProjectNameTest(SourceFolderTestCase):
         self.assertEqual(read_app(self.source)["name"], "Kept")
 
 
+class LanguageSettingTest(SourceFolderTestCase):
+    """The language line of app.toml, written to discourage changing it by hand."""
+
+    STRICT_LINE = ('language = "nextion_do_not_change_manually"  '
+                   '# use `nxwright language <source-folder> nxlang` to change')
+    NXLANG_LINE = 'language = "nxlang_do_not_change_manually"'
+
+    def app_lines(self) -> list:
+        return (self.source / "app.toml").read_text(encoding="utf-8").split("\n")
+
+    def test_a_strict_folder_gets_the_warning_and_the_command(self):
+        self.assertIn(self.STRICT_LINE, self.app_lines())
+        self.assertEqual(read_app(self.source)["language"], "nextion")
+
+    def test_a_folder_in_nxlang_gets_the_warning_alone(self):
+        switch_to_nxlang(self.source)
+        self.assertIn(self.NXLANG_LINE, self.app_lines())
+        self.assertEqual(read_app(self.source)["language"], "nxlang")
+
+    def test_every_form_of_the_value_reads(self):
+        app = self.source / "app.toml"
+        original = app.read_text(encoding="utf-8")
+        for value, language in (("nextion", "nextion"), ("nxlang", "nxlang"),
+                                ("nextion_do_not_change_manually", "nextion"),
+                                ("nxlang_do_not_change_manually", "nxlang")):
+            with self.subTest(value=value):
+                app.write_text(original.replace(self.STRICT_LINE, 'language = "%s"' % value),
+                               encoding="utf-8", newline="\n")
+                self.assertEqual(read_app(self.source)["language"], language)
+                index = FolderIndex(self.source, FileTexts().read)
+                self.assertEqual(index.uses_nxlang(), language == "nxlang")
+
+    def test_the_next_rewrite_moves_a_short_value_to_the_long_one(self):
+        app = self.source / "app.toml"
+        text = app.read_text(encoding="utf-8").replace(self.STRICT_LINE, 'language = "nextion"')
+        app.write_text(text, encoding="utf-8", newline="\n")
+        add_page(self.source, "extra")
+        self.assertIn(self.STRICT_LINE, self.app_lines())
+
+    def test_the_comment_goes_on_the_language_line_alone(self):
+        # An app's name may contain the text of the language line.
+        name = self.STRICT_LINE.split("  ")[0]
+        text = app_text(dict(read_app(self.source), name=name))
+        self.assertEqual(parse_app(text)["name"], name)
+        self.assertEqual(text.count("# use"), 1)
+        self.assertIn(self.STRICT_LINE + "\n", text)
+
+
 class SourceRefusalTest(SourceFolderTestCase):
 
     def test_app_file(self):
@@ -561,7 +612,7 @@ class SourceRefusalTest(SourceFolderTestCase):
             "format must be": ("format = 1", 'format = "2"'),
             "needs a newer nxwright": ("format = 1", "format = 3"),
             "format must be ": ("format = 1", "format = true"),
-            "language must be": ('language = "nextion"\n', ""),
+            "language must be": ('language = "nextion_do_not_change_manually"', ""),
             "not a valid name": ('"font-00"', '"../font-00"'),
             "unknown key": ("format = 1", "format = 1\ncolour = 1"),
             "are the same name": ('"font-01"', '"font-00"'),

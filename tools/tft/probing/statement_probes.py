@@ -18,6 +18,7 @@ from tools.tft.probing.component_probes import with_components
 from nxwright.tft.matching import code_lines
 from tools.tft.probing.number_probes import number_component
 from tools.tft.probing.probe_runner import Probe, ProbeMismatch
+from nxwright.source.source_folder import NEXTION, app_text, parse_app
 from nxwright.tft.compile_context import CompileContext
 from nxwright.tft.statements import SYSTEM_VARIABLES, COLOURS, CodePlace, encode_code
 from tools.tft.probing.text_probes import text_component
@@ -33,7 +34,7 @@ _EVENT = "up"
 def strict_app(text: str) -> str:
     """Returns app.toml's text `text`, its code made strict Nextion syntax
     from nxlang, the base folders' language."""
-    return text.replace('language = "nxlang"', 'language = "nextion"')
+    return app_text(dict(parse_app(text), language=NEXTION))
 
 
 def touch_release_code(lines: list) -> str:

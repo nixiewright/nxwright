@@ -69,7 +69,8 @@ class FolderFilesTest(unittest.TestCase):
                 project, decoded, fonts = _in_memory(probe)
                 files = folder_files(decoded, {"font": fonts})
                 app = tomllib.loads(files["app.toml"].decode("utf-8"))
-                self.assertEqual(app, {"format": 1, "language": "nextion",
+                self.assertEqual(app, {"format": 1,
+                                       "language": "nextion_do_not_change_manually",
                                        "pages": [page.name for page in project.pages],
                                        "pictures": [], "fonts": ["NotoSans24"],
                                        **device_keys(project.settings)})

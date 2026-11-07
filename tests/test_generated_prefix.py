@@ -29,7 +29,7 @@ class OwnNamesTest(FolderTestCase):
         self.write("pages/page0.nx", "on page0.load:\n  _tmp=_x.val\n")
         switch_to_nxlang(self.root)
         build(self.root, self.root.parent / "switched.HMI")
-        self.assertIn('language = "nxlang"', self.text("app.toml"))
+        self.assertIn('language = "nxlang_do_not_change_manually"\n', self.text("app.toml"))
 
     def test_the_simulator_starts_a_double_underscore_name_from_its_page_file(self):
         # In the Editor's own language nothing is generated, not even __v0.

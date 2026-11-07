@@ -52,7 +52,7 @@ class NewSourceFolderTest(unittest.TestCase):
                                    "warning": None})
         app = tomllib.loads((self.root / "app.toml").read_text(encoding="utf-8"))
         self.assertEqual((app["screen"], app["rotation"], app["language"]),
-                         ("NX4832F035", 90, "nextion"))
+                         ("NX4832F035", 90, "nextion_do_not_change_manually"))
 
     def test_the_apps_name(self):
         request("newSourceFolder", folder=str(self.root), screen="NX4832F035", rotation=0,

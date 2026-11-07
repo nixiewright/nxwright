@@ -31,13 +31,13 @@ See [nxlang-compiled.md](nxlang-compiled.md) for the code the build writes from 
 
 ## Switching to nxlang
 
-A folder extracted from a project starts in strict Nextion syntax, which is `language = "nextion"` in `app.toml`. Its `.nx` files can still use spaces and braces that the Nextion Editor does not accept ([Comfortable code](source-folder.md#comfortable-code)), but it cannot use any of the extended nxlang syntax. To switch the folder to nxlang, run:
+A folder extracted from a project starts in strict Nextion syntax, which is `language = "nextion_do_not_change_manually"` in `app.toml`. Its `.nx` files can still use spaces and braces that the Nextion Editor does not accept ([Comfortable code](source-folder.md#comfortable-code)), but they cannot use any of the extended nxlang syntax. To switch the folder to nxlang, run:
 
 ```
 nxwright language <source-folder> nxlang
 ```
 
-Always switch with this command, and never by setting `language = "nxlang"` in `app.toml` by hand. The two languages read some code differently: the Nextion Editor computes `a+b*c` as `(a+b)*c`, strictly from left to right, while nxlang computes it with the more usual precedence, as `a+(b*c)`. So the command rewrites every line that the two read differently, adding the parentheses that keep the Nextion Editor's meaning: `(a+b)*c`. It also writes a hexadecimal number such as `0X10` as `0x10`, the only form nxlang has.
+Always switch with this command, and never by changing the `language` line in `app.toml` by hand. The two languages read some code differently: the Nextion Editor computes `a+b*c` strictly from left to right, as `(a+b)*c`, while nxlang uses the more usual precedence, as `a+(b*c)`. If you only changed the setting, that line would compute something else, with no warning. The command instead rewrites every line that the two read differently, adding the parentheses that keep the Nextion Editor's meaning: `(a+b)*c`. It also writes a hexadecimal number such as `0X10` as `0x10`, the only form nxlang has.
 
 - The rewritten code builds to exactly the same project, apart from the locks on its pages ([Working with the Nextion Editor](#working-with-the-nextion-editor)). If any code would not, the command stops before writing anything.
 - After the switch, `nxwright extract` and `nxwright import` refuse the folder, so changes made in the Nextion Editor can't come back into it ([Working with the Nextion Editor](#working-with-the-nextion-editor)).
