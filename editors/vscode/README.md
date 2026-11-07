@@ -14,6 +14,9 @@ The page preview is a WYSIWYG editor. Open a page to display it as it will look 
 You can select, move, and resize components with the mouse or the arrow keys. Right-click to add a component, align or space out several components, give them the same size, lock them, or group them. See [The page preview's keys and mouse](#the-page-previews-keys-and-mouse) for the list of key and mouse actions.
 
 To change an attribute, use the Attributes section of the nxwright page side bar. The bottom of the section describes what the attribute does and the valid values it can have.
+
+![The nxwright page side bar: the list of pages, the page's components, and the attributes of the selected button, with the description of `picc`](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/page-side-bar.png)
+
 Note that Nextion screens cannot show all possible colours. Colours specified either manually or with a colour picker are displayed as the nearest one on the actual screen.
 
 When you cut, copy, paste, duplicate, or delete a component, its code goes with it.
@@ -58,8 +61,6 @@ A compile needs the firmware of the Nextion Editor version that nxwright support
 If a project file was changed outside nxwright, such as in the Nextion Editor, Build HMI and Compile TFT ask before they replace it, and offer to extract those changes into your source folder first.
 
 ![The nxwright side bar: the Project section with the screen settings, then the project file, the TFT file, and the screen, each with its button, the Media section, and the Simulator section](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/project-side-bar.png)
-
-![The nxwright page side bar: the list of pages, the page's components, and the attributes of the selected button, with the description of `picc`](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/page-side-bar.png)
 
 ### Fonts
 
