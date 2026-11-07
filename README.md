@@ -21,7 +21,7 @@ In VS Code, run **Developer: Install Extension from Location...** and pick `edit
 
 ## Why nxwright
 
-The Nextion Editor keeps your whole app in one binary `.HMI` file, so you can't see what changed between two versions, or merge two people's work. You write code in small event boxes, one component at a time, and the Nextion Editor is very strict about every space and brace. There is no way to write automated tests for a page either, and automating a project content update via scripts or agents cannot be done.
+The Nextion Editor keeps your whole app in one binary `.HMI` file: you can't see what changed between two versions, merge two people's work, write automated tests or update a project with scripts or agent harnesses. The syntax is strict and limited, operator precedence is non-standard, and you are forced to edit everything in the Windows-only IDE.
 
 nxwright turns your project into ordinary text files, and back. With it, you can:
 
