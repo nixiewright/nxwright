@@ -1317,11 +1317,6 @@
       ],
       "view/item/context": [
         {
-          "submenu": "nxwright.events",
-          "when": "view == nxwright.pages && viewItem =~ /(^| )hasEvents( |$)/",
-          "group": "0_open@1"
-        },
-        {
           "command": "nxwright.lockPage",
           "when": "view == nxwright.pages && viewItem =~ /^page( |$)/",
           "group": "1_lock@1"
@@ -1338,7 +1333,7 @@
         },
         {
           "submenu": "nxwright.events",
-          "when": "view == nxwright.components && viewItem =~ /(^| )hasEvents( |$)/",
+          "when": "view == nxwright.components && viewItem =~ /(^| )hasEvents( |$)/ || view == nxwright.pages && viewItem =~ /(^| )hasEvents( |$)/",
           "group": "0_open@1"
         },
         {

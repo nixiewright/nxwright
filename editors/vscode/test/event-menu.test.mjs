@@ -94,26 +94,28 @@ test("the submenu's commands show for the keys an object has, in the events' ord
   assert.doesNotMatch(itemContextValue("component", [{ event: "up", hasCode: false }]), pattern);
 });
 
-test("the submenu takes the place of Go to Event... in both menus", () => {
+test("the submenu takes the place of Go to Event... in the preview's menu and in the sections' menu", () => {
   assert.deepEqual(manifest.contributes.submenus.find((entry) => entry.id === "nxwright.events"),
                    { id: "nxwright.events", label: "Go to Event" });
   const preview = menus["webview/context"].find((entry) => entry.submenu === "nxwright.events");
   assert.deepEqual(preview, { submenu: "nxwright.events", group: "0_open@1",
                               when: `webviewId == 'nxwright.pagePreview' && ${HAS_EVENTS}` });
-  const components = menus["view/item/context"]
-    .find((entry) => entry.submenu === "nxwright.events"
-          && entry.when.includes("nxwright.components"));
-  assert.deepEqual(components, {
+  // The Components section and the Pages section share one menu, which can
+  // have the submenu only once, so one condition covers both.
+  const sections = menus["view/item/context"].filter((entry) => entry.submenu === "nxwright.events");
+  assert.deepEqual(sections, [{
     submenu: "nxwright.events", group: "0_open@1",
-    when: `view == nxwright.components && ${itemKeyCondition(HAS_EVENTS)}`,
-  });
-  const pages = menus["view/item/context"].filter((entry) => entry.submenu === "nxwright.events"
-                                                   && entry.when.includes("nxwright.pages"));
-  assert.deepEqual(pages, [{
-    submenu: "nxwright.events", group: "0_open@1",
-    when: `view == nxwright.pages && ${itemKeyCondition(HAS_EVENTS)}`,
+    when: `view == nxwright.components && ${itemKeyCondition(HAS_EVENTS)} || `
+      + `view == nxwright.pages && ${itemKeyCondition(HAS_EVENTS)}`,
   }]);
   assert.doesNotMatch(JSON.stringify(manifest), /nxwright\.goToEvent/);
+});
+
+test("no submenu is in the same menu twice, since VS Code keeps only the first", () => {
+  for (const [menu, entries] of Object.entries(menus)) {
+    const submenus = entries.map((entry) => entry.submenu).filter(Boolean);
+    assert.equal(new Set(submenus).size, submenus.length, menu);
+  }
 });
 
 test("the Components section's conditions still match its items, whatever their events", () => {
