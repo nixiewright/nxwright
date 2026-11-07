@@ -75,6 +75,30 @@ SEEN = {
     "overlap-scrolling-text-in-a-chain": {0: {
         1: [2, 3, 4, 5], 2: [1, 3, 4, 5], 3: [2, 1, 2, 4, 5], 4: [3, 2, 1, 2, 3, 5],
         5: [4, 3, 2, 1, 2, 3, 4]}},
+    "overlap-itself-after-a-restart": {0: {
+        1: [2, 3, 4, 5, 6, 7], 2: [3, 5, 7, 1, 3, 4, 5, 6, 7], 3: [7, 2, 5, 7, 1, 2, 4, 5, 6, 7],
+        4: [1, 2, 3, 5, 6, 7], 5: [1, 2, 3, 4, 6, 7], 6: [5, 1, 2, 3, 4, 5, 7],
+        7: [2, 3, 5, 1, 2, 3, 4, 5, 6]}},
+    "overlap-itself-after-a-restart-2": {0: {
+        1: [2, 3, 4, 5, 6, 7], 2: [3, 4, 5, 6, 1, 3, 4, 5, 6, 7],
+        3: [4, 5, 2, 4, 5, 6, 1, 2, 4, 5, 6, 7], 4: [3, 5, 2, 3, 5, 6, 1, 2, 3, 5, 6, 7],
+        5: [2, 3, 4, 6, 1, 2, 3, 4, 6, 7], 6: [1, 2, 3, 4, 5, 7],
+        7: [3, 4, 5, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6]}},
+    "overlap-itself-after-a-restart-3": {0: {
+        1: [2, 3, 4, 5, 6, 7], 2: [5, 1, 3, 4, 5, 6, 7], 3: [4, 7, 2, 5, 1, 2, 4, 5, 6, 7],
+        4: [3, 7, 2, 5, 1, 2, 3, 5, 6, 7], 5: [1, 2, 3, 4, 6, 7], 6: [1, 2, 3, 4, 5, 7],
+        7: [2, 5, 1, 2, 3, 4, 5, 6]}},
+    # Text 5 overlaps none.
+    "overlap-itself-after-a-restart-4": {0: {
+        1: [2, 3, 4, 6, 7, 8], 2: [4, 6, 7, 1, 3, 4, 6, 7, 8],
+        3: [7, 8, 2, 4, 6, 7, 1, 2, 4, 6, 7, 8], 4: [2, 6, 7, 1, 2, 3, 6, 7, 8],
+        6: [1, 2, 3, 4, 7, 8], 7: [2, 4, 6, 1, 2, 3, 4, 6, 8],
+        8: [3, 7, 2, 4, 6, 7, 1, 2, 3, 4, 6, 7]}},
+    "overlap-walk-goes-back": {0: {
+        1: [2, 3, 4, 5, 6, 7, 8], 2: [3, 4, 6, 8, 1, 3, 4, 5, 6, 7, 8],
+        3: [2, 4, 6, 8, 1, 2, 4, 5, 6, 7, 8], 4: [3, 2, 3, 6, 8, 1, 2, 3, 5, 6, 7, 8],
+        5: [2, 3, 4, 6, 8, 1, 2, 3, 4, 6, 7, 8], 6: [3, 2, 3, 4, 8, 1, 2, 3, 4, 5, 7, 8],
+        7: [2, 3, 4, 6, 8, 1, 2, 3, 4, 5, 6, 8], 8: [1, 2, 3, 4, 5, 6, 7]}},
 }
 
 
@@ -133,6 +157,16 @@ class RefreshedTest(unittest.TestCase):
                     with self.subTest(probe=probe.name, page=number, object_id=object_id):
                         self.assertEqual(overlaps.refreshed(areas, object_id),
                                          SEEN[probe.name].get(number, {}).get(object_id, []))
+
+    def test_a_hotspot_of_nspanel_easy(self):
+        # Hotspot 7 of the page `light` in NSPanel-Easy's portrait project
+        # (https://github.com/edwardtfn/NSPanel-Easy, hmi/nspanel_portrait.hmi),
+        # with the components it reaches through overlaps. The expected refs
+        # are the ones the Nextion Editor 1.68.2 wrote for it.
+        areas = {3: (117, 194, 85, 235), 6: (51, 459, 40, 20), 7: (8, 458, 40, 20),
+                 9: (117, 194, 85, 235), 10: (61, 211, 200, 200), 21: (228, 405, 60, 60),
+                 32: (25, 405, 60, 60)}
+        self.assertEqual(overlaps.refreshed(areas, 7), [32, 6, 10, 32, 3, 6, 9, 10, 21, 32])
 
     def test_components_that_touch_get_none(self):
         # As the probe text-touching showed.

@@ -1,18 +1,14 @@
-"""The probes of drawn components that overlap (overlaps.py): texts on the T
-base folder's pages that share pixels: two, two that share one pixel, two
-beside a third apart, one inside another, one under four others and one
-over them, chains of three, four, and five whose IDs run in different
-orders, one of them beside a sixth text apart, three with IDs past 9, two
-on a second page, and two with code in their events. Then the types the
-rule covers, under a picture and in a chain: first a text, a crop, a
-number, a button, a progress bar, and a picture; then a checkbox, a radio,
-and a dual-state button, with some of the others; then a hotspot and an
-xfloat, with a text; then a slider, a gauge, a QR code, and a waveform,
-with a text; then scrolling texts, with texts. Run them with
-`tools.tft.probe run overlap_probes`.
+"""The probes of drawn components that overlap (overlaps.py), on the T base
+folder's pages. Most use texts, in layouts that change which refs a
+component gets: overlaps of one pixel, components inside, under, or over
+others, chains whose IDs run in different orders, IDs past 9, a second
+page, and code in events. Others put each type the rule covers under a
+picture and in a chain. The last ones have walks that restart and then walk
+the component itself again, or go back to a component walked before. Run
+them with `tools.tft.probe run overlap_probes`.
 
-Each probe compares the whole file, part by part, and keeps the user code
-alone as its fixtures (component_probes.py gives both).
+Each probe compares the whole file, part by part. A probe that keeps
+fixtures keeps only the user code. component_probes.py has the details.
 """
 from functools import partial
 
@@ -72,6 +68,11 @@ _PAST_9 = {**{number + 1: (10 + 160 * (number % 2), 10 + 50 * (number // 2), 100
 # Four small texts apart, and one over them all.
 _SMALL = [(10, 10, 40, 20), (10, 60, 40, 20), (10, 110, 40, 20), (10, 160, 40, 20)]
 _LARGE = (0, 0, 200, 200)
+# Components 3, 6, 7, 9, 10, 21, and 32 of the page `light` in NSPanel-Easy's
+# portrait project, at their places there, renumbered 1 to 7.
+_ITSELF_AFTER_A_RESTART = {1: (117, 194, 85, 235), 2: (51, 459, 40, 20), 3: (8, 458, 40, 20),
+                           4: (117, 194, 85, 235), 5: (61, 211, 200, 200),
+                           6: (228, 405, 60, 60), 7: (25, 405, 60, 60)}
 
 # The probes keeping fixtures are the fewest that show each part: two
 # texts; a chain whose walk lists a component behind it, then one of lower
@@ -155,4 +156,27 @@ PROBES = [
         text_component(**_in_a_chain(0)), scrolling_text_component(**_in_a_chain(1)),
         text_component("t1", **_in_a_chain(2)), scrolling_text_component("g1", **_in_a_chain(3)),
         scrolling_text_component("g2", **_in_a_chain(4)))),
+    # Layouts whose walks restart, then walk the component itself again
+    # before the next restart. The first is the part of NSPanel-Easy's page
+    # in _ITSELF_AFTER_A_RESTART. The others came from a search for layouts
+    # on which rules that fit every earlier probe give different refs.
+    _probe("itself-after-a-restart", with_components(*_texts_at(_ITSELF_AFTER_A_RESTART))),
+    _probe("itself-after-a-restart-2", with_components(*_texts_at(
+        {1: (114, 25, 124, 73), 2: (83, 197, 89, 77), 3: (136, 113, 125, 58),
+         4: (122, 147, 117, 31), 5: (138, 151, 57, 120), 6: (93, 83, 130, 103),
+         7: (242, 44, 71, 74)}))),
+    _probe("itself-after-a-restart-3", with_components(*_texts_at(
+        {1: (190, 289, 63, 72), 2: (116, 267, 71, 44), 3: (81, 105, 113, 89),
+         4: (40, 15, 71, 110), 5: (114, 257, 81, 75), 6: (166, 230, 36, 89),
+         7: (84, 168, 55, 109)}))),
+    _probe("itself-after-a-restart-4", with_components(*_texts_at(
+        {1: (214, 124, 57, 75), 2: (123, 139, 80, 35), 3: (81, 35, 126, 36),
+         4: (50, 142, 109, 37), 5: (201, 269, 51, 91), 6: (162, 99, 120, 68),
+         7: (133, 83, 59, 118), 8: (117, 66, 42, 51)}))),
+    # A walk that reaches a component with no neighbour left to walk, then
+    # goes back to the components walked before it.
+    _probe("walk-goes-back", with_components(*_texts_at(
+        {1: (156, 357, 92, 115), 2: (60, 201, 114, 99), 3: (125, 263, 136, 81),
+         4: (189, 251, 55, 45), 5: (85, 199, 96, 53), 6: (92, 332, 40, 57),
+         7: (42, 246, 138, 43), 8: (123, 336, 97, 81)}))),
 ]

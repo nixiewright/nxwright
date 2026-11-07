@@ -51,8 +51,8 @@ class DecodersOnETest(unittest.TestCase):
                 code, again, count = rebuilt_user_code(probe_facts(probe), _values_of)
                 self.assertEqual(again, code)
                 rebuilt += count
-        # 3408 pages and components, of 912 probes.
-        self.assertEqual(rebuilt, 3408)
+        # 3450 pages and components, of 917 probes.
+        self.assertEqual(rebuilt, 3450)
 
 
 if __name__ == "__main__":
