@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { pageItemLook } from "../out/pageLocking.js";
 
 const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const menus = manifest.contributes.menus;
@@ -44,9 +45,18 @@ test("the page preview offers locking on the page, and unlocking on a locked one
 test("the Pages section offers the same, by whether the page is locked", () => {
   const items = menus["view/item/context"].filter((item) => PAGE_COMMANDS.includes(item.command));
   assert.deepEqual(items.map((item) => [item.command, item.when]), [
-    ["nxwright.lockPage", "view == nxwright.pages && viewItem == page"],
-    ["nxwright.lockPageWithPassword", "view == nxwright.pages && viewItem == page"],
-    ["nxwright.unlockPage", "view == nxwright.pages && viewItem == lockedPage"]]);
+    ["nxwright.lockPage", "view == nxwright.pages && viewItem =~ /^page( |$)/"],
+    ["nxwright.lockPageWithPassword", "view == nxwright.pages && viewItem =~ /^page( |$)/"],
+    ["nxwright.unlockPage", "view == nxwright.pages && viewItem =~ /^lockedPage( |$)/"]]);
+  // Each matches its page's context value, whatever the page's events.
+  const events = [{ event: "load", hasCode: true }];
+  for (const [locked, kind] of [[new Set(["home"]), "lockedPage"], [new Set(), "page"]]) {
+    const pattern = new RegExp(`^${kind}( |$)`);
+    assert.match(pageItemLook("home", locked, events).contextValue, pattern);
+    assert.match(pageItemLook("home", locked).contextValue, pattern);
+    assert.doesNotMatch(pageItemLook("home", locked).contextValue,
+                        new RegExp(`^${kind === "page" ? "lockedPage" : "page"}( |$)`));
+  }
 });
 
 test("they are commands of the menus, not of the Command Palette", () => {

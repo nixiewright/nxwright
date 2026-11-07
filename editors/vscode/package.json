@@ -1273,18 +1273,23 @@
       ],
       "view/item/context": [
         {
+          "submenu": "nxwright.events",
+          "when": "view == nxwright.pages && viewItem =~ /(^| )hasEvents( |$)/",
+          "group": "0_open@1"
+        },
+        {
           "command": "nxwright.lockPage",
-          "when": "view == nxwright.pages && viewItem == page",
+          "when": "view == nxwright.pages && viewItem =~ /^page( |$)/",
           "group": "1_lock@1"
         },
         {
           "command": "nxwright.lockPageWithPassword",
-          "when": "view == nxwright.pages && viewItem == page",
+          "when": "view == nxwright.pages && viewItem =~ /^page( |$)/",
           "group": "1_lock@2"
         },
         {
           "command": "nxwright.unlockPage",
-          "when": "view == nxwright.pages && viewItem == lockedPage",
+          "when": "view == nxwright.pages && viewItem =~ /^lockedPage( |$)/",
           "group": "1_lock@3"
         },
         {

@@ -188,6 +188,7 @@ class NxwrightServer(LanguageServer):
                                "lockComponents": self._lock_components,
                                "lockPage": self._lock_page,
                                "pageLocks": self._page_locks,
+                               "pageEvents": self._page_events,
                                "groupComponents": self._group_components,
                                "fonts": self._fonts,
                                "typefaces": self._typefaces,
@@ -596,6 +597,22 @@ class NxwrightServer(LanguageServer):
             except NxwrightError:
                 pass
         return {"locked": locked}
+
+    def _page_events(self, params: dict) -> dict:
+        """Returns {"events": {page: [{"event", "hasCode"}]}}: the events of
+        each page of the source folder `folder`, from the files as open in
+        the editor, unsaved changes included. Each list has only the events
+        of the page itself, without those of its components. A page whose
+        file cannot be read has no events."""
+        root = Path(params["folder"])
+        index = FolderIndex(root, self._texts.read)
+        read = self._texts.folder_reader(root)
+        events = {}
+        for page in index.pages:
+            # The page itself is the first object of its page file.
+            found = object_events(index, read, page)
+            events[page] = found[0] if found else []
+        return {"events": events}
 
     def _group_components(self, params: dict) -> dict:
         """Returns the protocol's WorkspaceEdit giving the components `names`

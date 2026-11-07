@@ -79,11 +79,18 @@ test("the submenu takes the place of Go to Event... in both menus", () => {
   assert.deepEqual(preview, { submenu: "nxwright.events", group: "0_open@1",
                               when: `webviewId == 'nxwright.pagePreview' && ${HAS_EVENTS}` });
   const components = menus["view/item/context"]
-    .find((entry) => entry.submenu === "nxwright.events");
+    .find((entry) => entry.submenu === "nxwright.events"
+          && entry.when.includes("nxwright.components"));
   assert.deepEqual(components, {
     submenu: "nxwright.events", group: "0_open@1",
     when: `view == nxwright.components && ${itemKeyCondition(HAS_EVENTS)}`,
   });
+  const pages = menus["view/item/context"].filter((entry) => entry.submenu === "nxwright.events"
+                                                   && entry.when.includes("nxwright.pages"));
+  assert.deepEqual(pages, [{
+    submenu: "nxwright.events", group: "0_open@1",
+    when: `view == nxwright.pages && ${itemKeyCondition(HAS_EVENTS)}`,
+  }]);
   assert.doesNotMatch(JSON.stringify(manifest), /nxwright\.goToEvent/);
 });
 

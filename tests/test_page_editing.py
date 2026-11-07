@@ -371,6 +371,36 @@ class ServerRequestTest(EditingTestCase):
         self.assertEqual([(entry["name"], entry["events"]) for entry in found["objects"]],
                          [("page0", []), ("title", [])])
 
+    def page_events(self, connection=None) -> dict:
+        """Returns the events in the server's reply to nxwright/pageEvents about the folder."""
+        connection = connection or initialized()
+        connection.handle({"jsonrpc": "2.0", "id": 2, "method": "nxwright/pageEvents",
+                           "params": {"folder": str(self.root)}})
+        return connection.sent[-1]["result"]["events"]
+
+    def test_the_events_of_each_page(self):
+        self.write("pages/second.nx", "on second.up:\n  sys0 = 1\n")
+        # A page in app.toml without its files has no events.
+        self.write("app.toml", edited_app(self.text("app.toml"),
+                                          lambda app: app["pages"].append("ghost")))
+        events = self.page_events()
+        self.assertEqual(sorted(events), ["ghost", "page0", "second"])
+        self.assertEqual(events["second"], [{"event": "load", "hasCode": False},
+                                            {"event": "loadend", "hasCode": False},
+                                            {"event": "down", "hasCode": False},
+                                            {"event": "up", "hasCode": True},
+                                            {"event": "unload", "hasCode": False}])
+        self.assertEqual(events["ghost"], [])
+
+    def test_the_events_of_each_page_as_the_editor_has_them(self):
+        connection = initialized()
+        connection.handle({"jsonrpc": "2.0", "method": "textDocument/didOpen",
+                           "params": {"textDocument": document_item(
+                               uri_of(self.root / "pages/page0.nx"),
+                               "on page0.load:\n  sys0 = 2\n")}})
+        load = self.page_events(connection)["page0"][0]
+        self.assertEqual(load, {"event": "load", "hasCode": True})
+
     def test_the_objects_of_a_half_typed_page_file(self):
         self.write("pages/page0.page.toml", self.text("pages/page0.page.toml") + "[[component]]\nname = ")
         found = self.request("nxwright/pageObjects")["result"]

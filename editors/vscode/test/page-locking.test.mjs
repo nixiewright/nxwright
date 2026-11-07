@@ -11,6 +11,14 @@ test("a locked page has a padlock, and the menu that unlocks it", () => {
   assert.deepEqual(pageItemLook("day", locked), { contextValue: "page", padlock: false });
 });
 
+test("a page's context value also gives its events, for the Go to Event submenu", () => {
+  const events = [{ event: "load", hasCode: true }, { event: "up", hasCode: false }];
+  assert.deepEqual(pageItemLook("home", new Set(["home"]), events),
+                   { contextValue: "lockedPage hasEvents codeLoad noCodeUp", padlock: true });
+  assert.equal(pageItemLook("day", new Set(), events).contextValue,
+               "page hasEvents codeLoad noCodeUp");
+});
+
 test("a password must have a character, and only ASCII ones", () => {
   assert.equal(passwordProblem("abc"), undefined);
   assert.equal(passwordProblem(""),

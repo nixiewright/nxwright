@@ -84,7 +84,8 @@ export class PageComponents {
       // when it has code and one when it does not.
       ...EVENT_NAMES.flatMap((event) => [false, true].map((hasCode) =>
         vscode.commands.registerCommand(eventCommand(event, hasCode),
-                                        (target: PreviewMenuContext | PageObject) =>
+                                        (target: PreviewMenuContext | PageObject |
+                                                  ProjectPage) =>
                                           this.openEvent(target, event)))),
       vscode.commands.registerCommand("nxwright.editAttributes",
                                       (target: PreviewMenuContext | PageObject) =>
@@ -167,11 +168,13 @@ export class PageComponents {
   }
 
   // Opens the code of `event` for the object the menu is on, and adds the
-  // event's heading if the event has no code.
-  private async openEvent(target: PreviewMenuContext | PageObject, event: string):
-      Promise<void> {
-    const toml = pageOf(target, this.pages);
-    const name = isPageObject(target) ? target.name : target.eventObject;
+  // event's heading if the event has no code. When the menu is on a page in
+  // the Pages section, that object is the page itself.
+  private async openEvent(target: PreviewMenuContext | PageObject | ProjectPage,
+                          event: string): Promise<void> {
+    const fromPages = "id" in target;
+    const toml = fromPages ? target.toml : pageOf(target, this.pages);
+    const name = fromPages || isPageObject(target) ? target.name : target.eventObject;
     if (toml && name) {
       await this.editing.openEvent(toml, name, event);
     }

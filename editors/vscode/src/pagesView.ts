@@ -1,24 +1,28 @@
-// The Pages section of nxwright's side bar: the current project's pages
-// (currentProject.ts), in ID order, each with its ID. Choosing one opens its
-// page file, which opens in the preview, as VS Code's default for page
-// files. The page the side bar shows (pages.ts) is selected. The section's
-// header buttons, New page and Add a keyboard page, are package.json's.
+// The Pages section of nxwright's side bar. It lists the current project's
+// pages (currentProject.ts) in ID order, each with its ID, and selects the
+// page the side bar shows (pages.ts). Choosing a page opens its page file in
+// the preview, the default editor for page files. The section's header
+// buttons, New page and Add a keyboard page, are declared in package.json.
 //
-// A locked page shows a padlock, and its right-click menu offers Unlock
-// page. An unlocked page's menu offers Lock page and Lock page with password. The section asks
-// the server which pages are locked (nxwright/pageLocks) when the project
-// changes, and again shortly after one of its page files changes, saved or
-// not.
+// Each page's right-click menu offers to lock or unlock the page, and has
+// the Go to Event submenu for the page's own events. To show a padlock on
+// locked pages and pick each menu's items, the section asks the language
+// server which pages are locked (nxwright/pageLocks) and what events each
+// page has (nxwright/pageEvents). It asks when the project changes, and
+// again shortly after one of the project's page files or .nx files changes,
+// saved or not.
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
+import { isInside } from "./activeFile";
 import { CurrentProject, NO_PROJECT_NOTE } from "./currentProject";
+import { ObjectEvent } from "./eventMenu";
 import { pageFileStem } from "./pageFileNames";
 import { pageItemLook } from "./pageLocking";
 import { Pages, tomlOf } from "./pages";
 
-// How long, in milliseconds, page files must stop changing before the
-// section asks which pages are locked again.
-const LOCKS_PAUSE = 300;
+// How long, in milliseconds, files must stop changing before the section
+// asks again which pages are locked and what events they have.
+const PAGES_PAUSE = 300;
 
 // A page of the current project: its name, its ID, and its page file, which
 // the commands of its right-click menu take.
@@ -34,9 +38,12 @@ export class PagesView implements vscode.TreeDataProvider<ProjectPage> {
   private tree: vscode.TreeView<ProjectPage> | undefined;
   // The current project's locked pages, by name.
   private locked: ReadonlySet<string> = new Set();
-  private locksTimer: ReturnType<typeof setTimeout> | undefined;
-  // How many times the section has asked for the locked pages.
-  private locksAsked = 0;
+  // The events of each page of the current project, by name.
+  private events: Record<string, ObjectEvent[]> = {};
+  private askTimer: ReturnType<typeof setTimeout> | undefined;
+  // Numbers the requests about the pages, so that only the answer to the
+  // latest one is shown.
+  private asked = 0;
 
   constructor(private readonly project: CurrentProject, private readonly pages: Pages,
               private readonly client: () => LanguageClient | undefined) {}
@@ -51,9 +58,9 @@ export class PagesView implements vscode.TreeDataProvider<ProjectPage> {
         this.tree!.message = this.project.folder ? undefined : NO_PROJECT_NOTE;
         this.changed.fire();
         this.showShownPage();
-        void this.askLocks();
+        void this.askAboutPages();
       }),
-      { dispose: () => clearTimeout(this.locksTimer) },
+      { dispose: () => clearTimeout(this.askTimer) },
       this.pages.onDidChangePage(() => this.showShownPage()),
       this.tree.onDidChangeVisibility(() => this.showShownPage()),
     ];
@@ -73,11 +80,11 @@ export class PagesView implements vscode.TreeDataProvider<ProjectPage> {
 
   getTreeItem(page: ProjectPage): vscode.TreeItem {
     const item = new vscode.TreeItem(page.name);
-    // By name, which a project's pages never share, so that the shown page
-    // is found again after the list changes.
+    // Identifies the item by the page's name, which no two pages of a project
+    // share, so that the shown page can be found again after the list changes.
     item.id = page.name;
     item.description = String(page.id);
-    const look = pageItemLook(page.name, this.locked);
+    const look = pageItemLook(page.name, this.locked, this.events[page.name]);
     item.contextValue = look.contextValue;
     if (look.padlock) {
       item.iconPath = new vscode.ThemeIcon("lock");
@@ -91,35 +98,46 @@ export class PagesView implements vscode.TreeDataProvider<ProjectPage> {
   }
 
   // Called when a file changes, on disk or in an editor. If it is a page file
-  // of the current project, asks again which pages are locked, after a
-  // pause, because the change may lock or unlock its page.
+  // or a .nx file of the current project, asks the server again about the
+  // pages, after a pause. Editing a page file may lock or unlock its page,
+  // and editing a .nx file may add or remove the code of an event.
   fileChanged(uri: vscode.Uri): void {
     const folder = this.project.folder;
-    if (!folder || !uri.fsPath.endsWith(".page.toml") ||
-        !uri.fsPath.startsWith(vscode.Uri.joinPath(folder, "pages").fsPath)) {
+    if (!folder) {
       return;
     }
-    clearTimeout(this.locksTimer);
-    this.locksTimer = setTimeout(() => void this.askLocks(), LOCKS_PAUSE);
+    const pageFile = uri.fsPath.endsWith(".page.toml") &&
+      isInside(uri, vscode.Uri.joinPath(folder, "pages"));
+    const code = uri.fsPath.endsWith(".nx") && isInside(uri, folder);
+    if (!pageFile && !code) {
+      return;
+    }
+    clearTimeout(this.askTimer);
+    this.askTimer = setTimeout(() => void this.askAboutPages(), PAGES_PAUSE);
   }
 
-  // Asks the server which pages of the current project are locked, and
-  // shows them. Without a server or an answer, no page shows as locked.
-  private async askLocks(): Promise<void> {
-    const asked = ++this.locksAsked;
+  // Asks the server which pages of the current project are locked and what
+  // events each one has, and shows the answers. Without a server or an
+  // answer, no page shows as locked or offers the Go to Event submenu.
+  private async askAboutPages(): Promise<void> {
+    const asked = ++this.asked;
     const folder = this.project.folder;
     const client = this.client();
-    const answer = folder && client
-      ? await client.sendRequest<{ locked: string[] }>("nxwright/pageLocks",
-                                                        { folder: folder.fsPath })
-        .catch(() => undefined)
-      : undefined;
+    const ask = <T>(method: string): Promise<T | undefined> => folder && client
+      ? client.sendRequest<T>(method, { folder: folder.fsPath }).then(
+        (answer) => answer, () => undefined)
+      : Promise.resolve(undefined);
+    const [locks, events] = await Promise.all([
+      ask<{ locked: string[] }>("nxwright/pageLocks"),
+      ask<{ events: Record<string, ObjectEvent[]> }>("nxwright/pageEvents"),
+    ]);
     // A later request, such as one for another project, may have been sent
     // while the server answered this one. Only the latest answer is shown.
-    if (asked !== this.locksAsked) {
+    if (asked !== this.asked) {
       return;
     }
-    this.locked = new Set(answer?.locked ?? []);
+    this.locked = new Set(locks?.locked ?? []);
+    this.events = events?.events ?? {};
     this.changed.fire();
   }
 
