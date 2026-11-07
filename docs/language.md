@@ -27,27 +27,22 @@ What nxlang adds:
 - `break`, `continue`, and `switch`;
 - including other `.nx` files, such as a library shared by pages.
 
-[nxlang-compiled.md](nxlang-compiled.md) describes the code the build writes from it.
+See [nxlang-compiled.md](nxlang-compiled.md) for the code the build writes from nxlang.
 
 ## Switching to nxlang
+
+A folder extracted from a project starts in strict Nextion syntax, which is `language = "nextion"` in `app.toml`. Its `.nx` files can still use spaces and braces that the Nextion Editor does not accept ([Comfortable code](source-folder.md#comfortable-code)), but it cannot use any of the extended nxlang syntax. To switch the folder to nxlang, run:
 
 ```
 nxwright language <source-folder> nxlang
 ```
 
-Every source folder gives its language in `app.toml`: `language = "nextion"` for strict Nextion syntax, or `language = "nxlang"`. A folder extracted from a project starts in strict Nextion syntax. Even there, you can write code comfortably, with spaces and braces where the Nextion Editor wants none ([Comfortable code](source-folder.md#comfortable-code)).
-
-Always switch with the command, never by changing `app.toml` by hand. The two languages read some code differently: the Nextion Editor computes `a+b*c` as `(a+b)*c`, strictly from left to right, while nxlang computes it with the more usual precedence, as `a+(b*c)`. So the command rewrites every line that the two read differently, adding the parentheses that keep the Nextion Editor's meaning: `(a+b)*c`.
+Always switch with this command, and never by setting `language = "nxlang"` in `app.toml` by hand. The two languages read some code differently: the Nextion Editor computes `a+b*c` as `(a+b)*c`, strictly from left to right, while nxlang computes it with the more usual precedence, as `a+(b*c)`. So the command rewrites every line that the two read differently, adding the parentheses that keep the Nextion Editor's meaning: `(a+b)*c`.
 
 - The rewritten code builds to exactly the same project. If any code would not, the command stops before writing anything.
-- There is no command to switch back. If you must, build the project, then extract it into a new folder. You get a folder in strict Nextion syntax that builds the same project. Its code is the code the build wrote, with the compiler's hidden variables and hotspots ([nxlang-compiled.md](nxlang-compiled.md)), not the nxlang you wrote.
+- There is no command to switch back. If you must, build the project, then extract it into a new folder. You get a folder in strict Nextion syntax that builds the same project. It contains the code the build wrote, with the compiler's hidden variables and hotspots ([nxlang-compiled.md](nxlang-compiled.md)), instead of the nxlang you wrote.
 
-In VS Code, "Switch the source folder to the nxwright language" opens a panel that explains the switch before you make it:
-
-- what nxlang adds, each beside how you write the same thing in strict Nextion syntax;
-- each line of your code that the switch will rewrite, before and after, with each file's changes.
-
-Its button makes the switch in one edit, which one undo takes back. It refuses while a file of the project has unsaved changes. After the switch, it offers to format the project's code.
+In VS Code, "Switch the source folder to the nxwright language" shows what nxlang adds and each line the switch will rewrite, before you make it. The switch is one edit, so one undo takes it back.
 
 ## Expressions
 
@@ -68,28 +63,27 @@ Operators, from the tightest binding to the loosest:
 | `\|\|` | or (conditions only) |
 | `? :` | `a ? b : c` is `b` when `a` is true, else `c` |
 
-This is C's order. So `a & 1 == 1` means `a & (1 == 1)`, which the build refuses. Write `(a & 1) == 1`.
+The order is the same as in C, so `a & 1 == 1` means `a & (1 == 1)`, which the build refuses. Write `(a & 1) == 1`.
 
 ### Numbers
 
-- Parentheses group as usual.
-- Numbers are 32-bit, and behave as on the screen.
+Numbers are 32-bit, and behave as on the screen:
+
 - Division rounds toward zero: `-7/2` is `-3`.
 - The remainder takes the sign of the left side: `-7%2` is `-1`.
 - `>>` keeps the sign: `-8>>1` is `-4`.
 
 Hexadecimal numbers are written as in C: `0x1F`, `0x1`, `-0x10`.
 
-- A value past `0x7FFFFFFF` stands for its 32 bits, so `0xFFFFFFFF` is -1, as on the screen.
-- The Nextion Editor reads fewer forms: digits in pairs, without a sign, within 32 bits, and no hexadecimal number in an `int`'s starting value. So the build rewrites the other forms: `0x1` as `0x01`, `-0x10` as `-16`, and an `int`'s starting value in decimal.
-- A number too large for 32 bits, such as `0x0100000005`, keeps its low 32 bits, `0x00000005`, as in C. `nxwright check` warns you about it.
+- A value from `0x80000000` to `0xFFFFFFFF` is negative: `0xFFFFFFFF` is -1.
+- The Nextion Editor reads fewer forms ([Hexadecimal numbers](build-rules.md#hexadecimal-numbers)), so the build rewrites the others: `0x1` as `0x01`, `-0x10` as `-16`, and an `int`'s starting value in decimal.
 
-Decimal numbers outside -2147483648 to 2147483647 are cut to 32 bits the same way, with a warning from `nxwright check`. For example, the build writes `4294967295` as `-1`. The arguments of `printh`, `crcputh`, and `lcd_dev` are bytes, not numbers, so the build leaves them as they are.
+A number that does not fit in 32 bits keeps only its low 32 bits, as in C, and `nxwright check` warns you about it. For example, the build writes `0x0100000005` as `0x00000005`, and `4294967295` as `-1`. The build leaves the arguments of `printh`, `crcputh`, and `lcd_dev` as they are, because they are bytes.
 
 ### Text
 
 - `+` joins text. A number joined to text becomes its digits first: `t0.txt = "Speed: " + speed.val + " mm/s"`.
-- Putting a number into a text converts it the same way: `t0.txt = n0.val`.
+- Putting a number into a text also gives its digits: `t0.txt = n0.val`.
 - `t0.txt -= 2` removes the last two characters.
 
 ### Assignments and conditions
@@ -99,7 +93,7 @@ Decimal numbers outside -2147483648 to 2147483647 are cut to 32 bits the same wa
 - A plain number counts as true when it is not 0: `if (flag.val)`.
 - Texts compare with `==` and `!=` only.
 - `&&` and `||` evaluate their right side only when needed, as in C. So `b != 0 && a / b > 1` never divides by 0. In `ready.val == 1 && save() == 1`, `save` runs only when `ready.val` is 1.
-- `? :` chooses a value, as in C: `t0.txt = ready.val ? "Ready" : "Waiting"`. Only the chosen side runs. Both sides are numbers, or both texts. Among commands, only the first argument of `get`, `print`, `prints`, and `covx` takes it. For another command, such as `vis`, put the value in a local first.
+- `? :` chooses a value, as in C, and runs only the chosen side: `t0.txt = ready.val ? "Ready" : "Waiting"`. Both sides must be numbers, or both must be texts. You can use `? :` in a command only as the first argument of `get`, `print`, `prints`, or `covx`. For any other command, such as `vis`, put the value in a local first.
 
 ## Constants
 
@@ -125,8 +119,8 @@ on save.up:
 
 `var` declares a local variable for the rest of the event.
 
-- Its first value decides whether it stores a number or a text.
-- A `click` that runs another event cannot change it.
+- A local's first value decides whether it stores a number or a text.
+- A `click` that runs another event cannot change a local.
 - If your code reads a local where its `var` line did not run, for example one declared inside an `if` that was skipped, the local has whatever value another event or function last left there.
 - A local's name follows the same rules as a constant's, with one exception: it may share a component's name ([Names](#names)).
 
@@ -147,20 +141,22 @@ on save.up:
   showError("No paper")
 ```
 
-A function belongs to one page. It is written in the page's `.nx` file, between events, with its body indented like an event's.
+A function belongs to one page. It is written between events, in the page's `.nx` file or in a file the page includes ([Includes](#includes)), with its body indented like an event's.
 
 - Parameters are `number` or `text`. `-> number` or `-> text` gives a result. A function without a result is called as a statement.
-- A function with a result ends with `return <expression>`, as its last line and outside any block. `return` can go nowhere else, in a function or in an event.
+- A function with a result ends with `return <expression>`, as its last line and outside any block. `return` cannot go anywhere else, in a function or in an event.
 - A call can go anywhere an expression can. A function with a result can also be called as a statement, and its result is then not used.
-- Arguments are converted as assignments are: a number passed for a text becomes its digits. A text passed for a number is refused.
+- A number passed for a text becomes its digits, but a text passed for a number is refused.
 - A function may call other functions, but never itself, directly or through others. Each function has one set of variables, which a second call would overwrite.
 - A function's name follows the rules for a constant's.
-- A function may contain a `goto` and labels, as an event may. A `goto` goes to a label of its own function.
-- A comment right above a `function` line stays in the source. An event's comment, right above its heading, is copied into the Nextion Editor as the event's first lines ([Comments](source-folder.md#comments)), but a function's is not.
-- `program.nx` cannot call functions. It can `call` a macro, but only one that does not use `click`, directly or through the macros it calls. `program.nx` belongs to no page, so the build could not tell which event such a `click` runs.
-- nxlang code can `call` a macro ([Macros](source-folder.md#macros)). The build counts what the macro runs, so the macro and what it runs come under the [Limits](#limits) on calls and clicks.
+- Labels and `goto` work in a function too, but a `goto` can only go to a label in the same function.
+- A comment right above a `function` line stays in the source, and is not copied into the Nextion Editor. An event's comment is copied ([Comments](source-folder.md#comments)).
 
-Hand-made functions keep working too: a hidden component whose event you run with `click`. Each `click` must give its component and 0 or 1, and the clicks must not come back to an event already running ([Limits](#limits)).
+nxlang code can also `call` a macro ([Macros](source-folder.md#macros)). The macro and whatever it runs count toward the [Limits](#limits) on calls and clicks.
+
+`program.nx` cannot call functions. It can `call` a macro, but only one that does not use `click`, directly or through the macros it calls. `program.nx` belongs to no page, so the build could not tell which event such a `click` runs.
+
+Hand-made functions keep working too: a hidden component whose event you run with `click`. The [Limits](#limits) on `click` apply to them.
 
 ## `break`, `continue`, and `switch`
 
@@ -189,18 +185,9 @@ switch (mode.val) {
 }
 ```
 
-They work as in C:
+`break`, `continue`, and `switch` work as in C, and a `switch` can also compare texts. Each `case` gives a number, a text, or a constant of the same kind, each value once. Code between `switch (...) {` and the first `case` could never run, so it is refused.
 
-- `break` leaves the innermost `while`, `for`, or `switch`.
-- `continue` goes to the next pass of the innermost loop. A `for` loop runs its step first.
-- `switch` computes its value once. The value can be a number or a text.
-- Each `case` gives a number, a text, or a constant of the same kind, each value once.
-- `default:` is optional, at most one, and can come anywhere.
-- A case without `break` falls through into the next one.
-- `continue` inside a `switch` goes to the next pass of the loop around it.
-- Code between `switch (...) {` and the first `case` could never run, so it is refused.
-
-These words count only in their own forms: `switch (`, `case <value>:`, `default:`, and `break` or `continue` alone on a line. A component may keep such a name, as in `case.val = 1`. A constant, local, function, or parameter may not.
+`switch`, `case`, `default`, `break`, and `continue` are keywords only in these forms: `switch (`, `case <value>:`, `default:`, and `break` or `continue` alone on a line. A component can still have one of these names, as in `case.val = 1`. A constant, local, function, or parameter cannot.
 
 ## Includes
 
@@ -221,22 +208,23 @@ A `.nx` file can include others: a library of functions shared by pages, or part
 - The same event in two of a page's files is refused. So is a constant or a function defined twice.
 - A page gets only the functions it calls, directly or through other functions, wherever they are defined. The rest of a library costs it nothing. Constants cost nothing either.
 - Every function is still checked, so a mistake in a library shows on every page that includes it. Errors give the file and line they come from, such as `pages/lib/fixed.nx line 12`.
-- Which components exist is checked only in the code a page uses ([Names](#names)). So one file can contain a function for each page, each using its own page's components.
+- The build checks that components exist, but only in the code a page uses ([Names](#names)). One file can therefore contain a function for each page, using that page's components.
 - A library function that uses a constant only some pages define fails on the other pages. A library should define what it needs.
 - Each page runs its own copy of a function, with its own variables. State shared between pages goes in `program.nx`'s `int` variables.
 - `program.nx` may include files of constants only.
 
 ## Names
 
-A name on its own, without a dot, must be a constant, a local, an `int` variable declared in `program.nx`, or a system variable. Anything else stops the build with "unknown name". That catches a misspelt constant.
+A name on its own, without a dot, must be a constant, a local, a function's parameter, an `int` variable declared in `program.nx`, or a system variable. Anything else stops the build with "unknown name". That catches a misspelt constant.
 
-A name with a dot must be something that exists, as in strict Nextion syntax ([Names that must exist](build-rules.md#names-that-must-exist)): `t0.txt` a component of the page, and `settings.t0.txt` a component of another page, after its page's name. A component whose name is not made of letters, digits, and `_`, such as `b 0`, cannot be used in code, as in the Nextion Editor. Only the headings of its events give its name, in quotes ([Code files](source-folder.md#code-files)).
+A name with a dot must refer to something that exists ([Names that must exist](build-rules.md#names-that-must-exist)). `t0.txt` is a component of the page, and `settings.t0.txt` is a component of the page `settings`.
 
-A local or a function's parameter may share a component's name:
+Code cannot use a component whose name contains anything other than letters, digits, and `_`, such as `b 0`. Only the headings of that component's events can give its name, in quotes ([Code files](source-folder.md#code-files)).
 
-- Without a dot, the name is the local. With one, such as `units.txt`, it is the component.
-- This also applies in command arguments. So a function that also needs the component without a dot, as in `vis units,0`, must give its local another name.
-- This rule exists because a library function cannot know which components the pages including it have, now or later. A new component could otherwise break it.
+A local or a function's parameter may share a component's name, so that a new component on a page cannot break a library function that uses the same name.
+
+- Without a dot, the name is the local, even in a command's arguments. With a dot, as in `units.txt`, it is the component.
+- A function that also needs the component without a dot, as in `vis units,0`, must give its local another name.
 
 Names starting with `__`, two underscores, are kept for the compiler's own variables and components. No `int` of `program.nx`, constant, function, parameter, local, or component of a page in nxlang may use one. A single `_` is yours to use.
 
@@ -244,21 +232,21 @@ Names starting with `__`, two underscores, are kept for the compiler's own varia
 
 The build writes your nxlang into strict Nextion syntax, adding hidden variables and components where the Nextion Editor needs them ([nxlang-compiled.md](nxlang-compiled.md)). That brings some limits:
 
-- **250 components per page.** The compiler adds a few components of its own to a page: text variables for text worked out on the way, and a hidden hotspot for each depth of functions. They count toward the 250 that the Nextion Editor allows. The build stops if a page would need more.
-- **At most 7 calls and clicks in a chain.** A chain is a run of calls and clicks, such as an event, a function it calls, and a function that one calls. A macro's `call` counts as one level of the chain too. The screen runs events at most 9 deep, and the event a press or a timer runs is the first level. One level is kept free for a `page` command, which runs the new page's `load` event inside the current one. The build refuses a longer chain. Its message shows the chain, call by call.
-- **A hand-made `click` must give its component and 0 or 1**, as in `click b0,1`. 1 runs the component's Touch Press event, and 0 its Touch Release event. The build refuses any other form, such as `click b[3],1` or `click b0,n.val`, since it could not tell which event runs. In a macro that nxlang code calls, a `click` gives the component's ID instead, as in `click 3,1`.
+- **250 components per page.** The Nextion Editor allows 250, and the few components the compiler adds to a page count toward that limit. The build stops if a page would need more.
+- **At most 7 calls and clicks in a chain.** For example, an event that calls a function, which calls another function, is a chain of 2. A macro's `call` counts too. The build refuses a longer chain. The limit comes from the screen, which runs events at most 9 levels deep. The event that a press or a timer runs is the first level, and one level is kept free for a `page` command, which runs the new page's `load` event inside the current one. That leaves 7.
+- **A hand-made `click` must give its component and 0 or 1**, as in `click b0,1`. The build refuses any other form, such as `click b[3],1` or `click b0,n.val`, because it could not tell which event runs. In a macro that nxlang code calls, a `click` gives the component's ID instead, as in `click 3,1`.
 - **No call or click may come back to an event, function, or macro already running**, such as two events clicking each other. An event or a function has one set of variables, which the second run would overwrite. For a macro, the build could not count how deep it nests.
 - **A text that nxlang keeps for you has room for 255 bytes.** This is true of a local, a parameter, a function's result, and a joined text, such as a side of a comparison. A longer text is cut. For example, in `if (t1.txt == "Total: " + t0.txt)`, only the first 255 bytes of the joined text are compared.
   - **The exception is a quoted text longer than 255 bytes.** nxlang knows its length, so it gives the text the room it needs.
   - **nxlang does not give more room to a text whose length it cannot know in advance**, such as a component's text, because the screen has little memory. A text built from short texts with several `+=` also has room for only 255 bytes.
-  - **You get a warning where a component's text may be cut.** When a component's text, or a variable that nxlang gave more room, may not fit in one of these texts, `nxwright check` and the live checks warn on the line (`text-cut`). The warning gives the room the text needs. For example, the comparison above gives a warning when `t0`'s `txt_maxl` is 1000.
+  - **You get a warning where a component's text may be cut.** `nxwright check` and the live checks warn on the line (`text-cut`) when a component's text, or a variable that nxlang gave more room, may not fit in one of these texts. For example, `if (t1.txt == "Total: " + t0.txt)` gives a warning when `t0`'s `txt_maxl` is 1000.
   - **To keep a longer text, put it in a variable component** whose `txt_maxl` is large enough.
   - A `print` of joined texts keeps every part whole, as it prints each part in turn.
-- **At most 8,000 hidden globals.** That many are known to work. The build stops past that.
-- **`program.nx` has no hidden variables, and no locals.** An expression there that would need a hidden variable stops the build: write it as simpler steps. So does a text assignment that uses its own target anywhere but first, such as `t0.txt = "-" + t0.txt`. An `int` line can go anywhere in `program.nx`. The build moves it before the other code, because the Nextion Editor refuses a declaration after other code.
-- **A page with functions needs its `load` event.** The build turns off the touches of the hidden hotspots there. The `load` event is listed by default.
-- **A data record's call takes a number for a number.** A text given for a number is refused. A number given for a text becomes its digits.
-- **What the Nextion Editor refuses is refused in nxlang too.** An escape the screen does not read, such as `\n` in a quoted text, a variable's `val` while it stores a text, or a command given another number of arguments than it takes, is written as it is, and the build refuses it ([build-rules.md](build-rules.md)).
+- **At most 8,000 hidden global variables.** That many are known to work, and the build refuses more.
+- **`program.nx` has no hidden variables, and no locals.** The build stops at an expression there that would need a hidden variable, so write it as simpler steps. It also stops at a text assignment that uses its own target anywhere but first, such as `t0.txt = "-" + t0.txt`.
+- **A page with functions needs its `load` event.** The build turns off the touches of the hidden hotspots in that event. A page file's `events` list contains `load` by default.
+- **The build refuses a text given for a number in a data record's call.** A number given for a text becomes its digits.
+- **What the Nextion Editor refuses is refused in nxlang too** ([build-rules.md](build-rules.md)). That includes an escape the screen does not read, such as `\n` in a quoted text, a variable's `val` while the variable stores a text, and a command given the wrong number of arguments.
 - **The form `'&name&'` works only in an event's code** ([`'&name&'`](build-rules.md#name-an-attribute-of-the-events-own-object)). The build refuses it elsewhere:
   - in a function, because a function's body runs from a hidden hotspot, so the form would give the hotspot's attributes;
   - in a constant, because a constant's text goes into every line that uses the constant, even outside an event;
@@ -266,15 +254,19 @@ The build writes your nxlang into strict Nextion syntax, adding hidden variables
 
 ## Extracting from the Nextion Editor
 
-Extracting keeps the source of every event whose compiled code the Nextion Editor did not change, as it does for comfortable code. The compiler's hidden variables are left out of the page files.
+Extracting keeps the source of every event whose compiled code the Nextion Editor did not change, and the constants of `program.nx` and of each page's `.nx` file. It leaves the compiler's hidden variables out of the page files.
 
-- An event the Nextion Editor changed takes the Nextion Editor's code, with the parentheses that keep its meaning.
-- The Nextion Editor's `x-=a+b` computes `(x-a)+b`. nxlang reads `x -= a + b` differently, so extracting writes the Nextion Editor's line as `x=x-a+b`. That computes the same, and builds to `x=x-a+b`.
-- The Nextion Editor reads a hexadecimal number written `0X10` as `0x10`, the only way nxlang writes one. So extracting, and switching to nxlang, write it `0x10`.
-- An event that was compiled from nxlang uses hidden variables. If the Nextion Editor changed it, extracting stops. Its message shows which event. Make the change in the source folder instead. The same goes for a function's body, in the event of its hotspot.
-- Extracting compares the Nextion Editor's code with what the current nxwright compiles. After nxwright changes how it compiles, build the project once before its next extract. Otherwise extracting takes every compiled event for a change made in the Nextion Editor, and stops.
+An event the Nextion Editor changed takes the Nextion Editor's code, with the parentheses that keep its meaning. It is rewritten in the file that contains it, which may be an included file. An event the Nextion Editor emptied is removed from that file, and one it added goes into the page's own file. Included files are never deleted.
+
+Extracting stops in three cases:
+
+- The Nextion Editor changed an event, and its code uses hidden variables. Make the change in the source folder instead. The same goes for a function's body, which is in the event of its hotspot.
+- The Nextion Editor left an event different between the pages that include its file, since writing either version would change the other pages' build. Such a file changes only where the event is the same on every page.
+- nxwright has changed how it compiles since the project was last built. Extracting compares the Nextion Editor's code with what the current nxwright compiles, so it would take every compiled event for a change made in the Nextion Editor. Build the project once before you next extract it.
+
+Some lines and IDs come out differently:
+
+- The Nextion Editor computes `x-=a+b` as `(x-a)+b`, but nxlang reads `x -= a + b` as `x = x - (a + b)`. So extracting writes the Nextion Editor's line as `x=x-a+b`, which computes the same.
+- Extracting, and switching to nxlang, write a hexadecimal number such as `0X10` as `0x10`, the only form nxlang has.
 - The `tsw` lines at the start of a page's Preinitialize event are left out. The build adds them again.
-- An event the Nextion Editor changed is rewritten in the file that contains it, which may be an included file. An event it emptied is removed from that file. An event it added goes into the page's own file. Included files are never deleted.
-- A file with events included by several pages changes only where the Nextion Editor left them the same on every page. If an event differs between the pages, extracting stops, since writing either version would change the other pages' build. Its message shows which event.
-- The constants of `program.nx` and of each page's `.nx` file are kept.
 - A component added to a page in the Nextion Editor comes after the compiler's hidden variables. Extracting removes those, so the new component's ID moves down to where the next build puts it.
