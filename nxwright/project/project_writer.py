@@ -58,8 +58,8 @@ from nxwright.project.resources import (COPIED_KINDS, SOURCE_EXTENSION, CopiedKi
                                         encode_image_source, encode_manifest, parse_image_source,
                                         parse_manifest, partner_name, with_kind_in_order)
 from nxwright.project.screen_copy import (FORMAT_RAW, FORMAT_RAW_WITH_HEADER, ROTATIONS,
-                                          decode_screen_copy, is_compressed_format_3,
-                                          matches_within_editor_rounding, screen_copy_format)
+                                          decode_screen_copy, matches_within_editor_rounding,
+                                          screen_copy_format)
 from nxwright.project.stamp import block_stamp, manifest_stamp, with_manifest_stamp, with_stamp
 
 PROGRAM_BLOCK = "Program.s"
@@ -300,22 +300,23 @@ def _plan_new_picture(plan: WritePlan, dump_folder: Path, picture_id: int, file_
 
 
 def _screen_copy_layout(container: HmiContainer, manifest) -> tuple:
-    """Returns (format, rotation) for new screen copies, as the project's own
-    pictures confirm them.
+    """Returns (format, rotation) for new screen copies, worked out from the
+    project's own pictures.
 
     The format is the one every picture uses. A raw 1-by-1 picture in a project
-    of another format does not count, since the Editor stores those raw.
+    of another format does not count, because the Nextion Editor stores those
+    raw.
 
     The rotation is confirmed by decoding pictures under each rotation and
     comparing them with their files. A picture that matches under more than one
     rotation confirms nothing, so the next one is tried. The project's rotation
-    setting is not used then: "Save As" can leave it stale. A project with no
-    picture that counts takes both from its settings, as a build does
-    (_settings_layout): no picture can disagree with them.
+    setting is never used to break the tie, because "Save As" can leave it
+    stale. A project with no picture that counts takes both from its settings
+    with _settings_layout, like a build, because no picture can disagree with
+    them.
 
-    Format 3 ignores the rotation. One of its uncompressed pictures confirms the
-    format. Its compressed ones are skipped. They show nothing more, and
-    nxwright never writes one.
+    Format 3 ignores the rotation, so any one of its pictures confirms the
+    format.
     """
     names = manifest.block_names("i")
     if not names:
@@ -337,10 +338,7 @@ def _screen_copy_layout(container: HmiContainer, manifest) -> tuple:
                             "format; this one has formats %s" % formats)
     for name, kind, source in pictures:
         block = container.blocks[name]
-        # A compressed format 3 picture is skipped. Format 3 always uses the
-        # 0-degree order, so the picture shows nothing that the format's
-        # other pictures do not.
-        if kind != formats[0] or is_compressed_format_3(block):
+        if kind != formats[0]:
             continue
         try:
             image = read_picture(source.data)
@@ -353,9 +351,6 @@ def _screen_copy_layout(container: HmiContainer, manifest) -> tuple:
         if not matching:
             raise NxwrightError("picture block %s does not match its picture in any screen rotation"
                                 % name)
-    if formats[0] == FORMAT_RAW_WITH_HEADER:
-        raise NxwrightError("the project's format 3 pictures are all compressed, which nxwright "
-                            "does not write, so none confirms the format of new ones")
     raise NxwrightError("every picture in the project looks the same in more than one screen "
                         "rotation, so none confirms the pixel order of new ones")
 

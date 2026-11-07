@@ -96,7 +96,7 @@ The screen copy's format depends on the **screen model's series**, and its pixel
 | 3, raw with a second header | F (Discovery) | as raw, after a 20-byte second header; or, in a compressed variant, rows of runs of colours |
 | 4, compressed | P (Intelligent) and E (Edge) | runs of colours, then the transparency |
 
-The rotation decides the order the pixels are stored in, and a marker in the screen copy's first byte records it. `screen_copy.py` describes all three formats and the four orders.
+In format 3, the Nextion Editor uses the compressed variant only when it is smaller than the raw one. In formats 0 and 4, the rotation decides the order the pixels are stored in, and a marker in the screen copy's first byte records it. See `screen_copy.py` for the details of all three formats and the four pixel orders.
 
 Colours are stored as **RGB565**: 5 bits of red, 6 of green, 5 of blue.
 
@@ -466,12 +466,11 @@ The compile counts these, with numbers that differ between series of screens:
 ## The Nextion Editor's quirks
 
 - **"Save As" also changes the original file.** "Save As" writes the new file, and also writes the project's settings into the file it was opened from. After changing the screen's rotation and using "Save As", the original file has the new rotation with its old pictures. Make copies outside the Nextion Editor instead. For this reason, `nxwright write` takes the format and pixel order of new pictures from the project's own pictures, never from the rotation setting.
-- **One-pixel pictures in compressed projects.** The Nextion Editor stores a 1-by-1 picture uncompressed in a project whose pictures are compressed, then warns "Index was outside the bounds of the array" whenever the project is opened, until the picture is removed. nxwright refuses to add such a picture.
+- **One-pixel pictures in format 4 projects.** The Nextion Editor stores a 1-by-1 picture uncompressed in a project whose pictures are in format 4, then warns "Index was outside the bounds of the array" whenever the project is opened, until the picture is removed. nxwright refuses to add such a picture.
 
 ## What is not known
 
 - The purpose of some header bytes of pages and of the manifest. They are kept as they are, and a dump shows them as numbers.
 - Whether the screen checks a sound's check value.
-- The 2-byte value that the compressed variant of format 3 keeps for each row of a picture. Decoding does not need it, and new format 3 pictures are written uncompressed.
 - The exact rule for the colour of partly transparent pixels.
 - How the Nextion Editor takes a GIF of several frames.

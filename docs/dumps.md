@@ -132,8 +132,7 @@ Some projects limit what can be added:
   - The project's pictures use more than one format.
   - Every picture looks the same at more than one rotation, so nxwright cannot tell the pixel order.
   - The project has no pictures, and nxwright does not know its screen model.
-- Pictures in the compressed variant of format 3 are kept as they are, and new format 3 pictures are written uncompressed.
-- A 1-by-1 picture cannot be added to a project whose pictures are compressed ([format.md](format.md#the-nextion-editors-quirks)).
+- A 1-by-1 picture cannot be added to a project whose pictures are in format 4 ([format.md](format.md#the-nextion-editors-quirks)).
 
 Writing the output file:
 

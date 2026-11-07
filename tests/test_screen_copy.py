@@ -77,18 +77,24 @@ class DecodeTest(unittest.TestCase):
 
 
 def _compressed_format_3(width: int, height: int, rows: list) -> bytes:
-    """Returns a format 3 screen copy in its compressed variant of `width` by
-    `height` pixels, each row's colour blocks given in `rows` as [(control
-    word, [8 colours])] (screen_copy.py's docstring): the header, the second
-    header, the blocks, and the row index, whose 2-byte values are zeros."""
-    places, blocks = [], b""
+    """Returns a `width` by `height` format 3 screen copy in the compressed
+    variant, with each row's colour blocks given in `rows` as [(control word,
+    [8 colours])]. The copy is complete, with its row index and pixel counts.
+    screen_copy.py's docstring describes each part."""
+    places, blocks, counts = [], b"", []
     for row in rows:
         places.append(20 + len(blocks))
         blocks += b"".join(struct.pack("<I8H", control, *words) for control, words in row)
+        counts.append(bytes(8 if control & 15 == 15 else
+                            sum(control >> 4 * field & 15 for field in range(8))
+                            for control, _ in row))
     index_at = 20 + len(blocks)
-    index = b"".join(struct.pack("<II", place, index_at + 8 * len(rows) + 2 * number)
-                     for number, place in enumerate(places)) + bytes(2 * len(rows))
-    body = struct.pack("<5I", 1, index_at, 0, 0, 0) + blocks + index
+    counts_at = index_at + 8 * len(rows)
+    index = b""
+    for place, row_counts in zip(places, counts):
+        index += struct.pack("<II", place, counts_at)
+        counts_at += len(row_counts)
+    body = struct.pack("<5I", 1, index_at, 0, 0, 0) + blocks + index + b"".join(counts)
     return b"\x0a\x64\x01\x03" + struct.pack("<IIHHII", 0, 24, width, height, len(body), 0) + body
 
 
@@ -108,6 +114,32 @@ class CompressedFormat3Test(unittest.TestCase):
             with self.subTest(rotation=rotation):
                 self.assertEqual(decode_screen_copy(block, rotation),
                                  ScreenPixels(9, 2, singles + [9] + [7] * 9, [OPAQUE] * 18))
+
+    def test_encoding_gives_the_editors_blocks_and_counts(self):
+        # The first row is 40 pixels of one colour, in one block with runs of 14,
+        # 15, and 11. The first run stops at 14, because a lowest field of 15 marks
+        # a block of single pixels. The second row starts with 8 different colours,
+        # which fill a block of single pixels, and ends with 32 pixels of one colour.
+        # The pixel counts after the row index give one byte per block: 40 for the
+        # first row, then 8 and 32 for the second.
+        pixels = ScreenPixels(40, 2, [5] * 40 + list(range(1, 9)) + [9] * 32, [OPAQUE] * 80)
+        self.assertEqual(encode_screen_copy(pixels, FORMAT_RAW_WITH_HEADER, 0),
+                         _compressed_format_3(40, 2, [
+                             [(0xBFE, [5, 5, 5, 0, 0, 0, 0, 0])],
+                             [(0x1111111F, list(range(1, 9))), (0x3FE, [9, 9, 9, 0, 0, 0, 0, 0])]]))
+
+    def test_the_variant_is_used_only_when_smaller(self):
+        # 40 by 30 pixels of one colour take 30 blocks, or 890 bytes compressed
+        # against 2420 uncompressed. 8 by 8 different colours take 8 blocks, or 252
+        # bytes against 148, and a 1-by-1 picture takes 49 bytes against 22.
+        cases = ((40, 30, [0xF800] * 1200, True), (8, 8, list(range(64)), False),
+                 (1, 1, [0], False))
+        for width, height, colours, compressed in cases:
+            with self.subTest(width=width, height=height):
+                pixels = ScreenPixels(width, height, colours, [OPAQUE] * len(colours))
+                block = encode_screen_copy(pixels, FORMAT_RAW_WITH_HEADER, 0)
+                self.assertEqual(is_compressed_format_3(block), compressed)
+                self.assertEqual(decode_screen_copy(block, 0), pixels)
 
     def test_a_raw_format_3_or_a_format_4_is_not_the_variant(self):
         block = encode_screen_copy(ScreenPixels(2, 1, [1, 2], [OPAQUE, OPAQUE]),
@@ -144,6 +176,24 @@ def _colour_block_controls(block: bytes) -> list:
         controls.append(control)
         at += 4 + 2 * (control >> 4) if control & 15 == 15 else 20
     return controls
+
+
+def _without_unused_words(block: bytes) -> bytes:
+    """Returns `block` with 0 in every unused word of its colour blocks, if
+    `block` is a format 3 screen copy in the compressed variant. The Nextion
+    Editor leaves values from earlier blocks in those words, and nxwright
+    writes 0."""
+    if not is_compressed_format_3(block):
+        return block
+    cleared = bytearray(block)
+    index_at, = struct.unpack_from("<I", block, 28)
+    for at in range(44, 24 + index_at, 20):
+        control, = struct.unpack_from("<I", block, at)
+        if control & 15 != 15:
+            for field in range(8):
+                if not control >> 4 * field & 15:
+                    struct.pack_into("<H", cleared, at + 4 + 2 * field, 0)
+    return bytes(cleared)
 
 
 class EncodeTest(unittest.TestCase):
@@ -242,7 +292,7 @@ class ModelFixtureTest(unittest.TestCase):
         for folder, kind, rotation in self.folders():
             for block_path in sorted(folder.glob("*.i")):
                 block = block_path.read_bytes()
-                if screen_copy_format(block) != kind or is_compressed_format_3(block):
+                if screen_copy_format(block) != kind:
                     continue
                 with self.subTest(folder=folder.name, picture=block_path.stem):
                     pixels = decode_screen_copy(block, rotation)
@@ -252,7 +302,7 @@ class ModelFixtureTest(unittest.TestCase):
                         # The header and second header, sides swapped at 90 and 270 degrees.
                         self.assertEqual(encoded[:16] + encoded[24:44], block[:16] + block[24:44])
                     else:
-                        self.assertEqual(encoded, block)
+                        self.assertEqual(encoded, _without_unused_words(block))
 
 
 class EditorRoundingTest(unittest.TestCase):

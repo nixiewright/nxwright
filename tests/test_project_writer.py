@@ -15,9 +15,9 @@ from nxwright.project import project_writer
 from nxwright.project.project_writer import ProjectWriter
 from nxwright.project.resources import (ImageSource, encode_image_source, encode_manifest,
                                         parse_image_source, parse_manifest)
-from nxwright.project.screen_copy import (FORMAT_COMPRESSED, decode_screen_copy,
-                                          matches_within_editor_rounding, screen_copy_format,
-                                          stored_pixels)
+from nxwright.project.screen_copy import (FORMAT_COMPRESSED, FORMAT_RAW_WITH_HEADER,
+                                          decode_screen_copy, matches_within_editor_rounding,
+                                          screen_copy_format, stored_pixels)
 from nxwright.project.screen_models import model_named
 from nxwright.project.stamp import block_stamp, manifest_stamp, with_manifest_stamp, with_stamp
 from tests.test_container import build_project
@@ -422,11 +422,14 @@ class ScreenModelTest(unittest.TestCase):
             self.assertTrue(matches_within_editor_rounding(
                 decode_screen_copy(block, 90), read_picture(png), FORMAT_COMPRESSED))
 
-    def test_format_3_project_with_only_compressed_pictures_is_refused(self):
+    def test_a_compressed_format_3_picture_confirms_the_format(self):
+        png = sample_png("compressed/17-unique-16x16")
         with tempfile.TemporaryDirectory() as name:
-            with self.assertRaisesRegex(NxwrightError, "all compressed"):
-                self.add_picture(Path(name), ("models/raw-with-header-0/21-red-40x30",),
-                                 sample_png("compressed/17-unique-16x16"))
+            block = self.add_picture(Path(name), ("models/raw-with-header-0/21-red-40x30",),
+                                     png).blocks["1.i"]
+            self.assertEqual(screen_copy_format(block), FORMAT_RAW_WITH_HEADER)
+            self.assertTrue(matches_within_editor_rounding(
+                decode_screen_copy(block, 0), read_picture(png), FORMAT_RAW_WITH_HEADER))
 
 
 class UnsupportedPictureProjectTest(unittest.TestCase):

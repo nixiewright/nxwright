@@ -15,22 +15,26 @@ Header (24 bytes), all values little-endian:
 Raw format (0, FORMAT_RAW): one RGB565 word per pixel. There is no alpha; the
 Editor blends each pixel against white.
 
-Raw format with a second header (3, FORMAT_RAW_WITH_HEADER): 20 bytes, then
-the pixels. When the second header's first u32 is 0, all 20 bytes are zero and
-the pixels are as in the raw format. When it is 1, the pixels are compressed.
-This compressed variant has four parts, in this order. Places in it are
-counted from the end of the header.
-  second header  five u32: 1, the place of the row index, then three 0.
+Raw format with a second header (3, FORMAT_RAW_WITH_HEADER): a second header
+of 20 bytes, then the pixels. When the second header's first u32 is 0, all
+20 bytes are zero and the pixels are as in the raw format. When it is 1, the
+pixels are in a compressed variant, which the Nextion Editor uses only when
+it is smaller. The variant has four parts, in this order, and offsets in it
+are counted from the end of the header.
+  second header  five u32: 1, the offset of the row index, then three 0.
   colour blocks  each a u32 control word and 8 RGB565 words. Each 4-bit
                  field of the control word, lowest first, is how many pixels
                  repeat the matching word, from 0 to 15. The exception is a
-                 lowest field of 15: each of the 8 words is then one pixel.
-                 In every such block seen, the other fields are all 1. Each
-                 row's pixels start a new block.
-  row index      for each row, the place of its first block, and the place
-                 of a 2-byte value for the row.
-  row values     those 2-byte values.
-Decoding needs neither the row index nor the row values. The variant has no
+                 lowest field of 15, which makes each of the 8 words one
+                 pixel. In every such block seen, the other fields are all 1.
+                 Each row starts a new block, and only a row's last block can
+                 leave words unused. The Nextion Editor does not clear those
+                 words, so they keep values from an earlier block.
+  row index      for each row, the offset of its first block and the offset
+                 of its pixel counts.
+  pixel counts   for each row, one byte per block, giving how many pixels
+                 the block covers.
+Decoding needs neither the row index nor the pixel counts. The variant has no
 alpha. Pixels are always stored in the 0-degree order, whatever the screen
 rotation.
 
@@ -92,6 +96,13 @@ _EIGHT_WORDS = struct.Struct("<8H")
 _COMPRESSED_FORMAT_3_FLAG = struct.pack("<I", 1)
 _FORMAT_3_BLOCK_SIZE = _CONTROL.size + _EIGHT_WORDS.size
 _FORMAT_3_SINGLES = 15
+# The control word the Nextion Editor writes for a block of 8 single pixels,
+# with 1 in each field after the lowest.
+_FORMAT_3_SINGLES_CONTROL = 0x1111111F
+# The longest run one field can count. The lowest field counts at most 14,
+# because 15 there marks a block of single pixels.
+_FORMAT_3_RUN_MAX = 15
+_ROW_INDEX_ENTRY = struct.Struct("<II")
 _SHORT_RUN_MAX = 13
 _LONG_RUN, _LITERALS = 14, 15
 # Long runs are whole multiples of 8 pixels, as in every screen copy the
@@ -274,10 +285,12 @@ def _within_one_step(first: int, second: int) -> bool:
 
 def encode_screen_copy(pixels: ScreenPixels, kind: int, rotation: int) -> bytes:
     """Encodes `pixels` as a screen copy of format `kind`, in the pixel order of
-    `rotation` (FORMAT_RAW_WITH_HEADER: always the 0-degree order, uncompressed).
+    `rotation`. FORMAT_RAW_WITH_HEADER always uses the 0-degree order, and uses
+    its compressed variant when that is smaller.
 
-    Raises NxwrightError for a 1-by-1 picture in the compressed format, which
-    the Editor itself failed to add to a project of that format.
+    Raises NxwrightError for a 1-by-1 picture in FORMAT_COMPRESSED. The Nextion
+    Editor stores such a picture raw, then warns about it each time the project
+    opens.
     """
     count = pixels.width * pixels.height
     if max(pixels.width, pixels.height) > 0xFFFF:
@@ -304,10 +317,67 @@ def encode_screen_copy(pixels: ScreenPixels, kind: int, rotation: int) -> bytes:
     else:
         second_header = bytes(_SECOND_HEADER_SIZE) if kind == FORMAT_RAW_WITH_HEADER else b""
         body = second_header + struct.pack("<%dH" % count, *colours)
+        if kind == FORMAT_RAW_WITH_HEADER and count:
+            compressed = _compressed_format_3_body(colours, pixels.width)
+            if len(compressed) < len(body):
+                body = compressed
     marker = ROTATION_MARKER_0 + (0 if kind == FORMAT_RAW_WITH_HEADER else rotation // 90)
     header = _HEADER.pack(bytes([marker]) + _MARK + bytes([kind]), 0, _HEADER.size,
                           pixels.width, pixels.height, len(body), alpha_at)
     return header + body
+
+
+def _compressed_format_3_body(colours: list, width: int) -> bytes:
+    """Returns what follows the header of a FORMAT_RAW_WITH_HEADER screen copy
+    in its compressed variant, for `colours` in rows of `width` pixels."""
+    blocks, row_places, row_counts = bytearray(), [], []
+    for start in range(0, len(colours), width):
+        row_places.append(_SECOND_HEADER_SIZE + len(blocks))
+        counts = bytearray()
+        for control, words, covered in _format_3_row_blocks(colours[start:start + width]):
+            blocks += _CONTROL.pack(control) + _EIGHT_WORDS.pack(*words)
+            counts.append(covered)
+        row_counts.append(bytes(counts))
+    index_at = _SECOND_HEADER_SIZE + len(blocks)
+    counts_at = index_at + _ROW_INDEX_ENTRY.size * len(row_places)
+    index = bytearray()
+    for place, counts in zip(row_places, row_counts):
+        index += _ROW_INDEX_ENTRY.pack(place, counts_at)
+        counts_at += len(counts)
+    return (_COMPRESSED_PREFIX.pack(1, index_at, 0, 0, 0) + bytes(blocks) + bytes(index)
+            + b"".join(row_counts))
+
+
+def _format_3_row_blocks(row: list):
+    """Yields (control word, 8 words, pixels covered) for each colour block of
+    `row`, in the compressed variant of FORMAT_RAW_WITH_HEADER. These are the
+    blocks the Nextion Editor makes.
+
+    The row is cut into runs, each a stretch of pixels of one colour, no longer
+    than the matching field of the control word can count. Each block covers the
+    next 8 runs. A row's last block may cover fewer, and its unused words are 0.
+    A block whose 8 runs are all single pixels is written as a block of single
+    pixels.
+    """
+    at = 0
+    while at < len(row):
+        runs, end = [], at
+        while end < len(row) and len(runs) < 8:
+            longest = _FORMAT_3_RUN_MAX - 1 if not runs else _FORMAT_3_RUN_MAX
+            length = 1
+            while end + length < len(row) and length < longest and row[end + length] == row[end]:
+                length += 1
+            runs.append((row[end], length))
+            end += length
+        if end - at == 8 and len(runs) == 8:
+            yield _FORMAT_3_SINGLES_CONTROL, row[at:end], 8
+        else:
+            control = 0
+            for field, (_, length) in enumerate(runs):
+                control |= length << 4 * field
+            words = [value for value, _ in runs] + [0] * (8 - len(runs))
+            yield control, words, end - at
+        at = end
 
 
 class _CompressedReader:
