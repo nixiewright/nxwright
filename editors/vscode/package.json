@@ -460,7 +460,8 @@
       {
         "command": "nxwright.event.load",
         "title": "load",
-        "category": "nxwright"
+        "category": "nxwright",
+        "enablement": "canAddEvents || viewItem =~ /(^| )canAddEvents( |$)/"
       },
       {
         "command": "nxwright.event.load.withCode",
@@ -470,7 +471,8 @@
       {
         "command": "nxwright.event.loadend",
         "title": "loadend",
-        "category": "nxwright"
+        "category": "nxwright",
+        "enablement": "canAddEvents || viewItem =~ /(^| )canAddEvents( |$)/"
       },
       {
         "command": "nxwright.event.loadend.withCode",
@@ -480,7 +482,8 @@
       {
         "command": "nxwright.event.down",
         "title": "down",
-        "category": "nxwright"
+        "category": "nxwright",
+        "enablement": "canAddEvents || viewItem =~ /(^| )canAddEvents( |$)/"
       },
       {
         "command": "nxwright.event.down.withCode",
@@ -490,7 +493,8 @@
       {
         "command": "nxwright.event.up",
         "title": "up",
-        "category": "nxwright"
+        "category": "nxwright",
+        "enablement": "canAddEvents || viewItem =~ /(^| )canAddEvents( |$)/"
       },
       {
         "command": "nxwright.event.up.withCode",
@@ -500,7 +504,8 @@
       {
         "command": "nxwright.event.slide",
         "title": "slide",
-        "category": "nxwright"
+        "category": "nxwright",
+        "enablement": "canAddEvents || viewItem =~ /(^| )canAddEvents( |$)/"
       },
       {
         "command": "nxwright.event.slide.withCode",
@@ -510,7 +515,8 @@
       {
         "command": "nxwright.event.playend",
         "title": "playend",
-        "category": "nxwright"
+        "category": "nxwright",
+        "enablement": "canAddEvents || viewItem =~ /(^| )canAddEvents( |$)/"
       },
       {
         "command": "nxwright.event.playend.withCode",
@@ -520,7 +526,8 @@
       {
         "command": "nxwright.event.timer",
         "title": "timer",
-        "category": "nxwright"
+        "category": "nxwright",
+        "enablement": "canAddEvents || viewItem =~ /(^| )canAddEvents( |$)/"
       },
       {
         "command": "nxwright.event.timer.withCode",
@@ -530,7 +537,8 @@
       {
         "command": "nxwright.event.unload",
         "title": "unload",
-        "category": "nxwright"
+        "category": "nxwright",
+        "enablement": "canAddEvents || viewItem =~ /(^| )canAddEvents( |$)/"
       },
       {
         "command": "nxwright.event.unload.withCode",

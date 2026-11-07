@@ -36,6 +36,9 @@ export interface PageObject {
   // Its type's events, and whether each has code. An older toolchain does
   // not give them.
   events?: ObjectEvent[];
+  // True when no event can be added to it, because it or its page is
+  // locked. An older toolchain does not give it.
+  eventsLocked?: boolean;
 }
 
 export class Pages {

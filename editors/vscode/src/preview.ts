@@ -347,7 +347,8 @@ class PagePreview {
     }
     const asked = ++this.eventsAsked;
     const reply = await client
-      .sendRequest<{ objects: { name: string; events?: ObjectEvent[] }[] } | null>(
+      .sendRequest<{ objects: { name: string; events?: ObjectEvent[];
+                                eventsLocked?: boolean }[] } | null>(
         "nxwright/pageObjects", { textDocument: { uri: this.toml.toString() } })
       .catch(() => null);
     if (asked !== this.eventsAsked || this.disposed || !reply) {
@@ -355,7 +356,7 @@ class PagePreview {
     }
     const keys: Record<string, Record<string, true>> = {};
     for (const entry of reply.objects) {
-      keys[entry.name] ??= eventMenuKeys(entry.events ?? []);
+      keys[entry.name] ??= eventMenuKeys(entry.events ?? [], entry.eventsLocked);
     }
     void this.panel.webview.postMessage({ type: "events", keys });
   }

@@ -154,3 +154,15 @@ class LockedPageTest(ComponentsTestCase):
         for method, params in requests.items():
             with self.subTest(method=method, unlocked=True):
                 self.assertIn("result", self.request(method, **params))
+
+    def test_an_event_opens_but_is_not_added(self):
+        # Double-clicking title, or picking one of its events, opens code it
+        # has, and does not add the heading of an event without code.
+        message = "cannot create event, page0 is locked"
+        self.assertEqual(self.request("nxwright/defaultEvent", name="title")["error"]["message"],
+                         message)
+        self.write("pages/page0.nx", "on title.up:\n  sys0 = 1\n")
+        found = self.request("nxwright/defaultEvent", name="title")["result"]
+        self.assertEqual((found["line"], found["edit"]), (1, None))
+        self.assertEqual(self.request("nxwright/defaultEvent", name="title", event="down")
+                         ["error"]["message"], message)

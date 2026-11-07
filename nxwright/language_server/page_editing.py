@@ -1,18 +1,22 @@
-"""Editing a page from the page preview: what the properties panel lists, the
-key a component may be bound to, and where a component's events are, for
-the server's requests (server.py). The edits its changes and the mouse make
-are source/page_edits.py's.
+"""Answers the server's requests (server.py) for editing a page from the page
+preview: what the properties panel lists, the key a component may be bound
+to, and where a component's events are. The edits themselves, whether they
+come from the properties panel or the mouse, are made by
+source/page_edits.py.
 
 A component's events are those its type lists in defaults.toml, in that
 order. Its default event, which double-clicking it opens, is the first of
 them that has code, or the first of them when none has. An event without
 code has its heading added at the end of the page's own .nx file when it is
 opened, and the cursor goes under it. A type that lists no events, such as
-a variable, has none.
+a variable, has none. No heading is added for a locked component, or for
+any object of a locked page (what_locks_events).
 
 Their places count columns in Python's characters; the server gives them
 to the editor in its own units (server.py).
 """
+import tomllib
+
 from nxwright import NxwrightError
 from nxwright.language.resource_names import FONT, NOUNS
 from nxwright.language_server.attributes import attribute_tooltip
@@ -26,7 +30,8 @@ from nxwright.source.keyboard_adding import chinese_keyboard_fonts, keyboard_pag
 from nxwright.source.nx_files import event_heading, with_code_added
 from nxwright.source.page_edits import ComponentTable
 from nxwright.source.page_source import (COLOUR_ATTRIBUTES, RAW_KEY, attribute_value,
-                                         page_header_of_text, page_nx_path, reference_kind)
+                                         page_header_of_text, page_nx_path, page_toml_path,
+                                         reference_kind)
 
 
 def properties(index, read, page: str, name: str) -> dict:
@@ -200,6 +205,42 @@ def default_event(index, read, page: str, name: str, event: str = None) -> dict 
     new_text = with_code_added(text, event_heading(name, event) + "\n")
     return {"path": path, "line": new_text.count("\n"), "character": 0,
             "edit": _code_added_edit(text, new_text)}
+
+
+def what_locks_events(read, page: str, name: str):
+    """Returns the name of what stops events being added to the object
+    `name` of `page`: `page` when its page file locks it, `name` when that
+    object is a locked component, or None when neither is locked. The
+    server puts this name in its error."""
+    page_locked, names = _locks(read, page)
+    if name not in names:
+        return None
+    return page if page_locked else name
+
+
+def locked_objects(read, page: str) -> set:
+    """Returns the names of the objects of `page` that events cannot be
+    added to (_locks)."""
+    return _locks(read, page)[1]
+
+
+def _locks(read, page: str) -> tuple:
+    """Returns whether the page file of `page` locks the page, and the names
+    of its locked objects: all of them on a locked page, or else the
+    components whose table has `lockobj = 1`. If the page file cannot be
+    read, or is not valid TOML, no object counts as locked, because adding
+    an event then fails anyway, with the build's error."""
+    try:
+        text = read(page_toml_path(page))
+        data = tomllib.loads(text)
+    except (NxwrightError, tomllib.TOMLDecodeError):
+        return False, set()
+    components = data.get("component", [])
+    components = [table for table in components if isinstance(table, dict)] \
+        if isinstance(components, list) else []
+    if _page_locked(text, page):
+        return True, {page} | {table.get("name") for table in components}
+    return False, {table.get("name") for table in components if table.get("lockobj") == 1}
 
 
 def _code_added_edit(text: str, new_text: str) -> dict:

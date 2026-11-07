@@ -5,13 +5,14 @@ import { itemContextValue, ObjectEvent } from "./eventMenu";
 
 // Returns how the Pages section shows the page `name`. A page in `locked`
 // gets a padlock. The menus in package.json pick the items of the page's
-// right-click menu by its context value, which depends on whether the page
-// is locked and on its `events`.
+// right-click menu by its context value, which depends on its `events` and
+// on whether the page is locked. On a locked page, the events without code
+// are greyed out, because no event can be added to it.
 export function pageItemLook(name: string, locked: ReadonlySet<string>,
                              events: readonly ObjectEvent[] = []):
     { contextValue: string; padlock: boolean } {
   const isLocked = locked.has(name);
-  return { contextValue: itemContextValue(isLocked ? "lockedPage" : "page", events),
+  return { contextValue: itemContextValue(isLocked ? "lockedPage" : "page", events, isLocked),
            padlock: isLocked };
 }
 

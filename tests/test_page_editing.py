@@ -305,6 +305,23 @@ class DefaultEventTest(EditingTestCase):
         with self.assertRaisesRegex(NxwrightError, "type text has no event slide"):
             default_event(self.index(), self.read(), "page0", "title", "slide")
 
+    def test_a_locked_component(self):
+        # Double-clicking a locked component, or picking one of its events,
+        # opens code it has, and does not add the heading of an event
+        # without code.
+        self.write("pages/page0.page.toml", self.text("pages/page0.page.toml")
+                   .replace('type = "text"\n', 'type = "text"\nlockobj = 1\n'))
+        message = "cannot create event, title is locked"
+        self.assertEqual(self.request("nxwright/defaultEvent", name="title")["error"]["message"],
+                         message)
+        self.write("pages/page0.nx", "on title.up:\n  sys0 = 1\n")
+        found = self.request("nxwright/defaultEvent", name="title")["result"]
+        self.assertEqual((found["line"], found["edit"]), (1, None))
+        self.assertEqual(self.request("nxwright/defaultEvent", name="title", event="down")
+                         ["error"]["message"], message)
+        # The page's own events can still be added.
+        self.assertIsNotNone(self.request("nxwright/defaultEvent", name="page0")["result"]["edit"])
+
     def test_each_event_and_where_its_code_is(self):
         self.write("pages/lib/shared.nx", "on title.up:\n  sys0 = 3\n")
         self.write("pages/page0.nx", 'include "lib/shared.nx"\n')
@@ -364,6 +381,22 @@ class ServerRequestTest(EditingTestCase):
         self.assertEqual(events["title"], [{"event": "down", "hasCode": False},
                                            {"event": "up", "hasCode": True}])
         self.assertEqual((events["va0"], events["odd"]), ([], []))
+
+    def test_the_objects_whose_events_are_locked(self):
+        def locked() -> dict:
+            found = self.request("nxwright/pageObjects")["result"]
+            return {entry["name"]: entry["eventsLocked"] for entry in found["objects"]}
+        self.assertEqual(locked(), {"page0": False, "title": False})
+        page_file = self.text("pages/page0.page.toml")
+        self.write("pages/page0.page.toml",
+                   page_file.replace('type = "text"\n', 'type = "text"\nlockobj = 1\n'))
+        self.assertEqual(locked(), {"page0": False, "title": True})
+        self.write("pages/page0.page.toml",
+                   page_file.replace('type = "page"\n', 'type = "page"\nlocked = true\n'))
+        self.assertEqual(locked(), {"page0": True, "title": True})
+        # A page file that is not valid TOML locks nothing.
+        self.write("pages/page0.page.toml", page_file + "[[component]]\nname = ")
+        self.assertEqual(locked(), {"page0": False, "title": False})
 
     def test_no_events_when_the_defaults_file_cannot_be_read(self):
         self.write("defaults.toml", "[text\n")

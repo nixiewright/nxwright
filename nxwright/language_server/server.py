@@ -66,7 +66,8 @@ from nxwright.language_server.live_checks import LiveChecks
 from nxwright.language_server.media_viewer import media_frames
 from nxwright.language_server.nxlang_switch import nxlang_switch
 from nxwright.language_server.page_editing import (component_events, default_event,
-                                                   key_binding, object_events, properties)
+                                                   key_binding, locked_objects, object_events,
+                                                   properties, what_locks_events)
 from nxwright.source.page_edits import attribute_edits, page_lock_edits
 from nxwright.language_server.page_components import (add_component, clear_events,
                                                        component_types, copy_components,
@@ -96,6 +97,9 @@ from nxwright.source.upgrade import folder_format
 CHECK_PAUSE = 0.5
 # The error for a request that would change a locked page. %s is the page's name.
 LOCKED_PAGE = "%s is locked. Unlock it from the page preview or the Pages section."
+# The error when an event without code is opened on a locked component, or
+# on any object of a locked page. %s is the name of the locked component or page.
+LOCKED_EVENT = "cannot create event, %s is locked"
 # The start of the names of nxwright's own requests.
 _OWN = "nxwright/"
 # Turns the protocol's objects, such as a problem a request gives, back into data.
@@ -459,22 +463,25 @@ class NxwrightServer(LanguageServer):
 
     def _page_objects(self, params: dict):
         """Returns the objects of the page that the request's file belongs
-        to, the page itself first, with the lines of each object's table and
-        its events (page_editing.object_events). The lines are used to
-        select the object whose table the cursor is in. The page file is
-        read line by line, so the objects of a half-typed one are still
-        listed. Returns None when the file is not one of a page's own
-        files."""
+        to, the page itself first. Each object comes with the lines of its
+        table, its events (page_editing.object_events), and "eventsLocked",
+        true when no event can be added to it (page_editing.locked_objects).
+        The lines are used to select the object whose table the cursor is
+        in. The page file is read line by line, so the objects of a
+        half-typed one are still listed. Returns None when the file is not
+        one of a page's own files."""
         found = self._folder_of(params)
         page = found and page_of_file(found[1])
         if not page or page not in found[0].pages:
             return None
         index = found[0]
-        events = object_events(index, self._texts.folder_reader(index.root), page)
+        read = self._texts.folder_reader(index.root)
+        events = object_events(index, read, page)
+        locked = locked_objects(read, page)
         return {"page": page,
                 "objects": [{"name": entry.name, "type": entry.type,
                              "firstLine": entry.first_line, "lastLine": entry.last_line,
-                             "events": its_events}
+                             "events": its_events, "eventsLocked": entry.name in locked}
                             for entry, its_events in zip(index.page_objects[page], events)]}
 
     def _page_object(self, params: dict) -> tuple:
@@ -836,16 +843,22 @@ class NxwrightServer(LanguageServer):
         return root
 
     def _default_event(self, params: dict) -> dict | None:
-        """Returns {"uri", "line", "character"} of the code of the object's
-        event `event`, else of its default event, and "edit", the
-        WorkspaceEdit adding its heading when it has no code, or None; or
-        None when its type has no events. Raises NxwrightError for an event
-        its type lacks."""
+        """Returns where the code of the object's event `event` is, or of its
+        default event when no `event` is given, as {"uri", "line",
+        "character"}. The result also has "edit", the WorkspaceEdit that adds
+        the event's heading when the event has no code, or None when it has
+        code. Returns None when the object's type has no events. Raises
+        NxwrightError for an event its type lacks, and for an event without
+        code when the object or its page is locked."""
         index, page, name = self._page_object(params)
-        found = default_event(index, self._texts.folder_reader(index.root), page, name,
-                              params.get("event"))
+        read = self._texts.folder_reader(index.root)
+        found = default_event(index, read, page, name, params.get("event"))
         if found is None:
             return None
+        if found["edit"]:
+            locked = what_locks_events(read, page, name)
+            if locked:
+                raise NxwrightError(LOCKED_EVENT % locked)
         uri = uri_of(index.root / found["path"])
         lines = index.lines(found["path"]) or []
         cursor = self._client_position(lines, found)

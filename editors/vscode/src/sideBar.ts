@@ -86,7 +86,7 @@ export class ComponentsView implements vscode.TreeDataProvider<PageObject> {
     // page cannot be added or deleted from here. It then lists the object's
     // events, for the Go to Event submenu.
     item.contextValue = itemContextValue(entry.type === "page" ? "page" : "component",
-                                         entry.events ?? []);
+                                         entry.events ?? [], entry.eventsLocked);
     // A click, and no other change of the selection, such as the list
     // following the preview's, shows the component.
     item.command = { command: SHOW_COMPONENT, title: "Show the component", arguments: [entry] };

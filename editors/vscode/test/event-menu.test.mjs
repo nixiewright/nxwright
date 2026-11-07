@@ -4,9 +4,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { EVENT_NAMES, HAS_EVENTS, eventCommand, eventCommandCondition, eventCommandTitle,
-         eventMenuKeys, itemContextValue, itemKeyCondition, itemKindCondition }
-  from "../out/eventMenu.js";
+import { CAN_ADD_EVENTS, EVENT_NAMES, HAS_EVENTS, addEventEnablement, eventCommand,
+         eventCommandCondition, eventCommandTitle, eventMenuKeys, itemContextValue,
+         itemKeyCondition, itemKindCondition } from "../out/eventMenu.js";
 
 const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const menus = manifest.contributes.menus;
@@ -17,10 +17,11 @@ const BUTTON = [{ event: "down", hasCode: false }, { event: "up", hasCode: true 
 
 test("an object's events become keys, with or without code", () => {
   assert.deepEqual(eventMenuKeys(PAGE), {
-    hasEvents: true, codeLoad: true, noCodeLoadend: true, noCodeDown: true, noCodeUp: true,
-    noCodeUnload: true,
+    hasEvents: true, canAddEvents: true, codeLoad: true, noCodeLoadend: true, noCodeDown: true,
+    noCodeUp: true, noCodeUnload: true,
   });
-  assert.deepEqual(eventMenuKeys(BUTTON), { hasEvents: true, noCodeDown: true, codeUp: true });
+  assert.deepEqual(eventMenuKeys(BUTTON),
+                   { hasEvents: true, canAddEvents: true, noCodeDown: true, codeUp: true });
   // A variable has no events, and no submenu.
   assert.deepEqual(eventMenuKeys([]), {});
   // A defaults.toml could list an event name that has no command. Such an
@@ -32,9 +33,30 @@ test("an object's events become keys, with or without code", () => {
 });
 
 test("a Components section item's context value starts with its kind", () => {
-  assert.equal(itemContextValue("component", BUTTON), "component hasEvents noCodeDown codeUp");
+  assert.equal(itemContextValue("component", BUTTON),
+               "component hasEvents canAddEvents noCodeDown codeUp");
   assert.equal(itemContextValue("component", []), "component");
   assert.equal(itemContextValue("page", PAGE).split(" ")[0], "page");
+});
+
+test("a locked object's events can be opened, and none can be added", () => {
+  assert.deepEqual(eventMenuKeys(BUTTON, true), { hasEvents: true, noCodeDown: true, codeUp: true });
+  assert.equal(itemContextValue("component", BUTTON, true), "component hasEvents noCodeDown codeUp");
+  assert.deepEqual(eventMenuKeys([], false), {});
+});
+
+test("the commands for events without code are greyed out when none can be added", () => {
+  const enablement = Object.fromEntries(manifest.contributes.commands.map((entry) =>
+    [entry.command, entry.enablement]));
+  for (const event of EVENT_NAMES) {
+    assert.equal(enablement[eventCommand(event, false)], addEventEnablement(), event);
+    assert.equal(enablement[eventCommand(event, true)], undefined, event);
+  }
+  const condition = addEventEnablement();
+  assert.ok(condition.startsWith(`${CAN_ADD_EVENTS} || `));
+  const pattern = new RegExp(condition.match(/=~ \/(.*)\/$/)[1]);
+  assert.match(itemContextValue("component", BUTTON), pattern);
+  assert.doesNotMatch(itemContextValue("component", BUTTON, true), pattern);
 });
 
 test("each event has a command without code and one with code, hidden from the palette", () => {

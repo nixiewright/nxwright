@@ -15,8 +15,10 @@ test("a page's context value also gives its events, for the Go to Event submenu"
   const events = [{ event: "load", hasCode: true }, { event: "up", hasCode: false }];
   assert.deepEqual(pageItemLook("home", new Set(["home"]), events),
                    { contextValue: "lockedPage hasEvents codeLoad noCodeUp", padlock: true });
+  // A locked page's events without code cannot be added, so only an
+  // unlocked page has canAddEvents.
   assert.equal(pageItemLook("day", new Set(), events).contextValue,
-               "page hasEvents codeLoad noCodeUp");
+               "page hasEvents canAddEvents codeLoad noCodeUp");
 });
 
 test("a password must have a character, and only ASCII ones", () => {

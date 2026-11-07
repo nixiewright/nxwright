@@ -25,9 +25,9 @@ Right-click a component and choose Paste Special to give the selected components
 
 On an empty part of the page, or on the page in the Components list, Paste Special pastes new copies, and lets you choose whether they keep their original position and their code.
 
-Double-click a component to go to its code. If it has none yet, the extension adds its first event to the page's `.nx` file. To open or add any other event, right-click the component or the page and use Go to Event. From the same menu, you can also jump to the component's entry in the page file, or delete all its code.
+Double-click a component to go to its code. If it has none yet, the extension adds its first event to the page's `.nx` file, unless the component or its page is locked. To open or add any other event, right-click the component or the page and use Go to Event. From the same menu, you can also jump to the component's entry in the page file, or delete all its code.
 
-You can lock a whole page by right-clicking it in the preview or in the Pages section. A locked page can't be changed from the preview or the Attributes section until you unlock it, but its code and its page file are not protected. `Lock page with password` also sets a password that the Nextion Editor will ask for, which is useful if you share the project file without the source folder. VS Code doesn't ask for it.
+You can lock a whole page by right-clicking it in the preview or in the Pages section. A locked page can't be changed from the preview or the Attributes section until you unlock it, but you can still edit its code and its page file as text. `Lock page with password` also sets a password that the Nextion Editor will ask for, which is useful if you share the project file without the source folder. VS Code doesn't ask for it.
 
 Every change edits the page file, so the preview and the text editor share the same undo history. To switch between the two, use the editor picker at the top right of the editor. Its "Set Default" item lets you pick whether pages open by default in the WYSIWYG preview, or as the underlying `.page.toml` file.
 
@@ -175,7 +175,7 @@ If a configuration leaves out a parameter that also exists in the Simulator sett
 | Shift+arrow keys | Move the selection by 10 pixels. |
 | Delete | Deletes the selection. |
 | Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+D | Copy, cut, paste, duplicate. |
-| Double-click | Opens the first of the component's events that has code, or else its first event. |
+| Double-click | Opens the first of the component's events that has code. If none has code, adds its first event, unless the component or its page is locked. |
 | F12 | Opens the page file as text at the selected component's table, or at the page's. |
 | Right-click | Opens a menu with the other actions, such as Add a component here, Align, Bring to front, Lock, and Paste Special. |
 | Ctrl+mouse wheel | Zooms in or out around the pointer. |
