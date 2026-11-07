@@ -15,7 +15,7 @@ Which version of the Nextion Editor saved the project? Its Help menu shows the v
 
 ## What you did
 
-What did you do in the Nextion Editor before you saved the project? For example: added a component of a new type, or changed a setting.
+What did you do in the Nextion Editor before you saved the project? For example, did you add a component of a new type, or change a setting?
 
 ## The project file
 

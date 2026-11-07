@@ -1,21 +1,23 @@
 # Thermostat demo
 
-A thermostat screen for an 800 by 480 Nextion Intelligent screen, written with nxwright: its pages are text files, its code is in nxlang, and its tests run on a PC. Open `thermostat.HMI` in the Nextion Editor and run it in the simulator; no screen is needed.
+This demo shows what working with nxwright looks like, through a thermostat for an 800 by 480 Nextion Intelligent screen. To try it without a screen, open `thermostat.HMI` in the Nextion Editor and run it in the simulator.
 
-The room is simulated, sixty times faster than real time: each second, it loses or gains a minute's worth of heat, and the heating or cooling makes up for it. The outdoors suits the mode: a 30 degree day while cooling, an 8 degree day otherwise. The clock and the schedule keep real time.
+The demo has four pages:
 
-- **Home:** the room, the target with buttons to lower and raise it, the mode (off, heat, or cool), and whether the target follows the schedule.
-- **Schedule:** four periods of the day, Wake, Away, Home, and Sleep. Touch one to change its start, by quarter hours, and its target, by half degrees.
-- **Day:** a chart of a day under the schedule, simulated from midnight in the current mode: the target, and the room it gives.
+- **Home:** the room and target temperatures, the mode (off, heat, or cool), and whether the target follows the schedule.
+- **Schedule:** four periods of the day, Wake, Away, Home, and Sleep, each with a start time and a target temperature you can change.
+- **Day:** a chart of the target and room temperatures over a day that follows the schedule, simulated from midnight in the current mode.
 - **Settings:** Celsius or Fahrenheit, the screen's brightness, and the clock.
+
+The demo simulates the room sixty times faster than real time, but the clock and the schedule run at normal speed. The weather depends on the mode: a 30 degree day while cooling, and an 8 degree day otherwise.
 
 ## What to look at
 
 | Path | What it shows |
 | --- | --- |
 | `app/program.nx` | The state every page shares, as `int` variables, and the constants file it includes. |
-| `app/pages/lib/` | The shared code. `text.nx` turns temperatures and times into text, in Celsius or Fahrenheit; `room.nx` simulates the room; `schedule.nx` reads and changes the schedule. Each page gets only the functions it calls. |
-| `app/pages/lib/frame.nx` | The navigation bar's events, written once. Every page includes the file and has buttons of the same names. |
+| `app/pages/lib/` | The shared code. `text.nx` turns temperatures and times into text, in Celsius or Fahrenheit. `room.nx` simulates the room, and `schedule.nx` reads and changes the schedule. Each page gets only the functions it calls. |
+| `app/pages/lib/frame.nx` | The navigation bar's events, written once. Every page includes this file, and has buttons with the names the file uses. |
 | `app/pages/home.nx` | A page in nxlang: events, functions, `switch`, and pictures named with `@pic(...)`. |
 | `app/pages/day.nx` | Loops, page constants, and a waveform drawn point by point. |
 | `app/pages/home.page.toml` | The page's components, as text. |
@@ -29,7 +31,7 @@ Make changes in the source folder, `app/`, then build `thermostat.HMI`. In the `
 python run.py build examples/thermostat/app examples/thermostat/thermostat.HMI --overwrite
 ```
 
-A test checks that `thermostat.HMI` is what `app/` builds, so build again after each change.
+A test checks that `thermostat.HMI` matches what `app/` builds, so build again after each change.
 
 If you changed `thermostat.HMI` in the Nextion Editor instead, save it, then bring the change back into the source folder:
 
@@ -43,12 +45,12 @@ python run.py extract examples/thermostat/thermostat.HMI examples/thermostat/app
 python run.py test examples/thermostat/tests
 ```
 
-The tests run the pages' code on your PC ([Testing your app](../../docs/testing.md)), and check that `thermostat.HMI` and `app/` describe the same screen.
+See [Testing your app](../../docs/testing.md) for how the tests run the pages' code on your PC.
 
 ## Pictures
 
-Each page has two full-screen pictures: its background, and the same with every button pressed. Text and buttons show the part of the background behind them ("crop image" in the Nextion Editor), and a button shows the pressed picture while it is touched. The selected mode, unit, and schedule switch show the pressed picture too, by code, while they are on, and the brightness slider shows it up to its knob. All the pictures are opaque, drawn on the colour they sit on.
+Each page has two full-screen pictures: its background, and the same background with every button pressed. Text and buttons show the part of the background behind them ("crop image" in the Nextion Editor), and a button shows the pressed picture while it is touched. The pages' code also shows the pressed picture on the selected mode and unit, and on the schedule switch while it is on. The brightness slider shows the pressed picture up to its knob. All the pictures are opaque, so the smaller ones include the colour that appears behind them.
 
 ## Fonts
 
-The fonts were made with the Nextion Editor's font generator from Noto Sans, by the Noto Project Authors, under the SIL Open Font License 1.1 (`app/fonts/OFL.txt`). They carry plain names, `Sans16` to `Sans100`, after their size in pixels.
+The fonts were made with the Nextion Editor's font generator from Noto Sans, a typeface by the Noto Project Authors, and are under the SIL Open Font License 1.1 (`app/fonts/OFL.txt`). Each font is named after its size in pixels, from `Sans16` to `Sans100`.

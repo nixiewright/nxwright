@@ -1,12 +1,12 @@
 # Letting an agent drive your app
 
-An AI agent, such as Claude Code, Codex, or GitHub Copilot's agent mode, can run your app and use it the way you would: tap its buttons, send it instructions as if they came on its serial line, let its timers run, and see what its screen shows. nxwright gives agents these tools through MCP, the Model Context Protocol, with the command `nxwright mcp`.
+An AI agent, such as Claude Code, Codex, or GitHub Copilot's agent mode, can run your app and use it the way you would: tap its buttons, send it instructions as if they came on its serial line, let its timers run, and see what its screen shows. nxwright gives agents the tools for this through MCP, the Model Context Protocol, with the command `nxwright mcp`.
 
 ## Adding nxwright to your agent
 
-Your agent starts `nxwright mcp` itself, so `nxwright` must be a command it can run, as in a terminal. Add it once:
+Your agent starts `nxwright mcp` itself, so it must be able to run `nxwright` the way you do in a terminal. To add nxwright to your agent:
 
-- **Claude Code:** run `claude mcp add --transport stdio --scope user nxwright -- nxwright mcp`. Without `--scope user`, it is added to the current project alone.
+- **Claude Code:** run `claude mcp add --transport stdio --scope user nxwright -- nxwright mcp`. Leave out `--scope user` to add nxwright to the current project only.
 - **Codex:** run `codex mcp add nxwright -- nxwright mcp`, or add these lines to `~/.codex/config.toml`:
 
   ```toml
@@ -15,7 +15,7 @@ Your agent starts `nxwright mcp` itself, so `nxwright` must be a command it can 
   args = ["mcp"]
   ```
 
-- **GitHub Copilot in VS Code:** add the server to your project's `.vscode/mcp.json`:
+- **GitHub Copilot in VS Code:** add nxwright to your project's `.vscode/mcp.json`:
 
   ```json
   {
@@ -27,7 +27,7 @@ Your agent starts `nxwright mcp` itself, so `nxwright` must be a command it can 
 
 ## What the agent sees
 
-When the agent calls `screen`, it gets the screen's text layout: the page, then one line for each component that shows, with its box and what it shows. For a page with a text, a number, and a button:
+When the agent calls `screen`, it gets a text layout of the page and a picture of the screen. The picture is a PNG file, kept in your computer's temporary folder until `nxwright mcp` ends. For a page with a text, a number, and a button, the text layout is:
 
 ```
 page page0 (800 x 480), background colour #ffffff
@@ -36,59 +36,55 @@ n0  number  20,80   120x40  "2"
 b0  button  20,400  160x60  "Next"
 ```
 
-- Points and boxes are in the page's pixels, from its top left corner. `20,400  160x60` is a box 160 pixels wide and 60 high, 20 pixels from the left edge and 400 from the top.
-- The components are listed in the order they are drawn, so a later line lies on top of an earlier one.
-- After the components, the layout lists what the app's code painted on the page, such as with `xstr`. Then it gives the names of the components that do not show.
-- A picture is given by its ID and by its name in `app.toml`, such as `picture 9 "state/heating"`.
-- The agent also gets a picture of the screen, as a PNG file, unless it sets `picture` to false. The files are kept in your computer's temporary folder until `nxwright mcp` ends.
+After the page's line, each line gives a visible component's name, type, box, and content. See the [agent guide](../nxwright/mcp_server/guide.md) for more on the layout.
 
 ## The tools
 
 | Tool | What it does |
 | --- | --- |
-| `about` | Gives the agent a guide to read first: your app's files, checking a change, and these tools ([its text](../nxwright/mcp_server/guide.md)). Given a topic, such as `testing`, it gives that doc in full. Each doc in this folder is a topic, apart from the style guide. |
-| `start_simulation` | Starts the app of a source folder, from `program.nx`, or on a page without running `program.nx`. With `in_vscode`, it starts it in VS Code ([Simulations in VS Code](#simulations-in-vs-code)). |
-| `list_simulations` | Lists the simulations running, those in VS Code included. |
+| `about` | Gives the agent a [guide](../nxwright/mcp_server/guide.md) to read first, on your app's files, how to check a change, and these tools. The agent can also ask for any doc in this folder except the style guide, by giving a topic such as `testing`. |
+| `start_simulation` | Starts the app of a source folder, either from `program.nx` or on a given page without running `program.nx`. With `in_vscode`, the app runs in VS Code ([Simulations in VS Code](#simulations-in-vs-code)). |
+| `list_simulations` | Lists the running simulations, including those in VS Code. |
 | `screen` | Gives the screen's text layout, and a picture of it. |
 | `components` | Lists the components of the page shown, with their boxes. |
-| `tap` | Presses the screen and releases it, on a component by its name, or at a point. |
+| `tap` | Presses and releases a component, given by its name, or a point on the screen. |
 | `press`, `move`, `release` | Hold a press, drag it, and let go. |
-| `wait` | Lets time pass, so that the app's timers run, up to a minute at a time. |
+| `wait` | Lets time pass, up to a minute at a time, so that the app's timers run. |
 | `send` | Sends an instruction, as if it came on the serial line, and gives the log's new lines, such as what the screen sent back. |
 | `log` | Lists what the screen received and sent on its serial line. |
 | `values` | Reads values, such as `t0.txt` or `sys0`, or every attribute of a component, such as `t0`. |
 | `set_input` | Sets a GPIO input's level. |
-| `set_inputs` | Sets several GPIO inputs' levels at the same moment. The bound pins' events run once every level has changed, in pin order: nxwright's choice, not checked on a screen. |
-| `start_again` | Starts the app again, as a screen switched off and on. |
+| `set_inputs` | Sets several GPIO inputs' levels at the same moment. Once every level has changed, the events bound to those pins run in pin order. nxwright chose this order, and it has not been checked on a real screen. |
+| `start_again` | Starts the app again, like a screen being switched off and on. |
 | `stop_simulation` | Ends a simulation. |
 
 ## How the app runs
 
-Unless the agent starts it in VS Code, the app runs inside `nxwright mcp`, without VS Code.
+By default, the app runs inside `nxwright mcp`, without VS Code. It behaves as it does in the simulator ([Simulating your app](simulator.md)), with these differences:
 
-- Its time moves only when the agent lets it. A `wait` of 500 ms runs, at once, everything the app's timers would do in 500 ms.
-- It has no serial port. Its SD cards start empty, and their files stay in memory.
-- For Chinese input, it uses the installed Nextion Editor's pinyin table, if one is found.
-
-The app runs as it does in the simulator ([Simulating your app](simulator.md)).
+- The app's time moves only when the agent calls `wait`. A `wait` of 500 ms immediately runs everything the app's timers would do in 500 ms.
+- The app has no serial port.
+- SD cards start empty, and their files stay in memory.
+- For Chinese input, the app uses the installed Nextion Editor's pinyin table, if one is found.
 
 ## Simulations in VS Code
 
-An agent can also drive a simulation in VS Code, where you watch it in the simulator's panel and can press the screen too. VS Code lets an agent in only once you turn on the setting `nxwright.agents.allowControl` in your user settings. A workspace's settings can't turn it on.
+An agent can also drive a simulation in VS Code, where you can watch it in the simulator's panel and press the screen too. To allow this, turn on the setting `nxwright.agents.allowControl` in your user settings. A workspace's settings can't turn it on.
 
-- The agent starts a simulation there with `start_simulation`'s `in_vscode`. The window whose workspace contains the source folder runs it. If several do, the one whose workspace folder lies deepest runs it.
-- `list_simulations` lists the simulation each window runs, the one you started included, so that the agent can drive it.
-- A window runs one simulation at a time. While one runs, the agent can drive it. To start another there, the agent stops it first.
-- The app runs on its own, as you see it run. A `wait` lasts as long on the clock.
-- If the window doesn't answer within a minute, as when VS Code hangs, the tool gives up with an error, and the agent can go on with its other tools.
-- While an agent drives the simulation, the Simulator section shows it.
+A few things to know about simulations in VS Code:
+
+- The app runs on its own in real time, and a `wait` of 500 ms takes 500 ms.
+- An agent's simulation runs in the window whose workspace contains the source folder. If several windows do, it runs in the one whose workspace folder is nested deepest.
+- `list_simulations` includes any simulation you started yourself, so the agent can drive those too.
+- A window runs one simulation at a time. The agent can drive the one running, but must stop it before starting another in that window.
+- If the window doesn't answer within a minute, for example because VS Code has hung, the tool gives up with an error, and the agent can still use its other tools.
 
 ### When the serial port reaches a device
 
-A simulation in VS Code can be connected to a real serial port. What the app sends then reaches the device on that port, so:
+A simulation in VS Code can be connected to a real serial port, and what the app sends then reaches the device on that port. By default, an agent can't reach that device without your permission:
 
-- A simulation the agent starts has no serial port, whatever the Simulator settings say. To give it the settings' port, turn off `nxwright.agents.startWithoutSerialPort`. VS Code then asks you before the app starts, unless `nxwright.agents.askBeforeSerialActions` is off.
-- Before an agent's first action on a simulation whose port is connected, VS Code asks you whether the agent may drive it. Your answer stands until the simulation ends. While you haven't answered, the agent is told that VS Code waits for you.
-- If you connect a port from the Simulator section while an agent drives the simulation, VS Code takes that as your yes. The agent may then act on the simulation with that port, without being asked.
-- The agent can always read what the screen shows, values, and the log.
-- To let an agent act without being asked, turn off `nxwright.agents.askBeforeSerialActions`.
+- A simulation the agent starts has no serial port, whatever the Simulator settings are. To have it use the port from those settings, turn off `nxwright.agents.startWithoutSerialPort`. VS Code then asks you before the app starts, unless `nxwright.agents.askBeforeSerialActions` is off.
+- Before an agent's first action on a simulation whose port is connected, VS Code asks you whether the agent may drive it. Your answer stands until the simulation ends.
+- If you connect a port from the Simulator section while an agent drives the simulation, VS Code treats that as your permission, and will not ask you.
+- Reading what the screen shows, values, and the log never needs your permission.
+- To let agents act without asking you, turn off `nxwright.agents.askBeforeSerialActions`.
