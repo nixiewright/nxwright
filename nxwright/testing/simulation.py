@@ -2858,7 +2858,7 @@ def _program_code(source_folder: Path, read, app: dict) -> tuple:
     text = read("program.nx")
     lines = folders.numbered_lines(text)
     if app["language"] == folders.NXLANG:
-        lines = compile_program(lines, folders.program_names(text, read))
+        lines = compile_program(lines, folders.program_names(text, read, app["defines"]))
     placed = preprocess_with_places(lines, ResourceNames.of_app(app))
     kept = [(number, line) for number, line in placed
             if not is_declaration(line.lstrip(" \t"))]

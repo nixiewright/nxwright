@@ -13,7 +13,7 @@ The extension works on nxwright's source folders, which keep your Nextion screen
 The page preview is a WYSIWYG editor. Open a page to display it as it will look on the Nextion screen, with your project's own fonts, pictures, and colours.
 You can select, move, and resize components with the mouse or the arrow keys. Right-click to add a component, align several components, give them the same size, space them out, lock them, or group them. Spacing can make the gaps between components equal, or widen or narrow every gap by one pixel. The toolbar above the page has buttons for aligning, sizing, spacing, and bringing components forward or sending them back, so that you can repeat a command without opening the menu each time. See [The page preview's keys and mouse](#the-page-previews-keys-and-mouse) for the list of key and mouse actions.
 
-To change an attribute, use the Attributes section of the nxwright page side bar. The bottom of the section describes what the attribute does and the valid values it can have.
+To change an attribute, use the Attributes section of the nxwright page side bar. The bottom of the section describes what the attribute does and the valid values it can have. To change an attribute that takes its value from a define of `app.toml`, as in `bco = "%BCOLOR%"`, edit the page file instead.
 
 ![The nxwright page side bar: the list of pages, the page's components, and the attributes of the selected button, with the description of `picc`](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/page-side-bar.png)
 

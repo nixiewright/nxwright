@@ -128,6 +128,7 @@ nxwright build app thermostat.HMI
 - Close the project in the Nextion Editor before you build over it, because the Nextion Editor locks a project it has open.
 - The build prints each page's memory, such as `page0: 292 of 524288 bytes`. If nxwright could not count all the memory of any page, every page's line says `at least` ([Memory](build-rules.md#memory)).
 - The screen copies of your pictures are kept in a cache, so that later builds are faster ([The picture cache](source-folder.md#the-picture-cache)).
+- `--define NAME=VALUE` changes the value of one of the defines in `app.toml` for this build only ([source-folder.md](source-folder.md#apptoml)). Repeat it for each define, as in `--define LIMIT=40 --define TITLE=Lab`. A define whose default is a number takes only a whole number, and one whose default is a text takes everything after the `=`.
 
 To put your app on a screen, compile it with [compile](#compile) and send it with [upload](#upload). You can also open the built project in the Nextion Editor, and compile and upload it from there.
 
@@ -146,6 +147,7 @@ nxwright compile thermostat.HMI thermostat.tft
 - `--project-file <file.HMI>` also saves the project file that the compile builds from a source folder, so that you have one that always matches the TFT file. The pages of that project file are locked ([build](#build)), unless you give `--no-lock`. The locks do not change the TFT file.
 - If an output file already exists, the compile fails unless you give `--overwrite`. Even then, it only replaces a TFT file with a TFT file, and a project file with a project file.
 - An output file that changed since nxwright wrote it is kept as a backup ([build](#build)), unless you give `--no-backup`.
+- `--define NAME=VALUE` changes a define's value when you compile a source folder ([build](#build)). A project file (HMI) has its values built in, so the compile fails if you give `--define` with one.
 
 ### The firmware
 

@@ -429,7 +429,7 @@ def add_pages_up_to(folder: Path, count: int):
             text.replace('name = "%s"' % first, 'name = "%s"' % name, 1), encoding="utf-8")
         (folder / "pages" / ("%s.nx" % name)).write_text("", encoding="utf-8")
         app["pages"].append(name)
-    app_path.write_text(app_text(app), encoding="utf-8", newline="\n")
+    app_path.write_text(app_text(app, written=None), encoding="utf-8", newline="\n")
 
 
 class ComponentCountTest(SourceFolderTestCase):

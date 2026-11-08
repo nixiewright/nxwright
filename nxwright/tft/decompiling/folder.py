@@ -162,7 +162,7 @@ def folder_files(decoded: DecodedFile, blocks: dict) -> dict:
     app = {"format": SOURCE_FORMAT, "language": NEXTION, "pages": pages,
            "pictures": names.pictures, "fonts": names.fonts, "animations": names.animations,
            "videos": names.videos, "sounds": names.sounds, **device_keys(settings)}
-    files["app.toml"] = app_text(app).encode("utf-8")
+    files["app.toml"] = app_text(app, written=None).encode("utf-8")
     return files
 
 

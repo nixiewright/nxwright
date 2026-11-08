@@ -122,14 +122,14 @@ def _base(series: str, strict: bool, program: tuple = (), declarations: tuple = 
             if strict:
                 text = strict_app(text)
             if encoding:
-                text = app_text(dict(parse_app(text), encoding=encoding))
+                text = app_text(dict(parse_app(text), encoding=encoding), written=None)
             if moved:
-                text = app_text(dict(parse_app(text), **moved))
+                text = app_text(dict(parse_app(text), **moved), written=None)
             if keyboard:
                 app = parse_app(text)
                 font = _keyboard(app, keyboard).font_name
                 if font not in app["fonts"]:
-                    text = app_text(dict(app, fonts=app["fonts"] + [font]))
+                    text = app_text(dict(app, fonts=app["fonts"] + [font]), written=None)
             return text
         if path == "program.nx":
             return program_text(text, program, declarations, ints)
@@ -187,10 +187,10 @@ def page(*components: str, series: str = "T", code: str = "", strict: bool = Fal
                     macros=macros, ints=ints, encoding=encoding, screen=screen,
                     rotation=rotation, page_values=page_values, keyboard=keyboard)
     toml, page_id = _page_file(base, name, components, attributes, after, text)
-    data = parsed_page_toml(toml, name)
+    data = parsed_page_toml(toml, name, None)
     files = {name: data}
     for other, made_from in (others or {}).items():
-        files[other] = parsed_page_toml(_page_file(base, other, *made_from)[0], other)
+        files[other] = parsed_page_toml(_page_file(base, other, *made_from)[0], other, None)
     names = ResourceNames.of_app({**base.app, "pictures": list(pictures)})
     made = page_from_source(
         PageSource(toml, code), name, names, base.defaults, base.declared, page_id, [],

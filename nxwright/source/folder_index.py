@@ -23,6 +23,7 @@ from nxwright.language.resource_names import LISTS
 from nxwright.project.page_file_names import page_of_file_stem
 from nxwright.project.resources import PICTURE_SUFFIXES
 from nxwright.project.screen_models import model_named
+from nxwright.source.defines import checked_defines, filled, is_define_name
 from nxwright.source.macros_source import MACROS_PATH
 from nxwright.source.nx_files import (FUNCTION_HEADING, INCLUDE, MACRO_HEADING,
                                       read_event_heading, resolve)
@@ -211,12 +212,29 @@ class FolderIndex:
         except NxwrightError:
             return None
 
+    def define_names(self) -> list:
+        """The valid names that app.toml's [defines] table declares, which
+        nxlang code uses as constants of program.nx. Returns no names while
+        app.toml cannot be parsed, such as when it is half typed."""
+        table = self._app_settings().get("defines")
+        return [name for name in table if is_define_name(name)] if isinstance(table, dict) else []
+
     def _app_settings(self) -> dict:
-        """app.toml's settings, or none when it does not read."""
+        """Returns app.toml's settings, with placeholders filled in from its
+        defines. If the defines or a placeholder are invalid, returns the
+        settings as written, and while app.toml cannot be parsed, such as
+        when it is half typed, returns no settings."""
         try:
-            return tomllib.loads("\n".join(self.lines(APP_FILE) or []))
+            settings = tomllib.loads("\n".join(self.lines(APP_FILE) or []))
         except tomllib.TOMLDecodeError:
             return {}
+        try:
+            defines = checked_defines(settings.get("defines"))
+            return dict(filled({key: value for key, value in settings.items()
+                                if key != "defines"}, defines, ("format", "language"), APP_FILE),
+                        defines=settings.get("defines"))
+        except NxwrightError:
+            return settings
 
     def picture_path(self, picture: str) -> str:
         """Returns the path, within the folder, of the picture `picture`'s

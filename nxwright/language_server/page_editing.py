@@ -30,8 +30,9 @@ from nxwright.source.keyboard_adding import chinese_keyboard_fonts, keyboard_pag
 from nxwright.source.nx_files import event_heading, with_code_added
 from nxwright.source.page_edits import ComponentTable
 from nxwright.source.page_source import (COLOUR_ATTRIBUTES, RAW_KEY, attribute_value,
-                                         page_header_of_text, page_nx_path, page_toml_path,
-                                         reference_kind)
+                                         page_data, page_header_of_text, page_nx_path,
+                                         page_toml_path, reference_kind)
+from nxwright.source.source_folder import folder_defines
 
 
 def properties(index, read, page: str, name: str) -> dict:
@@ -48,7 +49,9 @@ def properties(index, read, page: str, name: str) -> dict:
     panel's footer, and its "treatment" in the panel: shown with a field,
     value-only, hidden, or never-shown (attribute_descriptions.py); and
     "pageLocked", whether the page is locked, in which case the panel shows
-    the values without fields. Raises NxwrightError as the build would."""
+    the values without fields. An attribute whose value is a placeholder,
+    such as "%BCOLOR%", shows the placeholder, without a field. Raises
+    NxwrightError as the build would."""
     table = ComponentTable(index, read, page, name)
     object_type = TYPES_BY_NAME.get(table.type)
     names = table.page_toml.names
@@ -65,27 +68,34 @@ def properties(index, read, page: str, name: str) -> dict:
         # without a field to edit it. nxwright does not know what the bytes
         # mean (page_source.RAW_KEY).
         raw = isinstance(entry.value, dict)
-        attributes.append({"name": entry.attribute, "value": _shown_value(entry.value),
+        placeholder = table.placeholders.get(entry.attribute)
+        # A placeholder is shown as written, without a field: the page file
+        # gives its value through app.toml's [defines].
+        fixed = raw or placeholder is not None
+        attributes.append({"name": entry.attribute,
+                           "value": placeholder or _shown_value(entry.value),
                            "default": _shown_value(entry.default), "given": entry.given,
-                           "kind": kind, "choices": choices, "labels": [] if raw else labels,
+                           "kind": kind, "choices": choices, "labels": [] if fixed else labels,
                            "line": table.key_lines.get(entry.attribute,
                                                        table.object.first_line),
                            "description": attribute_tooltip(table.type, entry.attribute),
-                           "treatment": VALUE_ONLY if raw else
+                           "treatment": VALUE_ONLY if fixed else
                            described.properties if described else SHOWN})
     place = table.object.place
     return {"name": name, "type": table.type, "defaultsFalse": table.full,
             "firstLine": table.object.first_line, "lastLine": table.object.last_line,
             "nameLine": place.line, "nameCharacter": place.start, "attributes": attributes,
-            "pageLocked": _page_locked(table.page_toml.text, page)}
+            "pageLocked": _page_locked(table.page_toml.text, page,
+                                       table.page_toml.app.get("defines"))}
 
 
-def _page_locked(text: str, page: str) -> bool:
-    """Whether the page file `text` locks the page. A header the build would
+def _page_locked(text: str, page: str, defines: dict) -> bool:
+    """Whether the page file `text` locks the page, its placeholders taking
+    the values of app.toml's `defines`. A header the build would
     refuse counts as unlocked here: the panel still shows the page, and the
     edits it sends get the build's message."""
     try:
-        return bool(page_header_of_text(text, page).locked)
+        return bool(page_header_of_text(text, page, defines).locked)
     except NxwrightError:
         return False
 
@@ -232,13 +242,14 @@ def _locks(read, page: str) -> tuple:
     an event then fails anyway, with the build's error."""
     try:
         text = read(page_toml_path(page))
-        data = tomllib.loads(text)
+        defines = folder_defines(read)
+        data = page_data(text, page, defines)
     except (NxwrightError, tomllib.TOMLDecodeError):
         return False, set()
     components = data.get("component", [])
     components = [table for table in components if isinstance(table, dict)] \
         if isinstance(components, list) else []
-    if _page_locked(text, page):
+    if _page_locked(text, page, defines):
         return True, {page} | {table.get("name") for table in components}
     return False, {table.get("name") for table in components if table.get("lockobj") == 1}
 

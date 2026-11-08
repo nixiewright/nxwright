@@ -62,7 +62,7 @@ from nxwright.project.screen_arithmetic import int32
 from nxwright.source.nx_files import (FUNCTION_HEADING, event_blocks, read_event_heading,
                                       read_nx_file, read_page_files)
 from nxwright.source.device_keys import settings_from_keys
-from nxwright.source.page_source import page_nx_path, page_toml_path
+from nxwright.source.page_source import page_data, page_nx_path, page_toml_path
 from nxwright.source.source_folder import (check_picture_file, check_picture_source, code_files,
                                            line_naming, picture_file, picture_source_file,
                                            types_in_page_data, video_rotation_problem)
@@ -123,7 +123,7 @@ def _page_places(app: dict, read) -> list:
         path = page_toml_path(page)
         try:
             text = read(path)
-            table = tomllib.loads(text).get("page")
+            table = page_data(text, page, app["defines"]).get("page")
         except (OSError, NxwrightError, tomllib.TOMLDecodeError):
             continue    # the check reports the file
         if not isinstance(table, dict):

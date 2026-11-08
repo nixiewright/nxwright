@@ -27,14 +27,16 @@ from nxwright.project.device_settings import password_hash
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.screen_colours import nearest_screen_colour
 from nxwright.source.page_source import (COLOUR_ATTRIBUTES, KEY_LINE, attribute_value,
-                                         component_properties, page_header_of_text,
+                                         component_properties, page_data, page_header_of_text,
                                          page_toml_path, stored_value)
+from nxwright.source.defines import placeholder_name
 from nxwright.source.source_folder import read_page_toml
 
 
 class ComponentTable:
     """One table of a page file: the object it describes, its ID, its lines,
-    and the line of each of its keys. `index` is the source folder's
+    the line of each of its keys, and its placeholders, {key: "%NAME%"}, for
+    the keys whose values come from app.toml's defines. `index` is the source folder's
     FolderIndex (folder_index.py), and `read` reads a file of it, as the
     editor has it."""
 
@@ -42,7 +44,7 @@ class ComponentTable:
         self.page, self.name, self.path = page, name, page_toml_path(page)
         self.page_toml = read_page_toml(read, page)
         try:
-            data = tomllib.loads(self.page_toml.text)
+            data = page_data(self.page_toml.text, page, self.page_toml.app.get("defines"))
         except tomllib.TOMLDecodeError as error:
             raise NxwrightError("%s: %s" % (self.path, error)) from None
         tables = [data.get("page", {})] + list(data.get("component", []))
@@ -51,6 +53,7 @@ class ComponentTable:
         if not ids or not found:
             raise NxwrightError("page %s has no object %s" % (page, name))
         self.table, self.object_id, self.object = tables[ids[0]], ids[0], found[0]
+        self.placeholders = _placeholders(self.page_toml, self.object_id)
         self.where = "%s, %s" % (self.path, name)
         self.type, self.full, self.properties = component_properties(
             self.table, self.object_id, self.page_toml.names, self.page_toml.defaults,
@@ -68,6 +71,18 @@ class ComponentTable:
             raise NxwrightError("%s: type %s has no attribute %s" % (self.where, self.type,
                                                                      attribute))
         return found[0]
+
+
+def _placeholders(page_toml, table_id: int) -> dict:
+    """Returns {key: placeholder} for the table `table_id` of the page file,
+    as written in the file, before page_data fills them in. Tables are
+    counted from 0, which is the [page] table. Without defines, there are
+    none."""
+    if not page_toml.app.get("defines"):
+        return {}
+    data = tomllib.loads(page_toml.text)
+    table = ([data.get("page", {})] + list(data.get("component", [])))[table_id]
+    return {key: value for key, value in table.items() if placeholder_name(value) is not None}
 
 
 def attribute_edits(index, read, page: str, name: str, values: dict,
@@ -126,7 +141,7 @@ def page_lock_edits(index, read, page: str, locked: bool, password: str = None) 
     Raises NxwrightError if password_hash refuses the password, or if the
     page file cannot be read."""
     table = ComponentTable(index, read, page, page)
-    header = page_header_of_text(table.page_toml.text, page)
+    header = page_header_of_text(table.page_toml.text, page, table.page_toml.app.get("defines"))
     if bool(header.locked) == locked:
         return []
     lines = [table.key_lines[key] for key in ("locked", "lock_password_hash")

@@ -29,7 +29,7 @@ from nxwright.project.zi_font import (GRID_ENCODINGS, UTF8, decode_font, decodes
                                       turned_font)
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.keyboards import noto_sans_covers
-from nxwright.source.source_folder import (RESOURCE_FILES, app_text, drawn_font_name, name_part,
+from nxwright.source.source_folder import (RESOURCE_FILES, app_text_in, drawn_font_name, name_part,
                                            parse_app, picture_paths, picture_source_paths,
                                            read_bytes, read_text)
 
@@ -95,8 +95,8 @@ def add_pictures(source_folder: Path, files: list) -> list:
     for relative, content in files_written.items():
         (source_folder / relative).parent.mkdir(parents=True, exist_ok=True)
         (source_folder / relative).write_bytes(content)
-    (source_folder / "app.toml").write_text(app_text(dict(app, pictures=pictures)),
-                                           encoding="utf-8", newline="\n")
+    text = app_text_in(source_folder, dict(app, pictures=pictures))
+    (source_folder / "app.toml").write_text(text, encoding="utf-8", newline="\n")
     return names
 
 
@@ -506,8 +506,8 @@ def _add_resource(source_folder: Path, app: dict, listed: str, name: str, files)
     for path, content in files:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
-    (source_folder / "app.toml").write_text(app_text(dict(app, **{listed: app[listed] + [name]})),
-                                            encoding="utf-8", newline="\n")
+    text = app_text_in(source_folder, dict(app, **{listed: app[listed] + [name]}))
+    (source_folder / "app.toml").write_text(text, encoding="utf-8", newline="\n")
 
 
 def _picture_at(path: Path):

@@ -127,8 +127,8 @@ from nxwright.source.device_keys import screen_model, settings_from_keys
 from nxwright.source.folder_check import check_folder
 from nxwright.source.nx_files import event_heading, read_event_heading, with_code_added
 from nxwright.source.page_source import (KEY_LINE, attribute_value, component_properties,
-                                         page_nx_path, page_toml_path)
-from nxwright.source.source_folder import folder_lister, read_page_toml
+                                         page_data, page_nx_path, page_toml_path)
+from nxwright.source.source_folder import folder_defines, folder_lister, read_page_toml
 
 
 def component_types(read, page: str) -> list:
@@ -248,7 +248,7 @@ def paste_components(index, read, exists, page: str, text: str, code: list = (),
     tables = _pasted_tables(text.replace("\r\n", "\n"))
     path = page_toml_path(page)
     page_text = read(path)
-    components = _page_tables(path, page_text)
+    components = _page_tables(read, page)
     if at is not None:
         step = _step_to(read_page_toml(read, page).app, [table for table, _ in tables], at)
     else:
@@ -318,7 +318,7 @@ def paste_parts(index, read, exists, page: str, names: list, text: str, code: li
     page_toml = read_page_toml(read, page)
     path = page_toml_path(page)
     page_text = read(path)
-    types = {table.get("name"): table.get("type") for table in _page_tables(path, page_text)}
+    types = {table.get("name"): table.get("type") for table in _page_tables(read, page)}
     copied_values = _copied_values(copied, page_toml) if "attributes" in parts else []
     # A part the copied table cannot give, such as a size it lacks, changes nothing.
     placed = [part for part, keys in (("size", ("w", "h")), ("position", ("x", "y")))
@@ -621,7 +621,7 @@ def group_components(index, read, page: str, names: list, grouped: bool) -> list
     pair = {"groupid0": NO_GROUP, "groupid1": 0}
     if grouped:
         path = page_toml_path(page)
-        pair["groupid0"] = new_groupid0(_page_tables(path, read(path)))
+        pair["groupid0"] = new_groupid0(_page_tables(read, page))
     edits = []
     for name in names:
         edits += attribute_edits(index, read, page, name, pair)
@@ -691,11 +691,13 @@ def _pasted_name(table: dict, taken: set) -> str:
     return _free_name(NAME_PREFIXES[TYPES_BY_NAME[table["type"]]], taken)
 
 
-def _page_tables(path: str, text: str) -> list:
-    """Returns the component tables of the page file at `path`, whose text
-    is `text`. Raises NxwrightError for a file that does not read."""
+def _page_tables(read, page: str) -> list:
+    """Returns the component tables of the page file of `page`, read through
+    `read(path)`, their placeholders filled in (page_data). Raises
+    NxwrightError for a file that does not read."""
+    path = page_toml_path(page)
     try:
-        return tomllib.loads(text).get("component", [])
+        return page_data(read(path), page, folder_defines(read)).get("component", [])
     except tomllib.TOMLDecodeError as error:
         raise NxwrightError("%s: %s" % (path, error)) from None
 

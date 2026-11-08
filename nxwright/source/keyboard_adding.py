@@ -18,7 +18,8 @@ from nxwright.source.keyboards import (CHINESE_INPUT, KEYBOARD_PAGES, UTF8_CHARA
                                        chinese_font_height, chinese_label_characters,
                                        font_widths, keyboard, keyboard_font, typeface_widths)
 from nxwright.source.page_source import page_nx_path, page_toml_path
-from nxwright.source.source_folder import (FONT_SUFFIX, app_text, drawn_font_name, folder_reader,
+from nxwright.source.source_folder import (FONT_SUFFIX, app_text_in, drawn_font_name,
+                                           folder_defines, folder_reader,
                                            noto_sans_lacks, parse_app, parsed_page_toml,
                                            read_bytes, read_text)
 
@@ -100,8 +101,8 @@ def add_keyboard(source_folder: Path, kind: str, typeface: Path = None, font: st
         (source_folder / relative).parent.mkdir(parents=True, exist_ok=True)
         (source_folder / relative).write_bytes(content)
     (source_folder / "app.toml").write_text(
-        app_text(dict(app, pages=app["pages"] + [page], fonts=fonts)), encoding="utf-8",
-        newline="\n")
+        app_text_in(source_folder, dict(app, pages=app["pages"] + [page], fonts=fonts)),
+        encoding="utf-8", newline="\n")
     if not chinese:
         warning = _keyboard_font_warning(source_folder, made, block is not None, settings)
     return page, made.font_name, warning
@@ -255,8 +256,9 @@ def keyboard_page(read, pages: list, kind: str):
     """Returns the name of the page of `pages` that is the keyboard `kind`, a
     name of SYSTEM_PAGES, by its page file's system_page, the Editor's or
     nxwright's; or None. `read(path)` returns a file of the folder."""
+    defines = folder_defines(read)
     for name in pages:
-        table = parsed_page_toml(read(page_toml_path(name)), name)
+        table = parsed_page_toml(read(page_toml_path(name)), name, defines)
         if table.get("page", {}).get("system_page") == kind:
             return name
     return None

@@ -34,7 +34,7 @@ _EVENT = "up"
 def strict_app(text: str) -> str:
     """Returns app.toml's text `text`, its code made strict Nextion syntax
     from nxlang, the base folders' language."""
-    return app_text(dict(parse_app(text), language=NEXTION))
+    return app_text(dict(parse_app(text), language=NEXTION), written=text)
 
 
 def touch_release_code(lines: list) -> str:

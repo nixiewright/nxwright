@@ -320,7 +320,7 @@ def _read_page_tables(source_folder: Path, read) -> FolderPageTables:
     screen = screen_model(app)
     for page in app["pages"]:
         texts[page] = read(page_toml_path(page))
-        data = folders.parsed_page_toml(texts[page], page)
+        data = folders.parsed_page_toml(texts[page], page, app["defines"])
         names[page] = folders.names_in_page_data(data)
         page_table = data.get("page", {})
         types[page] = table_types([page_table] + data.get("component", []))
@@ -353,7 +353,7 @@ def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str
     generated = []
     start = _program_start(read)
     if app["language"] == folders.NXLANG:
-        program = folders.program_names(read("program.nx"), read)
+        program = folders.program_names(read("program.nx"), read, app["defines"])
         # Compiled in the project's encoding even when not checked, as the
         # build compiles it.
         compiled = compile_nxlang_page(events_text, page, in_order[page], program, read=read,
@@ -474,7 +474,7 @@ def _compile_code(source_folder: Path, tables: FolderPageTables, read,
     if app["language"] != folders.NXLANG:
         raise NxwrightError("%s does not use nxlang, so it has no functions to run"
                             % source_folder)
-    program = folders.program_names(read("program.nx"), read)
+    program = folders.program_names(read("program.nx"), read, app["defines"])
     # Its code runs in no object's event, so the form '&name&' stays refused.
     compiled = compile_nxlang_page(page_text, _CODE_PAGE, [_CODE_PAGE], program, read=read,
                                    own_attributes=False, codec=TextCodec(_encoding(app)))

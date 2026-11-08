@@ -503,8 +503,9 @@ class NxwrightServer(LanguageServer):
         changes the page. Raises NxwrightError when the page is locked, or
         when its page file cannot be read."""
         index, page = self._page_of(params)
-        text = self._texts.folder_reader(index.root)(page_toml_path(page))
-        if page_header_of_text(text, page).locked:
+        read = self._texts.folder_reader(index.root)
+        defines = parse_app(read("app.toml"))["defines"]
+        if page_header_of_text(read(page_toml_path(page)), page, defines).locked:
             raise NxwrightError(LOCKED_PAGE % page)
         return index, page
 
@@ -596,10 +597,10 @@ class NxwrightServer(LanguageServer):
         in the editor, unsaved changes included. A page whose file cannot be
         read is left out."""
         read = self._texts.folder_reader(Path(params["folder"]))
-        locked = []
-        for page in parse_app(read("app.toml"))["pages"]:
+        locked, app = [], parse_app(read("app.toml"))
+        for page in app["pages"]:
             try:
-                if page_header_of_text(read(page_toml_path(page)), page).locked:
+                if page_header_of_text(read(page_toml_path(page)), page, app["defines"]).locked:
                     locked.append(page)
             except NxwrightError:
                 pass

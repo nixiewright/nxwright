@@ -66,7 +66,7 @@ class Previews:
         drawing = self.drawing_of(root, app, components)
         drawing["page"] = page
         try:
-            if page_header_of_text(text, page).locked:
+            if page_header_of_text(text, page, app["defines"]).locked:
                 drawing["locked"] = True
         except NxwrightError:
             pass    # the build's message comes with the edits the preview sends

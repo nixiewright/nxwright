@@ -119,7 +119,8 @@ class MediaFolderTestCase(unittest.TestCase):
         """Sets keys of the folder's app.toml, and writes the file with app_text,
         so that an extract gives back the same file."""
         app = self.source / "app.toml"
-        app.write_text(app_text(dict(parse_app(app.read_text(encoding="utf-8")), **values)),
+        app.write_text(app_text(dict(parse_app(app.read_text(encoding="utf-8")), **values),
+                                written=None),
                        encoding="utf-8", newline="\n")
 
     def build(self, name: str = "built.HMI") -> HmiContainer:

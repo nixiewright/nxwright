@@ -31,6 +31,7 @@ from nxwright.project.replacing import is_page_file, is_project_file
 from nxwright.project.screen_copy import ROTATIONS
 from nxwright.project.screen_models import MODELS, model_named
 from nxwright.project.zi_font import GRID_ENCODINGS, font_facts
+from nxwright.source.defines import DEFINE_OPTION, define_arguments, overriding_defines
 from nxwright.source.device_change import change_device
 from nxwright.source.folder_check import check_folder
 from nxwright.source.formatting import format_folder
@@ -56,13 +57,18 @@ from nxwright.tft.commands import command_summary
 
 
 def _run_build(arguments) -> str:
+    # Checked before the overwrite prompt, so that a wrong --define fails before anything
+    # is asked.
+    overrides = define_arguments(arguments.define)
     if not arguments.overwrite:
         refuse_unless_replacing(arguments.output, _terminal_asker())
-    memory = build(arguments.source_folder, arguments.output,
-                   keep_backup=not arguments.no_backup, lock_pages=not arguments.no_lock)
+    with overriding_defines(overrides):
+        memory = build(arguments.source_folder, arguments.output,
+                       keep_backup=not arguments.no_backup, lock_pages=not arguments.no_lock)
+        kept_copies = kept_screen_copy_warnings(arguments.source_folder)
     if memory.warning is not None:
         print("nxwright build: warning: %s" % memory.warning, file=sys.stderr)
-    for warning in kept_screen_copy_warnings(arguments.source_folder):
+    for warning in kept_copies:
         print("nxwright build: warning: %s" % warning, file=sys.stderr)
     # Each page's memory, as the Editor's compile lists it. Counted without
     # what the table did not measure, it is a lower bound.
@@ -543,7 +549,8 @@ _SUBCOMMANDS = [
                                "asking"}),
       _NO_BACKUP,
       ("--no-lock", {"action": "store_true",
-                     "help": "keep each page's lock as its page file sets it"})]),
+                     "help": "keep each page's lock as its page file sets it"}),
+      ("--define", DEFINE_OPTION)]),
     ("check", _run_check, "check a source folder as the build does, writing nothing",
      "Prints each error the build would stop at, the first of each page, and warnings about "
      "likely mistakes the build accepts, as `<file> line <n>: error: <message>`. Exits with 1 "

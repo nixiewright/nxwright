@@ -546,7 +546,7 @@ class LanguageSettingTest(SourceFolderTestCase):
     def test_the_comment_goes_on_the_language_line_alone(self):
         # An app's name may contain the text of the language line.
         name = self.STRICT_LINE.split("  ")[0]
-        text = app_text(dict(read_app(self.source), name=name))
+        text = app_text(dict(read_app(self.source), name=name), written=None)
         self.assertEqual(parse_app(text)["name"], name)
         self.assertEqual(text.count("# use"), 1)
         self.assertIn(self.STRICT_LINE + "\n", text)

@@ -62,6 +62,7 @@ from nxwright.project.editor_limits import (LEAST_SIDE, bounded_attributes, chec
 from nxwright.project.page_block import HEADER_SIZE, Attribute, Event, Marker, PageBlock, PageObject
 from nxwright.project.page_header import (HEADER_21, NO_LOCK_PASSWORD, SYSTEM_PAGES, PageHeader,
                                          header_16, header_40, page_header_of)
+from nxwright.source.defines import filled
 from nxwright.source.content_sorts import CANNOT_BE_KEPT, KEPT, MAY_BE_LOST, WRITTEN_OTHERWISE
 from nxwright.source.nx_files import (CODE_INDENT, EVENT_COMMENT_MARKER, EventBlock, PageFiles,
                                       blank_lines_dropped, event_blocks, event_heading,
@@ -233,7 +234,7 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
                      program_variables: frozenset = None, macros: frozenset = None,
                      absent_attributes: dict = None, screen: ScreenModel = None,
                      page_size: tuple = None, text_limits: dict = None,
-                     cut_texts: list = None) -> PageBlock:
+                     cut_texts: list = None, defines: dict = None) -> PageBlock:
     """Returns the page `page_name` built from its source files. Its stamp, a
     checksum of the page block, is left 0. Its texts, its code, and its header
     are in `encoding`, the project's character encoding (the Editor's
@@ -281,10 +282,47 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
         return _page_from_source(source, page_name, names, defaults, nxlang_program, page_id,
                                  globals_used, read, page_objects, encoding, chain,
                                  program_variables, macros, absent_attributes, screen,
-                                 page_size, text_limits, cut_texts)
+                                 page_size, text_limits, cut_texts, defines)
     except NxwrightError as error:
         error.file = error.file or page_toml_path(page_name)
         raise
+
+
+# The keys that identify a page file's table. They cannot be placeholders,
+# because the language server's index and the code checks read them as
+# written.
+_FIXED_KEYS = ("name", "type")
+
+
+def page_data(text: str, page_name: str, defines: dict) -> dict:
+    """Parses the page file `text` of the page `page_name`, and returns it
+    with each placeholder filled in from app.toml's `defines`
+    (defines.filled). Every reader of a page file's values reads it through
+    this function. Raises tomllib.TOMLDecodeError if `text` is not TOML, so
+    that each caller can word its own message. Raises NxwrightError for a
+    placeholder that cannot be filled in. The error names the table, and its
+    `table` is the table's index, 0 for [page]."""
+    data = tomllib.loads(text)
+    if not defines:
+        return data
+    path = page_toml_path(page_name)
+
+    def table_filled(table, index: int):
+        if not isinstance(table, dict):
+            return table
+        try:
+            return filled(table, defines, _FIXED_KEYS,
+                          "%s, %s" % (path, table.get("name", "table %d" % index)))
+        except NxwrightError as error:
+            error.table = index
+            raise
+
+    if "page" in data:
+        data["page"] = table_filled(data["page"], 0)
+    if isinstance(data.get("component"), list):
+        data["component"] = [table_filled(table, index)
+                             for index, table in enumerate(data["component"], 1)]
+    return data
 
 
 def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, defaults: dict,
@@ -292,10 +330,11 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
                       page_objects: dict, encoding: str, chain: list,
                       program_variables: frozenset, macros: frozenset,
                       absent_attributes: dict, screen: ScreenModel,
-                      page_size: tuple, text_limits: dict, cut_texts: list) -> PageBlock:
+                      page_size: tuple, text_limits: dict, cut_texts: list,
+                      defines: dict) -> PageBlock:
     """Does the work of page_from_source."""
     try:
-        data = tomllib.loads(source.toml)
+        data = page_data(source.toml, page_name, defines)
     except tomllib.TOMLDecodeError as error:
         raise NxwrightError("%s.page.toml: %s" % (page_file_stem(page_name), error)) from None
     page_table, components = data.get("page"), data.get("component", [])
@@ -1046,14 +1085,15 @@ def page_table_at_screen(table: dict, page_size: tuple, defaults: dict) -> dict:
 
 
 def page_components(text: str, page_name: str, names: ResourceNames, defaults: dict,
-                    encoding: str, page_size: tuple = None) -> list:
+                    encoding: str, page_size: tuple = None, defines: dict = None) -> list:
     """Returns the Components of the page file `text`, the page first, in ID
     order, each table completed by its type's defaults as the build does.
     With `page_size`, the page has the screen's place and size, as the build
-    gives it (page_table_at_screen). Raises NxwrightError, naming the table,
-    as the build does."""
+    gives it (page_table_at_screen). Placeholders take the values of
+    app.toml's `defines` (page_data). Raises NxwrightError, naming the
+    table, as the build does."""
     try:
-        data = tomllib.loads(text)
+        data = page_data(text, page_name, defines)
     except tomllib.TOMLDecodeError as error:
         raise NxwrightError("%s: %s" % (page_toml_path(page_name), error)) from None
     tables = ([page_table_at_screen(data.get("page", {}), page_size, defaults)]
@@ -1314,13 +1354,14 @@ def _header_keys(header: PageHeader) -> dict:
     return keys
 
 
-def page_header_of_text(text: str, page_name: str) -> PageHeader:
+def page_header_of_text(text: str, page_name: str, defines: dict = None) -> PageHeader:
     """Returns the page header that the [page] table of the page file `text`
     gives, after making the same checks as the build. Raises NxwrightError,
     naming the page's file, if `text` is not TOML, has no [page] table, or
-    has an invalid value."""
+    has an invalid value. Placeholders take the values of app.toml's
+    `defines` (page_data)."""
     try:
-        data = tomllib.loads(text)
+        data = page_data(text, page_name, defines)
     except tomllib.TOMLDecodeError as error:
         raise NxwrightError("%s.page.toml: %s" % (page_file_stem(page_name), error)) from None
     page_table, components = data.get("page"), data.get("component", [])

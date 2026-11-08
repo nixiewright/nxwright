@@ -163,6 +163,10 @@ def _names_in_scope(index: FolderIndex, path: str, line: int, pages: list) -> li
             found += [Item(name, FUNCTION, visible) for name in nx_file.functions()]
         if visible in index.program_files:
             found += [Item(name, VARIABLE, "int, " + visible) for name in nx_file.globals]
+    # app.toml's defines are constants of program.nx, so every file except
+    # macros.nx can use them.
+    if path != MACROS_PATH and index.uses_nxlang():
+        found += [Item(name, CONSTANT, "app.toml") for name in index.define_names()]
     # Those the screen's series lacks are left out, as the build refuses them.
     lacked = SERIES_LACKED_VARIABLES.get(index.screen_series(), frozenset())
     found += [Item(name, VARIABLE, "system variable")

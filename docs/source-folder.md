@@ -37,7 +37,7 @@ The rest of this page describes the folder's files. See [commands.md](commands.m
 
 | Path | Contents |
 | --- | --- |
-| `app.toml` | The folder's format, its language, its device settings, then the pages, pictures, fonts, animations, videos, and sounds, in ID order, by name. |
+| `app.toml` | The folder's format, its language, its device settings, then the pages, pictures, fonts, animations, videos, and sounds, in ID order, by name. Any defines come last. |
 | `defaults.toml` | What a newly added component of each type has ([Component defaults](#component-defaults)). |
 | `program.nx` | The code that runs when the screen starts. |
 | `macros.nx` | The project's macros, if it has any ([Macros](#macros)). |
@@ -131,6 +131,23 @@ fonts = [
 - The order of `pages`, `pictures`, `fonts`, `animations`, `videos`, and `sounds` is their order in the project, and so it sets their IDs. To reorder, reorder these lists.
   - Do this with care. A name follows the change, but a number keeps pointing at whatever now has that ID. Code that uses a number in place of a name will then reach another page or resource: `page 2`, `p0.pic=3`, or the page array `p[2]`.
 - To remove a picture, font, animation, video, or sound, use `nxwright remove`, which checks that nothing uses it ([commands.md](commands.md#remove)).
+- An optional `[defines]` table, at the end of the file, declares defines: named values that a build can change without editing the folder.
+
+  ```
+  [defines]
+  LIMIT = 30
+  TITLE = "Living room"
+  ```
+
+  - A define's name is made of letters, digits, and `_`, and does not start with a digit. The value you give it is its default, and must be a whole number or a text.
+  - nxlang code on every page can use each define as a constant ([language.md](language.md#constants)).
+  - A key of `app.toml` or of a page file can take a define's value. Write the define's name between two `%` signs, as the key's whole value: `rotation = "%ROTATION%"`, or `bco = "%BCOLOR%"`. The build checks the define's value the same way as a value written in the key.
+    - `format` and `language` in `app.toml`, and `name` and `type` in a page file, cannot take a define's value.
+    - If the folder has no defines, a text such as `"%BCOLOR%"` stays a plain text.
+    - A command or an edit that writes a new value in such a key replaces the define's name with that value, as when `nxwright device` changes the rotation, or when you move a component in VS Code's page preview. The Attributes section cannot change a key that takes a define's value.
+    - A define only puts its value in place: the build does not resize the pages or make the videos again. So a define can switch `rotation` between 0 and 180 degrees, or between 90 and 270, in a folder without videos. For a quarter turn, run `nxwright device` on a copy of the folder ([A new rotation](commands.md#a-new-rotation)).
+  - `nxwright build` and `nxwright compile` can change a define's value for one build, as in `--define LIMIT=40` ([commands.md](commands.md#build)). Everything else, such as the page preview, the simulator, and the tests, uses the defaults.
+  - An older nxwright cannot read a folder that has this table.
 
 ## Page files
 

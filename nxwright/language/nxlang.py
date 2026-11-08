@@ -2137,10 +2137,11 @@ def _check_program_macros(lines: list, macros: dict):
     _check_nesting(_deepest_chain(depths, deepest_caller), events, {})
 
 
-def read_program_names(lines: list, included: list = ()) -> ProgramNames:
-    """Returns the constants and `int` variables program.nx's lines declare,
-    with the constants of the files it includes, `included` [(file, lines)].
-    Errors name the file."""
+def read_program_names(lines: list, included: list = (), defines: dict = None) -> ProgramNames:
+    """Returns the constants and `int` variables that program.nx's `lines`
+    declare. The constants include those of the files program.nx includes,
+    `included` [(file, lines)], and app.toml's `defines`, {name: int or
+    str}. Errors name the file."""
     variables = set()
     with _naming("program.nx"):
         _read_int_names(lines, variables)
@@ -2151,7 +2152,29 @@ def read_program_names(lines: list, included: list = ()) -> ProgramNames:
     with _naming("program.nx"):
         _read_constants([(number, text) for number, text in lines
                          if _CONST_LINE.match(split_line(text, number)[1])], page)
+    # Read after program.nx's own constants, so that a name clash is reported
+    # on the define, with a message that says it comes from app.toml.
+    with _naming("app.toml"):
+        _read_defines(defines or {}, page)
     return ProgramNames(page.constants, frozenset(variables))
+
+
+def _read_defines(defines: dict, page: "_PageState"):
+    """Adds app.toml's `defines`, {name: int or str}, to the page's
+    constants. Each define is checked the same way as the line
+    `const NAME = value`, with a text quoted and escaped the way code writes
+    it. Raises NxwrightError naming the define."""
+    for name, value in defines.items():
+        try:
+            if isinstance(value, str) and "\n" in value:
+                raise NxwrightError("a quoted text cannot contain a line break")
+            literal = (str(value) if isinstance(value, int) else '"%s"' % value.replace(
+                "\\", "\\\\").replace('"', '\\"').replace("\r", "\\r"))
+            _, constant = _parse_constant("const %s = %s" % (name, literal), None)
+            page.check_new_name(name, None, "constant")
+        except NxwrightError as error:
+            raise NxwrightError("the define %s of [defines]: %s" % (name, error.reason)) from None
+        page.constants[name] = constant
 
 
 def _read_int_names(lines: list, variables: set):

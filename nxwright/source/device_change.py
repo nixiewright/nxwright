@@ -43,7 +43,7 @@ from nxwright.project.zi_font import converted_font, font_facts
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.folder_check import check_folder
 from nxwright.source.page_source import page_toml_path
-from nxwright.source.source_folder import (app_text, folder_byte_reader, folder_lister,
+from nxwright.source.source_folder import (app_text_in, folder_byte_reader, folder_lister,
                                            folder_reader, kept_picture_paths, read_app,
                                            read_bytes, resource_paths, screen_copy_path)
 from nxwright.source.resource_adding import encodings_taken
@@ -142,8 +142,9 @@ def device_change_files(source_folder: Path, screen: str = None, rotation: int =
         files.update(videos)
         notes += ["%s: made again for %d degrees, its frames coded again, which loses a "
                   "little of each" % (path, new.rotation) for path in videos]
-    files[APP_FILE] = app_text(dict(app, screen=new.model.name, rotation=new.rotation,
-                                    encoding=new.encoding)).encode("utf-8")
+    files[APP_FILE] = app_text_in(source_folder, dict(app, screen=new.model.name,
+                                                      rotation=new.rotation,
+                                                      encoding=new.encoding)).encode("utf-8")
     return files, notes
 
 

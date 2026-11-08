@@ -74,6 +74,7 @@ from nxwright.project.resources import (COPIED_KINDS, FONTS, MEDIA, PICTURE_SUFF
 from nxwright.project.device_settings import (DEFAULT_ENCODING, ENCODINGS, DeviceSettings,
                                               TextCodec, encoding_code, encoding_name,
                                               is_unknown_encoding)
+from nxwright.source.defines import checked_defines, filled, placeholder_name
 from nxwright.source.device_keys import (DEVICE_KEYS, app_encoding, device_keys, screen_model,
                                          settings_from_keys)
 from nxwright.source.unknown_content import checked, unknown_in_dump
@@ -85,7 +86,7 @@ from nxwright.source.macros_source import (MACROS_PATH, block_of_compiled, calla
                                            read_macros_text)
 from nxwright.source.page_source import (PAGE_FILE_SUFFIX, PageSource, code_text_limits,
                                          editor_code_of_file, page_components, page_from_source,
-                                         page_nx_path, page_to_source, page_toml_path,
+                                         page_data, page_nx_path, page_to_source, page_toml_path,
                                          table_limits, table_types)
 from nxwright.source.asset_names_in_code import with_asset_names
 from nxwright.source.nxlang_switch import switch_events_to_nxlang
@@ -203,10 +204,11 @@ def import_dump(dump_folder: Path, source_folder: Path, name: str = None,
     return notes + warnings
 
 
-def program_names(program_text: str, read) -> ProgramNames:
-    """Returns the constants and int variables program.nx declares, with the
-    constants of the files it includes, and the folder's macros, which
-    nxlang follows where its code calls one (macros_source.followed_macros)."""
+def program_names(program_text: str, read, defines: dict) -> ProgramNames:
+    """Returns the constants and int variables that program.nx declares, and
+    the folder's macros, which nxlang follows where its code calls one
+    (macros_source.followed_macros). The constants include those of the
+    files program.nx includes, and app.toml's `defines`."""
     lines = numbered_lines(program_text)
     included, seen = [], set()
 
@@ -229,7 +231,7 @@ def program_names(program_text: str, read) -> ProgramNames:
         written = included_path(text)
         if written is not None:
             visit(resolve("program.nx", written, number), number, "program.nx")
-    names = read_program_names(lines, included)
+    names = read_program_names(lines, included, defines)
     names.macros = followed_macros(read)
     return names
 
@@ -273,19 +275,20 @@ def video_rotation_problem(app: dict, head: bytes):
             "`nxwright video` or VideoBox's display direction" % (made_for, settings.rotation))
 
 
-def _page_components(page_toml: str, page_name: str) -> tuple:
+def _page_components(page_toml: str, page_name: str, defines: dict) -> tuple:
     """Returns (the names in a page's .page.toml file, the page's then its
     components', in ID order; the types of its objects, {name: type}), as
     nxlang's compiler takes them."""
-    data = parsed_page_toml(page_toml, page_name)
+    data = parsed_page_toml(page_toml, page_name, defines)
     return names_in_page_data(data), types_in_page_data(data)
 
 
-def parsed_page_toml(page_toml: str, page_name: str) -> dict:
-    """Returns a page's .page.toml file parsed. Raises NxwrightError naming
-    the file when it is not TOML."""
+def parsed_page_toml(page_toml: str, page_name: str, defines: dict) -> dict:
+    """Parses a page's .page.toml file, and fills its placeholders in from
+    app.toml's `defines` (page_source.page_data). Raises
+    NxwrightError naming the file when it is not TOML."""
     try:
-        return tomllib.loads(page_toml)
+        return page_data(page_toml, page_name, defines)
     except tomllib.TOMLDecodeError as error:
         raise NxwrightError("%s%s: %s" % (page_file_stem(page_name), PAGE_FILE_SUFFIX,
                                            error)) from None
@@ -587,7 +590,7 @@ def new_source_folder(source_folder: Path, settings: DeviceSettings, language: s
     app = dict({"format": SOURCE_FORMAT, "name": name, "language": language},
                **device_keys(settings), pages=["page0"], pictures=[],
                fonts=[font_name])
-    files = {"app.toml": app_text(app).encode("utf-8"),
+    files = {"app.toml": app_text(app, written=None).encode("utf-8"),
              "defaults.toml": DEFAULTS_FILE.read_bytes(),
              "program.nx": _NEW_PROGRAM.encode("utf-8"),
              page_toml_path("page0"): (_NEW_PAGE % ("page0", width, height)).encode("utf-8"),
@@ -645,8 +648,8 @@ def add_page(source_folder: Path, name: str = None) -> str:
     for relative, content in files.items():
         (source_folder / relative).parent.mkdir(parents=True, exist_ok=True)
         (source_folder / relative).write_bytes(content)
-    (source_folder / "app.toml").write_text(app_text(dict(app, pages=app["pages"] + [name])),
-                                           encoding="utf-8", newline="\n")
+    text = app_text_in(source_folder, dict(app, pages=app["pages"] + [name]))
+    (source_folder / "app.toml").write_text(text, encoding="utf-8", newline="\n")
     return name
 
 
@@ -724,9 +727,9 @@ def nxlang_switch_files(source_folder: Path) -> dict:
     names = ResourceNames.of_app(app)
     files = {}
     program = read_text(source_folder / "program.nx")
-    declared = program_names(program, folder_reader(source_folder))
+    declared = program_names(program, folder_reader(source_folder), app["defines"])
     components = {page_name: _page_components(read_text(source_folder / page_toml_path(page_name)),
-                                              page_name)
+                                              page_name, app["defines"])
                   for page_name in app["pages"]}
     # nxlang compiles each page with every page's object types, as the build does.
     object_types = {page_name: types for page_name, (_, types) in components.items()}
@@ -747,7 +750,7 @@ def nxlang_switch_files(source_folder: Path) -> dict:
         raise NxwrightError("program.nx would not build to the same code in nxlang")
     if switched != program:
         files["program.nx"] = switched
-    files["app.toml"] = app_text(dict(app, language=NXLANG))
+    files["app.toml"] = app_text_in(source_folder, dict(app, language=NXLANG))
     return files
 
 
@@ -882,7 +885,7 @@ def _source_files_from_dump(dump_folder: Path, project_name: str,
            **chosen}
     if settings is not None:
         app.update(device_keys(settings))
-    files["app.toml"] = app_text(app).encode("utf-8")
+    files["app.toml"] = app_text(app, written=None).encode("utf-8")
     return files, warnings
 
 
@@ -905,17 +908,26 @@ def check_page_count(app: dict, app_toml: str):
                             line=line_naming(app_toml, app["pages"][MOST_PAGES]))
 
 
-def app_text(app: dict) -> str:
-    """Returns the text of app.toml, with its keys in their usual order and
-    without the empty lists that may be left out. An encoding nxwright does
-    not know is written as its number, the form that parse_app reads. The
-    language is written as its value in _LANGUAGE_VALUES, followed by
-    _STRICT_LANGUAGE_COMMENT for a folder in strict Nextion syntax."""
-    order = ("format", "name", "language") + DEVICE_KEYS + ("pages",) + tuple(RESOURCE_FILES)
+def app_text(app: dict, *, written: str) -> str:
+    """Returns the text of app.toml for the settings `app`, as parse_app
+    returns them. The keys are in their usual order, with the [defines]
+    table last, and the empty lists that may be left out are dropped.
+    `written` is the text of the app.toml these settings replace, or None
+    for a new one. A key that has a placeholder there keeps it, unless
+    `app` changes its value. An encoding nxwright does not know is written
+    as its number, the form that parse_app reads. The language is written
+    as its value in _LANGUAGE_VALUES, followed by _STRICT_LANGUAGE_COMMENT
+    for a folder in strict Nextion syntax."""
+    # The [defines] table comes last, because in TOML every key after a
+    # table's heading belongs to that table.
+    order = (("format", "name", "language") + DEVICE_KEYS + ("pages",) + tuple(RESOURCE_FILES)
+             + ("defines",))
     shown = {key: app[key] for key in order
-             if app.get(key) is not None and not (key in _OPTIONAL_LISTS and not app[key])}
+             if app.get(key) is not None and not (key in _OPTIONAL_LISTS and not app[key])
+             and not (key == "defines" and not app[key])}
     if "encoding" in shown:
         shown["encoding"] = app_encoding(shown["encoding"])
+    shown.update(_kept_placeholders(written, app))
     language = language_of_value(app.get("language"))
     if language is not None:
         shown["language"] = _LANGUAGE_VALUES[language]
@@ -927,6 +939,31 @@ def app_text(app: dict) -> str:
         line = tomli_w.dumps({"language": shown["language"]})
         text = text.replace(line, line.rstrip("\n") + _STRICT_LANGUAGE_COMMENT + "\n", 1)
     return text
+
+
+def folder_defines(read) -> dict:
+    """Returns the defines of the folder whose files `read(path)` returns,
+    {name: value}, from its app.toml. Raises NxwrightError when app.toml
+    cannot be read."""
+    return _in_file("app.toml", lambda: parse_app(read("app.toml")))["defines"]
+
+
+def app_text_in(source_folder: Path, app: dict) -> str:
+    """Returns the new text of the folder's app.toml for the settings
+    `app`, keeping the placeholders of its current text (app_text)."""
+    return app_text(app, written=read_text(Path(source_folder) / "app.toml"))
+
+
+def _kept_placeholders(written: str, app: dict) -> dict:
+    """Returns {key: placeholder} for each key of the app.toml text
+    `written` whose placeholder still gives the value that `app` has for
+    that key."""
+    if written is None:
+        return {}
+    as_written, values = tomllib.loads(written), parse_app(written)
+    return {key: value for key, value in as_written.items()
+            if placeholder_name(value) is not None and values["defines"]
+            and app.get(key) == values.get(key)}
 
 
 def _choose_names(kind: str, contents: list) -> list:
@@ -1049,7 +1086,8 @@ class FolderSource:
                                 page_id, globals_used, self.read, self.page_objects,
                                 self.encoding, chain, self.program_variables, self.macros,
                                 self.absent_attributes, self.screen, page_size,
-                                code_text_limits(self.text_limits or {}, page_name), cut_texts)
+                                code_text_limits(self.text_limits or {}, page_name), cut_texts,
+                                defines=self.app["defines"])
         # Not a refusal by the memory table: the memory probe, which turns
         # those off, places every component inside the screen.
         if self.screen is not None:
@@ -1100,7 +1138,7 @@ class FolderSource:
         `path`, as page `page_name` compiles them (editor_code_of_file in
         page_source.py). Raises NxwrightError as the build does."""
         component_names, own_types = _page_components(self.read(page_toml_path(page_name)),
-                                                      page_name)
+                                                      page_name, self.app["defines"])
         # Every page's types, as the build compiles the page with them.
         return editor_code_of_file(path, page_name, self.read(page_nx_path(page_name)),
                                    self.names, component_names, self.declared,
@@ -1126,7 +1164,7 @@ def read_folder_source(read, skip_broken_pages: bool = False,
     program = _in_file("program.nx", lambda: read("program.nx"))
     declared = program_variables = None
     if app["language"] == NXLANG:
-        declared = _in_file("program.nx", lambda: program_names(program, read))
+        declared = _in_file("program.nx", lambda: program_names(program, read, app["defines"]))
     else:
         # Read as the Editor reads them, without nxlang's rules for names.
         program_variables = _in_file("program.nx", lambda: program_int_variables(program))
@@ -1136,7 +1174,8 @@ def read_folder_source(read, skip_broken_pages: bool = False,
     for page_name in app["pages"]:
         path = page_toml_path(page_name)
         try:
-            data = _in_file(path, lambda: parsed_page_toml(read(path), page_name))
+            data = _in_file(path, lambda: parsed_page_toml(read(path), page_name,
+                                                           app["defines"]))
             page_objects[page_name] = types_in_page_data(data)
             text_limits[page_name] = table_limits(_page_data_tables(data), defaults)
             page_globals[page_name] = global_names_in_page_data(data, defaults)
@@ -1198,7 +1237,7 @@ def page_toml_components(page_toml: PageToml, page_name: str) -> list:
     page_size = None if settings is None else settings.page_size
     return _in_file(path, lambda: page_components(
         page_toml.text, page_name, page_toml.names, page_toml.defaults, page_toml.encoding,
-        page_size))
+        page_size, page_toml.app.get("defines")))
 
 
 def _in_file(file: str, work):
@@ -1392,6 +1431,9 @@ def parse_app(text: str) -> dict:
         app = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
         raise NxwrightError("app.toml: %s" % error) from None
+    # The other keys' placeholders take the defines' values before any check.
+    defines = checked_defines(app.pop("defines", None))
+    app = filled(app, defines, ("format", "language"), "app.toml")
     found = app.get("format")
     # TOML's true is Python's True, which equals 1: only a real number counts.
     is_number = isinstance(found, int) and not isinstance(found, bool)
@@ -1437,6 +1479,7 @@ def parse_app(text: str) -> dict:
              - set(DEVICE_KEYS))
     if extra:
         raise NxwrightError("app.toml: unknown key %s" % sorted(extra)[0])
+    app["defines"] = defines
     if "name" in app and not _is_app_name(app["name"]):
         raise NxwrightError("app.toml: %s" % _APP_NAME_RULE)
     app["language"] = language_of_value(app.get("language"))

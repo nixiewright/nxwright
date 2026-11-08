@@ -39,8 +39,9 @@ from nxwright.source.nx_files import read_event_label
 from nxwright.source.references import references
 from nxwright.source.folder_check import check_folder
 from nxwright.source.macros_source import MACROS_PATH
-from nxwright.source.page_source import page_toml_path, reference_kind
-from nxwright.source.source_folder import (RESOURCE_FILES, app_text, folder_file_exists,
+from nxwright.source.defines import placeholder_name
+from nxwright.source.page_source import page_data, page_toml_path, reference_kind
+from nxwright.source.source_folder import (RESOURCE_FILES, app_text_in, folder_file_exists,
                                            folder_lister, folder_reader, kept_picture_paths,
                                            number_in_table, picture_source_paths, read_app,
                                            read_folder_source, screen_copy_path)
@@ -103,7 +104,7 @@ def remove_resource(source_folder: Path, kind: str, name: str) -> tuple:
     folder = read_folder_source(read)
     ids = range(names.index(name), len(names))
     uses = (_uses_by_name(index, listed, name)
-            + _uses_in_page_files(folder, index, KINDS[kind], ids)
+            + _uses_in_page_files(folder, index, KINDS[kind], ids, name)
             + _uses_in_code(folder, index, KINDS[kind], ids))
     if uses:
         raise NxwrightError("%s %s is used, so it stays:\n%s"
@@ -126,7 +127,8 @@ def remove_resource_files(source_folder: Path, listed: str, name: str) -> tuple:
     kept = (kept_picture_paths(name, folder_file_exists(source_folder),
                                folder_lister(source_folder)) if listed == "pictures" else [])
     app[listed] = [listed_name for listed_name in app[listed] if listed_name != name]
-    (source_folder / "app.toml").write_text(app_text(app), encoding="utf-8", newline="\n")
+    (source_folder / "app.toml").write_text(app_text_in(source_folder, app), encoding="utf-8",
+                                            newline="\n")
     removed, left = [], []
     paths = ["%s/%s%s" % (listed, name, suffix) for suffix in RESOURCE_FILES[listed]]
     if listed == "pictures":
@@ -158,16 +160,19 @@ def _uses_by_name(index: FolderIndex, listed: str, name: str) -> list:
             if place.path != APP_FILE]
 
 
-def _uses_in_page_files(folder, index: FolderIndex, kind: str, ids: range) -> list:
-    """The page files' attributes taking a resource of `kind` that hold a
-    number of `ids`, written there or left to the defaults."""
+def _uses_in_page_files(folder, index: FolderIndex, kind: str, ids: range, name: str) -> list:
+    """Returns where the page files use a resource of `kind`, in an attribute
+    that takes one. A use is a number in `ids`, written in the page file or
+    taken from the defaults, or the resource's `name`, given through a
+    placeholder. _uses_by_name finds a name written directly in the page
+    file."""
     uses = []
     for page in folder.app["pages"]:
         path = page_toml_path(page)
-        lines = index.lines(path)
-        data = tomllib.loads("\n".join(lines))
-        components = data.get("component", [])
-        for table in [data.get("page", {})] + (components if isinstance(components, list) else []):
+        text = "\n".join(index.lines(path))
+        data = page_data(text, page, folder.app.get("defines"))
+        written = tomllib.loads(text)
+        for table, as_written in zip(_tables(data), _tables(written)):
             object_type = TYPES_BY_NAME.get(table.get("type"))
             if object_type is None:
                 continue
@@ -178,13 +183,24 @@ def _uses_in_page_files(folder, index: FolderIndex, kind: str, ids: range) -> li
                 value = number_in_table(table, folder.defaults, attribute)
                 if isinstance(value, int) and value in ids:
                     uses.append(_page_file_use(index, path, table, attribute, value))
+                elif (placeholder_name(as_written.get(attribute)) is not None
+                      and table.get(attribute) == name):
+                    uses.append(_page_file_use(index, path, table, attribute, name))
     return uses
 
 
+def _tables(data: dict) -> list:
+    """Returns the tables of a parsed page file, the [page] table first."""
+    components = data.get("component", [])
+    return [data.get("page", {})] + (components if isinstance(components, list) else [])
+
+
 def _page_file_use(index: FolderIndex, path: str, table: dict, attribute: str,
-                   value: int) -> str:
-    """Names where a page file's `table` gives `attribute` the number `value`:
-    its own line, or the table's name line when the defaults give it."""
+                   value) -> str:
+    """Returns the place where a page file's `table` gives `attribute` the
+    value `value`, a number or a resource's name. The place is the
+    attribute's own line, or the table's name line when the value comes
+    from the defaults."""
     lines = index.lines(path)
     name = table.get("name")
     name_line = next((number for number, line in enumerate(lines)

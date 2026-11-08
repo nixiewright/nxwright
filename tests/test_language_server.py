@@ -14,6 +14,7 @@ from lsprotocol import types
 
 from nxwright import MissingFileError, NxwrightError
 from nxwright.language_server.attributes import attribute_markdown
+from nxwright.language_server import completion
 from nxwright.language_server.completion import Signature, completions, signature
 from nxwright.source.definitions import definitions
 from nxwright.language_server.file_texts import FileTexts, uri_of
@@ -841,6 +842,16 @@ class CompletionTest(FolderTestCase):
         # sys0 is no system variable but an int program.nx may declare, as
         # the Editor's new project does; this one does not.
         self.assertNotIn("sys0", labels)
+
+    def test_the_defines_of_app_toml_are_offered_as_constants(self):
+        write_folder(self.root, {"app.toml": FOLDER["app.toml"]
+                                 + '\n[defines]\nROTATION = 0\nTITLE = "Lab"\n'})
+        place = self.find("pages/home.nx", "  sys0 = ")
+        items = {item.label: item for item in completions(self.index(), "pages/home.nx",
+                                                           place.line, place.end)}
+        self.assertEqual((items["ROTATION"].kind, items["ROTATION"].detail),
+                         (completion.CONSTANT, "app.toml"))
+        self.assertIn("TITLE", items)
 
     def test_the_system_variables_of_the_screens_series(self):
         # The Intelligent series lacks lowpower alone; the Basic lacks the

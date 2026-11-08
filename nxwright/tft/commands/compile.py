@@ -73,6 +73,7 @@ from nxwright import NxwrightError
 from nxwright.project.ffmpeg import find_ffmpeg
 from nxwright.project.replacing import held_by_the_nextion_editor, is_project_file, written_beside
 from nxwright.project.screen_models import model_with_id
+from nxwright.source.defines import DEFINE_OPTION, define_arguments, overriding_defines
 from nxwright.source.project_files import build
 
 from nxwright.tft import firmware_versions, frame
@@ -134,6 +135,7 @@ def main(arguments: list) -> int:
                         "--project-file as its page file sets it")
     parser.add_argument("--json", action="store_true",
                         help="print JSON objects, one a line, for programs; never prompt")
+    parser.add_argument("--define", **DEFINE_OPTION)
     options = parser.parse_args(arguments)
     # With --json, the words for people go to standard error, so that what
     # is printed is JSON alone.
@@ -143,7 +145,7 @@ def main(arguments: list) -> int:
                                   options.ffmpeg, options.editor,
                                   TerminalAsker(options.download, as_json=options.json),
                                   options.project_file, options.overwrite,
-                                  not options.no_lock)
+                                  not options.no_lock, define_arguments(options.define))
         write_outputs(options.output, compiled.data, options.project_file,
                       compiled.project_file, options.overwrite, not options.no_backup)
     except FirmwareMissing as error:
@@ -181,11 +183,15 @@ class FirmwareMissing(NxwrightError):
 def compile_folder(source: Path, output: Path, firmware_file: Path = None,
                    ffmpeg_file: Path = None, editor_folder: Path = None,
                    asker: DownloadAsker = None, project_file: Path = None,
-                   overwrite: bool = False, lock_pages: bool = False) -> Compiled:
+                   overwrite: bool = False, lock_pages: bool = False,
+                   defines: dict = None) -> Compiled:
     """Returns the compile of `source`, a source folder or a project file,
     to be written as `output`. With `project_file`, which needs a source
     folder, the result also has the project file built on the way, to be
-    written there, with its pages locked if `lock_pages`. The firmware comes
+    written there, with its pages locked if `lock_pages`. `defines`, {name:
+    value as text}, contains the new values that --define gives the
+    folder's defines (source/defines.py). Like `project_file`, it needs a
+    source folder. The firmware comes
     from the TFT file `firmware_file` or the Nextion Editor folder
     `editor_folder`, when one is given, or else
     from the cache, the installed Nextion Editor, or a download that `asker`
@@ -204,11 +210,15 @@ def compile_folder(source: Path, output: Path, firmware_file: Path = None,
     if not source.exists():
         raise NxwrightError("%s does not exist" % source)
     if source.is_dir():
-        project, built = project_and_file_of_folder(source, lock_pages)
+        with overriding_defines(defines or {}):
+            project, built = project_and_file_of_folder(source, lock_pages)
     elif is_project_file(source):
         if project_file is not None:
             raise NxwrightError("--project-file writes the project file built from a source "
                                 "folder, and %s is a project file already" % source)
+        if defines:
+            raise NxwrightError("--define changes the defines of a source folder, and %s is a "
+                                "project file, which has none" % source)
         project, built = Project.from_file(source), None
     else:
         raise NxwrightError("%s is neither a source folder nor a project file" % source)
