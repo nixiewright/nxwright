@@ -1152,6 +1152,25 @@ class LiveCheckTest(CheckFolderTestCase):
                          [{"range": {"start": {"line": 1, "character": 2},
                                      "end": {"line": 1, "character": 7}}, "newText": "heading"}])
 
+    def test_rename_a_page(self):
+        # The page's files are renamed first, so the edits to them use their new paths.
+        self.change("pages/page0.nx", "on page0.load:\n  title.txt = \"a\"\n",
+                    "textDocument/didOpen")
+        result = self.request("textDocument/rename", "pages/page0.nx",
+                              position={"line": 0, "character": 4}, newName="main")["result"]
+        changes = result["documentChanges"]
+        self.assertEqual(changes[:2], [
+            {"kind": "rename", "oldUri": self.uri("pages/page0.page.toml"),
+             "newUri": self.uri("pages/main.page.toml")},
+            {"kind": "rename", "oldUri": self.uri("pages/page0.nx"),
+             "newUri": self.uri("pages/main.nx")}])
+        edited = {change["textDocument"]["uri"]: change["edits"] for change in changes[2:]}
+        self.assertEqual(sorted(edited), sorted([self.uri("app.toml"), self.uri("pages/main.nx"),
+                                                 self.uri("pages/main.page.toml")]))
+        self.assertEqual(edited[self.uri("pages/main.nx")],
+                         [{"range": {"start": {"line": 0, "character": 3},
+                                     "end": {"line": 0, "character": 8}}, "newText": "main"}])
+
     def test_editor_code(self):
         self.change("pages/page0.nx", "on page0.load:\n  sys0 = 1 + 2\n", "textDocument/didOpen")
         result = self.request("nxwright/editorCode", "pages/page0.nx")["result"]

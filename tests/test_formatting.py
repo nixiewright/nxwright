@@ -211,7 +211,7 @@ class RenameTest(FolderTestCase):
         column = lines[line].index(needle) + (needle.index(inside) if inside else 0)
         index = FolderIndex(self.root, FileTexts().read)
         edits = rename(index, path, line, column, new_name, folder_reader(self.root),
-                       lambda file: (self.root / file).is_file())
+                       lambda file: (self.root / file).is_file())["edits"]
         texts = {}
         for file, file_edits in edits.items():
             file_lines = self.text(file).split("\n")
@@ -277,9 +277,20 @@ class RenameTest(FolderTestCase):
         self.assertIn("var shown = amount + LIMIT",
                       self.rename_at("pages/lib/show.nx", "value", "amount")["pages/lib/show.nx"])
 
+    def test_a_page(self):
+        # Renaming the page second moves its files, and edits app.toml as well as each
+        # use of its name.
+        lines = self.text("pages/page0.nx").split("\n")
+        line = next(number for number, text in enumerate(lines) if "second.title" in text)
+        renamed = rename(FolderIndex(self.root, FileTexts().read), "pages/page0.nx", line,
+                         lines[line].index("second.title"), "other", folder_reader(self.root),
+                         lambda file: (self.root / file).is_file())
+        self.assertEqual(renamed["moves"], [("pages/second.page.toml", "pages/other.page.toml"),
+                                            ("pages/second.nx", "pages/other.nx")])
+        self.assertEqual(sorted(renamed["edits"]), ["app.toml", "pages/page0.nx",
+                                                    "pages/second.nx", "pages/second.page.toml"])
+
     def test_refusals(self):
-        with self.assertRaisesRegex(NxwrightError, "renamed by hand"):
-            self.rename_at("pages/page0.nx", "second.title", "other", "second")
         with self.assertRaisesRegex(NxwrightError, "is not a name"):
             self.rename_at("pages/page0.nx", "vis title", "two words", "title")
         with self.assertRaisesRegex(NxwrightError, "no name to rename"):

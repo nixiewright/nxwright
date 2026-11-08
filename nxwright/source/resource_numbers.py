@@ -9,7 +9,15 @@ Removing a resource uses the two to find numbers that the removal would make
 stand for another resource (resource_removal.py). placed_numbers finds where
 each such number appears in one file's own text, so that the language server
 can show the resource's name beside it, and as_name gives the text that writes
-the number as that name. """
+the number as that name.
+
+Pages have IDs too: a page's ID is its place in app.toml's `pages`.
+page_numbers finds the page IDs that one line gives as numbers: the argument
+of `page`, and each number given to `dp` or compared with it. Deleting a page
+uses code_lines and page_numbers to find the numbers that the deletion would
+make stand for another page (page_removal.py). placed_page_numbers finds
+where `page` is given a number in one file's own text, and
+page_number_as_name gives the page's name to write in its place. """
 import dataclasses
 from dataclasses import dataclass
 import re
@@ -51,6 +59,15 @@ _COMPARED_NUMBER = re.compile(r"(?<=[(&|])(%s)(?:==|!=|<=|>=|<|>)([A-Za-z_]\w*)\
 # A number standing alone in a line of a file's own text, not part of a
 # name or of another number.
 _WHOLE_NUMBER = re.compile(r"(?<![\w.])(?:0x[0-9A-Fa-f]+|\d+)(?![\w.])")
+# The system variable `dp`, the current page's ID, given a number or
+# compared with one, as in `dp==1`. The second pattern finds a number on the
+# left of the comparison, as in `2!=dp`.
+_DP_NUMBER = re.compile(r"(?<![\w.])dp(?:==|!=|<=|>=|<|>|=)(%s)(?=$|\)|&&|\|\|)" % _NUMBER)
+_NUMBER_DP = re.compile(r"(?<=[(&|])(%s)(?:==|!=|<=|>=|<|>)dp(?![\w.])" % _NUMBER)
+# A name that code can use unchanged, as in `page settings`.
+_CODE_NAME = re.compile(r"[A-Za-z_]\w*")
+# The kind of a PlacedNumber that gives a page's ID.
+PAGE = "page"
 # A page file's attribute given a number: its name, then the number.
 _PAGE_FILE_NUMBER = re.compile(r"\s*([A-Za-z_]\w*)\s*=\s*(\d+)\s*(?:#.*)?$")
 PAGE_FILE_SUFFIX = ".page.toml"
@@ -186,6 +203,55 @@ def as_name(folder, index: FolderIndex, placed: PlacedNumber):
     if rewritten == line[:placed.place.start] + reference + line[placed.place.end:]:
         return reference
     return None
+
+
+def page_numbers(code: str) -> list:
+    """Returns the page IDs that `code`, the code part of one line in strict
+    Nextion syntax, gives as numbers: the argument of `page`, then each
+    number given to `dp` or compared with it."""
+    found = []
+    if command_word(code) == "page":
+        found.append(_literal(command_arguments(code[len("page"):].strip()), 0))
+    # Quoted texts are emptied first, so that a `dp` inside one is not taken for code.
+    code = STRING_LITERAL.sub('""', code)
+    found += [_value(match.group(1)) for match in _DP_NUMBER.finditer(code)]
+    found += [_value(match.group(1)) for match in _NUMBER_DP.finditer(code)]
+    return [value for value in found if value is not None]
+
+
+def placed_page_numbers(folder, index: FolderIndex, path: str) -> list:
+    """Returns the PlacedNumbers, of kind PAGE, where the folder's .nx file
+    `path` gives `page` a number, in the order they appear in the file. A
+    number is placed only if it appears once in its line. A number given to
+    `dp` is left out, since it cannot be written as a name, and a file whose
+    code does not compile gives none."""
+    try:
+        places = code_lines(folder, index, path)
+    except NxwrightError:
+        return []
+    lines = index.lines(path) or []
+    found = []
+    for (file, number), compiled in sorted(places.items()):
+        if file != path or not 0 < number <= len(lines):
+            continue
+        values = {_literal(command_arguments(code_part[len("page"):].strip()), 0)
+                  for code_part in (_code_part(code) for _, code in compiled)
+                  if command_word(code_part) == "page"}
+        for value in sorted(value for value in values if value is not None):
+            span = _only_place(lines[number - 1], value)
+            if span is not None:
+                found.append(PlacedNumber(Place(path, number - 1, *span), PAGE, value))
+    return found
+
+
+def page_number_as_name(folder, placed: PlacedNumber):
+    """Returns the name of the page whose ID `placed` gives, to write after
+    `page` in place of the number. Returns None for an ID past the last page,
+    and for a page whose name cannot appear in code as it is, such as `a:b`."""
+    pages = folder.app["pages"]
+    if not 0 <= placed.id < len(pages) or not _CODE_NAME.fullmatch(pages[placed.id]):
+        return None
+    return pages[placed.id]
 
 
 def number_files(index: FolderIndex, app: dict) -> list:

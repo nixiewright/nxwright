@@ -380,8 +380,8 @@ class CodeAndLanguageServerTest(MediaFolderTestCase):
 
     def test_a_name_is_renamed_by_hand(self):
         place = self.find("pages/page0.nx", "@animation(blink)", "blink")
-        with self.assertRaisesRegex(NxwrightError, "animations, videos, sounds, and files are "
-                                                   "renamed by hand"):
+        with self.assertRaisesRegex(NxwrightError, "renamed with nxwright rename or from the "
+                                                   "Media section"):
             rename(self.index(), place.path, place.line, place.start, "wink",
                    self.documents.folder_reader(self.source), lambda path: True)
 

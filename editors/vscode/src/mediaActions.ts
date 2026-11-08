@@ -3,6 +3,7 @@
 // mediaResource.<list>). Each runs an nxwright subcommand, `remove`,
 // `replace`, or `rename`, after asking the questions that mediaEditing.ts
 // builds. A font is replaced from the Fonts panel instead (fontPanel.ts).
+// The Pages section's Delete Page deletes a page the same way.
 // Each action refuses to run while a file of the folder has unsaved
 // changes, because the subcommand could rewrite that file.
 import * as vscode from "vscode";
@@ -21,6 +22,7 @@ import { errorText } from "./userMessages";
 // Each list of app.toml, by the word nxwright's commands name its kind with.
 const KINDS: Record<string, string> = {
   pictures: "picture", fonts: "font", animations: "animation", videos: "video", sounds: "sound",
+  pages: "page",
 };
 
 // What the actions need of the extension.
@@ -48,6 +50,11 @@ export class MediaActions {
                                       (entry: MediaEntry) => this.replace(entry)),
       vscode.commands.registerCommand("nxwright.renameResource",
                                       (entry: MediaEntry) => this.rename(entry)),
+      // The Pages section's item for a page, deleted as an entry of app.toml's
+      // `pages`.
+      vscode.commands.registerCommand("nxwright.deletePage",
+                                      (page: { name: string }) =>
+                                        this.delete({ list: "pages", name: page.name })),
     ];
   }
 

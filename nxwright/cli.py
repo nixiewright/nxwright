@@ -44,6 +44,9 @@ from nxwright.source.unknown_content import (UnknownContentError, report_hint,
 from nxwright.source.keyboards import KEYBOARD_PAGES
 from nxwright.source.resource_removal import (KINDS, remove_keeping_ids, remove_resource,
                                              removal_report)
+from nxwright.source.page_removal import (page_removal_report, remove_page,
+                                          remove_page_keeping_ids)
+from nxwright.source.page_renaming import rename_page
 from nxwright.source.resource_renaming import rename_resource
 from nxwright.source.resource_replacing import (OPTIONS as REPLACE_OPTIONS, current_settings,
                                                 replace_resource)
@@ -324,18 +327,24 @@ def _run_picture(arguments) -> str:
 def _run_remove(arguments) -> str:
     if arguments.report and arguments.keep_ids:
         raise NxwrightError("--report writes nothing, so it does not go with --keep-ids")
+    page = arguments.kind == "page"
     if arguments.report:
         # On one line, because programs read nxwright's JSON output line by line.
-        return json.dumps(removal_report(arguments.source_folder, arguments.kind,
-                                         arguments.name))
+        return json.dumps(page_removal_report(arguments.source_folder, arguments.name) if page
+                          else removal_report(arguments.source_folder, arguments.kind,
+                                              arguments.name))
     if arguments.keep_ids:
-        placeholder, removed, left = remove_keeping_ids(arguments.source_folder, arguments.kind,
-                                                        arguments.name)
-        lines = ["Replaced the %s %s in %s with the placeholder %s, deleting %s"
-                 % (arguments.kind, arguments.name, arguments.source_folder, placeholder,
+        placeholder, removed, left = (
+            remove_page_keeping_ids(arguments.source_folder, arguments.name) if page
+            else remove_keeping_ids(arguments.source_folder, arguments.kind, arguments.name))
+        lines = ["Replaced the %s %s in %s with the %s %s, deleting %s"
+                 % (arguments.kind, arguments.name, arguments.source_folder,
+                    "empty slot page" if page else "placeholder", placeholder,
                     ", ".join(removed) or "no file")]
     else:
-        removed, left = remove_resource(arguments.source_folder, arguments.kind, arguments.name)
+        removed, left = (remove_page(arguments.source_folder, arguments.name) if page
+                         else remove_resource(arguments.source_folder, arguments.kind,
+                                              arguments.name))
         lines = ["Removed the %s %s from %s: %s" % (arguments.kind, arguments.name,
                                                    arguments.source_folder,
                                                    ", ".join(removed) or "it had no files")]
@@ -368,8 +377,11 @@ def _run_replace(arguments) -> str:
 
 
 def _run_rename(arguments) -> str:
-    written = rename_resource(arguments.source_folder, arguments.kind, arguments.name,
-                              arguments.new_name)
+    if arguments.kind == "page":
+        written = rename_page(arguments.source_folder, arguments.name, arguments.new_name)
+    else:
+        written = rename_resource(arguments.source_folder, arguments.kind, arguments.name,
+                                  arguments.new_name)
     return "Renamed the %s %s to %s in %s, writing %s" % (
         arguments.kind, arguments.name, arguments.new_name, arguments.source_folder,
         ", ".join(written))
@@ -760,7 +772,7 @@ _SUBCOMMANDS = [
      "name, are refused, and nothing is written then.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
       ("pictures", {"type": Path, "nargs": "+", "help": "the picture files"})]),
-    ("remove", _run_remove, "remove a resource from a source folder",
+    ("remove", _run_remove, "remove a page or a resource from a source folder",
      "Removes a picture, font, animation, video, or sound: its files, and its name in "
      "app.toml. The command fails, and changes nothing, while the folder still uses the "
      "resource, by name or by a number from its ID to the last ID of its kind. Numbers in that "
@@ -774,12 +786,17 @@ _SUBCOMMANDS = [
      "fails only if the folder uses the resource itself, by name or by its own ID. --report "
      "changes nothing, and prints as JSON what removing the resource would affect: its ID, "
      "the folder's encoding, whether it is the last of its kind, the names of the later ones, "
-     "and each use, by name or by number, of the resource or of a later one.",
+     "and each use, by name or by number, of the resource or of a later one. A page is "
+     "removed the same way, with its page file and its .nx file, but a file the page "
+     "includes stays. For a page, the command looks for numbers given to the page command, or "
+     "given to dp or compared with it. With --keep-ids, a blank page named empty_slot_1 takes "
+     "the page's place. The folder's only page cannot be removed.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
-      ("kind", {"choices": list(KINDS), "help": "the kind of resource"}),
+      ("kind", {"choices": ["page", *KINDS], "help": "what to remove"}),
       ("name", {"help": "its name, as app.toml lists it"}),
       ("--keep-ids", {"action": "store_true",
-                      "help": "leave a placeholder in its place, so that no ID changes"}),
+                      "help": "leave a placeholder, or a blank page, in its place, so that "
+                              "no ID changes"}),
       ("--report", {"action": "store_true",
                     "help": "print what removing it would affect, as JSON, and write "
                             "nothing"})]),
@@ -824,15 +841,16 @@ _SUBCOMMANDS = [
                   "help": "convert a sound to one channel"}),
       ("--ffmpeg", {"type": Path, "help": "the ffmpeg program, for a video file or a sound to "
                                           "convert (default: the one on the PATH)"})]),
-    ("rename", _run_rename, "rename a resource, and each use of its name",
-     "Renames a picture, font, animation, video, or sound, with its files and each use of its "
-     "name that a code editor's Find All References finds in the page files and the code. The "
-     "resource keeps its place in app.toml, so its ID stays the same, and numbers in the code "
-     "still point to it. Changing only the letter case is a rename too. The command fails, and "
-     "changes nothing, if another resource of the same kind has the new name in any letter "
-     "case, or if the folder's checks find an error, before or after the rename.",
+    ("rename", _run_rename, "rename a page or a resource, and each use of its name",
+     "Renames a page, picture, font, animation, video, or sound, with its files and each use "
+     "of its name that a code editor's Find All References finds in the page files and the "
+     "code. The page or resource keeps its place in app.toml, so its ID stays the same, and "
+     "numbers in the code still point to it. Changing only the letter case is a rename too. "
+     "A page's new name must be one that new-page would take. The command fails, and changes "
+     "nothing, if another page, or another resource of the same kind, has the new name in "
+     "any letter case, or if the folder's checks find an error, before or after the rename.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
-      ("kind", {"choices": list(KINDS), "help": "the kind of resource"}),
+      ("kind", {"choices": ["page", *KINDS], "help": "what to rename"}),
       ("name", {"help": "its name, as app.toml lists it"}),
       ("new_name", {"help": "its new name"})]),
     ("device", _run_device, "change a source folder's screen model, rotation, or encoding",

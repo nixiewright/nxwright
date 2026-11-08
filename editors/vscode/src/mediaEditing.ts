@@ -47,11 +47,15 @@ export interface DeleteDialog {
 // Each kind's plural, as the warning names them.
 const PLURALS: Record<string, string> = {
   picture: "pictures", font: "fonts", animation: "animations", video: "videos", sound: "sounds",
+  page: "pages",
 };
 // The two-byte encodings, in which a font contains every character of the encoding.
 const TWO_BYTE_ENCODINGS = ["gb2312", "big5", "shift-jis", "ks_c_5601-1987"];
-// A placeholder's name, as `nxwright remove --keep-ids` gives it.
+// The names that `nxwright remove --keep-ids` gives a placeholder resource
+// and an empty slot page. A page's name has underscores, so that code can
+// use it.
 const PLACEHOLDER = /^empty-slot-[1-9][0-9]*$/;
+const EMPTY_SLOT_PAGE = /^empty_slot_[1-9][0-9]*$/;
 // A resource's name: parts of letters, digits, "_" and "-", separated by "/".
 const NAME = /^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/;
 // How many of the names whose IDs change the dialog lists.
@@ -59,9 +63,10 @@ const NAMES_SHOWN = 5;
 // The names Windows reserves for devices, which no part of a name may be.
 const DEVICE_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 
-// Whether `name` is a placeholder's.
-export function isPlaceholder(name: string): boolean {
-  return PLACEHOLDER.test(name);
+// Whether `name` is the name of a placeholder, or, when `kind` is "page",
+// of an empty slot page.
+export function isPlaceholder(name: string, kind?: string): boolean {
+  return (kind === "page" ? EMPTY_SLOT_PAGE : PLACEHOLDER).test(name);
 }
 
 // Returns the dialog for deleting the resource of `report`. `rewroteNumbers`
@@ -82,7 +87,7 @@ export function deleteDialog(report: RemovalReport, rewroteNumbers = false): Del
     return { error: false, message: `Delete the ${kind} ${name}?`, detail: "",
              buttons: [{ label: "Delete", action: "delete" }] };
   }
-  const placeholder = isPlaceholder(name);
+  const placeholder = isPlaceholder(name, kind);
   const keep = placeholder ? [] : [{ label: "Leave an Empty Slot", action: "keepIds" as const }];
   const shifting = `Deleting the ${kind} ${name} will change the ${changedIds(report)}.`;
   const numbers = report.uses.filter((use) => use.of === "later");
@@ -131,7 +136,8 @@ function namesOf(names: string[]): string {
 }
 
 // The warning of a deletion that changes IDs: what may then go wrong, and
-// what each choice does. A placeholder is not offered one in its place.
+// what each choice does. Deleting a placeholder or an empty slot page does
+// not offer to leave another in its place.
 // `offersShift` says whether the dialog offers Delete and Shift IDs.
 export function warningText(report: RemovalReport, placeholder: boolean,
                             offersShift = true): string {
@@ -139,8 +145,11 @@ export function warningText(report: RemovalReport, placeholder: boolean,
   const lines = [`Code that computes ${kind} IDs, or code on your microcontroller, would ` +
     `then use the wrong ${kind}.`];
   if (!placeholder) {
-    let slot = `Leave an Empty Slot keeps every ID as it is: a placeholder takes ${name}'s ` +
-      "place, and stays in the Media section until you fill it with Replace.";
+    let slot = kind === "page"
+      ? `Leave an Empty Slot keeps every ID as it is: a blank page takes ${name}'s place, ` +
+        "and you can reuse it by renaming it and adding components."
+      : `Leave an Empty Slot keeps every ID as it is: a placeholder takes ${name}'s ` +
+        "place, and stays in the Media section until you fill it with Replace.";
     if (kind === "font" && TWO_BYTE_ENCODINGS.includes(String(report.encoding))) {
       slot += ` In ${report.encoding}, a placeholder font contains every character of the ` +
         "encoding, which takes many kilobytes of the screen's flash, such as about 135 KB in " +

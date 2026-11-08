@@ -28,9 +28,9 @@ nxwright animation <source-folder> <pictures...>
 nxwright video <source-folder> <video-file or pictures...>
 nxwright sound <source-folder> <sound-file>
 nxwright sd-picture <pictures...> --output <folder>
-nxwright remove <source-folder> <picture|font|animation|video|sound> <name> [--keep-ids]
+nxwright remove <source-folder> <page|picture|font|animation|video|sound> <name> [--keep-ids]
 nxwright replace <source-folder> <picture|font|animation|video|sound> <name> <files...>
-nxwright rename <source-folder> <picture|font|animation|video|sound> <name> <new-name>
+nxwright rename <source-folder> <page|picture|font|animation|video|sound> <name> <new-name>
 nxwright device <source-folder> [--screen MODEL] [--rotation DEGREES] [--encoding NAME]
 nxwright upgrade <source-folder>
 nxwright language <source-folder> nxlang
@@ -588,6 +588,18 @@ Options:
   - In a utf-8 folder, a placeholder font contains only the space. In any other encoding, it contains every character of the encoding, so it takes about 6 KB in a one-byte encoding, and about 135 KB in a two-byte one such as gb2312.
 - `--report` changes nothing, and prints as JSON what removing the resource would affect: its ID, the folder's encoding, whether it is the last of its kind, the names of the later ones, and each use, by name or by number, of the resource itself or of a later one. The report is printed even when the folder uses the resource.
 
+### A page
+
+```
+nxwright remove app page settings
+```
+
+Removing a page works just like removing a resource: the command fails while the folder uses the page, by name or by a number from its ID to the last page's ID, and `--keep-ids` and `--report` work the same too. The command deletes the page's page file, its `.nx` file, and its name in `app.toml`. A file the page includes stays, since other pages may include it too.
+
+- The command looks for page IDs written as numbers in two places: the argument of `page`, as in `page 2`, and a number given to `dp` or compared with it. Uses in the page's own files don't count, since they are deleted with the page.
+- The command also fails for the folder's only page, and if the folder would not build without the page.
+- `--keep-ids` leaves a blank page in the deleted page's place, named `empty_slot_1`, or `empty_slot_2` and so on if that name is taken. To use the blank page, rename it and add components.
+
 ## replace
 
 ```
@@ -614,15 +626,18 @@ Details:
 
 ```
 nxwright rename app picture picture-0012 logo
+nxwright rename app page settings config
 ```
 
-`rename` renames a picture, font, animation, video, or sound, with its files and each use of its name that a code editor's Find All References finds in your page files and code. The resource keeps its place in `app.toml`, so its ID stays the same, and numbers in your code still point to it.
+`rename` renames a page, picture, font, animation, video, or sound, with its files and each use of its name that a code editor's Find All References finds in your page files and code. The page or resource keeps its place in `app.toml`, so its ID stays the same, and numbers in your code still point to it.
 
 Details:
 
 - A change of letter case alone, such as `logo` to `Logo`, is a rename too.
 - A name in another folder, such as `icons/logo`, makes that folder. The old folder stays, even when empty.
-- The command fails, and changes nothing, if another resource of the same kind has the new name in any letter case, or if the folder's checks find an error, before or after the rename.
+- A page's new name must be one that [new-page](#new-page) would accept.
+- `rename` does not change your Python tests or launch configurations, so update any that use the page's old name.
+- The command fails and changes nothing if another page, or another resource of the same kind, has the new name in any letter case, or if the folder's checks find an error, before or after the rename.
 
 ## device
 

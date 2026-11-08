@@ -134,6 +134,15 @@ class ServerTest(PlacedNumbersTestCase):
         self.assertEqual([edit["newText"] for edit in changes[uri_of(self.source / PAGE)]],
                          ['"b"'])
 
+    def test_page_numbers_as_names(self):
+        # Only the number given to `page` is written as the page's name. The one
+        # given to `dp` stays a number.
+        self.write_code("page 0", "dp=0")
+        result = self.ask("nxwright/resourceNumbersAsNames", {
+            "folder": str(self.source), "kind": "page", "ids": [0]})
+        edits = result["changes"][uri_of(self.source / CODE)]
+        self.assertEqual([edit["newText"] for edit in edits], ["page0"])
+
 
 if __name__ == "__main__":
     import unittest

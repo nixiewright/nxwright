@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.3] - 2026-11-08
+
+- `nxwright rename` and `nxwright remove` now work on pages too.
+
 ### [0.2.2] - 2026-11-08
 
 - Adds `nxwright replace`, which replaces a resource's file and keeps its ID.
@@ -40,6 +44,15 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.4] - 2026-11-08
+
+Needs nxwright 0.2.3 or later.
+
+- Adds Rename and Delete to the right-click menu of a page, and Rename to a component's.
+- Replace Numbers with Names now also covers page numbers.
+- Asks first when changing components would change their IDs.
+- Fixes a cancelled Cut changing the clipboard.
 
 ### [0.3.3] - 2026-11-08
 

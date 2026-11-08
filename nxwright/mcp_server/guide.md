@@ -24,7 +24,7 @@ The app is a source folder: the folder that contains `app.toml`. The files you w
     page main
   ```
 
-- Add a page with `nxwright new-page`, and a picture or font with `nxwright picture` or `nxwright font`. Remove a picture or font with `nxwright remove`, which first checks that nothing uses it, and add `--keep-ids` to leave a placeholder in its place, so that the IDs after it stay the same. `nxwright replace` puts a new file in a resource's place, keeping its ID, and `nxwright rename` renames a resource and each use of its name.
+- Add a page with `nxwright new-page`, and a picture or font with `nxwright picture` or `nxwright font`. Remove a page, picture, or font with `nxwright remove`, which first checks that nothing uses it, and add `--keep-ids` to leave a placeholder in its place, so that the IDs after it stay the same. `nxwright replace` puts a new file in a resource's place, keeping its ID, and `nxwright rename` renames a page or a resource and each use of its name.
 - The order of `app.toml`'s lists sets each page's, picture's, and font's ID. Code may use an ID as a number, so do not reorder the lists unless the user asks.
 - `nxwright --help` lists the commands, and `nxwright <command> --help` prints what a command does, with its options.
 

@@ -1,10 +1,11 @@
-// The commands for a page's components: adding, deleting, copying,
-// pasting, locking, unlocking, grouping, and ungrouping them, going to
+// The commands for a page's components: adding, renaming, deleting,
+// copying, pasting, locking, unlocking, grouping, and ungrouping them, going to
 // their events, clearing their code, and showing their attributes. The page
 // preview's right-click menu and the Components list of nxwright's side bar
 // run them, and the command palette can also add a component. This file
-// also registers Lock page, Lock page with password, and Unlock page, for
-// the right-click menus of the preview and of the Pages section.
+// also registers Rename Page, Lock page, Lock page with password, and
+// Unlock page, for the right-click menus of the preview and of the Pages
+// section.
 // pageEditing.ts makes the edits themselves.
 import * as vscode from "vscode";
 import { EVENT_NAMES, eventCommand } from "./eventMenu";
@@ -44,6 +45,10 @@ export class PageComponents {
                                       (target: PreviewMenuContext | PageObject) =>
                                         this.onComponents(target, (toml, names) =>
                                           this.editing.deleteComponents(toml, names))),
+      vscode.commands.registerCommand("nxwright.renameComponent",
+                                      (target: PreviewMenuContext | PageObject) =>
+                                        this.onComponents(target, (toml, names) =>
+                                          this.rename(toml, names))),
       vscode.commands.registerCommand("nxwright.copyComponent",
                                       (target: PreviewMenuContext | PageObject) =>
                                         this.onComponents(target, (toml, names) =>
@@ -64,6 +69,9 @@ export class PageComponents {
       vscode.commands.registerCommand("nxwright.unlockComponents",
                                       (target: PreviewMenuContext) =>
                                         this.lock(target, false)),
+      vscode.commands.registerCommand("nxwright.renamePage",
+                                      (target: PreviewMenuContext | ProjectPage) =>
+                                        this.renamePage(target)),
       vscode.commands.registerCommand("nxwright.lockPage",
                                       (target: PreviewMenuContext | ProjectPage) =>
                                         this.lockPage(target, true)),
@@ -167,6 +175,25 @@ export class PageComponents {
     }
   }
 
+  // Asks for a new name for the one component in `names`, then renames the
+  // component and each use of its name. The language server checks the new
+  // name. If `names` does not have exactly one component, it only shows a
+  // message asking the user to select one.
+  private async rename(toml: vscode.Uri, names: string[]): Promise<void> {
+    if (names.length !== 1) {
+      void vscode.window.showInformationMessage("nxwright: select one component to rename.");
+      return;
+    }
+    const [name] = names;
+    const newName = await vscode.window.showInputBox({
+      title: `nxwright: rename ${name}, and each use of its name`,
+      value: name,
+    });
+    if (newName !== undefined) {
+      await this.editing.rename(toml, name, newName.trim());
+    }
+  }
+
   // Opens the code of `event` for the object the menu is on, and adds the
   // event's heading if the event has no code. When the menu is on a page in
   // the Pages section, that object is the page itself.
@@ -195,6 +222,25 @@ export class PageComponents {
     const toml = menuPageFile(target);
     if (toml) {
       await this.editing.lockPage(toml, locked);
+    }
+  }
+
+  // Asks for a new name for the page the menu was opened on, then renames
+  // the page, its files, and each use of its name, through the language
+  // server's rename. The server checks the new name.
+  private async renamePage(target: PreviewMenuContext | ProjectPage): Promise<void> {
+    const toml = menuPageFile(target);
+    const name = !toml ? undefined : "id" in target ? target.name
+      : await this.editing.pageName(toml);
+    if (!toml || name === undefined) {
+      return;
+    }
+    const newName = await vscode.window.showInputBox({
+      title: `nxwright: rename the page ${name}, and each use of its name`,
+      value: name,
+    });
+    if (newName !== undefined) {
+      await this.editing.rename(toml, name, newName.trim());
     }
   }
 

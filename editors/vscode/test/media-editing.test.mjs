@@ -73,6 +73,19 @@ test("a placeholder is not offered another in its place", () => {
   assert.equal(isPlaceholder("empty-slot-12"), true);
   assert.equal(isPlaceholder("empty-slot-0"), false);
   assert.equal(isPlaceholder("logo"), false);
+  // An empty slot page's name has underscores, so that code can use it.
+  assert.equal(isPlaceholder("empty_slot_3", "page"), true);
+  assert.equal(isPlaceholder("empty-slot-3", "page"), false);
+});
+
+test("a page's empty slot is a blank page, reused by renaming it", () => {
+  const dialog = deleteDialog(report("settings", 1, ["about"], [], "page"));
+  assert.match(dialog.detail, /^Deleting the page settings will change the ID of page 2 \(about\)/);
+  assert.match(dialog.detail, /a blank page takes settings's place, and you can reuse it by renaming it/);
+  assert.deepEqual(actions(dialog), ["keepIds", "shift"]);
+  // An empty slot page is not offered another in its place.
+  assert.deepEqual(actions(deleteDialog(report("empty_slot_1", 1, ["about"], [], "page"))),
+                   ["shift"]);
 });
 
 test("a font's empty slot in a two-byte encoding says what it takes", () => {

@@ -25,9 +25,9 @@ Right-click a component and choose Paste Special to give the selected components
 
 On an empty part of the page, or on the page in the Components list, Paste Special pastes new copies, and lets you choose whether they keep their original position and their code.
 
-Double-click a component to go to its code. If it has none yet, the extension adds its first event to the page's `.nx` file, unless the component or its page is locked. To open or add any other event, right-click the component or the page and use Go to Event. From the same menu, you can also jump to the component's entry in the page file, or delete all its code.
+Double-click a component to go to its code. If it has none yet, the extension adds its first event to the page's `.nx` file, unless the component or its page is locked. To open or add any other event, right-click the component or the page and use Go to Event. That menu also lets you rename the component, jump to its entry in the page file, or delete all its code.
 
-You can lock a whole page by right-clicking it in the preview or in the Pages section. A locked page can't be changed from the preview or the Attributes section until you unlock it, but you can still edit its code and its page file as text. `Lock page with password` also sets a password that the Nextion Editor will ask for, which is useful if you share the project file without the source folder. VS Code doesn't ask for it.
+You can rename a page, or lock it, by right-clicking it in the preview or in the Pages section. Renaming a page also renames its files. A locked page can't be changed from the preview or the Attributes section until you unlock it, but you can still edit its code and its page file as text. `Lock page with password` also sets a password that the Nextion Editor will ask for, which is useful if you share the project file without the source folder. VS Code doesn't ask for it. You can also delete a page from the Pages section, and leave an empty slot in its place so that the other pages keep their IDs.
 
 Every change edits the page file, so the preview and the text editor share the same undo history. To switch between the two, use the editor picker at the top right of the editor. Its "Set Default" item lets you pick whether pages open by default in the WYSIWYG preview, or as the underlying `.page.toml` file.
 
@@ -195,13 +195,13 @@ On a Mac, use Cmd instead of Ctrl, and the delete key to delete.
 
 ### Before you edit a page
 
-- Deleting a component, or moving it forward or backward, changes the IDs of the components after it. If your code or attributes use an ID as a number, that number then points to a different component.
+- A component's ID is its place on its page, so deleting a component, or moving it forward or backward, changes the IDs of the components after it. If your code, your attributes, or your microcontroller's code uses an ID as a number, that number will then point to a different component.
 - If a component's code is in an included file, you can't delete the component from the preview, because other pages may use that code. To delete the component, first remove its events from the included file, or move them into the `.nx` files of the pages that still need them. Deleting it from the page file by hand makes the build fail, because the included file still has events for a component of that name. Clear events and Paste Special can't change code in an included file either.
 - Components paste with their code only if they are the ones you copied last. Component tables from anywhere else, such as a text file, paste without code.
 - Setting a component's `key` to a keyboard adds nxwright's keyboard page, if the project doesn't have it yet. The keyboard files are written right away and undo will only remove the component's key (remove the keyboard page manually if you need to).
 - A keyboard only opens from a component of global scope.
 - `key` 4 opens the Chinese keyboard. It only works in a gb2312 project, and you will be asked for a font with Chinese characters.
-- Rename changes your code and page files, but not strings, comments, or your Python tests.
+- Rename changes your code and page files, but not strings, comments, your Python tests, or a page set in a launch configuration.
 
 ### Good to know
 
@@ -218,6 +218,7 @@ You can change these in VS Code's Settings, where they are grouped by category.
 - `nxwright.backups`: keeps a backup of a project file or a TFT file that changed since nxwright wrote it, when a build or a compile replaces that file. It is on by default. Backups go beside the new file, such as `app.HMI.2026-11-06-143205.bak`, and nxwright never deletes them.
 - `nxwright.lockPages`: locks the pages of a project file nxwright builds, with no password, to show in the Nextion Editor that the file is not meant for editing. It is on by default.
 - `nxwright.previewGrid`: the size of the grid, in pixels, that dragged components snap to. The default is 1, which means no grid.
+- `nxwright.warnWhenComponentIdsChange`: warns you when deleting, cutting, or moving components would change the IDs of components on their page. It is on by default, and choosing Don't Warn Again in the warning turns it off.
 - `nxwright.testFolders`: the folders of tests that Test Explorer lists. By default, it lists every folder named `tests` next to a source folder.
 - The Simulator settings, used when a launch configuration doesn't set its own value:
   - `nxwright.simulator.serialPort` and `nxwright.simulator.serialBaud`: the serial port, such as `COM4`, and its speed. Leave the port empty for none.

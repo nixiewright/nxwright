@@ -658,37 +658,18 @@ def add_page(source_folder: Path, name: str = None) -> str:
     the first of page0, page1, and so on that the folder lacks. Returns the
     page's name.
 
-    Raises NxwrightError, before writing anything, for a folder without screen
-    settings; a folder that already has 251 pages, the most the Nextion Editor
-    compiles (editor_limits.check_room_for_a_page); a name app.toml's pages
-    may not hold, or one the build refuses for a page
-    (editor_limits.check_page_limits); a name the folder has already, in any
-    case; and a file already at the place of one it writes."""
+    Raises NxwrightError, before writing anything, if the folder has no screen
+    settings, if it already has 251 pages, the most the Nextion Editor compiles
+    (editor_limits.check_room_for_a_page), if check_new_page_name rejects the
+    name, or if a file is already where one of the new page's files would go."""
     source_folder = Path(source_folder)
     app = parse_app(read_text(source_folder / "app.toml"))
-    settings = settings_from_keys(app)
-    if settings is None:
-        raise NxwrightError("app.toml gives no screen settings, so the page's size is not known")
     check_room_for_a_page(len(app["pages"]))
-    taken = {page.lower(): page for page in app["pages"]}
     if name is None:
+        taken = {page.lower() for page in app["pages"]}
         name = next("page%d" % number for number in count() if "page%d" % number not in taken)
-    elif not is_valid_name(name) or "/" in name:
-        raise NxwrightError("%r is not a valid page name" % name)
-    elif name.lower() in taken:
-        raise NxwrightError("the folder has a page named %s already" % taken[name.lower()])
-    if len(name) > NAME_LIMIT:
-        raise NxwrightError("the name %s has %d characters; the Nextion Editor keeps %d"
-                            % (name, len(name), NAME_LIMIT))
-    if name in NAMES_THE_EDITOR_REFUSES:
-        raise NxwrightError('the Nextion Editor refuses this name, saying "Illegal name": %s'
-                            % name)
-    if name[:1].isdigit():
-        raise NxwrightError('the Nextion Editor refuses a name that starts with a digit, saying '
-                            '"First character of a Name can not be number": %s' % name)
-    width, height = settings.page_size
-    files = {page_toml_path(name): (_NEW_PAGE % (name, width, height)).encode("utf-8"),
-             page_nx_path(name): b""}
+    check_new_page_name(name, app["pages"])
+    files = new_page_files(app, name)
     for relative in files:
         if (source_folder / relative).exists():
             raise NxwrightError("%s is already there, though app.toml does not list it"
@@ -699,6 +680,41 @@ def add_page(source_folder: Path, name: str = None) -> str:
     text = app_text_in(source_folder, dict(app, pages=app["pages"] + [name]))
     (source_folder / "app.toml").write_text(text, encoding="utf-8", newline="\n")
     return name
+
+
+def new_page_files(app: dict, name: str) -> dict:
+    """Returns the files of a blank page named `name`, as {path: bytes}: its
+    page file and an empty code file. `app` is a folder's app.toml, whose
+    screen and rotation set the page's size. Raises NxwrightError for
+    an app.toml without screen settings."""
+    settings = settings_from_keys(app)
+    if settings is None:
+        raise NxwrightError("app.toml gives no screen settings, so the page's size is not known")
+    width, height = settings.page_size
+    return {page_toml_path(name): (_NEW_PAGE % (name, width, height)).encode("utf-8"),
+            page_nx_path(name): b""}
+
+
+def check_new_page_name(name: str, pages: list, renamed: str = None):
+    """Raises NxwrightError if `name` cannot be the name of a new page in a
+    folder whose pages are `pages`. A name is rejected if app.toml cannot list
+    it as a page, if the build rejects it for a page, or if another page has it
+    in any letter case. With `renamed`, `name` is checked as the new name of
+    the page `renamed`, which may keep its own name in another letter case."""
+    if not is_valid_name(name) or "/" in name:
+        raise NxwrightError("%r is not a valid page name" % name)
+    taken = {page.lower(): page for page in pages if page != renamed}
+    if name.lower() in taken:
+        raise NxwrightError("the folder has a page named %s already" % taken[name.lower()])
+    if len(name) > NAME_LIMIT:
+        raise NxwrightError("the name %s has %d characters; the Nextion Editor keeps %d"
+                            % (name, len(name), NAME_LIMIT))
+    if name in NAMES_THE_EDITOR_REFUSES:
+        raise NxwrightError('the Nextion Editor refuses this name, saying "Illegal name": %s'
+                            % name)
+    if name[:1].isdigit():
+        raise NxwrightError('the Nextion Editor refuses a name that starts with a digit, saying '
+                            '"First character of a Name can not be number": %s' % name)
 
 
 @cache

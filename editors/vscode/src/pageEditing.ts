@@ -16,6 +16,8 @@ import {
 } from "vscode-languageclient/node";
 import { chineseFontChoices, chineseFontParameters } from "./chineseKeyboard";
 import { clearEventsQuestion, nothingToClearNote } from "./componentEvents";
+import { DONT_WARN_AGAIN, Question, deleteQuestion, moveQuestion, shiftedByDeleting }
+  from "./componentIds";
 import { KeyBinding, keyChange, makeKeyChange } from "./keyBinding";
 import { PageObject, PREVIEW_VIEW_TYPE } from "./pages";
 import {
@@ -32,7 +34,8 @@ import { appTomlUnsaved } from "./unsavedChanges";
 import { errorText } from "./userMessages";
 
 const MAKE_GLOBAL = "Make it global";
-const DELETE = "Delete";
+// The setting that turns on the warning before components' IDs change.
+const WARN_IDS = "warnWhenComponentIdsChange";
 const CLEAR_EVENTS = "Clear events";
 
 // Where Paste puts the copies: with `at`, the box holding those with a
@@ -264,10 +267,13 @@ export class PageEditing {
     }
   }
 
-  // Deletes components of the page, their code with them. When other code
-  // names one of them, asks first, saying where. Returns whether they were
-  // deleted; says why when they were not.
-  async deleteComponents(toml: vscode.Uri, names: string[]): Promise<boolean> {
+  // Deletes components of the page, with their code. It asks first if code
+  // elsewhere still uses one of their names, or if the deletion would change
+  // the IDs of other components and that warning is on (see componentIds.ts).
+  // With `cut`, it copies the components only once the deletion is confirmed,
+  // so that a cancelled Cut leaves the clipboard unchanged. Returns whether
+  // they were deleted, and shows why when they were not.
+  async deleteComponents(toml: vscode.Uri, names: string[], cut = false): Promise<boolean> {
     const client = this.client();
     if (!client || names.length === 0) {
       return false;
@@ -277,7 +283,16 @@ export class PageEditing {
         textDocument: { uri: toml.toString() },
         names,
       });
-      if (found.namedElsewhere.length > 0 && !(await this.confirmDelete(names, found))) {
+      const warnIds = this.warnsOfIds();
+      const order = warnIds ? await this.componentOrder(client, toml) : [];
+      const places = found.namedElsewhere.map((place) =>
+        `${vscode.workspace.asRelativePath(vscode.Uri.parse(place.uri))} line ${place.line + 1}`);
+      const question = deleteQuestion(cut ? "Cut" : "Delete", names, places,
+                                      shiftedByDeleting(order, names), warnIds);
+      if (question && !(await this.ask(question))) {
+        return false;
+      }
+      if (cut && !(await this.copyComponents(toml, names))) {
         return false;
       }
       return await this.apply(client, toml, found.edit);
@@ -328,9 +343,10 @@ export class PageEditing {
     return true;
   }
 
-  // Copies components, then deletes them as deleteComponents does.
+  // Copies components and deletes them, after the same questions as a
+  // deletion (see deleteComponents).
   async cutComponents(toml: vscode.Uri, names: string[]): Promise<boolean> {
-    return (await this.copyComponents(toml, names)) && (await this.deleteComponents(toml, names));
+    return await this.deleteComponents(toml, names, true);
   }
 
   // Pastes the clipboard's tables into the page, where `place` says, with
@@ -483,12 +499,33 @@ export class PageEditing {
     return await this.edit(toml, "nxwright/placeComponents", { places });
   }
 
-  // Moves components of the page one place "forward", up the ID order, or
-  // "backward"; or past every other component, to the "front" or the
-  // "back". Returns whether the page file changed.
+  // Moves components of the page in its ID order. `direction` is "forward" or
+  // "backward" to move them one place up or down the order, or "front" or
+  // "back" to move them past every other component. A move changes IDs, so it
+  // asks first, unless the warning about IDs is turned off (see
+  // componentIds.ts). Returns whether the page file changed.
   async reorderComponents(toml: vscode.Uri, names: string[], direction: string):
       Promise<boolean> {
-    return await this.edit(toml, "nxwright/reorderComponents", { names, direction });
+    const client = this.client();
+    if (!client) {
+      return false;
+    }
+    try {
+      const edit = await client.sendRequest<ProtocolWorkspaceEdit>("nxwright/reorderComponents", {
+        textDocument: { uri: toml.toString() }, names, direction });
+      // The edit is empty when the components are already as far as they can
+      // go, so there is nothing to ask.
+      if (Object.values(edit.changes ?? {}).every((edits) => edits.length === 0)) {
+        return false;
+      }
+      if (this.warnsOfIds() && !(await this.ask(moveQuestion(names)))) {
+        return false;
+      }
+      return await this.apply(client, toml, edit);
+    } catch (error) {
+      void vscode.window.showErrorMessage(`nxwright: ${errorText(error)}`);
+      return false;
+    }
   }
 
   // Locks components of the page, or unlocks them, as one edit. Returns
@@ -527,14 +564,53 @@ export class PageEditing {
     }
   }
 
-  // Asks whether to delete components that other code still names.
-  private async confirmDelete(names: string[], found: DeletedComponents): Promise<boolean> {
-    const places = found.namedElsewhere.map((place) =>
-      `${vscode.workspace.asRelativePath(vscode.Uri.parse(place.uri))} line ${place.line + 1}`);
-    const count = places.length === 1 ? "1 place" : `${places.length} places`;
-    const question = `Code names ${names.join(", ")} in ${count}, which will no longer build: ` +
-      `${places.slice(0, 5).join(", ")}${places.length > 5 ? ", ..." : ""}. Delete anyway?`;
-    return await vscode.window.showWarningMessage(question, { modal: true }, DELETE) === DELETE;
+  // Returns the name of the page whose page file is `toml`, or undefined if
+  // the language server cannot give it. A failed request shows its error.
+  async pageName(toml: vscode.Uri): Promise<string | undefined> {
+    const client = this.client();
+    if (!client) {
+      return undefined;
+    }
+    try {
+      const listed = await client.sendRequest<{ objects: PageObject[] } | null>(
+        "nxwright/pageObjects", { textDocument: { uri: toml.toString() } });
+      return listed?.objects.find((entry) => entry.type === "page")?.name;
+    } catch (error) {
+      void vscode.window.showErrorMessage(`nxwright: ${errorText(error)}`);
+      return undefined;
+    }
+  }
+
+  // Returns the page's components, in ID order, without the page itself.
+  private async componentOrder(client: LanguageClient, toml: vscode.Uri): Promise<string[]> {
+    const listed = await client.sendRequest<{ objects: PageObject[] } | null>(
+      "nxwright/pageObjects", { textDocument: { uri: toml.toString() } });
+    return (listed?.objects ?? []).filter((entry) => entry.type !== "page")
+      .map((entry) => entry.name);
+  }
+
+  // Returns whether to warn before components' IDs change.
+  private warnsOfIds(): boolean {
+    return vscode.workspace.getConfiguration("nxwright").get<boolean>(WARN_IDS, true);
+  }
+
+  // Asks `question` in a modal dialog, and returns whether the user chose to
+  // go ahead. Choosing Don't Warn Again also goes ahead, and turns off the
+  // warning about IDs in the user's settings.
+  private async ask(question: Question): Promise<boolean> {
+    const chosen = await vscode.window.showWarningMessage(
+      question.message, { modal: true, detail: question.detail }, ...question.buttons);
+    if (chosen === DONT_WARN_AGAIN) {
+      // The action goes ahead even if the setting cannot be written.
+      try {
+        await vscode.workspace.getConfiguration("nxwright").update(
+          WARN_IDS, false, vscode.ConfigurationTarget.Global);
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          `nxwright: could not turn off nxwright.warnWhenComponentIdsChange: ${errorText(error)}`);
+      }
+    }
+    return chosen !== undefined;
   }
 
   // Opens the code of an object's `event`, else of its default event: the

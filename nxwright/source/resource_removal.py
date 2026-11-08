@@ -168,7 +168,7 @@ def remove_resource_files(source_folder: Path, listed: str, name: str) -> tuple:
     return delete_files(source_folder, paths)
 
 
-def _use(index: FolderIndex, path: str, number: int, by: str, of: str) -> ResourceUse:
+def use_at(index: FolderIndex, path: str, number: int, by: str, of: str) -> ResourceUse:
     """The use on line `number`, counted from 1, of the file `path`."""
     return ResourceUse(path, number, index.lines(path)[number - 1].strip(), by, of)
 
@@ -182,7 +182,7 @@ def _uses_by_name(index: FolderIndex, listed: str, name: str) -> list:
     """The places outside app.toml that Find All References finds for the
     resource `name` of app.toml's list `listed`."""
     entry = index.app_entries[(listed, name)]
-    return [_use(index, place.path, place.line + 1, "name", "itself")
+    return [use_at(index, place.path, place.line + 1, "name", "itself")
             for place in references(index, entry.path, entry.line, entry.start, False)
             if place.path != APP_FILE]
 
@@ -239,7 +239,7 @@ def _page_file_use(index: FolderIndex, path: str, table: dict, attribute: str,
     if attribute in table:
         given = next((number for number in range(name_line, len(lines))
                       if lines[number].split("=")[0].strip() == attribute), name_line)
-        return _use(index, path, given + 1, by, of)
+        return use_at(index, path, given + 1, by, of)
     return ResourceUse(path, name_line + 1, "%s leaves out its %s, so it takes %s from the "
                        "defaults" % (name, attribute, value), by, of)
 
@@ -260,6 +260,6 @@ def _uses_in_code(folder, index: FolderIndex, kind: str, ids: range, own: int) -
                                                        split_line(code, 0)[1].strip())
                   if taken == kind and value in ids}
         if values:
-            uses.append(_use(index, path, number, "number",
-                             "itself" if own in values else "later"))
+            uses.append(use_at(index, path, number, "number",
+                               "itself" if own in values else "later"))
     return uses

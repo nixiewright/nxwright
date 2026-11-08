@@ -87,8 +87,9 @@ from nxwright.project.screen_copy import ROTATIONS
 from nxwright.project.screen_models import MODELS, model_named
 from nxwright.language.nxlang_samples import MORE_FEATURES, panel_sections
 from nxwright.language.resource_names import LISTS, NOUNS
-from nxwright.source.resource_numbers import (PAGE_FILE_SUFFIX, as_name, number_files,
-                                              placed_numbers)
+from nxwright.source.resource_numbers import (PAGE, PAGE_FILE_SUFFIX, as_name, number_files,
+                                              page_number_as_name, placed_numbers,
+                                              placed_page_numbers)
 from nxwright.source.source_folder import (LANGUAGES, NXLANG, SOURCE_FORMAT, add_page, app_name,
                                            new_source_folder, parse_app, read_app,
                                            read_folder_source)
@@ -403,12 +404,22 @@ class NxwrightServer(LanguageServer):
         if position is None:
             raise NxwrightError("only names of a source folder can be renamed")
         index = position[0]
-        edits = rename(*position, params.new_name, self._texts.folder_reader(index.root),
-                       lambda path: (index.root / path).is_file())
-        return {"changes": {uri_of(index.root / file): [{"range": self._range(index, place),
-                                                       "newText": new_text}
-                                                      for place, new_text in file_edits]
-                            for file, file_edits in edits.items()}}
+        renamed = rename(*position, params.new_name, self._texts.folder_reader(index.root),
+                         lambda path: (index.root / path).is_file())
+        edits = {file: [{"range": self._range(index, place), "newText": new_text}
+                        for place, new_text in file_edits]
+                 for file, file_edits in renamed["edits"].items()}
+        if not renamed["moves"]:
+            return {"changes": {uri_of(index.root / file): file_edits
+                                for file, file_edits in edits.items()}}
+        # The page's files are renamed first, so the edits after them use the new paths.
+        moved = dict(renamed["moves"])
+        return {"documentChanges": [{"kind": "rename", "oldUri": uri_of(index.root / old),
+                                     "newUri": uri_of(index.root / new)}
+                                    for old, new in renamed["moves"]]
+                + [{"textDocument": {"uri": uri_of(index.root / moved.get(file, file)),
+                                     "version": None},
+                    "edits": file_edits} for file, file_edits in edits.items()]}
 
     def _code_actions(self, params):
         """Returns the protocol's CodeActions of the request's problems that
@@ -502,19 +513,31 @@ class NxwrightServer(LanguageServer):
         return actions
 
     def _resource_numbers_as_names(self, params: dict) -> dict:
-        """Returns the protocol's WorkspaceEdit that writes as names the
-        numbers in the source folder `folder` that stand for resources of
-        `kind` whose IDs are among `ids`. `kind` is the word nxwright's
-        commands use, such as "picture". A number is written as a name only
-        where resource_numbers.as_name allows it."""
+        """Returns the protocol's WorkspaceEdit that replaces numbers with
+        names in the source folder `folder`: each number that stands for a
+        resource or page of `kind` whose ID is among `ids`. `kind` is the word
+        nxwright's commands use, such as "picture" or "page". A number is
+        replaced only where resource_numbers.as_name gives a name for it, or,
+        for a page, resource_numbers.page_number_as_name."""
         root = Path(params["folder"])
         index = FolderIndex(root, self._texts.read)
         folder = read_folder_source(self._texts.folder_reader(root))
+        edits = {}
+        if params["kind"] == PAGE:
+            # Only the argument of `page` can be written as a name. A number given
+            # to `dp` stays a number.
+            for path in number_files(index, folder.app):
+                if path.endswith(PAGE_FILE_SUFFIX):
+                    continue
+                for number in placed_page_numbers(folder, index, path):
+                    name = page_number_as_name(folder, number)
+                    if number.id in params["ids"] and name is not None:
+                        edits.setdefault(path, []).append(_text_edit(number.place, name))
+            return self._workspace_edit(index, edits)
         kinds = {noun: kind for kind, noun in NOUNS.items()}
         if params["kind"] not in kinds:
             raise NxwrightError("%s is not a kind of resource" % params["kind"])
         kind, ids = kinds[params["kind"]], set(params["ids"])
-        edits = {}
         for path in number_files(index, folder.app):
             for number in placed_numbers(folder, index, path):
                 if number.kind != kind or number.id not in ids:

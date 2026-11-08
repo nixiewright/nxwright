@@ -2,7 +2,7 @@
   "name": "nxwright-language",
   "displayName": "nxwright",
   "description": "Design, write, simulate, test, compile, and upload Nextion screen apps in VS Code.",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "publisher": "nxwright",
   "icon": "images/icon.png",
   "license": "Apache-2.0",
@@ -78,6 +78,11 @@
             "default": 1,
             "minimum": 1,
             "markdownDescription": "The grid, in pixels, that a component's edges snap to when dragged in the page preview. 1 for none."
+          },
+          "nxwright.warnWhenComponentIdsChange": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Warns you when deleting, cutting, or moving components would change the IDs of components on their page. Your microcontroller's code may rely on those IDs."
           }
         }
       },
@@ -468,6 +473,11 @@
         "category": "nxwright"
       },
       {
+        "command": "nxwright.renameComponent",
+        "title": "Rename...",
+        "category": "nxwright"
+      },
+      {
         "command": "nxwright.clearEvents",
         "title": "Clear events",
         "category": "nxwright"
@@ -678,6 +688,16 @@
       {
         "command": "nxwright.lockPage",
         "title": "Lock page",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.renamePage",
+        "title": "Rename Page...",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.deletePage",
+        "title": "Delete Page...",
         "category": "nxwright"
       },
       {
@@ -1039,6 +1059,10 @@
           "when": "false"
         },
         {
+          "command": "nxwright.renameComponent",
+          "when": "false"
+        },
+        {
           "command": "nxwright.cutComponent",
           "when": "false"
         },
@@ -1235,6 +1259,14 @@
           "when": "false"
         },
         {
+          "command": "nxwright.renamePage",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.deletePage",
+          "when": "false"
+        },
+        {
           "command": "nxwright.lockPageWithPassword",
           "when": "false"
         },
@@ -1344,6 +1376,16 @@
       ],
       "view/item/context": [
         {
+          "command": "nxwright.renamePage",
+          "when": "view == nxwright.pages && viewItem =~ /^page( |$)/",
+          "group": "0_edit@1"
+        },
+        {
+          "command": "nxwright.deletePage",
+          "when": "view == nxwright.pages && viewItem =~ /^page( |$)/",
+          "group": "0_edit@2"
+        },
+        {
           "command": "nxwright.lockPage",
           "when": "view == nxwright.pages && viewItem =~ /^page( |$)/",
           "group": "1_lock@1"
@@ -1397,6 +1439,11 @@
           "command": "nxwright.duplicateComponent",
           "when": "view == nxwright.components && viewItem =~ /^component( |$)/",
           "group": "1_clipboard@5"
+        },
+        {
+          "command": "nxwright.renameComponent",
+          "when": "view == nxwright.components && viewItem =~ /^component( |$)/",
+          "group": "2_delete@0"
         },
         {
           "command": "nxwright.deleteComponent",
@@ -1511,6 +1558,11 @@
           "group": "2_clipboard@6"
         },
         {
+          "command": "nxwright.renameComponent",
+          "when": "webviewId == 'nxwright.pagePreview' && component && !pageLocked",
+          "group": "3_delete@0"
+        },
+        {
           "command": "nxwright.deleteComponent",
           "when": "webviewId == 'nxwright.pagePreview' && component && !pageLocked",
           "group": "3_delete@1"
@@ -1564,6 +1616,11 @@
           "command": "nxwright.unlockComponents",
           "when": "webviewId == 'nxwright.pagePreview' && locked && !pageLocked",
           "group": "6_lock@2"
+        },
+        {
+          "command": "nxwright.renamePage",
+          "when": "webviewId == 'nxwright.pagePreview' && webviewSection == 'page' && !pageLocked",
+          "group": "3_delete@0"
         },
         {
           "command": "nxwright.lockPage",

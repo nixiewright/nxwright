@@ -53,8 +53,8 @@ def rename_resource(source_folder: Path, kind: str, name: str, new_name: str) ->
     check_resource_name(source_folder, app, listed, new_name, Slot(name))
     read, exists = folder_reader(source_folder), folder_file_exists(source_folder)
     lister = folder_lister(source_folder)
-    _check(read, exists, lister, "the folder's checks find an error, so its uses of %s %s "
-                                 "cannot all be found" % (kind, name))
+    check_builds(read, exists, lister, "the folder's checks find an error, so its uses of %s %s "
+                                       "cannot all be found" % (kind, name))
     moves = [(old, listed + "/" + new_name + old[len(listed) + 1 + len(name):])
              for old in resource_file_paths(source_folder, listed, name)]
     for old, new in moves:
@@ -64,18 +64,18 @@ def rename_resource(source_folder: Path, kind: str, name: str, new_name: str) ->
     texts = _edited_texts(source_folder, read, listed, name, new_name)
     renamed = [new_name if known == name else known for known in app[listed]]
     texts[APP_FILE] = app_text_in(source_folder, dict(app, **{listed: renamed}))
-    _check(*_as_renamed(read, exists, lister, texts, moves),
-           "the folder would not build after the rename")
-    _move(source_folder, moves)
+    check_builds(*as_renamed(read, exists, lister, texts, moves),
+                 "the folder would not build after the rename")
+    move_files(source_folder, moves)
     try:
-        _write(source_folder, texts)
+        write_texts(source_folder, texts)
     except Exception:
-        _move(source_folder, [(new, old) for old, new in reversed(moves)])
+        move_files(source_folder, [(new, old) for old, new in reversed(moves)])
         raise
     return [new for _, new in moves] + list(texts)
 
 
-def _check(read, exists, lister, why: str):
+def check_builds(read, exists, lister, why: str):
     """Raises NxwrightError, saying `why`, when the folder's checks, reading
     it through `read`, `exists`, and `lister`, find an error."""
     errors = check_folder(read, exists, listed=lister).errors()
@@ -96,7 +96,7 @@ def _edited_texts(source_folder: Path, read, listed: str, name: str, new_name: s
     return {path: text_with_edits(read(path), file_edits) for path, file_edits in edits.items()}
 
 
-def _as_renamed(read, exists, lister, texts: dict, moves: list) -> tuple:
+def as_renamed(read, exists, lister, texts: dict, moves: list) -> tuple:
     """Returns (read, exists, lister) of the folder as the rename would leave
     it: the files of `texts` holding their new texts, and each file of
     `moves`, (old path, new path), at its new path."""
@@ -117,7 +117,7 @@ def _as_renamed(read, exists, lister, texts: dict, moves: list) -> tuple:
     return read_renamed, exists_renamed, list_renamed
 
 
-def _move(source_folder: Path, moves: list):
+def move_files(source_folder: Path, moves: list):
     """Renames each file of `moves`, (old path, new path), making the folders
     a new path needs. A change of letter case alone goes through a
     temporary name first, because file names may ignore letter case. If a
@@ -145,7 +145,7 @@ def _move(source_folder: Path, moves: list):
         raise
 
 
-def _write(source_folder: Path, texts: dict):
+def write_texts(source_folder: Path, texts: dict):
     """Writes each file of `texts`, {path: its new text}, keeping its line
     endings and any byte order mark. If a write fails, the files already
     written are put back as they were, and the error is raised."""
