@@ -43,7 +43,7 @@ First public release.
 
 ### [0.3.3] - 2026-11-08
 
-- Shows progress, with a Cancel button, while Delete checks where a resource is used.
+- Shows progress during Build HMI, changing the screen settings, and adding, deleting, replacing, or renaming a resource.
 
 ### [0.3.2] - 2026-11-08
 

@@ -376,7 +376,8 @@ async function build(context: vscode.ExtensionContext): Promise<void> {
   // unless it changed elsewhere since nxwright last wrote it (tftFiles.ts).
   if (folder && project && await projectFileMayBeReplaced(context, project.fsPath, folder.fsPath)) {
     const code = await runSubcommand("build", ["build", folder.fsPath, project.fsPath,
-                                               "--overwrite", ...settingsArguments()]);
+                                               "--overwrite", ...settingsArguments()],
+                                     "building the project file...");
     if (code === 0) {
       await rememberProjectFile(context, project.fsPath);
     }
@@ -499,7 +500,10 @@ async function changeDevice(setting: "screen" | "rotation" | "encoding"): Promis
     "Change",
   );
   if (answer === "Change") {
-    await runSubcommand("device", ["device", folder.fsPath, `--${setting}`, chosen]);
+    await runSubcommand("device", ["device", folder.fsPath, `--${setting}`, chosen],
+                        `changing the ${setting === "screen" ? "screen model"
+                            : setting === "encoding" ? "character encoding" : setting} ` +
+                          `of ${name}...`);
   }
 }
 
@@ -854,7 +858,7 @@ async function addMedia(what: string,
   }
   const args = await ask(folder.fsPath, MEDIA_QUESTIONS);
   if (args) {
-    await runSubcommand(args[0], args);
+    await runSubcommand(args[0], args, `adding ${what}...`);
   }
 }
 
@@ -947,12 +951,26 @@ async function unknownContentArguments(project: string,
 
 // Runs `nxwright <args>` as a task, so its output shows in a terminal.
 // Returns its exit code once it ends, or undefined when it did not run or
-// gave none.
-async function runSubcommand(name: string, args: string[]): Promise<number | undefined> {
+// gave none. If `doing` is given, a notification shows that text until the
+// task ends, because the terminal can stay empty for a while. The
+// notification has no Cancel button, because stopping nxwright partway
+// could leave a folder half changed.
+async function runSubcommand(name: string, args: string[],
+                             doing?: string): Promise<number | undefined> {
   const command = await commandToRun();
   if (command === undefined) {
     return undefined;
   }
+  return doing === undefined ? runTask(name, command, args)
+    : vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification, title: `nxwright: ${doing}`,
+    }, () => runTask(name, command, args));
+}
+
+// Runs `command`, which starts nxwright, with `args` as a task called
+// `name`. Returns the exit code once the task ends.
+async function runTask(name: string, command: string[],
+                       args: string[]): Promise<number | undefined> {
   const execution = new vscode.ProcessExecution(command[0], [...command.slice(1), ...args], {
     cwd: firstWorkspaceFolder(),
   });

@@ -31,7 +31,8 @@ export interface MediaMeans {
   // The command that runs nxwright, or undefined, having said why.
   command: () => Promise<string[] | undefined>;
   // Runs an nxwright subcommand in a terminal, resolving to its exit code.
-  runSubcommand: (name: string, args: string[]) => Promise<number | undefined>;
+  // If `doing` is given, a notification shows that text until the subcommand ends.
+  runSubcommand: (name: string, args: string[], doing?: string) => Promise<number | undefined>;
   questions: MediaQuestions;
   workingFolder: () => string | undefined;
 }
@@ -75,9 +76,10 @@ export class MediaActions {
     if (action === "showUses") {
       await this.showUses(folder, entry.list, report);
     } else if (action === "keepIds") {
-      await this.means.runSubcommand("remove", ["remove", folder.fsPath, kind, name, "--keep-ids"]);
+      await this.run(`deleting the ${kind} ${name}, and leaving an empty slot...`,
+                     ["remove", folder.fsPath, kind, name, "--keep-ids"]);
     } else if (action === "shift" || action === "delete") {
-      await this.means.runSubcommand("remove", ["remove", folder.fsPath, kind, name]);
+      await this.run(`deleting the ${kind} ${name}...`, ["remove", folder.fsPath, kind, name]);
     } else if (action === "namesForNumbers" && await this.writeNumbersAsNames(folder, report)) {
       await this.delete(entry, true);
     }
@@ -112,27 +114,32 @@ export class MediaActions {
       return false;
     }
     const ids = report.later.map((_, index) => report.id + 1 + index);
-    let edit: vscode.WorkspaceEdit | undefined;
-    try {
-      const reply = await client.sendRequest("nxwright/resourceNumbersAsNames",
-                                             { folder: folder.fsPath, kind: report.kind, ids });
-      edit = await client.protocol2CodeConverter.asWorkspaceEdit(
-        reply as Parameters<typeof client.protocol2CodeConverter.asWorkspaceEdit>[0]);
-    } catch (error) {
-      void vscode.window.showErrorMessage(
-        `nxwright: could not write the numbers as names: ${errorText(error)}`);
-      return false;
-    }
-    if (!edit || !await vscode.workspace.applyEdit(edit)) {
-      void vscode.window.showErrorMessage("nxwright: the numbers could not be written as names.");
-      return false;
-    }
-    for (const [uri] of edit.entries()) {
-      const document = vscode.workspace.textDocuments.find(
-        (open) => open.uri.toString() === uri.toString());
-      await document?.save();
-    }
-    return true;
+    return vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: "nxwright: replacing numbers with names...",
+    }, async () => {
+      let edit: vscode.WorkspaceEdit | undefined;
+      try {
+        const reply = await client.sendRequest("nxwright/resourceNumbersAsNames",
+                                               { folder: folder.fsPath, kind: report.kind, ids });
+        edit = await client.protocol2CodeConverter.asWorkspaceEdit(
+          reply as Parameters<typeof client.protocol2CodeConverter.asWorkspaceEdit>[0]);
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          `nxwright: could not write the numbers as names: ${errorText(error)}`);
+        return false;
+      }
+      if (!edit || !await vscode.workspace.applyEdit(edit)) {
+        void vscode.window.showErrorMessage("nxwright: the numbers could not be written as names.");
+        return false;
+      }
+      for (const [uri] of edit.entries()) {
+        const document = vscode.workspace.textDocuments.find(
+          (open) => open.uri.toString() === uri.toString());
+        await document?.save();
+      }
+      return true;
+    });
   }
 
   // Replaces the resource of `entry`. It asks the questions of adding its
@@ -179,7 +186,7 @@ export class MediaActions {
       : kind === "video" ? await videoArguments(folder.fsPath, questions, settings)
       : await soundArguments(folder.fsPath, questions);
     if (added) {
-      await this.means.runSubcommand("replace", replaceArguments(added, name, newName));
+      await this.run(`replacing the ${kind} ${name}...`, replaceArguments(added, name, newName));
     }
   }
 
@@ -196,7 +203,8 @@ export class MediaActions {
       validateInput: (text) => newNameCheck(text, name, this.names(entry.list)),
     });
     if (newName !== undefined) {
-      await this.means.runSubcommand("rename", ["rename", folder.fsPath, kind, name, newName]);
+      await this.run(`renaming the ${kind} ${name} to ${newName}...`,
+                     ["rename", folder.fsPath, kind, name, newName]);
     }
   }
 
@@ -218,11 +226,19 @@ export class MediaActions {
     return this.means.project.info?.resources?.[list] ?? [];
   }
 
-  // Runs nxwright with `args`, and returns the JSON object it prints.
-  // nxwright can take a while on a large project, so a notification shows
-  // `doing` while it runs, with a button to cancel. Returns undefined if the
-  // user cancels. If nxwright fails, shows an error that starts
-  // "could not get `what`", and returns undefined.
+  // Runs `nxwright <args>` in a terminal, for a subcommand that changes the
+  // folder. A notification shows `doing` until the subcommand ends.
+  private async run(doing: string, args: string[]): Promise<void> {
+    await this.means.runSubcommand(args[0], args, doing);
+  }
+
+  // Runs nxwright with `args`, for a subcommand that only reads the folder,
+  // and returns the JSON object it prints. nxwright can take a while on a
+  // large project, so a notification shows `doing` while it runs. The
+  // notification has a Cancel button, because stopping nxwright cannot leave
+  // the folder half changed. Returns undefined if the user cancels, or if
+  // nxwright fails. A failure also shows an error that starts
+  // "could not get `what`".
   private async json<T>(doing: string, what: string, args: string[]): Promise<T | undefined> {
     const command = await this.means.command();
     if (command === undefined) {
