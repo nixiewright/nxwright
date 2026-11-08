@@ -33,10 +33,12 @@ _COMMANDS = {"pic": (2, PICTURE), "picq": (4, PICTURE), "xpic": (6, PICTURE), "x
 def with_asset_names(text: str, names: ResourceNames) -> str:
     """Returns `text`, the code of a .nx file as extracted from a project, with each
     number that can only mean an asset replaced by that asset's name in `names`."""
-    return "\n".join(_line_with_asset_names(line, names) for line in text.split("\n"))
+    return "\n".join(line_with_asset_names(line, names) for line in text.split("\n"))
 
 
-def _line_with_asset_names(line: str, names: ResourceNames) -> str:
+def line_with_asset_names(line: str, names: ResourceNames) -> str:
+    """Returns one line of a .nx file with the number that can only mean an
+    asset, if there is one, replaced by that asset's name in `names`."""
     try:
         indent, code, comment = split_line(line, 0)
     except NxwrightError:

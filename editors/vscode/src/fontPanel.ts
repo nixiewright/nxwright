@@ -63,6 +63,8 @@ const STYLES = `
 
 const BODY = `
 <h1 id="title">Fonts</h1>
+<p id="replacing" class="hint" hidden><span id="replacing-text"></span>
+  <button id="stop-replacing" class="secondary">Stop replacing</button></p>
 <div class="field">
   <label for="sample-text">Sample text</label>
   <input id="sample-text" type="text">
@@ -143,15 +145,20 @@ export class FontPanels {
     private readonly project: CurrentProject,
   ) {}
 
-  // Shows the panel of a source folder, opening it when it is not open;
-  // with `atForm`, at its form for a new font; with `variation`, a font of
-  // the folder, at the form filled from it, as its "Create a variation of
-  // this font" fills it.
-  async show(folder: vscode.Uri, atForm: boolean, variation?: string): Promise<void> {
+  // Shows the panel of a source folder, opening it when it is not open.
+  // With `atForm`, it shows the form for a new font. With `variation`, a
+  // font of the folder, it shows that form filled in from the font, the same
+  // way the font's "Create a variation of this font" button fills it. With
+  // `replacing`, a font of the folder, it fills the form the same way, and
+  // the font the form makes then takes that font's place.
+  async show(folder: vscode.Uri, atForm: boolean, variation?: string,
+             replacing?: string): Promise<void> {
     const open = this.panels.get(folder.toString());
     if (open) {
       open.reveal();
-      if (variation !== undefined) {
+      if (replacing !== undefined) {
+        void open.webview.postMessage({ type: "replace", name: replacing });
+      } else if (variation !== undefined) {
         void open.webview.postMessage({ type: "variation", name: variation });
       } else if (atForm) {
         void open.webview.postMessage({ type: "showForm" });
@@ -174,7 +181,7 @@ export class FontPanels {
     panel.webview.onDidReceiveMessage((message: PageMessage) => {
       if (message.type === "ready") {
         void panel.webview.postMessage({
-          type: "start", folder: name, atForm, variation });
+          type: "start", folder: name, atForm, variation, replacing });
       } else {
         void this.answer(panel, folder, message);
       }

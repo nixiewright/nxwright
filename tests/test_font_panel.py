@@ -18,6 +18,7 @@ from nxwright.project.zi_font import decode_font
 from nxwright.drawing.font_samples import font_sample, sample_font
 from nxwright.source.source_folder import new_source_folder
 from nxwright.source.resource_adding import add_font, add_font_file
+from nxwright.source.resource_removal import remove_keeping_ids
 from tests.language_server_connection import document_item, initialized
 from tests.test_font_command import GENERATORS
 from tests.test_installed_typefaces import renamed_noto_sans
@@ -326,6 +327,38 @@ class FontPanelTest(unittest.TestCase):
         self.assertEqual(tomllib.loads((folder / "app.toml").read_text(encoding="utf-8"))["fonts"],
                          ["NotoSans24", "Small"])
         self.assertEqual(decode_font((folder / "fonts" / "Small.zi").read_bytes()).height, 18)
+
+    def test_replacing_a_font(self):
+        # The font takes the place of NotoSans24, its ID and its name; the
+        # sample of it is not refused for that name.
+        folder = self.new_folder()
+        sample = self.request("nxwright/fontSample", folder, typeface=str(NOTO_SANS),
+                              height=18, name="NotoSans24", replacing="NotoSans24",
+                              text="Hello", colour=BLACK)["result"]
+        self.assertIsNone(sample["refusal"])
+        reply = self.request("nxwright/addFont", folder, typeface=str(NOTO_SANS), height="18",
+                             name="NotoSans24", replacing="NotoSans24")["result"]
+        self.assertEqual(reply, {"name": "NotoSans24", "warning": None})
+        self.assertEqual(tomllib.loads((folder / "app.toml").read_text(encoding="utf-8"))["fonts"],
+                         ["NotoSans24"])
+        self.assertEqual(decode_font((folder / "fonts" / "NotoSans24.zi").read_bytes()).height, 18)
+        # A ready-made font file, under a new name, as a placeholder would need.
+        block = (folder / "fonts" / "NotoSans24.zi").read_bytes()
+        reply = self.request("nxwright/addFont", folder, file=str(self.font_file("f.zi", block)),
+                             name="Small", replacing="NotoSans24")["result"]
+        self.assertEqual(reply["name"], "Small")
+        self.assertEqual(tomllib.loads((folder / "app.toml").read_text(encoding="utf-8"))["fonts"],
+                         ["Small"])
+        self.assertFalse((folder / "fonts" / "NotoSans24.zi").exists())
+
+    def test_a_placeholder_is_replaced_under_a_name(self):
+        folder = self.new_folder()
+        remove_keeping_ids(folder, "font", "NotoSans24")
+        reply = self.request("nxwright/addFont", folder, typeface=str(NOTO_SANS), height="18",
+                             name="", replacing="empty-slot-1")
+        self.assertIn("give the font a name", reply["error"]["message"])
+        self.assertEqual(tomllib.loads((folder / "app.toml").read_text(encoding="utf-8"))["fonts"],
+                         ["empty-slot-1"])
 
     def test_a_request_naming_no_font(self):
         folder = self.new_folder()

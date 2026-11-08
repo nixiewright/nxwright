@@ -60,6 +60,17 @@ def references(index: FolderIndex, path: str, line: int, column: int,
     return found
 
 
+def text_with_edits(text: str, edits: list) -> str:
+    """Returns `text` with each (Place, new text) of `edits` applied, each
+    Place a span of one of its lines, as references gives them."""
+    lines = text.split("\n")
+    for place, new_text in sorted(edits, key=lambda edit: (edit[0].line, edit[0].start),
+                                  reverse=True):
+        line = lines[place.line]
+        lines[place.line] = line[:place.start] + new_text + line[place.end:]
+    return "\n".join(lines)
+
+
 def _declarations_without_lookup(index: FolderIndex) -> list:
     """Returns the definitions that no Ctrl+click reaches from where they
     stand: each object's name in its page file, and each name in app.toml."""

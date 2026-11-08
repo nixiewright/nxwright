@@ -122,7 +122,7 @@ You can also refer to pictures and fonts in your code by name, instead of by num
 
 Because your app is now text, you can use the tools you already use for code:
 
-- **Any editor.** nxwright's language server, `nxwright lsp`, works in VS Code, Neovim, Emacs, and any other editor that supports the Language Server Protocol. It gives you errors as you type, quick fixes, completion, descriptions on hover, go to definition, find references, rename, and formatting.
+- **Any editor.** nxwright's language server, `nxwright lsp`, works in VS Code, Neovim, Emacs, and any other editor that supports the Language Server Protocol. It gives you errors as you type, quick fixes, completion, descriptions on hover, go to definition, find references, rename, formatting, and hints.
 - **Version control.** Every change is a diff you can read, and you can review and merge branches like any other code.
 - **AI coding agents.** Agents read and write text files, and nxwright's checks and tests tell them when something is wrong. Through nxwright's MCP server, `nxwright mcp`, they can also run your app and use it: tap the screen, let time pass, and see what it shows ([docs/mcp.md](https://github.com/nixiewright/nxwright/blob/main/docs/mcp.md)).
 - **The command line.** `nxwright check app` finds what would make the build fail, without building. `nxwright format app` lays your code out in one consistent style.
@@ -445,6 +445,8 @@ A few more commands you will use:
 | `nxwright sound app beep.wav` | adds a sound |
 | `nxwright device app --rotation 90` | changes the screen model, rotation, or encoding |
 | `nxwright remove app font NotoSans20` | removes a picture, font, or media file your code no longer uses |
+| `nxwright replace app picture logo new-logo.png` | puts a new file in a resource's place, keeping its ID |
+| `nxwright rename app picture picture-0012 logo` | renames a resource, and each use of its name |
 | `nxwright rescue rescue.tft --screen NX4832T035` | writes a file for an SD card, to recover a screen that no longer responds |
 | `nxwright upgrade app` | converts a folder made by an older nxwright |
 

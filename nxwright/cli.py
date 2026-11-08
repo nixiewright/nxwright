@@ -42,7 +42,11 @@ from nxwright.source.report import SHOWN_BYTES, write_report
 from nxwright.source.unknown_content import (UnknownContentError, report_hint,
                                              unknown_in_project_file)
 from nxwright.source.keyboards import KEYBOARD_PAGES
-from nxwright.source.resource_removal import KINDS, remove_resource
+from nxwright.source.resource_removal import (KINDS, remove_keeping_ids, remove_resource,
+                                             removal_report)
+from nxwright.source.resource_renaming import rename_resource
+from nxwright.source.resource_replacing import (OPTIONS as REPLACE_OPTIONS, current_settings,
+                                                replace_resource)
 from nxwright.source.source_folder import (LANGUAGES, NXLANG, add_page, folder_byte_reader,
                                            folder_lister, folder_reader, import_dump,
                                            kept_screen_copy_warnings, new_source_folder,
@@ -318,13 +322,57 @@ def _run_picture(arguments) -> str:
 
 
 def _run_remove(arguments) -> str:
-    removed, left = remove_resource(arguments.source_folder, arguments.kind, arguments.name)
-    lines = ["Removed the %s %s from %s: %s" % (arguments.kind, arguments.name,
-                                               arguments.source_folder,
-                                               ", ".join(removed) or "it had no files")]
-    lines += ["warning: %s could not be deleted, and stays, though no list names it: %s"
+    if arguments.report and arguments.keep_ids:
+        raise NxwrightError("--report writes nothing, so it does not go with --keep-ids")
+    if arguments.report:
+        # On one line, because programs read nxwright's JSON output line by line.
+        return json.dumps(removal_report(arguments.source_folder, arguments.kind,
+                                         arguments.name))
+    if arguments.keep_ids:
+        placeholder, removed, left = remove_keeping_ids(arguments.source_folder, arguments.kind,
+                                                        arguments.name)
+        lines = ["Replaced the %s %s in %s with the placeholder %s, deleting %s"
+                 % (arguments.kind, arguments.name, arguments.source_folder, placeholder,
+                    ", ".join(removed) or "no file")]
+    else:
+        removed, left = remove_resource(arguments.source_folder, arguments.kind, arguments.name)
+        lines = ["Removed the %s %s from %s: %s" % (arguments.kind, arguments.name,
+                                                   arguments.source_folder,
+                                                   ", ".join(removed) or "it had no files")]
+    lines += ["warning: could not delete %s, which app.toml no longer lists: %s"
               % tuple(problem.split(": ", 1)) for problem in left]
     return "\n".join(lines)
+
+
+def _run_replace(arguments) -> str:
+    if arguments.settings:
+        if arguments.files:
+            raise NxwrightError("--settings writes nothing, so it takes no file")
+        return json.dumps(current_settings(arguments.source_folder, arguments.kind,
+                                           arguments.name))
+    options = {option: getattr(arguments, option) for option in sorted(set(
+        option for options in REPLACE_OPTIONS.values() for option in options))
+        if getattr(arguments, option) is not None}
+    name, warning, removed, left = replace_resource(arguments.source_folder, arguments.kind,
+                                                    arguments.name, arguments.files,
+                                                    arguments.new_name, **options)
+    if warning:
+        print("nxwright replace: warning: %s" % warning, file=sys.stderr)
+    lines = ["Replaced the %s %s in %s%s%s"
+             % (arguments.kind, arguments.name, arguments.source_folder,
+                " with " + name if name != arguments.name else "",
+                ", deleting " + ", ".join(removed) if removed else "")]
+    lines += ["warning: could not delete %s, which app.toml no longer lists: %s"
+              % tuple(problem.split(": ", 1)) for problem in left]
+    return "\n".join(lines)
+
+
+def _run_rename(arguments) -> str:
+    written = rename_resource(arguments.source_folder, arguments.kind, arguments.name,
+                              arguments.new_name)
+    return "Renamed the %s %s to %s in %s, writing %s" % (
+        arguments.kind, arguments.name, arguments.new_name, arguments.source_folder,
+        ", ".join(written))
 
 
 def _run_device(arguments) -> str:
@@ -714,15 +762,79 @@ _SUBCOMMANDS = [
       ("pictures", {"type": Path, "nargs": "+", "help": "the picture files"})]),
     ("remove", _run_remove, "remove a resource from a source folder",
      "Removes a picture, font, animation, video, or sound: its files, and its name in "
-     "app.toml. Removing one gives each later one of its kind an ID one lower, which a name "
-     "follows but a number does not. So it is refused, and nothing written, while the folder "
-     "uses it by name, or by a number from its ID to the last of its kind: in a page file, "
-     "written or left to the defaults, or in code, written there or given by an nxlang "
-     "constant, where its kind is taken. Each place is named. A number code computes, or keeps "
-     "in a variable, is not seen. A folder whose checks find an error is refused too.",
+     "app.toml. The command fails, and changes nothing, while the folder still uses the "
+     "resource, by name or by a number from its ID to the last ID of its kind. Numbers in that "
+     "range count because removing a resource gives each later one of its kind an ID one "
+     "lower, so those numbers would then point to the wrong resource. The command looks in "
+     "page files, including values left to the defaults, and in code, including "
+     "numbers given by nxlang constants, and lists each use it finds. It does not see a number "
+     "that code computes or keeps in a variable. It also fails on a folder whose checks find "
+     "an error. --keep-ids leaves a placeholder in its place, named empty-slot-1, or "
+     "empty-slot-2 and so on if that name is taken, so that no ID changes. The command then "
+     "fails only if the folder uses the resource itself, by name or by its own ID. --report "
+     "changes nothing, and prints as JSON what removing the resource would affect: its ID, "
+     "the folder's encoding, whether it is the last of its kind, the names of the later ones, "
+     "and each use, by name or by number, of the resource or of a later one.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
       ("kind", {"choices": list(KINDS), "help": "the kind of resource"}),
-      ("name", {"help": "its name, as app.toml lists it"})]),
+      ("name", {"help": "its name, as app.toml lists it"}),
+      ("--keep-ids", {"action": "store_true",
+                      "help": "leave a placeholder in its place, so that no ID changes"}),
+      ("--report", {"action": "store_true",
+                    "help": "print what removing it would affect, as JSON, and write "
+                            "nothing"})]),
+    ("replace", _run_replace, "put a new file in a resource's place, keeping its ID",
+     "Puts a new picture, font, animation, video, or sound in the place of the one named. The "
+     "new one keeps the old one's ID, and its name unless --name gives another. The files and "
+     "options are those of the command that adds that kind. Settings you leave out are "
+     "taken from the current resource: a font drawn from a typeface keeps its height and "
+     "smoothing, and in utf-8 its characters; an animation keeps its frames' duration; and a "
+     "video keeps its rate, and its size when cut from a video file. A placeholder, such as "
+     "empty-slot-1, has no settings to keep. With --name, the command fails if the folder uses "
+     "the resource by name: rename it first. --settings takes no file, changes nothing, and "
+     "prints as JSON the settings that would be kept.",
+     [("source_folder", {"type": Path, "help": "the source folder"}),
+      ("kind", {"choices": list(KINDS), "help": "the kind of resource"}),
+      ("name", {"help": "its name, as app.toml lists it"}),
+      ("files", {"type": Path, "nargs": "*",
+                 "help": "the new files: a picture; a typeface or a font file (.zi); the "
+                         "pictures of an animation, or a GmovMaker file; a video file or "
+                         "pictures; or a sound"}),
+      ("--name", {"dest": "new_name", "help": "a new name for it (default: its own)"}),
+      ("--settings", {"action": "store_true",
+                      "help": "print the settings it would keep, as JSON, and write nothing"}),
+      ("--height", {"type": int, "help": "a font's height in pixels, from 12 to 254"}),
+      ("--smoothing", {"dest": "smoothed", "action": "store_const", "const": True,
+                       "help": "smooth a font's edges"}),
+      ("--no-smoothing", {"dest": "smoothed", "action": "store_const", "const": False,
+                          "help": "draw a font's characters without smoothing"}),
+      ("--characters", {"help": "in a utf-8 folder, a font's characters: code points in "
+                                "hexadecimal and ranges of them, such as 20-7e,400-4ff"}),
+      ("--full-table", {"action": "store_const", "const": True,
+                        "help": "in a utf-8 folder, a font's table of every code point to "
+                                "U+FFFF"}),
+      ("--duration", {"type": int, "help": "how long each frame of an animation shows, in ms"}),
+      ("--rate", {"type": int, "help": "a video's frames a second, or a sound's samples a "
+                                       "second to convert to"}),
+      ("--size", {"type": _size, "help": "for a video file: the frames' width and height, "
+                                         "such as 320x240"}),
+      ("--start", {"type": float, "help": "for a video file: where to start, in seconds"}),
+      ("--length", {"type": float, "help": "for a video file: how long to take, in seconds"}),
+      ("--mono", {"action": "store_const", "const": True,
+                  "help": "convert a sound to one channel"}),
+      ("--ffmpeg", {"type": Path, "help": "the ffmpeg program, for a video file or a sound to "
+                                          "convert (default: the one on the PATH)"})]),
+    ("rename", _run_rename, "rename a resource, and each use of its name",
+     "Renames a picture, font, animation, video, or sound, with its files and each use of its "
+     "name that a code editor's Find All References finds in the page files and the code. The "
+     "resource keeps its place in app.toml, so its ID stays the same, and numbers in the code "
+     "still point to it. Changing only the letter case is a rename too. The command fails, and "
+     "changes nothing, if another resource of the same kind has the new name in any letter "
+     "case, or if the folder's checks find an error, before or after the rename.",
+     [("source_folder", {"type": Path, "help": "the source folder"}),
+      ("kind", {"choices": list(KINDS), "help": "the kind of resource"}),
+      ("name", {"help": "its name, as app.toml lists it"}),
+      ("new_name", {"help": "its new name"})]),
     ("device", _run_device, "change a source folder's screen model, rotation, or encoding",
      "Changes app.toml's screen model, rotation, or character encoding, as the Nextion Editor's "
      "Device window does, along with what depends on them. Each page takes the new screen's "

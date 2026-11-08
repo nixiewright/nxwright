@@ -28,7 +28,9 @@ nxwright animation <source-folder> <pictures...>
 nxwright video <source-folder> <video-file or pictures...>
 nxwright sound <source-folder> <sound-file>
 nxwright sd-picture <pictures...> --output <folder>
-nxwright remove <source-folder> <picture|font|animation|video|sound> <name>
+nxwright remove <source-folder> <picture|font|animation|video|sound> <name> [--keep-ids]
+nxwright replace <source-folder> <picture|font|animation|video|sound> <name> <files...>
+nxwright rename <source-folder> <picture|font|animation|video|sound> <name> <new-name>
 nxwright device <source-folder> [--screen MODEL] [--rotation DEGREES] [--encoding NAME]
 nxwright upgrade <source-folder>
 nxwright language <source-folder> nxlang
@@ -579,6 +581,48 @@ Details:
 - The command also fails on a folder whose checks find an error, since the error could hide a use.
 - A file that cannot be deleted is listed, and stays, though `app.toml` no longer lists it.
 - A folder that a picture's name made, such as `icons/`, stays, even when empty.
+
+Options:
+
+- `--keep-ids` puts a placeholder in the resource's place, so that no ID changes. The command then fails only if the folder uses the resource itself, by its name or by its own ID. The placeholder is an ordinary resource of the same kind, named `empty-slot-1`, or `empty-slot-2` and so on if that name is taken. It is as small as nxwright can make it: a picture of 2 by 1 pixels, a font of 12 pixels, an animation or a video of one such picture, or 10 ms of silence.
+  - In a utf-8 folder, a placeholder font contains only the space. In any other encoding, it contains every character of the encoding, so it takes about 6 KB in a one-byte encoding, and about 135 KB in a two-byte one such as gb2312.
+- `--report` changes nothing, and prints as JSON what removing the resource would affect: its ID, the folder's encoding, whether it is the last of its kind, the names of the later ones, and each use, by name or by number, of the resource itself or of a later one. The report is printed even when the folder uses the resource.
+
+## replace
+
+```
+nxwright replace app picture logo new-logo.png
+nxwright replace app font NotoSans20 NotoSans-Bold.ttf
+```
+
+`replace` puts a new picture, font, animation, video, or sound in the place of the one you name. The new one keeps the old one's ID, and its name unless you give `--name`, so your code and page files still point to it.
+
+`replace` takes the files and options of the command that adds that kind, such as [font](#font). Settings you leave out are taken from the current resource:
+
+- A font drawn from a typeface keeps its height and smoothing, and in a utf-8 folder its characters. To change the smoothing, give `--smoothing` or `--no-smoothing`.
+- An animation keeps its frames' duration.
+- A video keeps its frame rate, and its size when you give a video file to cut.
+
+Details:
+
+- A font file (`.zi`) is used as it is, and takes no settings.
+- A placeholder that [remove](#remove) `--keep-ids` left, such as `empty-slot-1`, has no settings to keep. To replace a placeholder font with one drawn from a typeface, give `--height`.
+- `--name` gives the new resource another name, for example to name what replaces a placeholder. If the folder uses the old name, the command fails: [rename](#rename) the resource first.
+- `--settings` prints, as JSON, the settings that would be kept, and changes nothing.
+
+## rename
+
+```
+nxwright rename app picture picture-0012 logo
+```
+
+`rename` renames a picture, font, animation, video, or sound, with its files and each use of its name that a code editor's Find All References finds in your page files and code. The resource keeps its place in `app.toml`, so its ID stays the same, and numbers in your code still point to it.
+
+Details:
+
+- A change of letter case alone, such as `logo` to `Logo`, is a rename too.
+- A name in another folder, such as `icons/logo`, makes that folder. The old folder stays, even when empty.
+- The command fails, and changes nothing, if another resource of the same kind has the new name in any letter case, or if the folder's checks find an error, before or after the rename.
 
 ## device
 

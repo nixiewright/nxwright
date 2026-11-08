@@ -2,7 +2,7 @@
   "name": "nxwright-language",
   "displayName": "nxwright",
   "description": "Design, write, simulate, test, compile, and upload Nextion screen apps in VS Code.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "nxwright",
   "icon": "images/icon.png",
   "license": "Apache-2.0",
@@ -363,6 +363,21 @@
         "title": "Add a sound",
         "category": "nxwright",
         "icon": "$(add)"
+      },
+      {
+        "command": "nxwright.deleteResource",
+        "title": "Delete...",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.replaceResource",
+        "title": "Replace...",
+        "category": "nxwright"
+      },
+      {
+        "command": "nxwright.renameResource",
+        "title": "Rename...",
+        "category": "nxwright"
       },
       {
         "command": "nxwright.writeCardPictures",
@@ -1000,6 +1015,18 @@
           "when": "false"
         },
         {
+          "command": "nxwright.deleteResource",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.replaceResource",
+          "when": "false"
+        },
+        {
+          "command": "nxwright.renameResource",
+          "when": "false"
+        },
+        {
           "command": "nxwright.showPageText",
           "when": "activeCustomEditorId == nxwright.pagePreview"
         },
@@ -1415,6 +1442,21 @@
           "command": "nxwright.addSound",
           "when": "view == nxwright.media && viewItem == mediaGroup.sounds",
           "group": "inline@1"
+        },
+        {
+          "command": "nxwright.replaceResource",
+          "when": "view == nxwright.media && viewItem =~ /^mediaResource[.]/",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "nxwright.renameResource",
+          "when": "view == nxwright.media && viewItem =~ /^mediaResource[.]/",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "nxwright.deleteResource",
+          "when": "view == nxwright.media && viewItem =~ /^mediaResource[.]/",
+          "group": "2_delete@1"
         }
       ],
       "webview/context": [

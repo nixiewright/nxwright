@@ -4,6 +4,13 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.2] - 2026-11-08
+
+- Adds `nxwright replace`, which replaces a resource's file and keeps its ID.
+- Adds `nxwright rename`, which renames a resource and each use of its name.
+- Adds `nxwright remove --keep-ids`, which keeps the IDs of the resource by using a tiny placeholder replacement.
+- Shows a resource's name beside a number in your code that stands for it.
+
 ### [0.2.1] - 2026-11-08
 
 - Adds defines, values in `app.toml` that you can change for one build with `--define`.
@@ -33,6 +40,12 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.2] - 2026-11-08
+
+Needs nxwright 0.2.2 or later.
+
+- Adds Replace, Rename, and Delete to the right-click menu of the Media section's resources.
 
 ### [0.3.1] - 2026-11-08
 

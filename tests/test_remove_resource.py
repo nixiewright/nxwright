@@ -3,6 +3,7 @@ the folder uses it by name, or by a number that is its ID or a later one's,
 as a removal gives each later resource of its kind an ID one lower."""
 import contextlib
 import io
+import json
 from pathlib import Path
 import tempfile
 import tomllib
@@ -10,10 +11,13 @@ import unittest
 
 from nxwright import NxwrightError
 from nxwright.cli import main
+from nxwright.project.device_settings import DeviceSettings
 from nxwright.project.pictures import write_png
+from nxwright.project.screen_models import model_named
 from nxwright.project.truetype import NOTO_SANS
+from nxwright.project.zi_font import decode_font
 from nxwright.source.folder_check import check_folder
-from nxwright.source.resource_removal import remove_resource
+from nxwright.source.resource_removal import remove_keeping_ids, remove_resource, removal_report
 from nxwright.source.source_folder import folder_reader, new_source_folder, switch_to_nxlang
 from nxwright.source.resource_adding import (add_animation, add_font, add_pictures, add_sound,
                                              add_video)
@@ -176,6 +180,113 @@ class RefusalTest(RemoveResourceTestCase):
     def test_a_folder_whose_checks_find_an_error(self):
         self.write_code("zz.val=1")
         self.assert_refused("picture", "a", "pages/page0.nx", "zz")
+
+
+class ReportTest(RemoveResourceTestCase):
+    """What `remove --report` says a removal would affect, writing nothing."""
+
+    def report(self, kind: str, name: str) -> dict:
+        before = self.files()
+        report = removal_report(self.source, kind, name)
+        self.assertEqual(self.files(), before)
+        return report
+
+    def test_unused_and_last(self):
+        self.assertEqual(self.report("picture", "b"), {
+            "kind": "picture", "name": "b", "id": 1, "encoding": "iso-8859-1", "last": True,
+            "later": [], "uses": []})
+        self.assertEqual(self.report("picture", "a")["later"], ["b"])
+        self.assertFalse(self.report("picture", "a")["last"])
+
+    def test_uses_by_name_by_its_own_id_and_by_a_later_one(self):
+        self.add("p0", "picture", pic="a")
+        self.write_code("p0.pic=0", "p0.pic=1")
+        uses = self.report("picture", "a")["uses"]
+        self.assertEqual([(use["by"], use["of"]) for use in uses],
+                         [("name", "itself"), ("number", "itself"), ("number", "later")])
+        self.assertEqual([(use["path"], use["line"], use["text"]) for use in uses[1:]],
+                         [("pages/page0.nx", 2, "p0.pic=0"), ("pages/page0.nx", 3, "p0.pic=1")])
+        self.assertEqual(uses[0]["path"], "pages/page0.page.toml")
+
+    def test_a_number_the_defaults_give(self):
+        self.add("t0", "text")
+        uses = self.report("font", "NotoSans24")["uses"]
+        self.assertEqual([(use["by"], use["of"]) for use in uses], [("number", "itself")])
+        self.assertIn("takes 0 from the defaults", uses[0]["text"])
+
+    def test_the_command_prints_json(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(main(["remove", str(self.source), "picture", "a", "--report"]), 0)
+        self.assertEqual(json.loads(output.getvalue())["later"], ["b"])
+        self.assertIn("pictures/a.png", self.files())
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            self.assertEqual(main(["remove", str(self.source), "picture", "a", "--report",
+                                   "--keep-ids"]), 1)
+        self.assertIn("--keep-ids", errors.getvalue())
+
+
+class KeepIdsTest(RemoveResourceTestCase):
+    """`remove --keep-ids`: a placeholder takes the resource's place."""
+
+    def test_each_kind_leaves_a_placeholder(self):
+        for kind, name, listed, files in (
+                ("picture", "a", "pictures", ["pictures/empty-slot-1.png"]),
+                ("font", "NotoSans24", "fonts", ["fonts/empty-slot-1.zi"]),
+                ("animation", "blink", "animations", ["animations/empty-slot-1.gmov",
+                                                      "animations/empty-slot-1.screen.gmov"]),
+                ("video", "clip", "videos", ["videos/empty-slot-1.video"]),
+                ("sound", "beep", "sounds", ["sounds/empty-slot-1.wav"])):
+            with self.subTest(kind=kind):
+                count = len(self.app()[listed])
+                self.assertEqual(remove_keeping_ids(self.source, kind, name)[0], "empty-slot-1")
+                self.assertEqual(len(self.app()[listed]), count)
+                self.assertEqual(self.app()[listed][0], "empty-slot-1")
+                for path in files:
+                    self.assertTrue((self.source / path).is_file())
+        check = check_folder(folder_reader(self.source), lambda path: (self.source / path).exists())
+        self.assertEqual(check.errors(), [])
+
+    def test_a_later_resource_keeps_its_id(self):
+        # b stays picture 1, so a number for it is no use of a.
+        self.add("p0", "picture", pic=1)
+        self.write_code("p0.pic=1")
+        remove_keeping_ids(self.source, "picture", "a")
+        self.assertEqual(self.app()["pictures"], ["empty-slot-1", "b"])
+        self.assertFalse((self.source / "pictures" / "a.png").exists())
+
+    def test_the_lowest_free_number_and_a_placeholder_replaced(self):
+        remove_keeping_ids(self.source, "picture", "a")
+        self.assertEqual(remove_keeping_ids(self.source, "picture", "b")[0], "empty-slot-2")
+        # Another placeholder in its place keeps its name.
+        self.assertEqual(remove_keeping_ids(self.source, "picture", "empty-slot-1")[0],
+                         "empty-slot-1")
+        self.assertEqual(self.app()["pictures"], ["empty-slot-1", "empty-slot-2"])
+
+    def test_a_font_in_utf_8_holds_the_space_alone(self):
+        folder = self.folder / "utf8"
+        new_source_folder(folder, DeviceSettings(model_named("NX4832T035"), 0, "utf-8"),
+                          "nextion")
+        add_font(folder, NOTO_SANS, 16)
+        remove_keeping_ids(folder, "font", "NotoSans16")
+        font = decode_font((folder / "fonts" / "empty-slot-1.zi").read_bytes())
+        self.assertEqual(sorted(font.characters), [0x20])
+
+    def test_a_use_of_the_resource_itself_refuses(self):
+        self.write_code("p0.pic=0")
+        self.add("p0", "picture")
+        before = self.files()
+        with self.assertRaisesRegex(NxwrightError, "line 2"):
+            remove_keeping_ids(self.source, "picture", "a")
+        self.assertEqual(self.files(), before)
+
+    def test_the_command(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(main(["remove", str(self.source), "sound", "beep", "--keep-ids"]), 0)
+        self.assertIn("empty-slot-1", output.getvalue())
+        self.assertEqual(self.app()["sounds"], ["empty-slot-1"])
 
 
 class CommandTest(RemoveResourceTestCase):

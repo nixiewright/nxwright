@@ -37,6 +37,7 @@ Every change edits the page file, so the preview and the text editor share the s
 
 - Errors show as you type, along with warnings about likely mistakes.
 - When an error has one sure fix, you can apply it as a quick fix, such as declaring `sys0` in `program.nx`, or making a component global so that a keyboard can open from it.
+- Where your code or a page file refers to a picture, font, or other resource by number, as in `p0.pic=7`, the resource's name shows beside the number. A code action can write the number as the name, as in `p0.pic=@pic(logo)`, so that it still points to the resource if the resource's ID changes.
 - Completion suggests attributes, components, events, functions, and constants. In page files, it also suggests your project's pictures and fonts.
 - Hover over a name for its description, attributes, and allowed values, such as the numbers your code may store in an attribute.
 - VS Code's usual tools work on your project: Go to Definition, Find All References, Rename, the Outline view, Go to Symbol in Workspace, and Format Document.
@@ -75,6 +76,8 @@ Open a font file to see it with a sample text, and to create a variation of it.
 ### Pictures, animations, videos, and sounds
 
 The Media section lets you add pictures, and make animations, videos, and sounds from ordinary files. You can play the animations, videos, and sounds in VS Code.
+
+Right-click a resource to replace, rename, or delete it. Replacing keeps its ID, and deleting can leave an empty slot in its place, so that numbers in your code still point to the right resources.
 
 ### Simulate your app
 

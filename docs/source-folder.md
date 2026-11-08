@@ -330,7 +330,7 @@ The name of a picture, font, animation, video, or sound has one or more parts, s
 How resources get their names:
 
 - Extracting names a font after the name its generator stored in it, such as `NotoSans16`. Anything else gets a placeholder: `picture-0012`, `font-03`, `animation-00`, `video-01`, `sound-02`.
-- To rename a resource, change its name in `app.toml`, and rename its file, or an animation's two files.
+- To rename a resource, and each use of its name, use [`nxwright rename`](commands.md#rename).
 
 Only references by name follow a reorder or a removal. An ID written as a number, in an attribute or in code, keeps pointing at whatever now has that ID. So extracted code uses a picture's or font's name in place of its ID where the number can only mean that resource, as in `t0.font=@font(NotoSans16)` or `pic 0,0,@pic(picture-0012)`. Any other number stays as it is, such as the `9` in `sys0=9`.
 

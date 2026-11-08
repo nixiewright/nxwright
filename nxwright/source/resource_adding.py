@@ -9,9 +9,10 @@ Also here, as it makes pictures as add_animation reads them: writing the
 picture files an external picture shows from an SD card
 (write_card_pictures).
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import tempfile
+import wave
 
 from nxwright import NxwrightError
 from nxwright.language.resource_names import KIND_OF_LIST, NOUNS, check_names, font_header_name
@@ -22,16 +23,17 @@ from nxwright.project.media_files import (CARD_PICTURE_QUALITIES, animation_file
                                           sound_file, sound_form_refusal, video_file,
                                           video_frame)
 from nxwright.project.pictures import (picture_problem, picture_size, read_picture,
-                                       still_picture_size)
+                                       still_picture_size, write_png)
 from nxwright.project.resources import PICTURE_SUFFIXES
-from nxwright.project.truetype import TrueTypeFont
+from nxwright.project.truetype import NOTO_SANS, TrueTypeFont
 from nxwright.project.zi_font import (GRID_ENCODINGS, UTF8, decode_font, decodes, font_facts,
                                       turned_font)
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.keyboards import noto_sans_covers
-from nxwright.source.source_folder import (RESOURCE_FILES, app_text_in, drawn_font_name, name_part,
-                                           parse_app, picture_paths, picture_source_paths,
-                                           read_bytes, read_text)
+from nxwright.source.source_folder import (RESOURCE_FILES, app_text_in, delete_files,
+                                           drawn_font_name, name_part, parse_app, picture_paths,
+                                           picture_source_paths, put_back, read_bytes,
+                                           read_text, resource_file_paths)
 
 # How long a frame of an animation's pictures shows when no duration is
 # chosen, in milliseconds, as GmovMaker's default.
@@ -40,13 +42,43 @@ FRAME_DURATION = 50
 # converted to: those the Editor was seen to take.
 VIDEO_RATE = 12
 SOUND_RATES = range(8000, 48001)
+# A placeholder's name, from a number counted from 1 (add_placeholder).
+PLACEHOLDER_NAME = "empty-slot-%d"
+# A placeholder font's height, the least nxwright draws, and in utf-8 its
+# one character, the space, as code_points_of reads it.
+_PLACEHOLDER_FONT_HEIGHT = 12
+_SPACE = "20"
+# A placeholder sound: 10 ms of 16-bit mono silence, at a rate a screen
+# plays as it is.
+_PLACEHOLDER_RATE = 22050
+_PLACEHOLDER_SAMPLES = 220
 
 
-def add_pictures(source_folder: Path, files: list) -> list:
+@dataclass
+class Slot:
+    """A resource's place in its list in app.toml. An add function given a
+    Slot as its `replacing` argument writes the new resource into that place
+    instead of listing it last, so the new resource has the old one's ID.
+    `name` is the name of the resource in that place now. Once the new
+    resource is written, `deleted` lists the paths of the old resource's files
+    that were deleted, which are those the new one did not write over, and
+    `left` gives a sentence "path: why" for each file that could not be
+    deleted."""
+    name: str
+    deleted: list = field(default_factory=list)
+    left: list = field(default_factory=list)
+
+
+def add_pictures(source_folder: Path, files: list, replacing: Slot = None,
+                 name: str = None) -> list:
     """Copies picture files into the folder's pictures/, and lists them last
     in app.toml, in the order given. Each is named after its file, kept to
     the characters a name may have (name_part): "My Icon.jpg" gives MyIcon.
     Returns their names.
+
+    With `replacing`, it takes one file, and writes it into that slot
+    (_write_into_slot). The new picture is named `name`, or else takes the
+    name of the picture it replaces.
 
     Raises NxwrightError, before writing anything, for a file whose suffix
     is not a picture's, or that nxwright cannot read as one
@@ -54,21 +86,20 @@ def add_pictures(source_folder: Path, files: list) -> list:
     name the folder has already, in any case, or that two files give; a
     name app.toml's pictures may not hold (check_names); and a file already
     there of a name it gives, under any picture suffix, as a picture has one
-    file."""
+    file. With `replacing`, also for other than one file, and a slot whose
+    picture the folder lacks; a `name` without `replacing` is refused."""
     source_folder = Path(source_folder)
+    if replacing is not None:
+        return [_picture_into_slot(source_folder, files, replacing, name)]
+    if name is not None:
+        raise NxwrightError("a picture's name is given only with replacing: added pictures "
+                            "are named after their files")
     app = parse_app(read_text(source_folder / "app.toml"))
     taken = {name.lower(): name for name in app["pictures"]}
     given = {}
     files_written = {}
     for file in map(Path, files):
-        suffix = file.suffix.lower()
-        if suffix not in PICTURE_SUFFIXES:
-            raise NxwrightError("%s: a picture is a %s, or %s file" % (
-                file.name, ", ".join(PICTURE_SUFFIXES[:-1]), PICTURE_SUFFIXES[-1]))
-        data = read_bytes(file)
-        problem = picture_problem(data)
-        if problem:
-            raise NxwrightError("%s: %s" % (file.name, problem))
+        suffix, data = _picture_data(file)
         name = name_part(file.stem)
         if not name:
             raise NxwrightError("%s gives no name: a name keeps letters, digits, _ and -"
@@ -100,20 +131,54 @@ def add_pictures(source_folder: Path, files: list) -> list:
     return names
 
 
+def _picture_data(file: Path) -> tuple:
+    """Returns (the picture file's suffix in small letters, its bytes).
+    Raises NxwrightError for a suffix that is not a picture's, and a file
+    nxwright cannot read as one (pictures.picture_problem)."""
+    suffix = file.suffix.lower()
+    if suffix not in PICTURE_SUFFIXES:
+        raise NxwrightError("%s: a picture is a %s, or %s file" % (
+            file.name, ", ".join(PICTURE_SUFFIXES[:-1]), PICTURE_SUFFIXES[-1]))
+    data = read_bytes(file)
+    problem = picture_problem(data)
+    if problem:
+        raise NxwrightError("%s: %s" % (file.name, problem))
+    return suffix, data
+
+
+def _picture_into_slot(source_folder: Path, files: list, slot: Slot, name: str = None) -> str:
+    """Writes the one picture file of `files` into `slot`, named `name`, or
+    else as the picture there, as add_pictures says; returns its name."""
+    if len(files) != 1:
+        raise NxwrightError("one picture takes a picture's place; %d are given" % len(files))
+    suffix, data = _picture_data(Path(files[0]))
+    app = parse_app(read_text(source_folder / "app.toml"))
+    name = name or slot.name
+    own = check_resource_name(source_folder, app, "pictures", name, slot)
+    # A picture has only one file, so a file of its name with any suffix is
+    # in the way, unless it is the old picture's.
+    _check_not_in_the_way(source_folder, picture_paths(name) + picture_source_paths(name), own)
+    _write_into_slot(source_folder, app, "pictures", name,
+                     [(source_folder / "pictures" / (name + suffix), data)], slot)
+    return name
+
+
 def add_font(source_folder: Path, font_file: Path, height: int, name: str = None,
-             smoothed: bool = True, characters: str = None, full_table: bool = False) -> tuple:
+             smoothed: bool = True, characters: str = None, full_table: bool = False,
+             replacing: Slot = None) -> tuple:
     """Draws a font from a typeface file (font_drawing.py), `height` pixels
-    tall, smoothed or not. The font is in the source folder's encoding, and
-    in the orientation that a compiled file stores fonts in
+    tall, smoothed or not. The font is in the source folder's encoding, and in
+    the orientation that a compiled file stores fonts in
     (DeviceSettings.font_rotation). In utf-8, the font has the code points
     listed in `characters`, as code_points_of reads them, or else U+0000 to
     U+00FF. Its table has only those code points and the space, or, with
     `full_table`, every code point (zi_font.encode_font). Writes the font to
     fonts/<name>.zi, and lists it in app.toml after the folder's fonts. Its
-    name is `name`, or else
-    drawn_font_name's. Returns (the name, a warning or None): the warning
-    says what characters the typeface file lacks, which the font leaves out
-    (font_drawing.font_warning).
+    name is `name`, or else drawn_font_name's. Returns (the name, a warning or
+    None): the warning says what characters the typeface file lacks, which the
+    font leaves out (font_drawing.font_warning). With `replacing`, a Slot, it
+    writes the new font into that slot instead (_write_into_slot). The new
+    font is named `name`, or else takes the name of the font it replaces.
 
     Raises NxwrightError, before writing anything, for what check_drawn_font
     refuses, `characters` code_points_of refuses, a font draw_font refuses,
@@ -121,33 +186,34 @@ def add_font(source_folder: Path, font_file: Path, height: int, name: str = None
     """
     source_folder, font_file = Path(source_folder), Path(font_file)
     typeface = TrueTypeFont(read_bytes(font_file))
-    name = name or drawn_font_name(typeface.typeface_name(), font_file, height)
-    app, settings, path = _drawn_font_place(source_folder, name)
+    name = name or (replacing.name if replacing is not None
+                    else drawn_font_name(typeface.typeface_name(), font_file, height))
+    app, settings, path = _drawn_font_place(source_folder, name, replacing)
     if full_table and settings.encoding != UTF8:
         raise NxwrightError("a font in %s holds every character of its encoding: a full table "
                             "is for a utf-8 folder" % settings.encoding)
     code_points = None if characters is None else code_points_of(characters)
     block = draw_font_block(name, typeface, height, settings.encoding, settings.font_rotation,
                             smoothed, code_points, full_table)
-    _add_resource(source_folder, app, "fonts", name, [(path, block)])
+    _add_resource(source_folder, app, "fonts", name, [(path, block)], replacing)
     return name, font_warning(typeface, settings.encoding, code_points, full_table)
 
 
-def check_drawn_font(source_folder: Path, name: str):
+def check_drawn_font(source_folder: Path, name: str, slot: Slot = None):
     """Raises NxwrightError where add_font would refuse a font named `name`
     for any reason but its typeface file and its characters: a folder without
     screen settings or in a two-byte encoding, a name the folder has, or a
-    file already at the font's place."""
-    _drawn_font_place(Path(source_folder), name)
+    file already at the font's place; into `slot` when given."""
+    _drawn_font_place(Path(source_folder), name, slot)
 
 
-def _drawn_font_place(source_folder: Path, name: str) -> tuple:
+def _drawn_font_place(source_folder: Path, name: str, slot: Slot = None) -> tuple:
     """Returns (the folder's app.toml settings, its screen settings, the
-    font's path) for a font named `name` to draw into it. Raises
-    NxwrightError as check_drawn_font says."""
+    font's path) for a font named `name` to draw into it, into `slot` when
+    given. Raises NxwrightError as check_drawn_font says."""
     app = parse_app(read_text(source_folder / "app.toml"))
     settings = font_settings(settings_from_keys(app))
-    return app, settings, _new_resource_paths(source_folder, app, "fonts", name)[0]
+    return app, settings, _new_resource_paths(source_folder, app, "fonts", name, slot)[0]
 
 
 @dataclass(frozen=True)
@@ -162,19 +228,26 @@ class ReadyMadeFont:
     warning: str = None
 
 
-def add_font_file(source_folder: Path, font_file: Path, name: str = None) -> tuple:
+def add_font_file(source_folder: Path, font_file: Path, name: str = None,
+                  replacing: Slot = None) -> tuple:
     """Adds a ready-made font, a .zi file such as the Editor's font generator
     writes, to a source folder, as ready_made_font says: as fonts/<name>.zi,
     listed in app.toml after the folder's fonts. Returns (its name, the
-    warning or None). Raises NxwrightError, before writing anything, where
-    ready_made_font does."""
+    warning or None). With `replacing`, a Slot, it writes the new font into
+    that slot instead (_write_into_slot). The new font is named `name`, or
+    else takes the name of the font it replaces. Raises NxwrightError, before
+    writing anything, where ready_made_font does, and for a slot whose font
+    the folder lacks."""
     source_folder = Path(source_folder)
-    app, path, font = _ready_made(source_folder, Path(font_file), name)
-    _add_resource(source_folder, app, "fonts", font.name, [(path, font.block)])
+    if replacing is not None:
+        name = name or replacing.name
+    app, path, font = _ready_made(source_folder, Path(font_file), name, replacing)
+    _add_resource(source_folder, app, "fonts", font.name, [(path, font.block)], replacing)
     return font.name, font.warning
 
 
-def ready_made_font(source_folder: Path, font_file: Path, name: str = None) -> ReadyMadeFont:
+def ready_made_font(source_folder: Path, font_file: Path, name: str = None,
+                    slot: Slot = None) -> ReadyMadeFont:
     """Returns the ReadyMadeFont add_font_file would add to a source folder,
     writing nothing. A font stored in another orientation than the one a
     compiled file stores fonts in (DeviceSettings.font_rotation) is turned
@@ -193,9 +266,10 @@ def ready_made_font(source_folder: Path, font_file: Path, name: str = None) -> R
     (zi_font.decodes), a font in another encoding, a font in another
     orientation that nxwright cannot decode in order to turn it, a name the
     folder already has, or a file
-    already at the font's place.
+    already at the font's place. With `slot`, the font would take the place
+    of the font there.
     """
-    return _ready_made(Path(source_folder), Path(font_file), name)[2]
+    return _ready_made(Path(source_folder), Path(font_file), name, slot)[2]
 
 
 def ready_made_font_name(block: bytes, font_file: Path) -> str:
@@ -205,10 +279,10 @@ def ready_made_font_name(block: bytes, font_file: Path) -> str:
     return font_header_name(block) or name_part(Path(font_file).stem) or "font"
 
 
-def _ready_made(source_folder: Path, font_file: Path, name: str) -> tuple:
+def _ready_made(source_folder: Path, font_file: Path, name: str, slot: Slot = None) -> tuple:
     """Returns (the folder's app.toml settings, the font's path, the
-    ReadyMadeFont) of a font file to add to a folder. Raises NxwrightError
-    as ready_made_font says."""
+    ReadyMadeFont) of a font file to add to a folder, into `slot` when
+    given. Raises NxwrightError as ready_made_font says."""
     app = parse_app(read_text(source_folder / "app.toml"))
     settings = font_settings(settings_from_keys(app))
     block = read_bytes(font_file)
@@ -234,7 +308,7 @@ def _ready_made(source_folder: Path, font_file: Path, name: str) -> tuple:
                                 "kept at %d, and nxwright cannot turn it: %s"
                                 % (facts.rotation, settings.font_rotation, error)) from None
     name = name or ready_made_font_name(block, font_file)
-    path = _new_resource_paths(source_folder, app, "fonts", name)[0]
+    path = _new_resource_paths(source_folder, app, "fonts", name, slot)[0]
     warning = None
     if facts.encoding == "iso-8859-1" != settings.encoding:
         warning = ("the font %s is in iso-8859-1, not in the folder's %s: text in characters "
@@ -287,14 +361,17 @@ def _media_rotation(app: dict) -> int:
 
 
 def add_animation(source_folder: Path, pictures: list, duration: int = None,
-                  name: str = None) -> str:
+                  name: str = None, replacing: Slot = None) -> str:
     """Makes an animation of `pictures`, a frame of each, in order, each
     lasting `duration` ms, FRAME_DURATION when it is None, as GmovMaker and
     the Editor's Gmov panel would. Writes its two files,
     animations/<name>.gmov and <name>.screen.gmov
-    (media_files.animation_files), and lists it in app.toml after the
-    folder's animations. Its name is `name`, or else the first picture's.
-    The screen's form is made for the folder's rotation. Returns the name.
+    (media_files.animation_files), and lists it in app.toml after the folder's
+    animations. Its name is `name`, or else the first picture's. The screen's
+    form is made for the folder's rotation. Returns the name. With
+    `replacing`, a Slot, it writes the new animation into that slot instead
+    (_write_into_slot). The new animation is named `name`, or else takes the
+    name of the animation it replaces.
 
     `pictures` may instead be one file of GmovMaker's (.gmov), as the Gmov
     panel takes it: it is kept as it is, and the screen's form is made from
@@ -324,15 +401,16 @@ def add_animation(source_folder: Path, pictures: list, duration: int = None,
             frames = gmovmaker_frames(data)
         except NxwrightError as error:
             raise NxwrightError("%s: %s" % (path.name, error)) from None
-    name = name or name_part(Path(pictures[0]).stem) or "animation"
-    paths = _new_resource_paths(source_folder, app, "animations", name)
+    name = name or (replacing.name if replacing is not None
+                    else name_part(Path(pictures[0]).stem) or "animation")
+    paths = _new_resource_paths(source_folder, app, "animations", name, replacing)
     if gmovmaker:
         files = (data, animation_files(frames, rotation)[1])
     else:
         frames = [(_picture_at(Path(picture)), FRAME_DURATION if duration is None else duration)
                   for picture in pictures]
         files = animation_files(frames, rotation)
-    _add_resource(source_folder, app, "animations", name, zip(paths, files))
+    _add_resource(source_folder, app, "animations", name, zip(paths, files), replacing)
     return name
 
 
@@ -373,11 +451,14 @@ def write_card_pictures(pictures: list, output: Path, quality: str = "very-high"
 
 def add_video(source_folder: Path, sources: list, rate: int = VIDEO_RATE, size: tuple = None,
               start: float = None, length: float = None, name: str = None,
-              ffmpeg: Path = None) -> str:
+              ffmpeg: Path = None, replacing: Slot = None) -> str:
     """Makes a video, as VideoBox does, `rate` frames a second, for the
     folder's rotation, and writes it to videos/<name>.video
     (media_files.video_file), listed in app.toml after the folder's videos.
-    Its name is `name`, or else its first source's. Returns the name.
+    Its name is `name`, or else its first source's. Returns the name. With
+    `replacing`, a Slot, it writes the new video into that slot instead
+    (_write_into_slot). The new video is named `name`, or else takes the name
+    of the video it replaces.
 
     `sources` is either one video file, which ffmpeg, the program `ffmpeg`
     names or the PATH finds, cuts into frames, from `start` seconds in, for
@@ -393,8 +474,9 @@ def add_video(source_folder: Path, sources: list, rate: int = VIDEO_RATE, size: 
     check_video_rate(rate)
     if not sources:
         raise NxwrightError("a video needs a video file or pictures")
-    name = name or name_part(sources[0].stem) or "video"
-    paths = _new_resource_paths(source_folder, app, "videos", name)
+    name = name or (replacing.name if replacing is not None
+                    else name_part(sources[0].stem) or "video")
+    paths = _new_resource_paths(source_folder, app, "videos", name, replacing)
     with tempfile.TemporaryDirectory() as cut:
         # A still picture is a frame. Any other file, such as an animated GIF
         # or a video, is a video file for ffmpeg to cut.
@@ -419,16 +501,18 @@ def add_video(source_folder: Path, sources: list, rate: int = VIDEO_RATE, size: 
                                     "as its first" % (frame.name, *frame_size, *sizes[0]))
         pictures = [video_frame(_picture_at(frame), rotation) for frame in frames]
     _add_resource(source_folder, app, "videos", name,
-                  zip(paths, [video_file(*sizes[0], rate, pictures, rotation)]))
+                  zip(paths, [video_file(*sizes[0], rate, pictures, rotation)]), replacing)
     return name
 
 
 def add_sound(source_folder: Path, sound: Path, name: str = None, rate: int = None,
-              mono: bool = False, ffmpeg: Path = None) -> str:
+              mono: bool = False, ffmpeg: Path = None, replacing: Slot = None) -> str:
     """Adds a sound: written to sounds/<name>.wav in the form the Editor
     writes, its samples as they are (media_files.sound_file), and listed in
     app.toml after the folder's sounds. Its name is `name`, or else the
-    file's. Returns the name.
+    file's. Returns the name. With `replacing`, a Slot, it writes the new
+    sound into that slot instead (_write_into_slot). The new sound is named
+    `name`, or else takes the name of the sound it replaces.
 
     A WAV file of PCM samples of 8 or 16 bits, mono or stereo, is taken as
     it is, except an 8-bit one at 22050 samples a second, which a screen
@@ -445,8 +529,9 @@ def add_sound(source_folder: Path, sound: Path, name: str = None, rate: int = No
     app = parse_app(read_text(source_folder / "app.toml"))
     if rate is not None and rate not in SOUND_RATES:
         raise NxwrightError("a sound's rate must be from 8,000 to 48,000 samples a second")
-    name = name or name_part(sound.stem) or "sound"
-    paths = _new_resource_paths(source_folder, app, "sounds", name)
+    name = name or (replacing.name if replacing is not None
+                    else name_part(sound.stem) or "sound")
+    paths = _new_resource_paths(source_folder, app, "sounds", name, replacing)
     # hmic holds the name of the sound's file in the folder, without its
     # extension, as the Editor's holds that of the file it was given.
     stored = name.split("/")[-1]
@@ -477,37 +562,162 @@ def add_sound(source_folder: Path, sound: Path, name: str = None, rate: int = No
             raise NxwrightError("%s %s. Add --mono, or give another --rate"
                                 % (sound.name, refusal[0]))
         content = sound_file(wav, stored)
-    _add_resource(source_folder, app, "sounds", name, zip(paths, [content]))
+    _add_resource(source_folder, app, "sounds", name, zip(paths, [content]), replacing)
     return name
 
 
-def _new_resource_paths(source_folder: Path, app: dict, listed: str, name: str) -> list:
-    """Returns the paths of the files of a new font, animation, video, or
-    sound named `name`, of the kind app.toml lists in `listed`. Raises
-    NxwrightError for a name the folder has or may not have, or a file
-    already at one of the paths."""
-    taken = {known.lower(): known for known in app[listed]}
+def _article(listed: str) -> str:
+    return "an" if listed == "animations" else "a"
+
+
+def check_resource_name(source_folder: Path, app: dict, listed: str, name: str,
+                 slot: Slot = None) -> set:
+    """Raises NxwrightError for a name `name` that app.toml's list `listed`
+    may not take: one another resource of its kind has, in any letter case,
+    or that check_names refuses. With `slot`, `name` takes the place of the
+    resource there, which must exist. Returns the paths, within the folder,
+    of the files that resource has (resource_file_paths), which the new one
+    may write over; with no slot, none."""
+    if slot is None:
+        others = app[listed]
+    elif slot.name not in app[listed]:
+        raise NxwrightError("the folder has no %s named %s" % (NOUNS[KIND_OF_LIST[listed]],
+                                                               slot.name))
+    else:
+        others = [known for known in app[listed] if known != slot.name]
+    taken = {known.lower(): known for known in others}
     if name.lower() in taken:
         raise NxwrightError("the folder has %s %s named %s" % (
-            "an" if listed == "animations" else "a", NOUNS[KIND_OF_LIST[listed]],
-            taken[name.lower()]))
-    check_names(app[listed] + [name], listed)
-    paths = [source_folder / listed / (name + suffix) for suffix in RESOURCE_FILES[listed]]
-    for path in paths:
-        if path.exists():
+            _article(listed), NOUNS[KIND_OF_LIST[listed]], taken[name.lower()]))
+    check_names(_listed_with(app[listed], name, slot), listed)
+    return set() if slot is None else set(resource_file_paths(source_folder, listed, slot.name))
+
+
+def _listed_with(names: list, name: str, slot: Slot = None) -> list:
+    """Returns app.toml's list `names` with `name` added: in the place of
+    `slot`'s resource, or else last."""
+    if slot is None:
+        return names + [name]
+    return [name if known == slot.name else known for known in names]
+
+
+def _check_not_in_the_way(source_folder: Path, relative_paths: list, own: set):
+    """Raises NxwrightError for a file already at one of `relative_paths`,
+    paths within the folder, that is not one of `own`, the files of the
+    resource a new one takes the place of: not the same file, as
+    `Logo.png` is `logo.png` where file names ignore letter case."""
+    for relative in relative_paths:
+        path = source_folder / relative
+        if path.exists() and not any(path.samefile(source_folder / mine) for mine in own):
             raise NxwrightError("%s is already there, though app.toml does not list it" % path)
-    return paths
 
 
-def _add_resource(source_folder: Path, app: dict, listed: str, name: str, files):
-    """Writes the files (path, content) of a new font, animation, video, or
-    sound named `name`, and lists it in app.toml, in `listed`, after the
-    others."""
+def _new_resource_paths(source_folder: Path, app: dict, listed: str, name: str,
+                        slot: Slot = None) -> list:
+    """Returns the paths of the files of a new font, animation, video, or
+    sound named `name`, of the kind app.toml lists in `listed`, written into
+    `slot` when given. Raises NxwrightError for a name the folder has or may
+    not have, a slot whose resource it lacks, or a file already at one of
+    the paths that is not the old resource's."""
+    own = check_resource_name(source_folder, app, listed, name, slot)
+    relative_paths = ["%s/%s%s" % (listed, name, suffix) for suffix in RESOURCE_FILES[listed]]
+    _check_not_in_the_way(source_folder, relative_paths, own)
+    return [source_folder / relative for relative in relative_paths]
+
+
+def _add_resource(source_folder: Path, app: dict, listed: str, name: str, files,
+                  slot: Slot = None):
+    """Writes the files (path, content) of a new resource named `name`, and
+    lists it in app.toml, in `listed`: after the others, or in `slot`'s
+    place (_write_into_slot)."""
+    if slot is not None:
+        _write_into_slot(source_folder, app, listed, name, list(files), slot)
+        return
     for path, content in files:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
     text = app_text_in(source_folder, dict(app, **{listed: app[listed] + [name]}))
     (source_folder / "app.toml").write_text(text, encoding="utf-8", newline="\n")
+
+
+def _write_into_slot(source_folder: Path, app: dict, listed: str, name: str, files: list,
+                     slot: Slot):
+    """Writes the new resource `name` into `slot`, in an order that never
+    leaves app.toml listing a missing file: the new files are written first,
+    then app.toml, with `name` in the place of the slot's resource, and then
+    the old resource's files that the new one did not write over are deleted
+    (`slot.deleted` and `slot.left`). If a file or app.toml cannot be written,
+    each file already written, and app.toml, is put back as it was, and the
+    error is raised. An old file that is the same file as a new one, as
+    `logo.png` is `Logo.png` where file names ignore letter case, is not
+    deleted."""
+    old = resource_file_paths(source_folder, listed, slot.name)
+    app_path = source_folder / "app.toml"
+    app_before = app_path.read_bytes()
+    # Each file is noted before it is written, so that one whose own write
+    # fails partway is put back too.
+    touched = [(app_path, app_before)]
+    try:
+        for path, content in files:
+            touched.append((path, path.read_bytes() if path.is_file() else None))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        text = app_text_in(source_folder,
+                           dict(app, **{listed: _listed_with(app[listed], name, slot)}))
+        app_path.write_text(text, encoding="utf-8", newline="\n")
+    except Exception:
+        put_back(touched)
+        raise
+    new = [path for path, _ in files]
+    slot.deleted, slot.left = delete_files(
+        source_folder, [relative for relative in old
+                        if not any((source_folder / relative).samefile(path) for path in new)])
+
+
+def add_placeholder(source_folder: Path, listed: str, slot: Slot) -> str:
+    """Writes a placeholder into `slot`, of the kind app.toml lists in
+    `listed`: an ordinary resource, as small as nxwright can make it, whose
+    only use is to keep the IDs of the resources after it. Returns its name,
+    PLACEHOLDER_NAME with the lowest number no other resource of its kind has,
+    in any letter case. The name of the resource it replaces counts as free.
+
+    Each kind's placeholder is made from inputs written to a temporary folder,
+    by the function that adds the kind: a picture of 2 by 1 black pixels; a
+    font drawn from the Noto Sans nxwright ships, at the smallest height
+    nxwright draws, holding only the space in utf-8, and every character of
+    the encoding in the others; an animation and a video of one frame of that
+    picture; and a sound of 10 ms of silence. The Nextion Editor 1.68.2
+    compiled each one to the same bytes as nxwright. Raises NxwrightError,
+    writing nothing, where that function refuses."""
+    source_folder = Path(source_folder)
+    app = parse_app(read_text(source_folder / "app.toml"))
+    taken = {known.lower() for known in app[listed] if known != slot.name}
+    number = 1
+    while (PLACEHOLDER_NAME % number).lower() in taken:
+        number += 1
+    name = PLACEHOLDER_NAME % number
+    with tempfile.TemporaryDirectory() as made:
+        picture = Path(made) / "placeholder.png"
+        picture.write_bytes(write_png(2, 1, bytes((0, 0, 0, 255)) * 2))
+        if listed == "pictures":
+            add_pictures(source_folder, [picture], slot, name)
+        elif listed == "fonts":
+            encoding = font_settings(settings_from_keys(app)).encoding
+            add_font(source_folder, NOTO_SANS, _PLACEHOLDER_FONT_HEIGHT, name,
+                     characters=_SPACE if encoding == UTF8 else None, replacing=slot)
+        elif listed == "animations":
+            add_animation(source_folder, [picture], name=name, replacing=slot)
+        elif listed == "videos":
+            add_video(source_folder, [picture], name=name, replacing=slot)
+        else:
+            sound = Path(made) / "placeholder.wav"
+            with wave.open(str(sound), "wb") as silence:
+                silence.setnchannels(1)
+                silence.setsampwidth(2)
+                silence.setframerate(_PLACEHOLDER_RATE)
+                silence.writeframes(bytes(2 * _PLACEHOLDER_SAMPLES))
+            add_sound(source_folder, sound, name, replacing=slot)
+    return name
 
 
 def _picture_at(path: Path):

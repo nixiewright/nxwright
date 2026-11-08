@@ -492,6 +492,54 @@ def picture_source_paths(name: str) -> list:
             for suffix in RESOURCE_FILES["pictures"]]
 
 
+def resource_file_paths(source_folder: Path, listed: str, name: str) -> list:
+    """Returns the paths, within the folder, of the files of the resource
+    `name` of app.toml's list `listed`, those that exist: its name with one of
+    its kind's suffixes (RESOURCE_FILES); and for a picture, also its source
+    file, any of its files of a type nxwright does not decode
+    (kept_picture_paths), and, when it has such files, its screen copy."""
+    exists = folder_file_exists(source_folder)
+    paths = ["%s/%s%s" % (listed, name, suffix) for suffix in RESOURCE_FILES[listed]]
+    if listed == "pictures":
+        kept = kept_picture_paths(name, exists, folder_lister(source_folder))
+        paths += picture_source_paths(name) + kept + ([screen_copy_path(name)] if kept else [])
+    return [path for path in dict.fromkeys(paths) if exists(path)]
+
+
+def delete_files(source_folder: Path, paths: list) -> tuple:
+    """Deletes each of `paths`, files within the folder, by its own path,
+    and never a folder. Returns (the paths deleted, a sentence "path:
+    why" for each file that could not be deleted)."""
+    deleted, left = [], []
+    for relative in paths:
+        path = Path(source_folder) / relative
+        if not path.is_file():
+            continue
+        try:
+            path.unlink()
+        except OSError as error:
+            left.append("%s: %s" % (relative, error.strerror or error))
+        else:
+            deleted.append(relative)
+    return deleted, left
+
+
+def put_back(files: list):
+    """Puts back each of `files` after a write that failed. Each entry is
+    (path, the file's bytes before the write, or None if there was no file):
+    the old bytes are written again, or the new file is deleted. A file that
+    cannot be put back is skipped, so that the others still are, because this
+    runs while another error is being raised."""
+    for path, before in reversed(files):
+        try:
+            if before is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(before)
+        except OSError:
+            continue
+
+
 def picture_source_file(name: str, exists):
     """Returns the path, within the folder, of the picture `name`'s source
     file, as `exists(path)` finds it, or None if it has none. If the picture

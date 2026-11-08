@@ -24,6 +24,7 @@ import { animationArguments, MediaQuestions, pictureArguments, sdPictureArgument
 import { findNxwright, NxwrightSearch, programOnPath, runsCleanly } from "./nxwrightCommand";
 import { declaredLaunchParameters, simulationEntry, simulationEntryEdits, simulationEntryText }
   from "./launchConfiguration";
+import { MediaActions } from "./mediaActions";
 import { MediaView } from "./mediaView";
 import { MediaViewers } from "./mediaViewer";
 import { NxlangPanel } from "./nxlangPanel";
@@ -129,6 +130,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ...simulator.register(),
     ...new AgentChannel(simulator).register(),
     ...new MediaView(project).register(),
+    ...new MediaActions({
+      project, fontPanels, client: getClient, command: commandToRun,
+      runSubcommand, questions: MEDIA_QUESTIONS, workingFolder: firstWorkspaceFolder,
+    }).register(),
     new FontViewer(context, getClient, fontPanels).register(),
     ...new MediaViewers(context, getClient).register(),
     vscode.commands.registerCommand("nxwright.showPreview", () => previews.show()),

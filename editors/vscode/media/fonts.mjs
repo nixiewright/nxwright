@@ -7,7 +7,10 @@
 //    a typeface file, and in a utf-8 folder of the characters asked for, as
 //    a full table or not, its sample drawn again as its choices change;
 //  - a form adding a ready-made font file, with its sample and what adding
-//    it would do.
+//    it would do;
+//  - while replacing a font of the folder, both forms put the font they
+//    make in its place. The new font keeps the old one's ID, and its name
+//    too unless the old one is a placeholder.
 // The language server draws the samples and adds the fonts
 // (nxwright/language_server/font_panel.py); the extension passes the
 // requests on, and opens the file dialogs.
@@ -53,6 +56,12 @@ let encoding = undefined; // the folder's encoding, as the fonts' list last gave
 // until the form changes.
 let newFontAdded = false;
 let fontFileAdded = false;
+// The font both forms replace, or undefined while they add one.
+let replacing = undefined;
+// A placeholder's name, as `nxwright remove --keep-ids` gives it.
+const PLACEHOLDER = /^empty-slot-[1-9][0-9]*$/;
+// What the forms' buttons say while they add.
+const ADD_LABEL = "Add the font";
 
 const askFonts = latestOnly((params) => request("nxwright/fonts", params));
 const askNewSample = latestOnly((params) => request("nxwright/fontSample", params));
@@ -68,26 +77,33 @@ window.addEventListener("message", (event) => {
   if (message.type === "reply") {
     questions.answered(message);
   } else if (message.type === "start") {
-    void start(message.folder, message.atForm, message.variation);
+    void start(message.folder, message.atForm, message.variation, message.replacing);
   } else if (message.type === "changed") {
     void showFonts();
     newSampleSoon();
     fileSampleSoon();
   } else if (message.type === "showForm") {
+    // Adding a font ends any replacement still in progress.
+    stopReplacing();
     showForm();
   } else if (message.type === "variation") {
+    stopReplacing();
     startVariation(message.name);
+  } else if (message.type === "replace") {
+    startReplacing(message.name);
   }
 });
 
-async function start(folder, atForm, variation) {
+async function start(folder, atForm, variation, replacingFont) {
   byId("title").textContent = `Fonts of ${folder}`;
   sampleText.value = FIRST_SAMPLE;
   // The typefaces first: the server looks for them anew, which takes about
   // half a second, and the fonts' list then uses what it found.
   await listTypefaces();
   await showFonts();
-  if (variation !== undefined) {
+  if (replacingFont !== undefined) {
+    startReplacing(replacingFont);
+  } else if (variation !== undefined) {
     startVariation(variation);
   } else if (atForm) {
     showForm();
@@ -104,6 +120,61 @@ function startVariation(name) {
   } else {
     showForm();
   }
+}
+
+// Sets both forms to replace the folder's font `name`. The new font form is
+// filled in from that font, and the font either form makes keeps its name.
+// A placeholder's settings would be poor defaults for a real font, so for a
+// placeholder the form is left empty, and the new font needs a name of its
+// own.
+function startReplacing(name) {
+  const placeholder = PLACEHOLDER.test(name);
+  if (placeholder) {
+    showForm();
+  } else {
+    startVariation(name);
+  }
+  replacing = name;
+  const banner = byId("replacing");
+  byId("replacing-text").textContent = placeholder
+    ? `Replacing the placeholder ${name}: give the new font a name. It will take the placeholder's ID.`
+    : `Replacing the font ${name}: the new font will take its name and its ID.`;
+  banner.hidden = false;
+  for (const field of [newFont.name, fontFile.name]) {
+    field.value = placeholder ? "" : name;
+    field.disabled = !placeholder;
+  }
+  newFont.add.textContent = fontFile.add.textContent = `Replace ${name}`;
+  newSampleSoon();
+  fileSampleSoon();
+}
+
+// Puts both forms back to adding fonts.
+function stopReplacing() {
+  if (replacing === undefined) {
+    return;
+  }
+  replacing = undefined;
+  byId("replacing").hidden = true;
+  for (const field of [newFont.name, fontFile.name]) {
+    field.value = "";
+    field.disabled = false;
+  }
+  newFont.add.textContent = fontFile.add.textContent = ADD_LABEL;
+  // The samples are drawn again, which enables a button waiting for a name.
+  newSampleSoon();
+  fileSampleSoon();
+}
+
+// Whether a form's button waits for a name: a font taking a placeholder's
+// place needs one of its own.
+function needsName(field) {
+  return replacing !== undefined && PLACEHOLDER.test(replacing) && !field.value.trim();
+}
+
+// What the requests of the forms add while they replace a font.
+function replacingParams() {
+  return replacing === undefined ? {} : { replacing };
 }
 
 // The colour the samples are drawn in: the page's text colour, as the
@@ -154,7 +225,11 @@ function fontRow(font) {
       `${font.characters} characters`, `stored at rotation ${font.rotation}`].join(", ")));
     const like = element("button", "secondary", "Create a variation of this font");
     like.disabled = !drawable;
-    like.addEventListener("click", () => startLike(font));
+    // A variation is a new font, so it ends any replacement in progress.
+    like.addEventListener("click", () => {
+      stopReplacing();
+      startLike(font);
+    });
     heading.append(like);
   }
   const sample = element("div", "sample");
@@ -252,7 +327,8 @@ async function showNewSample() {
     return;
   }
   const outcome = await askNewSample({
-    ...newFontParams(newFontForm(), encoding), text: sampleText.value, colour: colour() });
+    ...newFontParams(newFontForm(), encoding), ...replacingParams(), text: sampleText.value,
+    colour: colour() });
   if (!outcome) {
     return;
   }
@@ -267,7 +343,7 @@ async function showNewSample() {
   if (!newFontAdded) {
     showNote(newFont.note, ...newFontNote(reply));
   }
-  newFont.add.disabled = Boolean(reply.refusal);
+  newFont.add.disabled = Boolean(reply.refusal) || needsName(newFont.name);
 }
 
 // Shows the font file's sample, its name, and what adding it would do.
@@ -276,7 +352,8 @@ async function showFileSample() {
     return;
   }
   const outcome = await askFileSample({
-    file: fontFilePath, name: fontFile.name.value, text: sampleText.value, colour: colour() });
+    file: fontFilePath, name: fontFile.name.value, ...replacingParams(), text: sampleText.value,
+    colour: colour() });
   if (!outcome) {
     return;
   }
@@ -291,7 +368,7 @@ async function showFileSample() {
   if (!fontFileAdded) {
     showNote(fontFile.note, ...fontFileNote(reply));
   }
-  fontFile.add.disabled = Boolean(reply.refusal);
+  fontFile.add.disabled = Boolean(reply.refusal) || needsName(fontFile.name);
 }
 
 // What adding a font file would do, as the note's text and kind.
@@ -310,11 +387,15 @@ function fontFileNote(reply) {
 // Adds a font as `params` asks, and says what came of it in `note`.
 // Returns whether it was added.
 async function add(params, note) {
+  const replaced = replacing;
   try {
-    const added = await request("nxwright/addFont", params);
-    byId("status").textContent = `Added the font ${added.name}.`;
-    showNote(note, `Added the font ${added.name}. ${added.warning ?? ""}`,
-             added.warning ? "warning" : "hint");
+    const added = await request("nxwright/addFont", { ...params, ...replacingParams() });
+    const done = replaced === undefined ? `Added the font ${added.name}.`
+      : added.name === replaced ? `Replaced the font ${replaced}.`
+      : `Replaced the font ${replaced} with ${added.name}.`;
+    byId("status").textContent = done;
+    showNote(note, `${done} ${added.warning ?? ""}`, added.warning ? "warning" : "hint");
+    stopReplacing();
     return true;
   } catch (error) {
     showNote(note, error.message, "problem");
@@ -367,5 +448,7 @@ fontFile.name.addEventListener("input", () => {
 fontFile.add.addEventListener("click", async () => {
   fontFileAdded = await add({ file: fontFilePath, name: fontFile.name.value }, fontFile.note);
 });
+
+byId("stop-replacing").addEventListener("click", stopReplacing);
 
 vscode.postMessage({ type: "ready" });

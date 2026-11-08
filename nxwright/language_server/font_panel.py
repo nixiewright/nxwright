@@ -26,7 +26,8 @@ from nxwright.project.zi_font import (FONT_ENCODINGS, GRID_ENCODINGS, UTF8, deco
                                       font_facts)
 from nxwright.drawing.font_samples import font_sample, sample_font, sample_note
 from nxwright.source.source_folder import drawn_font_name
-from nxwright.source.resource_adding import (add_font, add_font_file, check_drawn_font,
+from nxwright.source.resource_replacing import is_placeholder
+from nxwright.source.resource_adding import (Slot, add_font, add_font_file, check_drawn_font,
                                              folder_fonts, font_settings, ready_made_font,
                                              ready_made_font_name)
 
@@ -100,7 +101,7 @@ class FontPanelAnswers:
 
 def typeface_sample(root: Path, typeface_file: Path, height, smoothed: bool, name: str,
                     text: str, colour: tuple, characters: str = None,
-                    full_table: bool = False) -> dict:
+                    full_table: bool = False, replacing: str = None) -> dict:
     """Returns {"name", "refusal"}, and a sample of `text` in `colour`, of the
     font add_font would draw from a typeface file, `height` pixels tall,
     smoothed or not, in a utf-8 folder of the code points `characters`
@@ -108,7 +109,9 @@ def typeface_sample(root: Path, typeface_file: Path, height, smoothed: bool, nam
     gives, and why add_font would refuse it; and {"warning"}, when the
     typeface lacks some of the characters, which the font would leave out
     (font_drawing.font_warning). The sample draws a character the font would
-    not hold as the screen would, and its note says so."""
+    not hold as the screen would, and its note says so. With `replacing`,
+    a font of the folder, the font would take its place, and its name too
+    unless `name` gives another."""
     encoding = _encoding(root)
     try:
         height = _whole_height(height)
@@ -118,7 +121,7 @@ def typeface_sample(root: Path, typeface_file: Path, height, smoothed: bool, nam
         typeface = TrueTypeFont(Path(typeface_file).read_bytes())
     except (OSError, NxwrightError) as error:
         return {"name": name, "refusal": str(error), "noSample": str(error)}
-    name = name or drawn_font_name(typeface.typeface_name(), typeface_file, height)
+    name = name or replacing or drawn_font_name(typeface.typeface_name(), typeface_file, height)
     # The characters first: the sample is of them, whatever else is refused.
     try:
         code_points = None if characters is None else code_points_of(characters)
@@ -126,7 +129,7 @@ def typeface_sample(root: Path, typeface_file: Path, height, smoothed: bool, nam
         return {"name": name, "refusal": str(error), "noSample": str(error)}
     reply = {"name": name, "refusal": None}
     try:
-        check_drawn_font(root, name)
+        check_drawn_font(root, name, _slot(replacing))
         warning = check_drawable(typeface, height, encoding, code_points, full_table)
         if warning:
             reply["warning"] = warning
@@ -138,22 +141,26 @@ def typeface_sample(root: Path, typeface_file: Path, height, smoothed: bool, nam
     return reply
 
 
-def font_file_sample(root: Path, font_file: Path, name: str, text: str, colour: tuple) -> dict:
+def font_file_sample(root: Path, font_file: Path, name: str, text: str, colour: tuple,
+                     replacing: str = None) -> dict:
     """Returns {"name", "refusal", "turned", "warning"}, and a sample of
     `text` in `colour`, of a ready-made font file as add_font_file would add
     it: its name, `name` or else the one add_font_file gives; why it would be
     refused; whether it would be turned to the orientation in which a
     compiled file keeps fonts (DeviceSettings.font_rotation); and the
-    warning that would come with it."""
+    warning that would come with it. With `replacing`, a font of the folder,
+    the font would take its place, and its name too unless `name` gives
+    another."""
     encoding = _encoding(root)
     try:
         block = Path(font_file).read_bytes()
     except OSError as error:
         return {"name": name, "refusal": str(error), "noSample": str(error)}
-    reply = {"name": name or ready_made_font_name(block, font_file), "refusal": None,
+    reply = {"name": name or replacing or ready_made_font_name(block, font_file),
+             "refusal": None,
              "turned": False, "warning": None}
     try:
-        font = ready_made_font(root, font_file, reply["name"])
+        font = ready_made_font(root, font_file, reply["name"], _slot(replacing))
         reply.update(turned=font.turned, warning=font.warning)
     except NxwrightError as error:
         reply["refusal"] = str(error)
@@ -196,17 +203,33 @@ def add(root: Path, params: dict) -> dict:
     typeface file "typeface", "height" pixels tall, "smoothed" or not, in a
     utf-8 folder of the "characters" given; or the ready-made font file
     "file". Its name is "name", or else the one the adding gives. A utf-8
-    font is a full table when "fullTable" is true. Returns {"name",
-    "warning"}."""
+    font is a full table when "fullTable" is true. With "replacing", a font
+    of the folder, the font takes its place, keeping its ID, and its name
+    unless "name" gives another. A placeholder must be given another name.
+    Returns {"name", "warning"}; the warning also lists an old file that
+    could not be deleted."""
     name = params.get("name") or None
+    slot = _slot(params.get("replacing"))
+    # A placeholder's name would mark the new font as an empty slot.
+    if slot is not None and name is None and is_placeholder(slot.name):
+        raise NxwrightError("give the font a name: it takes the place of the placeholder %s, "
+                            "whose name would mark it as empty" % slot.name)
     if "typeface" in params:
         name, warning = add_font(root, Path(params["typeface"]),
                                  _whole_height(params["height"]), name,
                                  bool(params.get("smoothed", True)), params.get("characters"),
-                                 bool(params.get("fullTable", False)))
-        return {"name": name, "warning": warning}
-    name, warning = add_font_file(root, requested_font_file(params), name)
+                                 bool(params.get("fullTable", False)), replacing=slot)
+    else:
+        name, warning = add_font_file(root, requested_font_file(params), name, slot)
+    if slot is not None and slot.left:
+        left = "could not delete %s" % ", ".join(slot.left)
+        warning = "%s; %s" % (warning, left) if warning else left
     return {"name": name, "warning": warning}
+
+
+def _slot(replacing):
+    """The Slot of the font `replacing`, or None when it is not given."""
+    return Slot(replacing) if replacing else None
 
 
 def requested_font_file(params: dict) -> Path:

@@ -86,7 +86,9 @@ from nxwright.project.device_settings import DEFAULT_ENCODING, ENCODINGS, Device
 from nxwright.project.screen_copy import ROTATIONS
 from nxwright.project.screen_models import MODELS, model_named
 from nxwright.language.nxlang_samples import MORE_FEATURES, panel_sections
-from nxwright.language.resource_names import LISTS
+from nxwright.language.resource_names import LISTS, NOUNS
+from nxwright.source.resource_numbers import (PAGE_FILE_SUFFIX, as_name, number_files,
+                                              placed_numbers)
 from nxwright.source.source_folder import (LANGUAGES, NXLANG, SOURCE_FORMAT, add_page, app_name,
                                            new_source_folder, parse_app, read_app,
                                            read_folder_source)
@@ -168,7 +170,11 @@ class NxwrightServer(LanguageServer):
         self._answers(types.TEXT_DOCUMENT_FORMATTING, self._formatting)
         self._answers(types.TEXT_DOCUMENT_RENAME, self._rename)
         self._answers(types.TEXT_DOCUMENT_CODE_ACTION, self._code_actions,
-                      types.CodeActionOptions(code_action_kinds=[types.CodeActionKind.QuickFix]))
+                      types.CodeActionOptions(code_action_kinds=[
+                          types.CodeActionKind.QuickFix, types.CodeActionKind.RefactorRewrite,
+                          types.CodeActionKind.Source]))
+        self._answers(types.TEXT_DOCUMENT_INLAY_HINT, self._inlay_hints,
+                      types.InlayHintOptions())
         for method, answer in {"limits": self._limits,
                                "editorCode": self._editor_code,
                                "pageDrawing": self._page_drawing,
@@ -193,6 +199,7 @@ class NxwrightServer(LanguageServer):
                                "lockPage": self._lock_page,
                                "pageLocks": self._page_locks,
                                "pageEvents": self._page_events,
+                               "resourceNumbersAsNames": self._resource_numbers_as_names,
                                "groupComponents": self._group_components,
                                "fonts": self._fonts,
                                "typefaces": self._typefaces,
@@ -423,7 +430,99 @@ class NxwrightServer(LanguageServer):
                                 "diagnostics": [_CONVERTER.unstructure(problem)],
                                 "isPreferred": preferred,
                                 "edit": self._workspace_edit(index, edits)})
+        return actions + self._number_actions(params)
+
+    def _numbers_of(self, uri: str):
+        """Returns (FolderIndex, path, the folder's source, the file's
+        PlacedNumbers) for a .nx file or a page file. Returns None for any
+        other file, or when the folder cannot be read."""
+        found = self._folder(uri)
+        if found is None:
+            return None
+        index, path = found
+        if not path.endswith((".nx", PAGE_FILE_SUFFIX)):
+            return None
+        try:
+            folder = read_folder_source(self._texts.folder_reader(index.root))
+        except NxwrightError:
+            return None
+        return index, path, folder, placed_numbers(folder, index, path)
+
+    def _inlay_hints(self, params) -> list:
+        """Returns the protocol's InlayHints of the request's file: after each
+        number that stands for a resource, its name, such as `logo` after
+        `p0.pic=7`, within the request's lines."""
+        made = self._numbers_of(params.text_document.uri)
+        if made is None:
+            return []
+        index, _, folder, numbers = made
+        first, last = params.range.start.line, params.range.end.line
+        hints = []
+        for number in numbers:
+            names = folder.app.get(LISTS[number.kind], [])
+            if first <= number.place.line <= last and 0 <= number.id < len(names):
+                hints.append({"position": self._range(index, number.place)["end"],
+                              "label": names[number.id], "paddingLeft": True})
+        return hints
+
+    def _number_actions(self, params) -> list:
+        """Returns the code actions writing a number that stands for a
+        resource as its name (resource_numbers.as_name): one for each such
+        number the request's range touches, and one for all of them in the
+        file, as a source action. No diagnostic comes with them."""
+        # A client asking only for other kinds of action, such as quick
+        # fixes, gets none of these.
+        only = params.context.only
+        wanted = [kind.value for kind in (types.CodeActionKind.RefactorRewrite,
+                                          types.CodeActionKind.Source)
+                  if not only or any(kind.value.startswith(asked) for asked in only)]
+        made = self._numbers_of(params.text_document.uri) if wanted else None
+        if made is None:
+            return []
+        index, path, folder, numbers = made
+        named = [(number, as_name(folder, index, number)) for number in numbers]
+        named = [(number, text) for number, text in named if text is not None]
+        start, end = params.range.start, params.range.end
+        actions = []
+        for number, text in named if types.CodeActionKind.RefactorRewrite.value in wanted else []:
+            span = self._range(index, number.place)
+            first = (span["start"]["line"], span["start"]["character"])
+            last = (span["end"]["line"], span["end"]["character"])
+            if (start.line, start.character) <= last and first <= (end.line, end.character):
+                written = index.lines(path)[number.place.line][number.place.start:number.place.end]
+                actions.append({"title": "Write %s as %s" % (written, text),
+                                "kind": types.CodeActionKind.RefactorRewrite.value,
+                                "edit": self._workspace_edit(
+                                    index, {path: [_text_edit(number.place, text)]})})
+        if named and types.CodeActionKind.Source.value in wanted:
+            actions.append({"title": "Write the resource numbers of this file as names",
+                            "kind": types.CodeActionKind.Source.value,
+                            "edit": self._workspace_edit(index, {path: [
+                                _text_edit(number.place, text) for number, text in named]})})
         return actions
+
+    def _resource_numbers_as_names(self, params: dict) -> dict:
+        """Returns the protocol's WorkspaceEdit that writes as names the
+        numbers in the source folder `folder` that stand for resources of
+        `kind` whose IDs are among `ids`. `kind` is the word nxwright's
+        commands use, such as "picture". A number is written as a name only
+        where resource_numbers.as_name allows it."""
+        root = Path(params["folder"])
+        index = FolderIndex(root, self._texts.read)
+        folder = read_folder_source(self._texts.folder_reader(root))
+        kinds = {noun: kind for kind, noun in NOUNS.items()}
+        if params["kind"] not in kinds:
+            raise NxwrightError("%s is not a kind of resource" % params["kind"])
+        kind, ids = kinds[params["kind"]], set(params["ids"])
+        edits = {}
+        for path in number_files(index, folder.app):
+            for number in placed_numbers(folder, index, path):
+                if number.kind != kind or number.id not in ids:
+                    continue
+                text = as_name(folder, index, number)
+                if text is not None:
+                    edits.setdefault(path, []).append(_text_edit(number.place, text))
+        return self._workspace_edit(index, edits)
 
     def _editor_code(self, params: dict):
         """Returns the Editor code of the request's .nx file, as the first page
@@ -810,15 +909,16 @@ class NxwrightServer(LanguageServer):
         """Returns a sample of a font about to be added, and what adding it
         would do: of the font drawn from the typeface file "typeface"
         (font_panel.typeface_sample), or of the ready-made font file "file"
-        (font_panel.font_file_sample)."""
+        (font_panel.font_file_sample); with "replacing", of the font taking
+        the place of that font of the folder."""
         root, colour = self._source_folder(params), _colour(params)
         if "typeface" in params:
             return typeface_sample(root, Path(params["typeface"]), params.get("height"),
                                    bool(params.get("smoothed", True)), params.get("name"),
                                    params["text"], colour, params.get("characters"),
-                                   bool(params.get("fullTable", False)))
+                                   bool(params.get("fullTable", False)), params.get("replacing"))
         return font_file_sample(root, requested_font_file(params), params.get("name"),
-                                params["text"], colour)
+                                params["text"], colour, params.get("replacing"))
 
     def _add_font(self, params: dict) -> dict:
         """Adds a font to the folder, writing its file (font_panel.add), and
@@ -954,6 +1054,15 @@ def serve(input_stream, output_stream) -> int:
     server = NxwrightServer()
     server.start_io(input_stream, output_stream)
     return 0 if server.shut_down else 1
+
+
+def _text_edit(place: Place, text: str) -> dict:
+    """The protocol's TextEdit putting `text` in the place of `place`. Its
+    columns count Python characters, which is what _workspace_edit
+    expects."""
+    return {"range": {"start": {"line": place.line, "character": place.start},
+                      "end": {"line": place.line, "character": place.end}},
+            "newText": text}
 
 
 def _colour(params: dict) -> tuple:

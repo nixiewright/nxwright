@@ -20,6 +20,14 @@ export interface MediaQuestions {
   folder(title: string): Promise<string | undefined>;
 }
 
+// The settings of an animation or a video that replacing it keeps, as
+// `nxwright replace --settings` prints them.
+export interface MediaSettings {
+  duration?: number;
+  rate?: number;
+  size?: number[];
+}
+
 const PICTURES = { Pictures: ["png", "jpg", "jpeg", "bmp", "gif"] };
 // An animation's pictures, or a file of GmovMaker's, which keeps its own durations.
 const ANIMATION_SOURCES = {
@@ -45,8 +53,10 @@ const MONO = "Mono";
 
 // Asks for the pictures of an animation, and how long each frame shows; or
 // for a file of GmovMaker's, whose frames keep their durations. Returns the
-// arguments of `nxwright animation`, or undefined.
-export async function animationArguments(folder: string, ask: MediaQuestions):
+// arguments of `nxwright animation`, or undefined. `current` gives the
+// duration to suggest, since replacing an animation keeps its own.
+export async function animationArguments(folder: string, ask: MediaQuestions,
+                                         current: MediaSettings = {}):
     Promise<string[] | undefined> {
   const pictures = await ask.files(
     "nxwright animation: the pictures, one per frame, or a GmovMaker file", ANIMATION_SOURCES,
@@ -59,7 +69,8 @@ export async function animationArguments(folder: string, ask: MediaQuestions):
     return ["animation", folder, ...pictures];
   }
   const duration = await ask.text("nxwright animation: how long each frame shows",
-                                  "In milliseconds; GmovMaker's default is 50", "50",
+                                  "In milliseconds; GmovMaker's default is 50",
+                                  String(current.duration ?? 50),
                                   wholeNumberCheck(1, 0xFFFFFFFF));
   return duration === undefined
     ? undefined
@@ -68,8 +79,10 @@ export async function animationArguments(folder: string, ask: MediaQuestions):
 
 // Asks for a video file or still pictures, the frame rate, and, of a video
 // file, the frames' size and the part to take. Returns the arguments of
-// `nxwright video`, or undefined.
-export async function videoArguments(folder: string, ask: MediaQuestions):
+// `nxwright video`, or undefined. `current` gives the rate and the
+// size to suggest, since replacing a video keeps its own.
+export async function videoArguments(folder: string, ask: MediaQuestions,
+                                     current: MediaSettings = {}):
     Promise<string[] | undefined> {
   const sources = await ask.files("nxwright video: a video file, or pictures, one per frame",
                                   VIDEOS, true);
@@ -77,7 +90,8 @@ export async function videoArguments(folder: string, ask: MediaQuestions):
     return undefined;
   }
   const rate = await ask.text("nxwright video: frames a second",
-                              "From 1 to 255; VideoBox's default is 12", "12",
+                              "From 1 to 255; VideoBox's default is 12",
+                              String(current.rate ?? 12),
                               wholeNumberCheck(1, 255));
   if (rate === undefined) {
     return undefined;
@@ -88,7 +102,8 @@ export async function videoArguments(folder: string, ask: MediaQuestions):
     return args;
   }
   const size = await ask.text("nxwright video: the frames' size",
-                              "Width and height, as 320,240; empty for the video's own", "",
+                              "Width and height, as 320,240; empty for the video's own",
+                              current.size ? current.size.join(",") : "",
                               sizeCheck);
   if (size === undefined) {
     return undefined;
@@ -129,11 +144,12 @@ export async function soundArguments(folder: string, ask: MediaQuestions):
           ...(channels === MONO ? ["--mono"] : [])];
 }
 
-// Asks for pictures to add to `folder`. Returns the arguments of
-// `nxwright picture`, or undefined.
-export async function pictureArguments(folder: string, ask: MediaQuestions):
+// Asks for pictures to add to `folder`, or with `one`, a picture. Returns
+// the arguments of `nxwright picture`, or undefined.
+export async function pictureArguments(folder: string, ask: MediaQuestions, one = false):
     Promise<string[] | undefined> {
-  const pictures = await ask.files("nxwright picture: the pictures to add", PICTURES, true);
+  const pictures = await ask.files(one ? "nxwright picture: the new picture"
+    : "nxwright picture: the pictures to add", PICTURES, !one);
   return pictures?.length ? ["picture", folder, ...pictures] : undefined;
 }
 

@@ -2,7 +2,8 @@
 // (currentProject.ts), a collapsible group per kind, each listing its names
 // in ID order, with the ID. A group's buttons, shown on hover, are
 // package.json's (view/item/context, inline), told apart by the group's
-// contextValue. Choosing a resource opens its file: a font's in the font
+// contextValue. A resource's right-click menu comes from there too, told
+// apart by the resource's own contextValue (mediaActions.ts). Choosing a resource opens its file: a font's in the font
 // viewer (fontViewer.ts), an animation's, a video's, or a sound's in its
 // media viewer (mediaViewer.ts), a picture as VS Code shows pictures.
 import * as path from "path";
@@ -26,7 +27,7 @@ const MEDIA_FILES: Record<string, string> = {
 };
 
 // A group, or a resource of one: its list, and for a resource, its name and ID.
-interface MediaEntry {
+export interface MediaEntry {
   list: string;
   name?: string;
   id?: number;
@@ -79,6 +80,7 @@ export class MediaView implements vscode.TreeDataProvider<MediaEntry> {
     const item = new vscode.TreeItem(entry.name);
     item.id = `${entry.list}/${entry.name}`;
     item.description = String(entry.id);
+    item.contextValue = `mediaResource.${entry.list}`;
     const folder = this.project.folder;
     if (entry.list === "fonts" && folder) {
       item.command = { command: "vscode.open", title: "Open the font",

@@ -18,7 +18,7 @@ import re
 
 from nxwright import NxwrightError
 from nxwright.source.folder_index import APP_FILE, FolderIndex
-from nxwright.source.references import references, targets_at
+from nxwright.source.references import references, targets_at, text_with_edits
 from nxwright.source.folder_check import check_folder
 from nxwright.source.source_folder import folder_lister
 
@@ -46,7 +46,8 @@ def rename(index: FolderIndex, path: str, line: int, column: int, new_name: str,
         edits.setdefault(place.path, []).append((place, new_name))
     listed = folder_lister(index.root)
     if not check_folder(read, exists, listed=listed).errors():
-        texts = {file: _edited(read(file), file_edits) for file, file_edits in edits.items()}
+        texts = {file: text_with_edits(read(file), file_edits)
+                 for file, file_edits in edits.items()}
         errors = check_folder(lambda file: texts[file] if file in texts else read(file),
                               exists, listed=listed).errors()
         if errors:
@@ -55,13 +56,3 @@ def rename(index: FolderIndex, path: str, line: int, column: int, new_name: str,
             raise NxwrightError("the folder would not build after the rename: %s: %s"
                                 % (place, errors[0].message))
     return edits
-
-
-def _edited(text: str, edits: list) -> str:
-    """Returns `text` with each (Place, new text) of `edits` applied."""
-    lines = text.split("\n")
-    for place, new_text in sorted(edits, key=lambda edit: (edit[0].line, edit[0].start),
-                                  reverse=True):
-        line = lines[place.line]
-        lines[place.line] = line[:place.start] + new_text + line[place.end:]
-    return "\n".join(lines)
