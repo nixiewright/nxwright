@@ -41,6 +41,10 @@ First public release.
 
 ## VS Code extension
 
+### [0.3.3] - 2026-11-08
+
+- Shows progress, with a Cancel button, while Delete checks where a resource is used.
+
 ### [0.3.2] - 2026-11-08
 
 Needs nxwright 0.2.2 or later.

@@ -61,6 +61,7 @@ export class MediaActions {
     }
     const { folder, kind, name } = target;
     const report = await this.json<RemovalReport>(
+      `checking where the ${kind} ${name} is used...`,
       `the report on deleting the ${kind} ${name}`,
       ["remove", folder.fsPath, kind, name, "--report"]);
     if (!report) {
@@ -160,6 +161,7 @@ export class MediaActions {
       }
     }
     const settings = await this.json<MediaSettings>(
+      `reading the settings of the ${kind} ${name}...`,
       `the settings of the ${kind} ${name}`,
       ["replace", folder.fsPath, kind, name, "--settings"]);
     if (!settings) {
@@ -216,15 +218,27 @@ export class MediaActions {
     return this.means.project.info?.resources?.[list] ?? [];
   }
 
-  // Runs nxwright with `args`, which prints a JSON object, and returns it;
-  // or undefined, having shown the error, when it fails. `what` names it in
-  // the error.
-  private async json<T>(what: string, args: string[]): Promise<T | undefined> {
+  // Runs nxwright with `args`, and returns the JSON object it prints.
+  // nxwright can take a while on a large project, so a notification shows
+  // `doing` while it runs, with a button to cancel. Returns undefined if the
+  // user cancels. If nxwright fails, shows an error that starts
+  // "could not get `what`", and returns undefined.
+  private async json<T>(doing: string, what: string, args: string[]): Promise<T | undefined> {
     const command = await this.means.command();
     if (command === undefined) {
       return undefined;
     }
-    const ran = await runJson(command, args, { cwd: this.means.workingFolder() });
+    const ran = await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification, cancellable: true,
+      title: `nxwright: ${doing}`,
+    }, (_, token) => {
+      const stop = new AbortController();
+      token.onCancellationRequested(() => stop.abort());
+      return runJson(command, args, { cwd: this.means.workingFolder(), signal: stop.signal });
+    });
+    if (ran.stopped) {
+      return undefined;
+    }
     if (ran.code !== 0 || ran.events.length === 0) {
       void vscode.window.showErrorMessage(
         `nxwright: could not get ${what}: ${ran.errors.trim() || "nxwright printed nothing"}`);
