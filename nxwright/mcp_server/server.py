@@ -441,8 +441,7 @@ def _point(driven: DrivenSimulation, component: str, x: int, y: int) -> tuple:
     if found is None:
         raise NxwrightError("the page shown has no component named %s" % component)
     if found["x"] is None:
-        raise NxwrightError("%s has no place on the screen, so it cannot be pressed"
-                            % component)
+        raise NxwrightError("%s is non-visual, so it cannot be pressed" % component)
     if not found["shown"]:
         raise NxwrightError("%s does not show, so it cannot be pressed" % component)
     return found["x"] + found["w"] // 2, found["y"] + found["h"] // 2

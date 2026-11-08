@@ -212,7 +212,7 @@ class McpServerTest(unittest.TestCase):
         self.assertEqual(self.refused("tap", component="b9"),
                          "the page shown has no component named b9")
         self.assertEqual(self.refused("tap", component="tm0"),
-                         "tm0 has no place on the screen, so it cannot be pressed")
+                         "tm0 is non-visual, so it cannot be pressed")
         self.assertEqual(self.refused("wait", milliseconds=-1),
                          "a wait lasts 0 milliseconds or more")
         # At most a minute at a time, so that the server answers again soon.

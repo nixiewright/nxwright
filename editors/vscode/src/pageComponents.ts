@@ -151,7 +151,7 @@ export class PageComponents {
     const chosen = await vscode.window.showQuickPick(
       types.map((entry) => ({
         label: entry.type,
-        description: entry.placed ? undefined : "no place on the screen",
+        description: entry.placed ? undefined : "(non-visual)",
       })),
       { placeHolder: "The type of the new component" });
     if (!chosen) {
