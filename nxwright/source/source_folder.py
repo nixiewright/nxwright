@@ -1115,7 +1115,8 @@ class FolderSource:
     declared: ProgramNames      # what program.nx declares; None in the Editor's own language
     page_objects: dict          # {page name: {object name: type}; None if broken}
     broken_pages: dict          # {page name: the NxwrightError reading its names}
-    # Each page's components of global scope, which alone a macro reaches.
+    # Each page's components of global scope. A macro, or another page's
+    # code, can use only these.
     page_globals: dict
     macros_text: str            # macros.nx's text; None when the folder has no macros
     macros: frozenset           # the macros' names, which a `call` must name; None if unread
@@ -1165,7 +1166,7 @@ class FolderSource:
                                 self.encoding, chain, self.program_variables, self.macros,
                                 self.absent_attributes, self.screen, page_size,
                                 code_text_limits(self.text_limits or {}, page_name), cut_texts,
-                                defines=self.app["defines"])
+                                defines=self.app["defines"], page_globals=self.page_globals)
         # Not a refusal by the memory table: the memory probe, which turns
         # those off, places every component inside the screen.
         if self.screen is not None:

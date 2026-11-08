@@ -234,7 +234,8 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
                      program_variables: frozenset = None, macros: frozenset = None,
                      absent_attributes: dict = None, screen: ScreenModel = None,
                      page_size: tuple = None, text_limits: dict = None,
-                     cut_texts: list = None, defines: dict = None) -> PageBlock:
+                     cut_texts: list = None, defines: dict = None,
+                     page_globals: dict = None) -> PageBlock:
     """Returns the page `page_name` built from its source files. Its stamp, a
     checksum of the page block, is left 0. Its texts, its code, and its header
     are in `encoding`, the project's character encoding (the Editor's
@@ -254,6 +255,9 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
     `absent_attributes` too, {page name: {name: {attribute: why}}}, no
     line may name an attribute a component lacks by its page file's
     values, such as a variable's `val` while it holds a text (ObjectNames).
+    With `page_globals` too, {page name: the names of its components of
+    global scope}, code can use another page's component only if it is of
+    global scope (ObjectNames.reachable).
 
     In the Editor's own language, with `program_variables`, program.nx's int
     variables, the code may name sys0, sys1, and sys2 only when they are
@@ -282,7 +286,7 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
         return _page_from_source(source, page_name, names, defaults, nxlang_program, page_id,
                                  globals_used, read, page_objects, encoding, chain,
                                  program_variables, macros, absent_attributes, screen,
-                                 page_size, text_limits, cut_texts, defines)
+                                 page_size, text_limits, cut_texts, defines, page_globals)
     except NxwrightError as error:
         error.file = error.file or page_toml_path(page_name)
         raise
@@ -331,7 +335,7 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
                       program_variables: frozenset, macros: frozenset,
                       absent_attributes: dict, screen: ScreenModel,
                       page_size: tuple, text_limits: dict, cut_texts: list,
-                      defines: dict) -> PageBlock:
+                      defines: dict, page_globals: dict) -> PageBlock:
     """Does the work of page_from_source."""
     try:
         data = page_data(source.toml, page_name, defines)
@@ -365,7 +369,7 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
         objects = None
         if page_objects is not None:
             objects = ObjectNames(frozenset(table.get("name") for table in tables), page_objects,
-                                  page_name, absent_attributes=absent_attributes)
+                                  page_name, page_globals, absent_attributes)
         code = _parse_events(source.events, page_name, names, codec,
                              [table.get("name") for table in tables], objects,
                              program_variables, macros, screen)
@@ -374,7 +378,7 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
             source.events, page_name, names, [table.get("name") for table in tables],
             nxlang_program, page_id, read, codec, events_of_page_tables(tables, defaults),
             page_objects, {**(page_objects or {}), page_name: table_types(tables)},
-            absent_attributes, screen, text_limits)
+            absent_attributes, screen, text_limits, page_globals)
         if cut_texts is not None:
             cut_texts.extend(cuts)
         if globals_used is not None:
@@ -793,7 +797,8 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
                            program: ProgramNames, page_id: int, read, codec: TextCodec,
                            page_events: frozenset, page_objects: dict = None,
                            object_types: dict = None, absent_attributes: dict = None,
-                           screen: ScreenModel = None, text_limits: dict = None) -> tuple:
+                           screen: ScreenModel = None, text_limits: dict = None,
+                           page_globals: dict = None) -> tuple:
     """Returns ({(object name, event): [code line bytes]}, [Generated] for the
     generated variables, [the program.s globals used], the longest chain of
     calls and clicks, [(file, line, message)] of the texts a generated
@@ -802,9 +807,11 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
     takes them. `text_limits` gives
     the most bytes of the pages' texts, keyed as the code writes them
     (code_text_limits), which those warnings need. With
-    `page_objects`, references, calls, and assignments are checked, as
-    page_from_source says (ObjectNames), with `absent_attributes` the
-    attributes components lack, and with `screen` what its series lacks.
+    `page_objects`, references, calls, and assignments are checked as
+    page_from_source describes (ObjectNames). The checks use
+    `absent_attributes` for the attributes components lack, `page_globals`
+    for each page's components of global scope, and `screen` for what its
+    series lacks.
     `object_types` gives the types of the pages' objects nxlang compiles
     with, {page: {name: type}} (nxlang.compile_page)."""
     page_files = read_page_files(page_nx_path(page_name), text, read or _no_includes)
@@ -815,7 +822,7 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
     objects = None
     if page_objects is not None:
         own = frozenset(component_names) | {variable.name for variable in compiled.generated}
-        objects = ObjectNames(own, page_objects, page_name, absent_attributes=absent_attributes)
+        objects = ObjectNames(own, page_objects, page_name, page_globals, absent_attributes)
     for key, lines in preprocess_compiled(compiled, page_name, names, objects=objects,
                                           screen=screen, codec=codec).items():
         where = "%s: %s.%s" % (compiled.sources.get(key, page_nx_path(page_name)), *key)

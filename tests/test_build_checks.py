@@ -29,13 +29,17 @@ from tests.test_project_writer import edit_text
 from tests.test_source_folder import SourceFolderTestCase
 
 
-def add_component(page_file: Path, name: str, text: str = None, limit: int = None):
-    """Adds a text component to a page file."""
+def add_component(page_file: Path, name: str, text: str = None, limit: int = None,
+                  scope: int = None):
+    """Adds a text component to a page file. Its `vscope` is `scope` when
+    given (0 for local, 1 for global), and otherwise its type's default."""
     lines = '\n[[component]]\nname = "%s"\ntype = "text"\nx = 0\ny = 0\nw = 100\nh = 30\n' % name
     if text is not None:
         lines += 'txt = "%s"\n' % text
     if limit is not None:
         lines += "txt_maxl = %d\n" % limit
+    if scope is not None:
+        lines += "vscope = %d\n" % scope
     with open(page_file, "a", encoding="utf-8", newline="\n") as file:
         file.write(lines)
 
@@ -561,14 +565,16 @@ class WriterLimitTest(SourceFolderTestCase):
 
 
 class ReferenceTest(SourceFolderTestCase):
-    """Editor code in first.down, checked against the names of the small test
-    project. setUp adds the down event, t0 on page first, and t1 on page second."""
+    """Code in strict Nextion syntax in first.down, checked against the names
+    of the small test project. setUp adds the down event, t0 on page first, and two texts on
+    page second: t1, of local scope, and t2, of global scope."""
 
     def setUp(self):
         super().setUp()
         edit_text(self.source / "pages" / "first.page.toml", "events = []", 'events = ["down"]')
         add_component(self.source / "pages" / "first.page.toml", "t0")
-        add_component(self.source / "pages" / "second.page.toml", "t1")
+        add_component(self.source / "pages" / "second.page.toml", "t1", scope=0)
+        add_component(self.source / "pages" / "second.page.toml", "t2", scope=1)
 
     def write_code(self, *lines: str):
         """Writes the code of first.down; its lines start at line 2 of first.nx."""
@@ -577,12 +583,51 @@ class ReferenceTest(SourceFolderTestCase):
                                                          encoding="utf-8", newline="\n")
 
     def test_names_that_exist(self):
-        # The page's own components, the page itself, another page's
-        # components after its name, a command's component, and the forms
-        # whose component is chosen at run time. Strings and comments are not read.
-        self.write_code('t0.txt="a.b"', "first.bco=0", "second.t1.txt=t0.txt", "vis t0,1",
-                        "tsw 255,0", "b[1].txt=p[0].b[2].txt", "sys0=second.bco // nothing.here")
+        # The build accepts each of these:
+        # - the page's own components, with or without the page's name;
+        # - the page itself;
+        # - another page's components of global scope, after that page's name;
+        # - a command's component;
+        # - the array forms, on this page and on another, which pick their
+        #   component when the code runs.
+        # The checks skip strings and comments.
+        self.write_code('t0.txt="a.b"', 'first.t0.txt="c"', "first.bco=0",
+                        "second.t2.txt=t0.txt", "sys0=second.t2.txt_maxl", "vis t0,1",
+                        "tsw 255,0", "b[1].txt=p[0].b[2].txt", "t0.txt=second.b[1].txt",
+                        "sys0=first.bco // nothing.here")
         export_dump(self.source, self.folder / "again")
+
+    def test_another_pages_component_of_local_scope(self):
+        # On the T and K series, the Nextion Editor rejected page code that
+        # read or assigned another page's component of local scope ("Invalid
+        # Variables"). It compiled the same lines with a component of global
+        # scope.
+        for line in ("second.t1.txt=t0.txt", "t0.txt=second.t1.txt", "sys0=second.t1.txt_maxl"):
+            with self.subTest(line=line):
+                self.write_code(line)
+                self.assert_export_refused(
+                    r"first\.nx line 2: second\.t1: t1 is of local scope, so another page's "
+                    r"code cannot use it\. The Nextion Editor refuses this line "
+                    r"\(\"Invalid Variables\"\)\. Give t1 global scope \(vscope = 1\)\.")
+
+    def test_another_pages_own_attribute(self):
+        # The Nextion Editor rejected page code that read or assigned another
+        # page's own attribute, whatever that page's vscope ("Invalid
+        # Variables"). On page0 itself, it compiled `sys0=page0.bco`.
+        for line in ("sys0=second.bco", "second.bco=0"):
+            with self.subTest(line=line):
+                self.write_code(line)
+                self.assert_export_refused(
+                    r"first\.nx line 2: second\.bco: only page second's own code can use the "
+                    r"page's attributes\. The Nextion Editor refuses this line "
+                    r"\(\"Invalid Variables\"\)")
+
+    def test_another_pages_component_of_local_scope_in_nxlang(self):
+        switch_to_nxlang(self.source)
+        self.write_code("second.t1.txt = t0.txt")
+        self.assert_export_refused(r"first\.nx line 2: second\.t1: t1 is of local scope")
+        self.write_code("second.t2.txt = t0.txt")
+        export_dump(self.source, self.folder / "nxlang")
 
     def test_an_unknown_component(self):
         self.write_code('t0.txt=""', 't9.txt=""')
@@ -606,8 +651,16 @@ class ReferenceTest(SourceFolderTestCase):
                                    r"this page nor a variable, so the Nextion Editor refuses it")
 
     def test_the_runner_refuses_what_the_build_refuses(self):
-        self.write_code('t9.txt=""')
-        with self.assertRaisesRegex(NxwrightError, r"line 2: t9 is neither on this page nor a page"):
+        for line, said in (('t9.txt=""', r"t9 is neither on this page nor a page"),
+                           ("second.t1.txt=t0.txt", r"second\.t1: t1 is of local scope"),
+                           ("sys0=second.bco", r"second\.bco: only page second's own code")):
+            with self.subTest(line=line):
+                self.write_code(line)
+                with self.assertRaisesRegex(NxwrightError, r"line 2: " + said):
+                    SourceFolderRunner(self.source).run("first", [("first", "down")])
+        switch_to_nxlang(self.source)
+        self.write_code("second.t1.txt = t0.txt")
+        with self.assertRaisesRegex(NxwrightError, r"line 2: second\.t1: t1 is of local scope"):
             SourceFolderRunner(self.source).run("first", [("first", "down")])
 
     def test_the_runner_does_not_check_code_given_as_text(self):
@@ -1901,17 +1954,17 @@ class LabelTest(SourceFolderTestCase):
 
 
 class ReadOnlyAttributeTest(SourceFolderTestCase):
-    """Assignments in first.down to attributes code cannot change, which the
-    Editor refused as it compiled ("Assignment operation failed").
-    setUp adds the down event, and a text on each page: t0 on first, and t1
-    on second."""
+    """Assignments in first.down to attributes that code cannot change. The
+    Nextion Editor rejected them when it compiled ("Assignment operation
+    failed"). setUp adds the down event, and a text on each page: t0 on
+    first, and t1, of global scope, on second."""
 
     def setUp(self):
         super().setUp()
         pages = self.source / "pages"
         edit_text(pages / "first.page.toml", "events = []", 'events = ["down"]')
         add_component(pages / "first.page.toml", "t0")
-        add_component(pages / "second.page.toml", "t1")
+        add_component(pages / "second.page.toml", "t1", scope=1)
 
     def write_code(self, *lines: str):
         """Writes the code of first.down; its lines start at line 2 of first.nx."""
@@ -1926,14 +1979,17 @@ class ReadOnlyAttributeTest(SourceFolderTestCase):
             export_dump(self.source, self.folder / ("refused%d" % number))
 
     def test_the_assignments_the_editor_refuses(self):
-        # As the Editor compiled them: every form of assignment, a page's own
+        # The Nextion Editor rejected each of these assignments when it
+        # compiled. They cover every form of assignment, the page's own
         # attributes, another page's component, and id, type, and objname,
-        # which the attribute descriptions hold none of.
+        # which are missing from the attribute descriptions. Another page's
+        # own attributes never reach this check, because the reference check
+        # rejects them first (ReferenceTest).
         cases = [("t0.w=10", "w of first's text t0"), ("t0.w+=1", "w of first's text t0"),
                  ("t0.h++", "h of first's text t0"), ("t0.h|=1", "h of first's text t0"),
                  ("t0.id=3", "id of first's text t0"), ("t0.type=1", "type of first's text t0"),
                  ('t0.objname="a"', "objname of first's text t0"),
-                 ("first.x=10", "x of the page first"), ("second.w=10", "w of the page second"),
+                 ("first.x=10", "x of the page first"),
                  ("second.t1.w=10", "w of second's text t1")]
         for number, (line, what) in enumerate(cases):
             with self.subTest(line=line):

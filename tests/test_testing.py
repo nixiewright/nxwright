@@ -50,9 +50,11 @@ class SourceFolderRunnerTest(SourceFolderTestCase):
             self.runner.run("first", [("first", "down")])
 
     def test_texts_are_cut_to_their_fields_size(self):
-        # A text field holds at most its txt_maxl bytes, from the page file or,
-        # when the page file leaves it out, from its type's defaults (10 for a
-        # text). The second page's field is named after its page.
+        # A text field keeps at most its txt_maxl bytes. The page file gives
+        # txt_maxl, or, if the page file leaves it out, its type's defaults do
+        # (10 for a text). The second page's field t7 is of global scope, so
+        # that the first page's code can set it, and its value is listed with
+        # its page's name, as `second.t7.txt`.
         with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8",
                   newline="\n") as file:
             file.write('\n[[component]]\nname = "t9"\ntype = "text"\nx = 0\ny = 0\nw = 9\nh = 9\n'
@@ -61,7 +63,7 @@ class SourceFolderRunnerTest(SourceFolderTestCase):
         with open(self.source / "pages" / "second.page.toml", "a", encoding="utf-8",
                   newline="\n") as file:
             file.write('\n[[component]]\nname = "t7"\ntype = "text"\nx = 0\ny = 0\nw = 9\nh = 9\n'
-                       'txt_maxl = 2\n')
+                       'txt_maxl = 2\nvscope = 1\n')
         (self.source / "pages" / "first.nx").write_text(
             'on first.down:\n  t9.txt="abcdef"\n  t8.txt="abcdefghijklmn"\n  t8.txt+="z"\n'
             '  second.t7.txt="xyz"\n', encoding="utf-8", newline="\n")
@@ -127,12 +129,13 @@ class SourceFolderRunnerTest(SourceFolderTestCase):
         self.assertEqual(runner.run("first", [("first", "down")], {"sys0": 0})["sys0"], 40)
 
     def test_a_changed_page_file_of_another_page_compiles_again(self):
-        # The first page's code sets a field of the second page, cut to the
-        # size the second page's file gives it.
+        # The first page's code sets the second page's field t7, which is of
+        # global scope. The text is cut to the size the second page's file
+        # gives t7, so a change to that file must compile the first page again.
         with open(self.source / "pages" / "second.page.toml", "a", encoding="utf-8",
                   newline="\n") as file:
             file.write('\n[[component]]\nname = "t7"\ntype = "text"\nx = 0\ny = 0\nw = 9\nh = 9\n'
-                       'txt_maxl = 2\n')
+                       'txt_maxl = 2\nvscope = 1\n')
         (self.source / "pages" / "first.nx").write_text(
             'on first.down:\n  second.t7.txt="xyz"\n', encoding="utf-8", newline="\n")
         self.assertEqual(self.runner.run("first", [("first", "down")])["second.t7.txt"], "xy")

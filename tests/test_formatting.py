@@ -208,6 +208,9 @@ class RenameTest(FolderTestCase):
         self.write("pages/page0.nx", 'include "lib/show.nx"\n\non title.up:\n  show(1)\n'
                                      '  vis title,1\n  second.title.txt = "a"\n')
         self.write("pages/second.nx", 'include "lib/show.nx"\n\non second.load:\n  show(2)\n')
+        # page0's code sets second's title, so the title is given global scope.
+        self.write("pages/second.page.toml", self.text("pages/second.page.toml").replace(
+            'name = "title"\n', 'name = "title"\nvscope = 1\n'))
 
     def rename_at(self, path: str, needle: str, new_name: str, inside: str = None) -> dict:
         """Renames the name at the first `needle` of `path`, or at `inside` it,

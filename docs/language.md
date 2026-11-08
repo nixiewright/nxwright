@@ -219,7 +219,7 @@ A `.nx` file can include others: a library of functions shared by pages, or part
 
 A name on its own, without a dot, must be a constant, a local, a function's parameter, an `int` variable declared in `program.nx`, or a system variable. Anything else stops the build with "unknown name". That catches a misspelt constant.
 
-A name with a dot must refer to something that exists ([Names that must exist](build-rules.md#names-that-must-exist)). `t0.txt` is a component of the page, and `settings.t0.txt` is a component of the page `settings`.
+A name with a dot must refer to something that exists ([Names that must exist](build-rules.md#names-that-must-exist)). `t0.txt` refers to `t0` on the code's own page, and `settings.t0.txt` to `t0` on the page `settings`. Code on any other page can use `settings.t0.txt` only if `t0` is of global scope.
 
 Code cannot use a component whose name contains anything other than letters, digits, and `_`, such as `b 0`. Only the headings of that component's events can give its name, in quotes ([Code files](source-folder.md#code-files)).
 

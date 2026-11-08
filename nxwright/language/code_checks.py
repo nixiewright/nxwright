@@ -253,10 +253,12 @@ class ObjectNames:
     record's calls, and assignments to attributes code cannot change, are
     checked by the types.
 
-    A macro's code belongs to no page: its `page` is None, and `own` is
-    empty. `reachable` then holds each page's components of global scope, by
-    page name, which alone a macro reaches, with its page's name, because
-    the Editor compiles macros apart from every page (macros_source.py).
+    `reachable` contains each page's components of global scope, by page
+    name. Another page's code, or a macro's, can use only these, and only
+    with their page's name. Scope is not checked for a page whose entry is
+    None or missing. A macro's code belongs to no page, because the Nextion
+    Editor compiles macros apart from every page (macros_source.py). Its
+    `page` is None, and its `own` is empty.
 
     `absent_attributes` holds the attributes each page's components lack by
     their page file's values (editor_limits.lacked_attributes), {page name:
@@ -508,18 +510,50 @@ def check_without_owner(code: str, number: int):
 
 
 def _check_references(code: str, objects: ObjectNames, number: int):
-    """Raises NxwrightError when a line names a component or page that does
-    not exist. Another page's components are named with the page first."""
+    """Raises NxwrightError when a line of a page's code uses a component or
+    a page that does not exist, another page's component of local scope
+    (ObjectNames.reachable), or another page's own attribute. Another page's
+    components are written with the page's name first.
+
+    On the T and K series, the Nextion Editor rejected a line that used
+    another page's component of local scope, such as `page1.t1.txt` with
+    `t1` local, or another page's own attribute, such as `page1.bco`,
+    whatever that page's scope. It gave "Invalid Variables" for both,
+    whether the line read or assigned them. It compiled `page0.t0.txt` on
+    page0 with `t0` local, and the array form `page1.b[1].val`. The array
+    form picks its component when the code runs, so it is not checked."""
     for part in STRING.split(code)[::2]:
-        for first, second, third in _DOTTED.findall(part):
-            if first in objects.pages and third:
-                known = objects.pages[first]
-                if known is not None and second not in known:
-                    raise NxwrightError("page %s has no component %s"
-                                        % (first, second), line=number)
-            elif first not in objects.own and first not in objects.pages:
-                raise NxwrightError("%s is neither on this page nor a page"
-                                    % first, line=number)
+        for match in _DOTTED.finditer(part):
+            first, second, third = match[1], match[2], match[3] or ""
+            if first not in objects.pages:
+                if first not in objects.own:
+                    raise NxwrightError("%s is neither on this page nor a page"
+                                        % first, line=number)
+                continue
+            known = objects.pages[first]
+            if known is None:
+                continue
+            if third and second not in known:
+                raise NxwrightError("page %s has no component %s"
+                                    % (first, second), line=number)
+            # `first` is this page, or one of its components that has the same
+            # name as another page, such as a radio named `second` in `second.val`.
+            if first in objects.own:
+                continue
+            # In `page1.b[1].val`, `b` is the array of page1's components, so the
+            # check for another page's attributes skips it.
+            array = part.startswith("[", match.end())
+            if not third and not array and second not in known:
+                raise NxwrightError("%s.%s: only page %s's own code can use the page's "
+                                    "attributes. The Nextion Editor refuses this line (\"%s\")"
+                                    % (first, second, first, INVALID_VARIABLES), line=number)
+            reachable = (objects.reachable or {}).get(first)
+            if third and reachable is not None and second not in reachable:
+                raise NxwrightError("%s.%s: %s is of local scope, so another page's code cannot "
+                                    "use it. The Nextion Editor refuses this line (\"%s\"). Give "
+                                    "%s global scope (vscope = 1)."
+                                    % (first, second, second, INVALID_VARIABLES, second),
+                                    line=number)
 
 
 def _check_macro_references(code: str, objects: ObjectNames, number: int):

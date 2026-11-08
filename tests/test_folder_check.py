@@ -761,18 +761,19 @@ class EditorLanguagePageAtScreenSizeTest(PageAtScreenSizeTest):
 
 
 class TextCutTest(FolderTestCase):
-    """Where nxlang puts a text that contains a component's text, or one of
-    nxlang's variables with more than 255 bytes of room, into a variable
-    whose room is less than its parts can take, the checks warn that the text
-    may be cut (rule text-cut). Page0 has texts big, of txt_maxl 1000, mid1
-    and mid2, of 200, and full, of 255. The second page has a big of its own."""
+    """The checks warn that a text may be cut (rule text-cut) when nxlang puts
+    it into a variable with less room than its parts can take, and the text
+    contains a component's text, or one of nxlang's variables with more than
+    255 bytes of room. Page0 has the texts big (txt_maxl 1000), mid1 and mid2
+    (200 each), and full (255). The second page has its own text named big,
+    of global scope, so that page0's code can read it."""
 
     def setUp(self):
         super().setUp()
         page0 = self.root / "pages" / "page0.page.toml"
         for name, limit in (("big", 1000), ("mid1", 200), ("mid2", 200), ("full", 255)):
             add_component(page0, name, "x", limit)
-        add_component(self.root / "pages" / "second.page.toml", "big", "x", 1000)
+        add_component(self.root / "pages" / "second.page.toml", "big", "x", 1000, scope=1)
 
     def cuts(self, code: str) -> list:
         """Returns the text-cut warnings of page0's code `code`."""

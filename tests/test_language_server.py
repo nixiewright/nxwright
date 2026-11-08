@@ -1080,15 +1080,15 @@ class LiveCheckTest(CheckFolderTestCase):
 
     def test_a_page_naming_another_is_checked_with_its_file(self):
         # page0's code refers to a component that the second page does not
-        # have. Once the second page's file adds it, page0's error goes away,
-        # though only that file changed.
+        # have. Once the second page's file adds it with global scope, page0's
+        # error goes away, even though page0's own file did not change.
         self.change("pages/page0.nx", 'on page0.load:\n  second.extra.txt = "a"\n',
                     "textDocument/didOpen")
         [(_, severity, _)] = self.published()[self.uri("pages/page0.nx")]
         self.assertEqual(severity, 1)
         self.change("pages/second.page.toml", self.text("pages/second.page.toml")
                     + '\n[[component]]\nname = "extra"\ntype = "text"\nx = 0\ny = 0\n'
-                      'w = 100\nh = 30\n', "textDocument/didOpen")
+                      'w = 100\nh = 30\nvscope = 1\n', "textDocument/didOpen")
         self.assertEqual(self.published().get(self.uri("pages/page0.nx")), [])
 
     def test_a_failing_check_does_not_end_the_server(self):

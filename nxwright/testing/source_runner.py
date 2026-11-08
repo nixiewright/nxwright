@@ -369,8 +369,8 @@ def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str
         if checked:
             own = frozenset(page_objects[page]) | {variable.name
                                                    for variable in compiled.generated}
-            objects = ObjectNames(own, page_objects, page,
-                                  absent_attributes=tables.absent_attributes)
+            objects = ObjectNames(own, page_objects, page, tables.globals,
+                                  tables.absent_attributes)
         placed = {}
         for key, lines in compiled.events.items():
             try:
@@ -384,8 +384,8 @@ def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str
         local_names = compiled.local_names
         code = {key: [text for _, text in lines] for key, lines in placed.items()}
     else:
-        objects = ObjectNames(frozenset(page_objects[page]), page_objects, page,
-                              absent_attributes=tables.absent_attributes) if checked else None
+        objects = ObjectNames(frozenset(page_objects[page]), page_objects, page, tables.globals,
+                              tables.absent_attributes) if checked else None
         # As in the build, sys0 to sys2 only as program.nx declares them, and
         # a call only of a macro the folder has.
         variables = program_int_variables(read("program.nx")) if checked else None

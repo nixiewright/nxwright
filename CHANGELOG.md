@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.5] - 2026-11-08
+
+- The build now rejects another page's own attributes, and its components of local scope.
+
 ### [0.2.4] - 2026-11-08
 
 - Pages can now include a `.nx` file with events for components they don't have. 
