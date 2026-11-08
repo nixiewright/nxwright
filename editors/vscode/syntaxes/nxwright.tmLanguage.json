@@ -8,6 +8,7 @@
     { "include": "#macro-heading" },
     { "include": "#label" },
     { "include": "#comment" },
+    { "include": "#include-line" },
     { "include": "#string" },
     { "include": "#reference" },
     { "include": "#declaration" },
@@ -77,6 +78,15 @@
         "2": { "name": "punctuation.section.parens.nxwright" },
         "3": { "name": "string.unquoted.resource-name.nxwright" },
         "4": { "name": "punctuation.section.parens.nxwright" }
+      }
+    },
+    "include-line": {
+      "comment": "An include line of nxlang whose path is followed by partial or strict, the one place those words mean anything.",
+      "match": "^\\s*(include)\\s+(\"[^\"]*\")\\s+(partial|strict)\\b",
+      "captures": {
+        "1": { "name": "storage.type.nxwright" },
+        "2": { "name": "string.quoted.double.nxwright" },
+        "3": { "name": "storage.modifier.nxwright" }
       }
     },
     "declaration": {

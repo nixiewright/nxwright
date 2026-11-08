@@ -1,6 +1,7 @@
 // The questions the extension asks before deleting, cutting, or moving
 // components of a page. They warn when code still uses the name of a
-// deleted component, and when the IDs of other components change. A
+// deleted component, when its code stays in a file other pages include
+// too, and when the IDs of other components change. A
 // component's ID is its place on its page. The microcontroller's code may
 // rely on it, and so may screen code that uses IDs as numbers.
 // pageEditing.ts shows the questions. This file does not import VS Code,
@@ -35,10 +36,13 @@ export function shiftedByDeleting(order: string[], names: string[]): string[] {
 // them, such as "pages/home.nx line 3".
 // `shifted` lists the components whose IDs change, from shiftedByDeleting.
 // `warnIds` is the value of nxwright.warnWhenComponentIdsChange.
+// `sharedFiles` lists the files other pages include too that hold some of
+// their code. That code stays, and this page is built without it.
 export function deleteQuestion(verb: string, names: string[], namedElsewhere: string[],
-                               shifted: string[], warnIds: boolean): Question | undefined {
+                               shifted: string[], warnIds: boolean,
+                               sharedFiles: string[] = []): Question | undefined {
   const ids = warnIds && shifted.length > 0;
-  if (namedElsewhere.length === 0 && !ids) {
+  if (namedElsewhere.length === 0 && !ids && sharedFiles.length === 0) {
     return undefined;
   }
   const what = names.length === 1 ? names[0] : names.join(", ");
@@ -48,16 +52,23 @@ export function deleteQuestion(verb: string, names: string[], namedElsewhere: st
       `(${namedElsewhere.slice(0, 5).join(", ")}${namedElsewhere.length > 5 ? ", ..." : ""}). ` +
       `${verb} anyway?`
     : `${verb} ${what}?`;
-  if (!ids) {
-    return { message, buttons: [verb] };
+  const details: string[] = [];
+  if (sharedFiles.length > 0) {
+    const files = sharedFiles.length === 1 ? "that file" : "those files";
+    details.push(`${names.length === 1 ? `${what}'s` : "Their"} code in ` +
+      `${sharedFiles.join(", ")} stays, because other pages include ${files}. This page ` +
+      `still includes ${files}, and will be built without that code.`);
   }
-  const changed = shifted.length === 1 ? "the ID of 1 component"
-    : `the IDs of ${shifted.length} components`;
+  if (ids) {
+    const changed = shifted.length === 1 ? "the ID of 1 component"
+      : `the IDs of ${shifted.length} components`;
+    details.push(`This will change ${changed} after ${names.length === 1 ? "it" : "them"} ` +
+      `on the page. ${RISK}`);
+  }
   return {
     message,
-    detail: `This will change ${changed} after ${names.length === 1 ? "it" : "them"} ` +
-      `on the page. ${RISK}`,
-    buttons: [verb, DONT_WARN_AGAIN],
+    ...(details.length > 0 ? { detail: details.join("\n\n") } : {}),
+    buttons: ids ? [verb, DONT_WARN_AGAIN] : [verb],
   };
 }
 

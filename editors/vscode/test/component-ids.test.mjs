@@ -54,6 +54,21 @@ test("a deletion asks first when code uses the component's name, with or without
   assert.match(many.message, /in 7 places \(p0, p1, p2, p3, p4, \.\.\.\)/);
 });
 
+test("a deletion asks first when code stays in a file other pages include", () => {
+  const shared = deleteQuestion("Delete", ["b0"], [], [], true, ["pages/lib/shared.nx"]);
+  assert.equal(shared.message, "Delete b0?");
+  assert.equal(shared.detail, "b0's code in pages/lib/shared.nx stays, because other pages " +
+               "include that file. This page still includes that file, and will be built " +
+               "without that code.");
+  assert.deepEqual(shared.buttons, ["Delete"]);
+  // With changed IDs too, both go in the detail.
+  const both = deleteQuestion("Cut", ["b0", "b1"], [], ["n0"], true,
+                              ["pages/lib/a.nx", "pages/lib/b.nx"]);
+  assert.match(both.detail, /^Their code in pages\/lib\/a.nx, pages\/lib\/b.nx stays, because other pages include those files\./);
+  assert.match(both.detail, /\n\nThis will change the ID of 1 component after them/);
+  assert.deepEqual(both.buttons, ["Cut", DONT_WARN_AGAIN]);
+});
+
 test("a move asks first, with a button that turns the warning off", () => {
   const question = moveQuestion(["b0"]);
   assert.equal(question.message, "Move b0?");

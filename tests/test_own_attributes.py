@@ -332,7 +332,7 @@ class NxlangTest(unittest.TestCase):
                                     (["other", "t0", "n0"], "n0.val=2")):
             with self.subTest(page=components[0]):
                 compiled = compile_nxlang_page('include "lib/shared.nx"\n', components[0],
-                                               components, program, read=read)
+                                               components, program, read=read, page_events=None)
                 self.assertEqual(preprocess(compiled.events[("n0", "down")], NO_NAMES),
                                  [written])
 

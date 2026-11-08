@@ -196,8 +196,10 @@ On a Mac, use Cmd instead of Ctrl, and the delete key to delete.
 ### Before you edit a page
 
 - A component's ID is its place on its page, so deleting a component, or moving it forward or backward, changes the IDs of the components after it. If your code, your attributes, or your microcontroller's code uses an ID as a number, that number will then point to a different component.
-- If a component's code is in an included file, you can't delete the component from the preview, because other pages may use that code. To delete the component, first remove its events from the included file, or move them into the `.nx` files of the pages that still need them. Deleting it from the page file by hand makes the build fail, because the included file still has events for a component of that name. Clear events and Paste Special can't change code in an included file either.
+- If a component's code is in a file other pages include too, deleting the component leaves that code where it is, and the page is built without it. The preview asks you to confirm first, and shows which file it is. Clear events and Paste Special can't change code inside the included file.
+- A new component is given its name in such a way that it doesn't pick up code from a file the page already includes. To give it that code, rename it to match what the include targets.
 - Components paste with their code only if they are the ones you copied last. Component tables from anywhere else, such as a text file, paste without code.
+- A pasted component whose events are also in a file included in the page only pastes if its event code matches.
 - Setting a component's `key` to a keyboard adds nxwright's keyboard page, if the project doesn't have it yet. The keyboard files are written right away and undo will only remove the component's key (remove the keyboard page manually if you need to).
 - A keyboard only opens from a component of global scope.
 - `key` 4 opens the Chinese keyboard. It only works in a gb2312 project, and you will be asked for a font with Chinese characters.

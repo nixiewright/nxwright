@@ -89,6 +89,12 @@ class FormatterTest(unittest.TestCase):
                                  'on page0.load:\n  sys0 = 1\n\n  sys1 = 2\n\non page0.up:\n'
                                  '  sys0 = 3\n')
 
+    def test_an_include_line_keeps_partial(self):
+        self.assertFormats('include  "lib/a.nx"   partial\n', 'include "lib/a.nx" partial\n')
+
+    def test_an_include_line_keeps_strict(self):
+        self.assertFormats('include  "lib/a.nx"   strict\n', 'include "lib/a.nx" strict\n')
+
     def test_a_function_heading(self):
         self.assertFormats("function  join( a:text,b : text )->text:\n  return a+b\n",
                            "function join(a: text, b: text) -> text:\n  return a + b\n")

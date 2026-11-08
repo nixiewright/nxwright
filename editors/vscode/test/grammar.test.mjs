@@ -13,6 +13,15 @@ function rule(name) {
   return new RegExp(grammar.repository[name].match);
 }
 
+test("partial is a word only after an include's path", () => {
+  const found = rule("include-line").exec('include "lib/shared.nx" partial');
+  assert.deepEqual([found?.[1], found?.[2], found?.[3]], ["include", '"lib/shared.nx"', "partial"]);
+  assert.equal(rule("include-line").exec("partial = 1"), null);
+  assert.equal(rule("include-line").exec('include "lib/shared.nx" strict')?.[3], "strict");
+  const index = (name) => grammar.patterns.findIndex((pattern) => pattern.include === `#${name}`);
+  assert.ok(index("include-line") < index("string"), "tried before the path is taken as a string");
+});
+
 test("a goto's word and the label it jumps to are highlighted", () => {
   const found = rule("goto").exec("  goto again");
   assert.deepEqual([found[1], found[2]], ["goto", "again"]);

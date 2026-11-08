@@ -204,7 +204,9 @@ A `.nx` file can include others: a library of functions shared by pages, or part
 
 - `include "<path>"` lines go at the top of a file, with its constants. The path is relative to the file containing the line, ends in `.nx`, and stays inside the source folder. `lib/` is only a habit for shared code.
 - An included file has the same form as a page's file: includes and constants at the top, then functions and events. It may include other files. A page takes each file once, however often it is included.
-- An event in an included file belongs to each page that includes it, and must use that page's components.
+- A page gets the events of the files it includes, as if they were in its own file. For example, `on b0.up:` in a shared file defines the `up` event for `b0` on every page where it is included.
+- If such a file is included in a page that does not have a `b0` component, a warning is issued ([Warnings](commands.md#warnings)). If the page leaves out `b0` on purpose, write `partial` after the path, as in `include "lib/buttons.nx" partial` to disable the warning.
+- If a page must have every component the file has events for, write `strict` after the path, as in `include "lib/buttons.nx" strict`. A missing `b0` then stops the build instead of giving a warning.
 - The same event in two of a page's files is refused. So is a constant or a function defined twice.
 - A page gets only the functions it calls, directly or through other functions, wherever they are defined. The rest of a library costs it nothing. Constants cost nothing either.
 - Every function is still checked, so a mistake in a library shows on every page that includes it. Errors give the file and line they come from, such as `pages/lib/fixed.nx line 12`.

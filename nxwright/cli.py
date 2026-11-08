@@ -35,7 +35,7 @@ from nxwright.source.defines import DEFINE_OPTION, define_arguments, overriding_
 from nxwright.source.device_change import change_device
 from nxwright.source.folder_check import check_folder
 from nxwright.source.formatting import format_folder
-from nxwright.source.lint import ERROR
+from nxwright.source.lint import ERROR, left_out_event_warnings
 from nxwright.source.project_diff import diff_projects
 from nxwright.source.project_files import build, extract, write_defaults
 from nxwright.source.report import SHOWN_BYTES, write_report
@@ -53,7 +53,7 @@ from nxwright.source.resource_replacing import (OPTIONS as REPLACE_OPTIONS, curr
 from nxwright.source.source_folder import (LANGUAGES, NXLANG, add_page, folder_byte_reader,
                                            folder_lister, folder_reader, import_dump,
                                            kept_screen_copy_warnings, new_source_folder,
-                                           switch_to_nxlang)
+                                           read_app, switch_to_nxlang)
 from nxwright.source.resource_adding import (VIDEO_RATE, add_animation, add_font, add_font_file,
                                              add_pictures, add_sound, add_video,
                                              write_card_pictures)
@@ -73,9 +73,11 @@ def _run_build(arguments) -> str:
         memory = build(arguments.source_folder, arguments.output,
                        keep_backup=not arguments.no_backup, lock_pages=not arguments.no_lock)
         kept_copies = kept_screen_copy_warnings(arguments.source_folder)
+        left_out = left_out_event_warnings(read_app(arguments.source_folder),
+                                           folder_reader(arguments.source_folder))
     if memory.warning is not None:
         print("nxwright build: warning: %s" % memory.warning, file=sys.stderr)
-    for warning in kept_copies:
+    for warning in left_out + kept_copies:
         print("nxwright build: warning: %s" % warning, file=sys.stderr)
     # Each page's memory, as the Editor's compile lists it. Counted without
     # what the table did not measure, it is a lower bound.

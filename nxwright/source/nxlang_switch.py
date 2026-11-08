@@ -37,8 +37,10 @@ def switch_events_to_nxlang(events: str, page_name: str, names: ResourceNames,
         text = events
     else:
         text = with_end("\n".join(block.text() for block in chosen.values()), end)
+    # A page in the Editor's own language includes no file, so none of its
+    # events is left out.
     compiled = compile_nxlang_page(text, page_name, component_names, program,
-                                   object_types=object_types, codec=codec)
+                                   object_types=object_types, codec=codec, page_events=None)
     _check_compiled(compiled, page_name, names, editor)
     return text
 

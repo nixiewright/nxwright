@@ -34,10 +34,11 @@ from nxwright.source import source_folder as folders
 from nxwright.source.device_keys import screen_model
 from nxwright.source.macros_source import (MACROS_PATH, callable_macros, compiled_macros,
                                            read_macros_text)
-from nxwright.source.nx_files import event_blocks
-from nxwright.source.page_source import (code_text_limits, compile_nxlang_page, file_at_fault,
-                                         generated_table, page_nx_path, page_toml_path,
-                                         table_limits, table_types)
+from nxwright.source.nx_files import event_blocks, read_page_files
+from nxwright.source.page_source import (code_text_limits, compile_nxlang_page,
+                                         compile_page_files, events_of_page_tables,
+                                         file_at_fault, generated_table, page_nx_path,
+                                         page_toml_path, table_limits, table_types)
 from nxwright.testing.editor_machine import EditorMachine
 from nxwright.testing.folder_resources import FolderResources
 from nxwright.testing.pinyin_table import pinyin_table_of
@@ -90,6 +91,7 @@ class FolderPageTables:
     text_limits: dict       # {page: {"name.attribute": the most bytes it keeps}}
     system_pages: dict      # {page: the system page its file says it is, or None}
     absent_attributes: dict  # {page: {name: {attribute: why}} of what its components lack}
+    events: dict            # {page: the events its objects have (page_source.events_of_page_tables)}
 
     def page_toml(self, page: str) -> folders.PageToml:
         """Returns the PageToml of `page`, as read_page_toml reads it, from
@@ -316,7 +318,7 @@ def _read_page_tables(source_folder: Path, read) -> FolderPageTables:
     app = _app(source_folder)
     defaults = defaults_from_toml(read("defaults.toml"), "defaults.toml")
     texts, names, types, globals_, text_limits, system_pages = {}, {}, {}, {}, {}, {}
-    absent_attributes = {}
+    absent_attributes, events = {}, {}
     screen = screen_model(app)
     for page in app["pages"]:
         texts[page] = read(page_toml_path(page))
@@ -329,8 +331,10 @@ def _read_page_tables(source_folder: Path, read) -> FolderPageTables:
                                                                           screen)
         text_limits[page] = table_limits([page_table] + data.get("component", []), defaults)
         system_pages[page] = page_table.get("system_page")
+        events[page] = events_of_page_tables([page_table] + data.get("component", []),
+                                             defaults)
     return FolderPageTables(app, defaults, texts, names, types, globals_, text_limits,
-                            system_pages, absent_attributes)
+                            system_pages, absent_attributes, events)
 
 
 def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str, text: str,
@@ -358,7 +362,8 @@ def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str
         # build compiles it.
         compiled = compile_nxlang_page(events_text, page, in_order[page], program, read=read,
                                        object_types=page_objects,
-                                       codec=TextCodec(_encoding(app)))
+                                       codec=TextCodec(_encoding(app)),
+                                       page_events=tables.events[page])
         generated = compiled.generated
         objects = None
         if checked:
@@ -476,8 +481,12 @@ def _compile_code(source_folder: Path, tables: FolderPageTables, read,
                             % source_folder)
     program = folders.program_names(read("program.nx"), read, app["defines"])
     # Its code runs in no object's event, so the form '&name&' stays refused.
-    compiled = compile_nxlang_page(page_text, _CODE_PAGE, [_CODE_PAGE], program, read=read,
-                                   own_attributes=False, codec=TextCodec(_encoding(app)))
+    # The page is made up, so a library's events are all left out here, and
+    # none is checked against the page, whatever its include lines say.
+    page_files = read_page_files(page_nx_path(_CODE_PAGE), page_text, read)
+    compiled = compile_page_files(page_files.without_events(frozenset()), _CODE_PAGE,
+                                  [_CODE_PAGE], program, own_attributes=False,
+                                  codec=TextCodec(_encoding(app)), page_events=None)
     names = ResourceNames.of_app(app)
     placed = {key: preprocess_with_places(lines, names) for key, lines in compiled.events.items()}
     places = _nxlang_places(compiled, placed)

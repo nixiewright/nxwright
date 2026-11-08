@@ -372,9 +372,9 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
     else:
         code, generated, used, deepest, cuts = _compile_nxlang_events(
             source.events, page_name, names, [table.get("name") for table in tables],
-            nxlang_program, page_id, read, codec, page_objects,
-            {**(page_objects or {}), page_name: table_types(tables)}, absent_attributes, screen,
-            text_limits)
+            nxlang_program, page_id, read, codec, events_of_page_tables(tables, defaults),
+            page_objects, {**(page_objects or {}), page_name: table_types(tables)},
+            absent_attributes, screen, text_limits)
         if cut_texts is not None:
             cut_texts.extend(cuts)
         if globals_used is not None:
@@ -769,15 +769,37 @@ def _no_includes(path: str) -> str:
     raise NxwrightError("%s: no source folder to read included files from" % path)
 
 
+def events_of_page_tables(tables: list, defaults: dict) -> frozenset:
+    """Returns the events that the objects of a page's `tables` have, as
+    {(object name, event)}: those a table's `events` lists, or for a table
+    without `events`, its type's events in `defaults`, the folder's
+    defaults.toml. A table marked defaults = false has only those it lists.
+    A table the build rejects is left out, as the build reports it."""
+    found = set()
+    for table in tables:
+        if not isinstance(table, dict):
+            continue
+        try:
+            name, object_type, events, full = _table_header(table, "")
+        except NxwrightError:
+            continue
+        if events is None and not full and object_type in defaults:
+            events = defaults[object_type].events
+        found.update((name, event) for event in events or [])
+    return frozenset(found)
+
+
 def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, component_names: list,
                            program: ProgramNames, page_id: int, read, codec: TextCodec,
-                           page_objects: dict = None, object_types: dict = None,
-                           absent_attributes: dict = None, screen: ScreenModel = None,
-                           text_limits: dict = None) -> tuple:
+                           page_events: frozenset, page_objects: dict = None,
+                           object_types: dict = None, absent_attributes: dict = None,
+                           screen: ScreenModel = None, text_limits: dict = None) -> tuple:
     """Returns ({(object name, event): [code line bytes]}, [Generated] for the
     generated variables, [the program.s globals used], the longest chain of
     calls and clicks, [(file, line, message)] of the texts a generated
-    variable may cut) for a page's .nx file in nxlang. `text_limits` gives
+    variable may cut) for a page's .nx file in nxlang. `page_events` gives
+    the events the page has (events_of_page_tables), as compile_page_files
+    takes them. `text_limits` gives
     the most bytes of the pages' texts, keyed as the code writes them
     (code_text_limits), which those warnings need. With
     `page_objects`, references, calls, and assignments are checked, as
@@ -787,7 +809,8 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
     with, {page: {name: type}} (nxlang.compile_page)."""
     page_files = read_page_files(page_nx_path(page_name), text, read or _no_includes)
     compiled = compile_page_files(page_files, page_name, component_names, program, page_id,
-                                  object_types, codec=codec, text_limits=text_limits)
+                                  object_types, codec=codec, text_limits=text_limits,
+                                  page_events=page_events)
     code = {}
     objects = None
     if page_objects is not None:
@@ -802,7 +825,8 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
 
 def editor_code_of_file(path: str, page_name: str, events_text: str, names: ResourceNames,
                         component_names: list, program: ProgramNames, page_id: int, read,
-                        object_types: dict = None, codec: TextCodec = None) -> list:
+                        object_types: dict = None, codec: TextCodec = None, *,
+                        page_events: frozenset) -> list:
     """Returns [(title, [(line, Editor code line)])] of the events and the
     functions that the .nx file `path` defines, as page `page_name` compiles
     them, its own .nx file's text being `events_text`. A title is as
@@ -813,7 +837,8 @@ def editor_code_of_file(path: str, page_name: str, events_text: str, names: Reso
     in the Editor's own language. `read(path)` returns an included file.
     `object_types` gives the types of the pages' objects nxlang compiles
     with, {page: {name: type}}, and `codec` the project's encoding
-    (nxlang.compile_page).
+    (nxlang.compile_page). `page_events` gives the events the page has,
+    as compile_page_files takes them.
 
     Raises NxwrightError as the build does."""
     if program is None:
@@ -828,7 +853,7 @@ def editor_code_of_file(path: str, page_name: str, events_text: str, names: Reso
                                                                       component_names))))
         return sections
     compiled = compile_nxlang_page(events_text, page_name, component_names, program, page_id,
-                                   read, object_types, codec=codec)
+                                   read, object_types, codec=codec, page_events=page_events)
     sections = [(event_label(*key), preprocess_with_places(lines, names))
                 for key, lines in compiled.events.items() if compiled.sources.get(key) == path]
     sections += [("function " + name, preprocess_with_places(compiled.bodies[name], names))
@@ -839,21 +864,32 @@ def editor_code_of_file(path: str, page_name: str, events_text: str, names: Reso
 def compile_nxlang_page(text: str, page_name: str, component_names: list, program: ProgramNames,
                         page_id: int = 0, read=None, object_types: dict = None,
                         own_attributes: bool = True, codec: TextCodec = None,
-                        text_limits: dict = None):
+                        text_limits: dict = None, *, page_events: frozenset):
     """Returns the CompiledPage of a page's .nx text and the files it
     includes, as compile_page_files compiles them."""
     page_files = read_page_files(page_nx_path(page_name), text, read or _no_includes)
     return compile_page_files(page_files, page_name, component_names, program, page_id,
-                              object_types, own_attributes, codec, text_limits)
+                              object_types, own_attributes, codec, text_limits,
+                              page_events=page_events)
 
 
 def compile_page_files(page_files: PageFiles, page_name: str, component_names: list,
                        program: ProgramNames, page_id: int = 0, object_types: dict = None,
                        own_attributes: bool = True, codec: TextCodec = None,
-                       text_limits: dict = None):
+                       text_limits: dict = None, *, page_events: frozenset):
     """Returns the CompiledPage of a page's .nx files. The compiler sees only
     code lines, so each event's comment is put back at its start, marked as
-    the build writes it. `object_types` gives the types of the pages'
+    the build writes it.
+
+    `page_events` gives the events the page has, {(object name, event)}
+    (events_of_page_tables). The events of included files whose objects are
+    not among `component_names` are left out before compiling, so that
+    their code, and the functions only they call, are not part of the page
+    (PageFiles.without_events). An event of an included file whose object
+    is on the page, but does not have that event, is refused. None keeps
+    every event, for a page without a page file.
+
+    `object_types` gives the types of the pages'
     objects nxlang compiles with, {page: {name: type}}
     (nxlang.compile_page). An event of an object among `component_names`,
     the page's objects in ID order, the unnamed included, may name its
@@ -861,6 +897,10 @@ def compile_page_files(page_files: PageFiles, page_name: str, component_names: l
     that runs in no object's event. `codec` is the project's encoding, and
     `text_limits` the most bytes of the pages' texts, as nxlang.compile_page
     takes them."""
+    if page_events is not None:
+        _refuse_included_events_the_page_lacks(page_files, page_name, component_names,
+                                               page_events)
+        page_files = page_files.without_events(frozenset(component_names))
     events, functions, comments = {}, {}, {}
     for nx_file in page_files.files:
         for key, block in nx_file.blocks.items():
@@ -879,6 +919,33 @@ def compile_page_files(page_files: PageFiles, page_name: str, component_names: l
     for key, comment in comments.items():
         compiled.events[key] = comment + compiled.events.get(key, [])
     return compiled
+
+
+def _refuse_included_events_the_page_lacks(page_files: PageFiles, page_name: str,
+                                           component_names: list, page_events: frozenset):
+    """Raises NxwrightError, at its heading, for an event of an included file
+    whose object is on the page but does not have that event, and for one
+    whose object is not on the page when a line including the file says
+    `strict`. The page's own file, the last of `files`, is checked later,
+    against the page file's tables (_page_from_source)."""
+    on_page = frozenset(component_names)
+    own = page_files.files[-1]
+    for nx_file in page_files.files[:-1]:
+        strict = [(including.path, number) for including in [own] + page_files.files[:-1]
+                  for number, included in including.includes
+                  if included == nx_file.path and included in including.strict]
+        for key, block in nx_file.blocks.items():
+            # A function's key has no object; an unnamed table's name is None.
+            if key[0] is None:
+                continue
+            if key[0] in on_page and key not in page_events:
+                raise NxwrightError("%s includes this file, but %s.%s is not an event listed in %s"
+                                    % (page_name, key[0], key[1], page_toml_path(page_name)),
+                                    file=nx_file.path, line=block.number)
+            if key[0] not in on_page and strict:
+                raise NxwrightError("%s has no %s, and line %d of %s includes this file with "
+                                    "strict" % (page_name, key[0], strict[0][1], strict[0][0]),
+                                    file=nx_file.path, line=block.number)
 
 
 def preprocess_compiled(compiled, page_name: str, names: ResourceNames,

@@ -25,10 +25,18 @@ stays inside the source folder. A page reads its own file and every file it
 includes, directly or not, each once. Every event and function is defined
 in exactly one of them.
 
+An event of an included file is that event on each page that includes the
+file. A page without the event's object leaves the event out
+(PageFiles.without_events). The word `partial` after an include's path says
+that the page does this on purpose, so that it gets no warning for it
+(lint.py). The word `strict` instead makes a missing object an error. A
+page whose object does not have the event is refused, as when the page's
+own file has such an event (page_source.compile_page_files).
+
 Code added at the end of a .nx file comes after one blank line
 (with_code_added).
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import posixpath
 import re
 
@@ -53,8 +61,9 @@ _EVENT_LABEL = re.compile(r'on (?:([A-Za-z0-9_]+)|"([^"\x00-\x1f]*)")\.([a-z]+)'
 FUNCTION_HEADING = re.compile(r"function\s+([A-Za-z_][A-Za-z0-9_]*)\b.*")
 # The heading of a macro, in macros.nx; macros_source.py checks the name.
 MACRO_HEADING = re.compile(r"macro (.+):")
-# The code of an include line, which gives the path as written.
-INCLUDE = re.compile(r'include\s+"([^"]*)"')
+# The code of an include line, which gives the path as written, then
+# `partial` or `strict` when the line says it.
+INCLUDE = re.compile(r'include\s+"([^"]*)"(?:\s+(partial|strict))?')
 
 
 @dataclass(frozen=True)
@@ -226,6 +235,9 @@ class NxFile:
     preamble: list      # (line number, text) before the first heading, include lines left out
     blocks: dict        # {key: EventBlock}, in file order
     includes: list      # [(line number, path)] of the files it includes, as source folder paths
+    # The paths among `includes` whose line says `partial`, and `strict`.
+    partial: frozenset = frozenset()
+    strict: frozenset = frozenset()
 
 
 @dataclass
@@ -238,11 +250,31 @@ class PageFiles:
         """Returns [(path, preamble)] of each file, in the order of `files`."""
         return [(nx_file.path, nx_file.preamble) for nx_file in self.files]
 
+    def without_events(self, object_names: frozenset) -> "PageFiles":
+        """Returns these files without the events of the included files whose
+        objects are not among `object_names`, the names of the page's objects.
+        The page's own file, the last of `files`, keeps all of its events, so
+        that the build reports one for an object the page does not have."""
+        own = self.files[-1]
+        files = [nx_file if nx_file is own else replace(nx_file, blocks={
+            key: block for key, block in nx_file.blocks.items()
+            if key[0] is None or key[0] in object_names}) for nx_file in self.files]
+        homes = {key: home for key, home in self.homes.items()
+                 if home is own or key[0] is None or key[0] in object_names}
+        return PageFiles(files, homes)
 
-def included_path(text: str):
-    """Returns the path an `include` line names, as written, or None for another line."""
+
+@dataclass(frozen=True)
+class IncludeLine:
+    """An `include` line of a .nx file."""
+    path: str           # as written
+    word: str           # `partial` or `strict` when the line says it, else None
+
+
+def read_include_line(text: str):
+    """Returns the IncludeLine of an `include` line, or None for another line."""
     match = INCLUDE.fullmatch(split_line(text, 0)[1])
-    return match[1] if match else None
+    return IncludeLine(match[1], match[2]) if match else None
 
 
 def read_nx_file(path: str, text: str) -> NxFile:
@@ -250,21 +282,28 @@ def read_nx_file(path: str, text: str) -> NxFile:
     its preamble without them.
 
     Raises NxwrightError for a line starting with `include` that is not
-    `include "<path>"`, and for what event_blocks and resolve refuse.
+    `include "<path>"`, `include "<path>" partial`, or `include "<path>"
+    strict`, and for what event_blocks and resolve refuse.
     """
     preamble = []
     blocks = event_blocks(text, path, preamble)
-    kept, includes = [], []
+    kept, includes, words = [], [], {"partial": set(), "strict": set()}
     for number, line in preamble:
         code = split_line(line, number)[1]
         match = INCLUDE.fullmatch(code)
         if match:
-            includes.append((number, resolve(path, match[1], number)))
+            included = resolve(path, match[1], number)
+            includes.append((number, included))
+            if match[2]:
+                words[match[2]].add(included)
         elif code.startswith("include"):
-            raise NxwrightError('an include is written include "<path>.nx"', file=path, line=number)
+            raise NxwrightError('an include is written include "<path>.nx", include '
+                                '"<path>.nx" partial, or include "<path>.nx" strict',
+                                file=path, line=number)
         else:
             kept.append((number, line))
-    return NxFile(path, kept, blocks, includes)
+    return NxFile(path, kept, blocks, includes, frozenset(words["partial"]),
+                  frozenset(words["strict"]))
 
 
 def resolve(including: str, written: str, number: int) -> str:

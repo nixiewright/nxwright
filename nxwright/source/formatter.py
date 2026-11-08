@@ -38,7 +38,7 @@ _ELSE_IF = re.compile(r"else\s+if\s*\((.*)\)")
 _CASE = re.compile(r"case\b\s*(.*?)\s*:")
 _DEFAULT = re.compile(r"default\s*:")
 _LEADING_WORD = re.compile(r"(var|return|const)\b\s*(.*)")
-_INCLUDE = re.compile(r'include\s+("[^"]*")')
+_INCLUDE = re.compile(r'include\s+("[^"]*")(?:\s+(partial|strict))?')
 # Words nxlang reads before a line could be a command.
 _NXLANG_WORDS = {"var", "return", "const", "include", "case", "default", "break", "continue",
                  "switch"}
@@ -220,7 +220,7 @@ def _format_statement(code: str, nxlang: bool) -> str:
         if _DEFAULT.fullmatch(code):
             return "default:"
         if include:
-            return "include " + include[1]
+            return "include " + include[1] + (" " + include[2] if include[2] else "")
         if leading:
             return leading[1] + (" " + _spaced(leading[2]) if leading[2] else "")
         if re.match(r"int\b", code) or LABEL.fullmatch(code):

@@ -78,15 +78,16 @@ from nxwright.source.defines import checked_defines, filled, placeholder_name
 from nxwright.source.device_keys import (DEVICE_KEYS, app_encoding, device_keys, screen_model,
                                          settings_from_keys)
 from nxwright.source.unknown_content import checked, unknown_in_dump
-from nxwright.source.nx_files import (blank_lines_dropped, included_path, read_nx_file,
+from nxwright.source.nx_files import (blank_lines_dropped, read_include_line, read_nx_file,
                                       read_page_files, resolve)
 from nxwright.source.macros_source import (MACROS_PATH, block_of_compiled, callable_macros,
                                            compiled_macros, followed_macros,
                                            macros_from_block, macros_to_source,
                                            read_macros_text)
 from nxwright.source.page_source import (PAGE_FILE_SUFFIX, PageSource, code_text_limits,
-                                         editor_code_of_file, page_components, page_from_source,
-                                         page_data, page_nx_path, page_to_source, page_toml_path,
+                                         editor_code_of_file, events_of_page_tables,
+                                         page_components, page_data, page_from_source,
+                                         page_nx_path, page_to_source, page_toml_path,
                                          table_limits, table_types)
 from nxwright.source.asset_names_in_code import with_asset_names
 from nxwright.source.nxlang_switch import switch_events_to_nxlang
@@ -225,15 +226,28 @@ def program_names(program_text: str, read, defines: dict) -> ProgramNames:
             raise NxwrightError("program.nx can include constants only, and %s "
                                 "holds events or functions" % path, file=including, line=number)
         for inner_number, inner in nx_file.includes:
+            for word, paths in (("partial", nx_file.partial), ("strict", nx_file.strict)):
+                if inner in paths:
+                    raise _word_in_program(word, path, inner_number)
             visit(inner, inner_number, path)
         included.append((path, nx_file.preamble))
     for number, text in lines:
-        written = included_path(text)
-        if written is not None:
-            visit(resolve("program.nx", written, number), number, "program.nx")
+        include = read_include_line(text)
+        if include is None:
+            continue
+        if include.word:
+            raise _word_in_program(include.word, "program.nx", number)
+        visit(resolve("program.nx", include.path, number), number, "program.nx")
     names = read_program_names(lines, included, defines)
     names.macros = followed_macros(read)
     return names
+
+
+def _word_in_program(word: str, path: str, number: int) -> NxwrightError:
+    """Returns the error of `word`, `partial` or `strict`, on line `number`
+    of `path`, program.nx or a file it includes, where it has no meaning."""
+    return NxwrightError("%s is only for the files a page includes, since program.nx "
+                         "takes no events" % word, file=path, line=number)
 
 
 def folder_reader(source_folder: Path):
@@ -1201,14 +1215,16 @@ class FolderSource:
         """Returns the Editor code of the events and functions of the .nx file
         `path`, as page `page_name` compiles them (editor_code_of_file in
         page_source.py). Raises NxwrightError as the build does."""
-        component_names, own_types = _page_components(self.read(page_toml_path(page_name)),
-                                                      page_name, self.app["defines"])
+        data = parsed_page_toml(self.read(page_toml_path(page_name)), page_name,
+                                self.app["defines"])
+        tables = [data.get("page")] + data.get("component", [])
         # Every page's types, as the build compiles the page with them.
         return editor_code_of_file(path, page_name, self.read(page_nx_path(page_name)),
-                                   self.names, component_names, self.declared,
+                                   self.names, names_in_page_data(data), self.declared,
                                    self.app["pages"].index(page_name), self.read,
-                                   {**self.page_objects, page_name: own_types},
-                                   TextCodec(self.encoding))
+                                   {**self.page_objects, page_name: types_in_page_data(data)},
+                                   TextCodec(self.encoding),
+                                   page_events=events_of_page_tables(tables, self.defaults))
 
 
 def read_folder_source(read, skip_broken_pages: bool = False,
@@ -1335,9 +1351,9 @@ def code_files(app: dict, read) -> dict:
         try:
             text = read(path)
             if path == "program.nx":
-                written = [(number, included_path(line))
+                written = [(number, read_include_line(line))
                            for number, line in enumerate(text.split("\n"), start=1)]
-                includes = [resolve(path, include, number)
+                includes = [resolve(path, include.path, number)
                             for number, include in written if include is not None]
             else:
                 includes = [include for _, include in read_nx_file(path, text).includes]

@@ -2,7 +2,7 @@
   "name": "nxwright-language",
   "displayName": "nxwright",
   "description": "Design, write, simulate, test, compile, and upload Nextion screen apps in VS Code.",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "publisher": "nxwright",
   "icon": "images/icon.png",
   "license": "Apache-2.0",

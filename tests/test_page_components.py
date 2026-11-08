@@ -195,14 +195,6 @@ class DeleteTest(ComponentsTestCase):
         self.delete("title")
         self.assertEqual(self.text("pages/lib/mine.nx"), "")
 
-    def test_code_in_a_file_other_pages_include_is_refused(self):
-        self.write("pages/lib/shared.nx", "on title.down:\n  sys0 = 2\n")
-        for page in ("page0", "second"):
-            self.write("pages/%s.nx" % page, 'include "lib/shared.nx"\n')
-        with self.assertRaisesRegex(NxwrightError, "the code of title is in pages/lib/shared.nx, "
-                                                   "which other pages include too"):
-            self.delete("title")
-
     def test_the_places_other_code_names_it(self):
         # Code naming it in its own events goes with them; elsewhere it stays.
         self.write("pages/page0.nx", 'on page0.load:\n  title.txt = "a"\n\non title.down:\n'
@@ -216,6 +208,90 @@ class DeleteTest(ComponentsTestCase):
             self.delete("page0")
         with self.assertRaisesRegex(NxwrightError, "page page0 has no object nobody"):
             self.delete("nobody")
+
+
+class SharedCodeTest(ComponentsTestCase):
+    """page0 and second include lib/shared.nx, which holds title's down event,
+    and each has a title. Once page0 has no title, the event is left out of
+    it, and the shared file stays as it is."""
+
+    SHARED = '// Says hello\non title.down:\n  title.txt = "hello"\n'
+
+    def setUp(self):
+        super().setUp()
+        self.write("pages/lib/shared.nx", self.SHARED)
+        for page in ("page0", "second"):
+            self.write("pages/%s.nx" % page, 'include "lib/shared.nx"\n')
+
+    def delete_title(self) -> dict:
+        found = delete_components(self.index(), self.read(), "page0", ["title"])
+        for path, edits in found["edits"].items():
+            self.write(path, applied(self.text(path), edits))
+        return found
+
+    def paste(self, text: str, code: list) -> dict:
+        found = paste_components(self.index(), self.read(), self.exists, "page0", text, code)
+        for path, edits in found["edits"].items():
+            self.write(path, applied(self.text(path), edits))
+        return found
+
+    def test_delete_leaves_the_shared_code(self):
+        found = self.delete_title()
+        self.assertEqual(found["sharedFiles"], ["pages/lib/shared.nx"])
+        self.assertEqual(found["namedElsewhere"], [])
+        self.assertEqual(self.text("pages/lib/shared.nx"), self.SHARED)
+        self.assertNotIn("component", tomllib.loads(self.text("pages/page0.page.toml")))
+        self.assertEqual(self.check(["page0"]).errors(), [])
+
+    def test_delete_is_refused_on_a_page_that_includes_the_file_with_strict(self):
+        # The page must then have title, so the build would refuse it.
+        self.write("pages/page0.nx", 'include "lib/shared.nx" strict\n')
+        with self.assertRaisesRegex(NxwrightError, "the code of title is in pages/lib/shared.nx, "
+                                                   "which page0 includes with strict"):
+            self.delete_title()
+        self.assertIn("component", tomllib.loads(self.text("pages/page0.page.toml")))
+
+    def test_delete_removes_the_code_in_the_pages_own_file(self):
+        self.write("pages/page0.nx", 'include "lib/shared.nx"\n\non title.up:\n  sys0 = 1\n')
+        self.delete_title()
+        self.assertEqual(self.text("pages/page0.nx"), 'include "lib/shared.nx"\n')
+
+    def test_a_use_in_another_shared_event_is_named(self):
+        # The page keeps page0.load, which names title, and loses title.down.
+        self.write("pages/lib/shared.nx", self.SHARED + '\non page0.load:\n  title.txt = "bye"\n')
+        self.assertEqual(self.delete_title()["namedElsewhere"],
+                         [{"path": "pages/lib/shared.nx", "line": 5}])
+
+    def test_cut_and_pasted_back(self):
+        copied = copy_components(self.index(), self.read(), "page0", ["title"])
+        self.delete_title()
+        found = self.paste(copied["text"], copied["code"])
+        self.assertEqual(found["names"], ["title"])
+        # The page gets the event from the shared file again, not a second copy.
+        self.assertEqual(self.text("pages/page0.nx"), 'include "lib/shared.nx"\n')
+        self.assertEqual(self.check(["page0"]).errors(), [])
+
+    def test_pasting_other_code_for_a_shared_event_fails(self):
+        copied = copy_components(self.index(), self.read(), "page0", ["title"])
+        self.delete_title()
+        with self.assertRaisesRegex(NxwrightError, "pages/lib/shared.nx, which page0 includes, "
+                                                   "already has other code for title.down"):
+            self.paste(copied["text"], ["on title.down:\n  sys0 = 9\n"])
+        self.assertEqual(self.text("pages/page0.nx"), 'include "lib/shared.nx"\n')
+
+    def test_add_passes_over_a_name_with_shared_code(self):
+        self.write("pages/lib/shared.nx", self.SHARED + "\non b0.down:\n  sys0 = 1\n")
+        found = add_component(self.index(), self.read(), self.exists, "page0", "button")
+        self.assertEqual(found["name"], "b1")
+        self.assertEqual(found["passedOver"], [{"name": "b0", "path": "pages/lib/shared.nx"}])
+
+    def test_the_requests_give_the_shared_files(self):
+        self.write("pages/lib/shared.nx", self.SHARED + "\non b0.down:\n  sys0 = 1\n")
+        shared = uri_of(self.root / "pages/lib/shared.nx")
+        reply = self.request("nxwright/addComponent", type="button")["result"]
+        self.assertEqual(reply["passedOver"], [{"name": "b0", "uri": shared}])
+        reply = self.request("nxwright/deleteComponents", names=["title"])["result"]
+        self.assertEqual(reply["sharedFiles"], [shared])
 
 
 class CopyPasteTest(ComponentsTestCase):

@@ -356,7 +356,7 @@ In either language, the build refuses a line assigning to an attribute that code
 - These are the attributes shown in black in the Nextion Editor's Attribute panel, and some the panel never shows but the Nextion Editor still refuses. `nxwright/project/attribute_descriptions.toml` marks each one. Examples are a text's width, in `t0.w = 10` or `settings.t0.w = 10`, an animation's `from`, and a waveform's `objWid`.
 - A component's `id`, `type`, and `objname` are refused too, on every type, and its `endx` and `endy`, on a type with a place on the screen.
 - Every form of assignment counts: `=`, `+=` and the others, `++`, and `--`.
-- Code in a file that several pages include is checked for each of them, so a line may be refused for only one page, if its component is of another type on that page.
+- Code in a file that multiple pages include is checked within the context of each page in which it appears: a line may fail to build for only one page, for instance if that page has a component with the same name but of an incompatible type.
 - A component the build cannot identify, such as `b[1]`, is left to the Nextion Editor.
 - The Basic (T), Enhanced (K), and Discovery (F) series also refuse code setting some attributes. Reading them is fine. The list is `ATTRIBUTES_CODE_CANNOT_CHANGE_ON_SERIES` in `nxwright/project/editor_limits.py`:
   - `x`, `y`, `aph`, `drag`, `effect`, `first`, and `time`, on every type that has them, the page's too;

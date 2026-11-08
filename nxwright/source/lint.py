@@ -27,7 +27,21 @@ but that are likely mistakes. Each has a rule's name:
     on its heading line, in nxlang in an included file too. The Editor
     keeps its code, but the screen never runs it: the Editor's simulator
     never ran a page's `postinit`. A type's events are those of nxwright's
-    own component defaults, not the folder's copy, which can be edited.
+    own component defaults, not the folder's copy, which can be edited. An
+    event an included file has for an object a page does not have is left
+    out of that page, so it gets the next two rules instead.
+  - event-left-out, in nxlang: an event of an included file whose object a
+    page including it does not have, on its heading line, when another page
+    including it has the object. The build leaves it out of that page
+    (page_source.compile_page_files). `partial` on one of the page's lines
+    including the file says that this is on purpose, and removes the
+    warning. `strict` there makes the build refuse the page instead. The
+    build and the compile print it too
+    (left_out_event_warnings).
+  - event-unused, in nxlang: an event of an included file whose object
+    no page including it has, which is probably a typo in its heading. As
+    with event-left-out, `partial` removes it, but only when every page
+    including the file says it. The build and the compile print it too.
   - page-place, in either language: a page file's x, y, w, or h of its
     page that is not the screen's place and size, on its line. The build
     gives the page the screen's instead, as the Nextion Editor compiles it.
@@ -59,8 +73,8 @@ from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.pictures import picture_problem
 from nxwright.project.resources import decodes_picture
 from nxwright.project.screen_arithmetic import int32
-from nxwright.source.nx_files import (FUNCTION_HEADING, event_blocks, read_event_heading,
-                                      read_nx_file, read_page_files)
+from nxwright.source.nx_files import (FUNCTION_HEADING, PageFiles, event_blocks,
+                                      read_event_heading, read_nx_file, read_page_files)
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.page_source import page_data, page_nx_path, page_toml_path
 from nxwright.source.source_folder import (check_picture_file, check_picture_source, code_files,
@@ -101,7 +115,7 @@ def warnings(app: dict, read) -> list:
     if app["language"] == "nxlang":
         return (_unused_constants(app, read) + _unused_functions(app, read)
                 + _numbers_past_32_bits(app, read) + _events_never_run(app, read)
-                + _page_places(app, read))
+                + _left_out_events(app, read) + _page_places(app, read))
     return _left_to_right(app, read) + _events_never_run(app, read) + _page_places(app, read)
 
 
@@ -278,17 +292,20 @@ def _left_to_right(app: dict, read) -> list:
 def _events_never_run(app: dict, read) -> list:
     """Returns the event-never-runs warning Findings: each event of a page's
     .nx files that its component's type does not have. In nxlang, they are
-    the page's own file and those it includes; an event in a file two pages
-    include is warned of once."""
+    the page's own file and those it includes, but for the events of
+    included files whose component the page does not have, which are left
+    out of it; an event in a file two pages include is warned of once."""
     found = []
     defaults = nxwright_defaults()
     for page in app["pages"]:
         path = page_nx_path(page)
         try:
-            types = types_in_page_data(tomllib.loads(read(page_toml_path(page))))
+            text = read(page_toml_path(page))
+            types = types_in_page_data(tomllib.loads(text))
             if app["language"] == "nxlang":
                 homes = read_page_files(path, read(path), read).homes
-                blocks = [(key, home.path, home.blocks[key]) for key, home in homes.items()]
+                blocks = [(key, home.path, home.blocks[key]) for key, home in homes.items()
+                          if home.path == path or key[0] in types]
             else:
                 blocks = [(key, path, block)
                           for key, block in event_blocks(read(path), path).items()]
@@ -315,6 +332,94 @@ def _events_never_run(app: dict, read) -> list:
             if finding not in found:
                 found.append(finding)
     return found
+
+
+def left_out_event_warnings(app: dict, read) -> list:
+    """Returns the event-left-out and event-unused warnings of the
+    folder whose settings are `app` and whose files `read(path)` returns, as
+    texts that give the place and the message, such as "pages/lib/shared.nx
+    line 4: ...". The commands that build a project from a folder print
+    them, since a left-out event changes what the project contains."""
+    if app["language"] != "nxlang":
+        return []
+    return ["%s: %s" % (finding.place, finding.message)
+            for finding in _left_out_events(app, read)]
+
+
+@dataclass
+class _IncludingPage:
+    """A page that includes a file, as _left_out_events sees it."""
+    name: str
+    objects: frozenset      # the names of its objects
+    files: PageFiles
+
+
+def _left_out_events(app: dict, read) -> list:
+    """Returns the event-left-out and event-unused warning Findings, on
+    the heading of each event of an included file whose object a page
+    including it does not have. Such an event is left out of that page
+    (compile_page_files). A page whose include lines say `partial` gets no
+    warning, and neither does one whose lines say `strict`, which the build
+    refuses. If no page including the file has the object, which is
+    probably a typo, the warning is event-unused, unless every page without
+    the object says one of the words. Otherwise each page without the object
+    and without the words gets event-left-out. Returns none while a page's
+    files cannot be read, because that page may be the one that has the
+    object."""
+    try:
+        pages = []
+        for page in app["pages"]:
+            data = page_data(read(page_toml_path(page)), page, app["defines"])
+            tables = [data.get("page")] + data.get("component", [])
+            pages.append(_IncludingPage(
+                page, frozenset(table.get("name") for table in tables
+                                if isinstance(table, dict) and isinstance(table.get("name"), str)),
+                read_page_files(page_nx_path(page), read(page_nx_path(page)), read)))
+    except (OSError, NxwrightError, tomllib.TOMLDecodeError):
+        return []   # the check reports the file
+    found, seen = [], set()
+    for including in pages:
+        for nx_file in including.files.files[:-1]:
+            for key, block in nx_file.blocks.items():
+                if key[0] is None or key[0] in including.objects or (nx_file.path, key) in seen:
+                    continue
+                seen.add((nx_file.path, key))
+                found += _left_out_event_findings(nx_file.path, key, block.number, pages)
+    return found
+
+
+def _left_out_event_findings(path: str, key: tuple, line: int, pages: list) -> list:
+    """Returns the Findings of the event `key` of the included file `path`,
+    on its heading's `line`, whose object a page among `pages` does not
+    have."""
+    name, event = key
+    # Every page whose files include `path`, or whose own file it is: such a
+    # page keeps the events of its own file, whatever it has.
+    holding = [page for page in pages if any(nx_file.path == path for nx_file in page.files.files)]
+    # The pages without the object, each with its first line including
+    # `path`, that no line saying `partial` or `strict` covers. The build
+    # refuses a page whose line says `strict`.
+    lacking = []
+    for page in holding:
+        if page.files.files[-1].path == path or name in page.objects:
+            continue
+        lines = [(nx_file.path, number, path in nx_file.partial | nx_file.strict)
+                 for nx_file in [page.files.files[-1]] + page.files.files[:-1]
+                 for number, included in nx_file.includes if included == path]
+        if not any(marked for _, _, marked in lines):
+            lacking.append((page, lines[0]))
+    if not lacking:
+        return []
+    if not any(name in page.objects or page.files.files[-1].path == path for page in holding):
+        return [Finding(path, line, WARNING,
+                        "none of the pages that include this file has %s, so the event %s.%s "
+                        "is left out of all of them. Check its heading for a typo"
+                        % (name, name, event), "event-unused")]
+    return [Finding(path, line, WARNING,
+                    "%s has no %s, so this event is left out of that page. If that is on "
+                    "purpose, add partial after the path on line %d of %s"
+                    % (page.name, name, number, including), "event-left-out")
+            for page, (including, number, _) in lacking]
 
 
 def _names_used(path: str, text: str) -> list:

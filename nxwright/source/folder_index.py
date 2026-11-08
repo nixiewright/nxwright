@@ -105,6 +105,7 @@ class NxFileNames:
     path: str
     lines: list
     includes: list = field(default_factory=list)    # [(Place of the written path, its path)]
+    strict: set = field(default_factory=set)        # the paths it includes with `strict`
     constants: dict = field(default_factory=dict)   # {name: Place}
     globals: dict = field(default_factory=dict)     # {name: Place} of `int` declarations
     blocks: list = field(default_factory=list)      # [Block], in file order
@@ -464,6 +465,8 @@ def _read_code_line(names: NxFileNames, block, number: int, line: str):
             return
         names.includes.append((Place(names.path, number, start, start + len(include[1])),
                                included))
+        if include[2] == "strict":
+            names.strict.add(included)
     elif is_constant_line(code) and len(tokens) > 1 and tokens[1][0] == "name":
         names.constants.setdefault(tokens[1][1], _token_place(names.path, number, tokens[1]))
     elif first == "int":

@@ -2,6 +2,7 @@
 build does not give, and each page's measures against its limits."""
 import contextlib
 import io
+import json
 from pathlib import Path
 import re
 import tempfile
@@ -21,9 +22,12 @@ from nxwright.source.page_source import page_file_text, page_table_at_screen
 from nxwright.source.project_files import build
 from nxwright.source.device_keys import DEVICE_KEYS
 from nxwright.source.source_folder import (export_dump, folder_reader, new_source_folder,
-                                           page_toml_components, read_page_components,
-                                           read_page_toml)
+                                           page_toml_components, read_folder_source,
+                                           read_page_components, read_page_toml)
+from nxwright.testing import SourceFolderRunner
 from tests.test_build_checks import add_component
+from tests.tft.made_tft import made_tft
+from tests.tft.stand_in_firmware import stand_in_firmware
 
 
 def edited_app(app_text: str, edit) -> str:
@@ -476,6 +480,184 @@ class NxlangEventNeverRunsTest(EventNeverRunsTest):
         self.assertEqual([(finding.file, finding.line, finding.rule)
                           for finding in self.findings()],
                          [("pages/lib/events.nx", 1, "event-never-runs")])
+
+
+class LeftOutEventTest(FolderTestCase):
+    """Three pages including a shared file with an event of title, one of
+    them without title: the build leaves the event out of that page, and
+    warns, unless its include line says `partial`."""
+
+    SHARED = 'function shout():\n  title.txt = "up"\n\non title.up:\n  shout()\n'
+    LEFT_OUT = ("third has no title, so this event is left out of that page. If that is on "
+                "purpose, add partial after the path on line 1 of pages/third.nx")
+
+    def setUp(self):
+        super().setUp()
+        self.write("pages/third.page.toml",
+                   self.text("pages/second.page.toml").replace('name = "second"', 'name = "third"'))
+        self.write("app.toml", edited_app(self.text("app.toml"),
+                                          lambda app: app["pages"].append("third")))
+        for page in ("page0", "second", "third"):
+            self.write("pages/%s.nx" % page, 'include "lib/shared.nx"\n')
+        self.write("pages/lib/shared.nx", self.SHARED)
+
+    def remove_title(self, page: str):
+        path = "pages/%s.page.toml" % page
+        self.write(path, edited_page_file(
+            self.text(path), lambda tables: tables.__setitem__(slice(1, None), [])))
+
+    def list_title_events(self, page: str, events: list):
+        path = "pages/%s.page.toml" % page
+        self.write(path, edited_page_file(
+            self.text(path), lambda tables: tables[1].update(events=events)))
+
+    def page_text(self, page: str) -> str:
+        """Returns `page`'s text in a dump of the folder's build."""
+        dump = self.root.parent / ("dump-" + page)
+        export_dump(self.root, dump)
+        number = ["page0", "second", "third"].index(page)
+        return (dump / "pages" / ("%02d-%s.txt" % (number, page))).read_text(encoding="utf-8")
+
+    def test_a_page_without_the_component(self):
+        self.remove_title("third")
+        self.assertEqual(self.findings(), [Finding("pages/lib/shared.nx", 4, WARNING,
+                                                   self.LEFT_OUT, "event-left-out")])
+        # The others keep the event, and only they get the function it calls.
+        self.assertIn("__f0", self.page_text("page0"))
+        self.assertNotIn("__f0", self.page_text("third"))
+
+    def test_a_component_without_the_event_is_refused(self):
+        # The component is on the page, so the event is meant for it, and
+        # partial does not change that.
+        self.list_title_events("third", ["down"])
+        self.write("pages/third.nx", 'include "lib/shared.nx" partial\n')
+        self.assertEqual(self.findings(), [Finding(
+            "pages/lib/shared.nx", 4, ERROR,
+            "third includes this file, but title.up is not an event listed in "
+            "pages/third.page.toml")])
+
+    def test_partial_removes_the_warning(self):
+        self.remove_title("third")
+        self.write("pages/third.nx", 'include "lib/shared.nx" partial\n')
+        self.assertEqual(self.findings(), [])
+
+    def test_strict_turns_the_warning_into_an_error(self):
+        self.remove_title("third")
+        self.write("pages/third.nx", 'include "lib/shared.nx" strict\n')
+        self.assertEqual(self.findings(), [Finding(
+            "pages/lib/shared.nx", 4, ERROR,
+            "third has no title, and line 1 of pages/third.nx includes this file with strict")])
+
+    def test_strict_on_a_page_with_every_component_builds(self):
+        self.write("pages/third.nx", 'include "lib/shared.nx" strict\n')
+        self.assertEqual(self.findings(), [])
+        self.assertIn("__f0", self.page_text("third"))
+
+    def test_a_partial_line_anywhere_in_the_pages_files_counts(self):
+        # third includes the shared file twice: through its own line, and
+        # through lib/more.nx, whose line says partial.
+        self.remove_title("third")
+        self.write("pages/lib/more.nx", 'include "shared.nx" partial\n')
+        self.write("pages/third.nx", 'include "lib/shared.nx"\ninclude "lib/more.nx"\n')
+        self.assertEqual(self.findings(), [])
+
+    def test_an_event_no_page_has(self):
+        # Probably a typo. One page without partial is enough for the warning.
+        for page in ("page0", "second"):
+            self.write("pages/%s.nx" % page, 'include "lib/shared.nx" partial\n')
+        self.write("pages/lib/shared.nx", self.SHARED + "\non titel.up:\n  sys0 = 1\n")
+        self.assertEqual(self.findings(), [Finding(
+            "pages/lib/shared.nx", 7, WARNING,
+            "none of the pages that include this file has titel, so the event titel.up is left "
+            "out of all of them. Check its heading for a typo", "event-unused")])
+
+    def test_partial_on_every_page_removes_the_warning_of_an_event_no_page_has(self):
+        for page in ("page0", "second", "third"):
+            self.write("pages/%s.nx" % page, 'include "lib/shared.nx" partial\n')
+        self.write("pages/lib/shared.nx", self.SHARED + "\non titel.up:\n  sys0 = 1\n")
+        self.assertEqual(self.findings(), [])
+
+    def test_a_pages_own_file_that_another_page_includes(self):
+        # page0 keeps every event of its own file, so the event is on a page.
+        self.remove_title("third")
+        self.write("pages/page0.nx", "on title.down:\n  sys0 = 1\n")
+        self.write("pages/third.nx", 'include "page0.nx"\n')
+        self.assertEqual(self.findings(), [Finding(
+            "pages/page0.nx", 1, WARNING, self.LEFT_OUT, "event-left-out")])
+
+    def test_an_event_its_type_lacks_is_refused(self):
+        # Every page has title, a text, which has no timer event.
+        self.write("pages/lib/shared.nx", "on title.timer:\n  sys0 = 1\n")
+        errors = [finding for finding in self.findings() if finding.severity == ERROR]
+        self.assertEqual([(finding.file, finding.line) for finding in errors],
+                         [("pages/lib/shared.nx", 1)] * 3)
+
+    def test_an_event_in_the_pages_own_file_still_fails(self):
+        self.remove_title("third")
+        self.write("pages/third.nx", 'include "lib/shared.nx" partial\n\non title.down:\n'
+                                     '  sys0 = 1\n')
+        [finding] = self.findings()
+        self.assertEqual((finding.severity, finding.message),
+                         (ERROR, "third.nx: title.down is not an event listed in the page's "
+                                 ".page.toml file"))
+
+    def test_the_tests_and_the_simulator_leave_the_event_out(self):
+        self.remove_title("third")
+        runner = SourceFolderRunner(self.root)
+        code, _ = runner.compile("third")
+        self.assertEqual([key for key in code if key[0].startswith("__")], [])
+        self.assertIn(("title", "up"), runner.compile("page0")[0])
+
+    def test_run_code_leaves_a_librarys_events_out(self):
+        # The page made up for the code has no title.
+        values = SourceFolderRunner(self.root).run_code("sys0 = 4", include="lib/shared.nx")
+        self.assertEqual(values["sys0"], 4)
+
+    def test_run_code_checks_no_library_event_against_its_made_up_page(self):
+        # That page is named p and has no components, so neither an event of
+        # p nor a strict include stops the code.
+        self.write("pages/lib/more.nx", "on title.down:\n  sys0 = 1\n")
+        self.write("pages/lib/shared.nx", 'include "more.nx" strict\n\n' + self.SHARED
+                   + "\non p.up:\n  sys0 = 2\n")
+        values = SourceFolderRunner(self.root).run_code("sys0 = 4", include="lib/shared.nx")
+        self.assertEqual(values["sys0"], 4)
+
+    def test_the_compiled_code_of_the_file(self):
+        self.remove_title("third")
+        folder = read_folder_source(folder_reader(self.root))
+        self.assertEqual(folder.editor_code("third", "pages/lib/shared.nx"), [])
+        self.assertEqual([title for title, _ in
+                          folder.editor_code("page0", "pages/lib/shared.nx")],
+                         ["on title.up", "function shout"])
+
+    def run_command(self, arguments: list) -> tuple:
+        output, errors = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            code = main(arguments)
+        return code, output.getvalue(), errors.getvalue()
+
+    def test_build_prints_the_warning(self):
+        self.remove_title("third")
+        code, _, errors = self.run_command(["build", str(self.root),
+                                            str(self.root.parent / "app.HMI")])
+        self.assertEqual(code, 0)
+        self.assertIn("nxwright build: warning: pages/lib/shared.nx line 4: %s\n"
+                      % self.LEFT_OUT, errors)
+
+    def test_compile_prints_the_warning(self):
+        self.remove_title("third")
+        firmware = self.root.parent / "firmware.tft"
+        firmware.write_bytes(made_tft("P"))
+        with stand_in_firmware(self.root.parent / "cache"):
+            code, output, errors = self.run_command(
+                ["compile", str(self.root), str(self.root.parent / "app.tft"), "--firmware",
+                 str(firmware), "--no-backup", "--json"])
+        self.assertEqual(code, 0, errors)
+        expected = "pages/lib/shared.nx line 4: %s" % self.LEFT_OUT
+        self.assertIn("nxwright compile: warning: %s\n" % expected, errors)
+        compiled = [json.loads(line) for line in output.splitlines()
+                    if json.loads(line).get("event") == "compiled"]
+        self.assertIn(expected, compiled[0]["warnings"])
 
 
 class PageAtScreenSizeTest(FolderTestCase):

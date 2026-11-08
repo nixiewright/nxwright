@@ -4,6 +4,12 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.4] - 2026-11-08
+
+- Pages can now include a `.nx` file with events for components they don't have. 
+- Adds the include options `partial` and `strict` to control this
+- The page preview can now delete a component whose code is in a shared file.
+
 ### [0.2.3] - 2026-11-08
 
 - `nxwright rename` and `nxwright remove` now work on pages too.
@@ -44,6 +50,11 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.5] - 2026-11-08
+
+- Better delete confirmation, and naming skip notification.
+- Colors `partial` and `strict` in include lines.
 
 ### [0.3.4] - 2026-11-08
 

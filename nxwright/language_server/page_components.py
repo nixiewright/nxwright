@@ -6,7 +6,9 @@ undo works.
 
 A new component's name is its type's prefix and the lowest number that no
 object of the page and no page has, such as t0, or t2 once t0 and t1 are
-taken (NAME_PREFIXES). It takes the size its type has in the folder's
+taken (NAME_PREFIXES). A name that a file the page includes has events for
+is passed over too, so that the new component starts without that code, and
+the reply says so. It takes the size its type has in the folder's
 defaults.toml, and its table goes at the end of the page file, so last in
 the ID order, on top. The table is written as extract writes one: its
 name, its type, and its place, every other attribute being its type's
@@ -17,16 +19,18 @@ allows.
 Deleting a component removes its table, and the code of its events, each
 with the comment lines right above it, the code from whichever of the page's
 .nx files holds it, since the build refuses code for a component the page
-does not have. A delete is refused when some of that code is in a file
-that other pages include too, which removing it would take from them. The
-places where other code names a deleted component come with the edit, for
-the editor to ask about first; deleting leaves that code to the checks.
+does not have. Code in a file that other pages include too stays, since
+removing it would take it from them: the build leaves it out of this page.
+The reply gives those files. The places where other code uses a deleted
+component come with the edit, for the editor to ask about first; deleting
+leaves that code to the checks.
 Deleting changes the ID of each component after it, so that an ID written
 as a number then names another (editors/vscode/README.md, Before you edit a
 page).
 
-Clearing components' events removes their code as deleting does, and is
-refused as deleting is, the components and their tables kept. A table's
+Clearing components' events removes their code as deleting does, the
+components and their tables kept. It is refused when some of that code is in
+a file that other pages include too. A table's
 `events` list stays: an event it lists without code builds empty.
 
 Copying gives the components' tables as the page file holds them, each
@@ -54,7 +58,10 @@ and group:
     would then make a paste into another page join that page's group.
 The code that came with them goes at the end of the page's own .nx file,
 made when the page has none, its headings following the new names; the
-code under them is pasted as it was, as a copy made by hand would be. The
+code under them is pasted as it was, as a copy made by hand would be. An
+event that a file the page includes already defines is not pasted when its
+text is the same, as when a component is cut and pasted back, and the
+paste is refused when it differs: the event would be defined twice. The
 paste is refused when the page built before and its tables would stop it
 building; the pasted code need not build, since code copied from another
 page may name what this page lacks, and is better pasted and mended than
@@ -144,9 +151,11 @@ def component_types(read, page: str) -> list:
 
 def add_component(index, read, exists, page: str, type_name: str, x: int = 0,
                   y: int = 0) -> dict:
-    """Returns {"edits": {path: [TextEdit]}, "name"}: the edits adding a new
-    component of the type `type_name` to `page`, its top left corner at (x,
-    y) when it has a place, and its name. It takes the folder's defaults,
+    """Returns {"edits": {path: [TextEdit]}, "name", "passedOver"}: the edits
+    adding a new component of the type `type_name` to `page`, its top left
+    corner at (x, y) when it has a place, its name, and [{"name", "path"}]
+    of the names passed over because the file `path`, which the page
+    includes, has events for them. It takes the folder's defaults,
     but for the values the Editor gives one on the series of the folder's
     screen (editor_limits.SERIES_NEW_COMPONENT_VALUES), written out. Raises
     NxwrightError for a type no component has, and when the page built
@@ -158,7 +167,13 @@ def add_component(index, read, exists, page: str, type_name: str, x: int = 0,
     defaults = page_toml.defaults.get(object_type)
     if defaults is None:
         raise NxwrightError("defaults.toml has no type %s" % type_name)
-    name = _free_name(NAME_PREFIXES[object_type], _taken_names(index, page))
+    taken, with_shared_code = _taken_names(index, page), _names_with_included_code(index, page)
+    passed_over = []
+    name = _free_name(NAME_PREFIXES[object_type], taken)
+    while name in with_shared_code:
+        passed_over.append({"name": name, "path": with_shared_code[name]})
+        taken.add(name)
+        name = _free_name(NAME_PREFIXES[object_type], taken)
     values = {"name": name, "type": type_name}
     stored = dict(defaults.attributes)
     if "x" in stored:
@@ -171,32 +186,38 @@ def add_component(index, read, exists, page: str, type_name: str, x: int = 0,
     text = read(path)
     new_text = _with_table(text, "[[component]]\n" + tomli_w.dumps(values))
     _refuse_breaking(index, read, exists, page, {path: new_text}, "adding %s" % name)
-    return {"edits": {path: line_edits(text, new_text)}, "name": name}
+    return {"edits": {path: line_edits(text, new_text)}, "name": name,
+            "passedOver": passed_over}
 
 
 def delete_components(index, read, page: str, names: list) -> dict:
     """Returns {"edits": {path: [TextEdit]}, "namedElsewhere": [{"path",
-    "line"}]}: the edits deleting the components `names` of `page`, their
-    tables and their code, and the places where code that stays names one
-    of them. Raises NxwrightError for the page itself, an object the page
-    lacks, a .nx file of the page that cannot be read (_refuse_unread_code),
-    and code in a file other pages include too."""
+    "line"}], "sharedFiles": [path]}: the edits deleting the components
+    `names` of `page`, their tables and their code; the places where code
+    that stays uses one of them; and the files other pages include too that
+    hold some of their code, which stays. Raises NxwrightError for the page
+    itself, an object the page lacks, and a .nx file of the page that cannot
+    be read (_refuse_unread_code)."""
     objects = _components_named(index, page, names, "deleted")
     _refuse_unread_code(index, read, page)
     removed = {}        # {path: set of line numbers}
+    # The lines of the code that stays in shared files. The page no longer
+    # gets that code, so the components it uses do not matter to the page.
+    left_out = {}       # {path: set of line numbers}
     for name in names:
         found = objects[name]
         removed.setdefault(found.place.path, set()).update(
             _table_lines(index.lines(found.place.path), found))
-        _add_code_lines(index, page, name, removed)
+        _add_code_lines(index, page, name, removed, left_out)
     named = []
     for name in names:
         place = objects[name].place
         for use in references(index, place.path, place.line, place.start,
                               with_declarations=False):
-            if use.line not in removed.get(use.path, ()):
+            if use.line not in removed.get(use.path, set()) | left_out.get(use.path, set()):
                 named.append({"path": use.path, "line": use.line})
-    return {"edits": _removal_edits(read, removed), "namedElsewhere": named}
+    return {"edits": _removal_edits(read, removed), "namedElsewhere": named,
+            "sharedFiles": list(left_out)}
 
 
 def clear_events(index, read, page: str, names: list) -> dict:
@@ -242,8 +263,10 @@ def paste_components(index, read, exists, page: str, text: str, code: list = (),
     pasted components' new names, in order. They go where the module's
     docstring says, or with `at`, (x, y), the box holding those with a place
     has its top left corner there, or with `in_place`, they are not moved.
-    Raises NxwrightError for text that is not components' tables, and when
-    the page built before and the tables would stop it building."""
+    Raises NxwrightError for text that is not components' tables, when the
+    page built before and the tables would stop it building, and for an
+    event a file the page includes already defines with other code
+    (_events_not_included)."""
     # A clipboard may hold a text's lines ended as Windows ends them.
     tables = _pasted_tables(text.replace("\r\n", "\n"))
     path = page_toml_path(page)
@@ -281,13 +304,14 @@ def paste_components(index, read, exists, page: str, text: str, code: list = (),
     new_text = _with_table(page_text, "\n".join(chunks))
     _refuse_breaking(index, read, exists, page, {path: new_text}, "pasting")
     edits, created = {path: line_edits(page_text, new_text)}, []
-    if code:
+    pasted = _events_not_included(index, page,
+                                  [_with_new_headings(block, renamed) for block in code])
+    if pasted:
         nx_path = page_nx_path(page)
         nx_text = read(nx_path) if exists(nx_path) else None
         if nx_text is None:
             created.append(nx_path)
-        blocks = "\n".join(_with_new_headings(block, renamed) for block in code)
-        new_nx_text = with_code_added(nx_text or "", blocks)
+        new_nx_text = with_code_added(nx_text or "", "\n".join(pasted))
         edits[nx_path] = line_edits(nx_text or "", new_nx_text)
     return {"edits": edits, "created": created, "names": names}
 
@@ -351,6 +375,33 @@ def paste_parts(index, read, exists, page: str, names: list, text: str, code: li
                 created.append(nx_path)
             edits[nx_path] = line_edits(old_text or "", new_text)
     return {"edits": edits, "created": created, "notes": notes}
+
+
+def _events_not_included(index, page: str, blocks: list) -> list:
+    """Returns the pasted `blocks`, each an event's text with the comment
+    above it, without those that a file `page` includes already defines with
+    the same text: the page gets those from that file, as when a component
+    is cut and pasted back. Raises NxwrightError for one that such a file
+    defines with other code, since the event would be defined twice."""
+    own = page_nx_path(page)
+    kept = []
+    for block in blocks:
+        heading = next(filter(None, map(read_event_heading, block.split("\n"))), None)
+        found = None
+        if heading:
+            found = next(((path, defined)
+                          for path, defined_blocks in index.event_blocks(page, heading.name).items()
+                          if path != own
+                          for defined in defined_blocks if defined.event == heading.event), None)
+        if found is None:
+            kept.append(block)
+            continue
+        path, defined = found
+        lines = index.lines(path)
+        if "".join(lines[number] + "\n" for number in _block_lines(lines, defined)) != block:
+            raise NxwrightError("%s, which %s includes, already has other code for %s.%s"
+                                % (path, page, heading.name, heading.event))
+    return kept
 
 
 def _type_defaults(page_toml, type_name: str):
@@ -741,16 +792,28 @@ def _components_named(index, page: str, names: list, what: str,
     return {name: objects[name] for name in names}
 
 
-def _add_code_lines(index, page: str, name: str, removed: dict):
+def _add_code_lines(index, page: str, name: str, removed: dict, left_out: dict = None):
     """Adds the lines of the code of the component `name`'s events, each
     event with the comment lines right above it, to `removed`, {path: set of
-    line numbers}. Raises NxwrightError for code in a file other pages
-    include too, which removing it would take from them."""
+    line numbers}. Code in a file other pages include too, which removing it
+    would take from them, goes in `left_out` instead, in the same form.
+    Such code raises NxwrightError when there is no `left_out`. It raises it
+    too when a file of `page` includes the shared file with `strict`, since
+    the page must then have the component."""
     for path, blocks in index.event_blocks(page, name).items():
-        _refuse_shared_code(index, page, name, path)
+        into = removed
+        if index.pages_using(path) != [page]:
+            if left_out is None:
+                _refuse_shared_code(index, page, name, path)
+            if any(path in nx_file.strict for nx_file in map(index.nx_file,
+                                                             index.page_files.get(page, []))
+                   if nx_file is not None):
+                raise NxwrightError("the code of %s is in %s, which %s includes with strict, so "
+                                    "the page must have %s" % (name, path, page, name))
+            into = left_out
         lines = index.lines(path)
         for block in blocks:
-            removed.setdefault(path, set()).update(_block_lines(lines, block))
+            into.setdefault(path, set()).update(_block_lines(lines, block))
 
 
 def _refuse_unread_code(index, read, page: str):
@@ -765,6 +828,21 @@ def _refuse_unread_code(index, read, page: str):
         except MissingFileError:
             if path != page_nx_path(page):
                 raise
+
+
+def _names_with_included_code(index, page: str) -> dict:
+    """Returns {object name: path} of the objects that the files `page`
+    includes have events for, each with the first file holding them. A
+    component given such a name would get that code."""
+    own = page_nx_path(page)
+    found = {}
+    for path in index.page_files.get(page, []):
+        nx_file = index.nx_file(path)
+        if path != own and nx_file is not None:
+            for block in nx_file.blocks:
+                if not block.is_function:
+                    found.setdefault(block.name, path)
+    return found
 
 
 def _refuse_shared_code(index, page: str, name: str, path: str):

@@ -638,29 +638,35 @@ class NxwrightServer(LanguageServer):
         return {"types": component_types(self._texts.folder_reader(index.root), page)}
 
     def _add_component(self, params: dict) -> dict:
-        """Returns {"edit", "name"}: the protocol's WorkspaceEdit adding a
-        component of the type `type` to the page, at `point`, {"x", "y"},
-        or (0, 0) without one, and its name. Raises NxwrightError when the
+        """Returns {"edit", "name", "passedOver"}: the protocol's
+        WorkspaceEdit adding a component of the type `type` to the page, at
+        `point`, {"x", "y"}, or (0, 0) without one; its name; and the names
+        passed over, {"name", "uri"}, because the file `uri`, which the page
+        includes, has events for them. Raises NxwrightError when the
         addition is refused."""
         index, page = self._unlocked_page_of(params)
         point = params.get("point") or {"x": 0, "y": 0}
         found = add_component(index, self._texts.folder_reader(index.root),
                               lambda path: (index.root / path).is_file(), page, params["type"],
                               point["x"], point["y"])
-        return {"edit": self._workspace_edit(index, found["edits"]), "name": found["name"]}
+        return {"edit": self._workspace_edit(index, found["edits"]), "name": found["name"],
+                "passedOver": [{"name": passed["name"], "uri": uri_of(index.root / passed["path"])}
+                               for passed in found["passedOver"]]}
 
     def _delete_components(self, params: dict) -> dict:
-        """Returns {"edit", "namedElsewhere"}: the protocol's WorkspaceEdit
-        deleting the components `names` of the page, and the places, {"uri",
-        "line"}, where code that stays names one of them. Raises
-        NxwrightError when the delete is refused."""
+        """Returns {"edit", "namedElsewhere", "sharedFiles"}: the protocol's
+        WorkspaceEdit deleting the components `names` of the page; the
+        places, {"uri", "line"}, where code that stays uses one of them; and
+        the URIs of the files other pages include too that hold their code,
+        which stays. Raises NxwrightError when the delete is refused."""
         index, page = self._unlocked_page_of(params)
         found = delete_components(index, self._texts.folder_reader(index.root), page,
                                   params["names"])
         return {"edit": self._workspace_edit(index, found["edits"]),
                 "namedElsewhere": [{"uri": uri_of(index.root / place["path"]),
                                     "line": place["line"]}
-                                   for place in found["namedElsewhere"]]}
+                                   for place in found["namedElsewhere"]],
+                "sharedFiles": [uri_of(index.root / path) for path in found["sharedFiles"]]}
 
     def _clear_events(self, params: dict) -> dict:
         """Returns the protocol's WorkspaceEdit removing the code of the

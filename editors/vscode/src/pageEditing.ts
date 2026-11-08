@@ -53,16 +53,22 @@ export interface ComponentType {
   placed: boolean;
 }
 
-// The server's reply to nxwright/addComponent.
+// The server's reply to nxwright/addComponent. `passedOver` lists the names
+// skipped because a file the page includes has events for them. A language
+// server older than the extension leaves it out.
 interface AddedComponent {
   edit: unknown;
   name: string;
+  passedOver?: { name: string; uri: string }[];
 }
 
-// The server's reply to nxwright/deleteComponents.
+// The server's reply to nxwright/deleteComponents. `sharedFiles` lists the
+// files other pages include too that hold the components' code, which
+// stays. A language server older than the extension leaves it out.
 interface DeletedComponents {
   edit: unknown;
   namedElsewhere: { uri: string; line: number }[];
+  sharedFiles?: string[];
 }
 
 // Components as copied: their tables, which the clipboard holds, and the
@@ -247,7 +253,7 @@ export class PageEditing {
 
   // Adds a component of `type` to the page, its top left corner at `point`,
   // or at (0, 0) without one. Returns its name once added; says why when it
-  // was not.
+  // was not, and why it has another name than the first free one.
   async addComponent(toml: vscode.Uri, type: string, point?: { x: number; y: number }):
       Promise<string | undefined> {
     const client = this.client();
@@ -260,7 +266,14 @@ export class PageEditing {
         type,
         point,
       });
-      return (await this.apply(client, toml, added.edit)) ? added.name : undefined;
+      if (!(await this.apply(client, toml, added.edit))) {
+        return undefined;
+      }
+      const passedOver = added.passedOver ?? [];
+      if (passedOver.length > 0) {
+        void vscode.window.showInformationMessage(passedOverMessage(type, added.name, passedOver));
+      }
+      return added.name;
     } catch (error) {
       void vscode.window.showErrorMessage(`nxwright: ${errorText(error)}`);
       return undefined;
@@ -268,8 +281,9 @@ export class PageEditing {
   }
 
   // Deletes components of the page, with their code. It asks first if code
-  // elsewhere still uses one of their names, or if the deletion would change
-  // the IDs of other components and that warning is on (see componentIds.ts).
+  // elsewhere still uses one of their names, if some of their code stays in
+  // files other pages include too, or if the deletion would change the IDs
+  // of other components and that warning is on (see componentIds.ts).
   // With `cut`, it copies the components only once the deletion is confirmed,
   // so that a cancelled Cut leaves the clipboard unchanged. Returns whether
   // they were deleted, and shows why when they were not.
@@ -287,8 +301,10 @@ export class PageEditing {
       const order = warnIds ? await this.componentOrder(client, toml) : [];
       const places = found.namedElsewhere.map((place) =>
         `${vscode.workspace.asRelativePath(vscode.Uri.parse(place.uri))} line ${place.line + 1}`);
+      const shared = (found.sharedFiles ?? []).map((uri) =>
+        vscode.workspace.asRelativePath(vscode.Uri.parse(uri)));
       const question = deleteQuestion(cut ? "Cut" : "Delete", names, places,
-                                      shiftedByDeleting(order, names), warnIds);
+                                      shiftedByDeleting(order, names), warnIds, shared);
       if (question && !(await this.ask(question))) {
         return false;
       }
@@ -745,4 +761,17 @@ export async function askChineseFont(fonts: readonly string[]):
     typeface = files?.[0]?.fsPath;
   }
   return chineseFontParameters(choice, typeface);
+}
+
+// The message saying why a new component was not given the first free name:
+// a file the page includes has events for that name, which the component
+// would have taken.
+function passedOverMessage(type: string, name: string,
+                           passedOver: { name: string; uri: string }[]): string {
+  const names = passedOver.map((passed) => passed.name);
+  const files = [...new Set(passedOver.map((passed) =>
+    vscode.workspace.asRelativePath(vscode.Uri.parse(passed.uri))))];
+  return `Named the new ${type} ${name}: this page includes ${files.join(", ")}, which has ` +
+    `events for ${names.join(", ")}. To give the ${type} that code, rename it to ` +
+    `${names.length === 1 ? names[0] : `one of ${names.join(", ")}`}.`;
 }

@@ -86,7 +86,8 @@ def run_page(text: str, values: dict = None, event: tuple = KEY, files: dict = N
     key = (text, tuple(sorted((files or {}).items())), repr(program))
     events = _COMPILED_PAGES.get(key)
     if events is None:
-        compiled = compile_nxlang_page(text, "p", COMPONENTS, program, read=reader(files))
+        compiled = compile_nxlang_page(text, "p", COMPONENTS, program, read=reader(files),
+                                       page_events=None)
         events = {key: preprocess(lines, NO_NAMES) for key, lines in compiled.events.items()}
         _COMPILED_PAGES[key] = events
     start = dict(VALUES, **(values or {}))
@@ -1066,7 +1067,7 @@ class LongTextLocalTest(unittest.TestCase):
     def rooms(self, page: str) -> dict:
         """Returns {name: txt_maxl} of the shared text variables of `page`, a
         page's .nx file."""
-        compiled = compile_nxlang_page(page, "p", COMPONENTS, ProgramNames())
+        compiled = compile_nxlang_page(page, "p", COMPONENTS, ProgramNames(), page_events=None)
         return {variable.name: variable.room for variable in compiled.generated
                 if variable.name.startswith("__v")}
 
@@ -1434,7 +1435,7 @@ class MacroCallTest(unittest.TestCase):
         # temporaries of its own.
         program = ProgramNames(macros={"tap": Macro("macros.nx", 1, ((2, "click 4,1"),))})
         names = ["p", "b0", None, "x", "b1", "a", "b", "c"]
-        compiled = compile_nxlang_page(MACRO_CALLER, "p", names, program)
+        compiled = compile_nxlang_page(MACRO_CALLER, "p", names, program, page_events=None)
         temporaries = {key: set(re.findall(r"__g\d+_\d+", "\n".join(text for _, text in lines)))
                        for key, lines in compiled.events.items()}
         self.assertTrue(temporaries[("b1", "down")])
@@ -1511,7 +1512,7 @@ class FunctionTest(unittest.TestCase):
 
     def test_generated_parts(self):
         compiled = compile_nxlang_page(FUNCTIONS + "on p.down:\n  x.val = twice(1)\n", "p",
-                                       COMPONENTS, ProgramNames())
+                                       COMPONENTS, ProgramNames(), page_events=None)
         # Only twice is called: it is at depth 1, alone on the first hotspot.
         twice = compiled.functions["twice"]
         parameter, result, which = twice.parameter_variables[0], twice.result_variable, twice.which
@@ -1582,7 +1583,7 @@ class FunctionTest(unittest.TestCase):
                 "on p.down:\n  f()\n  g()\n")
         machine = run_page(text)
         self.assertEqual((machine.values["x.val"], machine.values["r.val"]), (11, 11))
-        compiled = compile_nxlang_page(text, "p", COMPONENTS, ProgramNames())
+        compiled = compile_nxlang_page(text, "p", COMPONENTS, ProgramNames(), page_events=None)
         self.assertEqual([line.strip() for _, line in compiled.bodies["f"]
                           if "__l" in line], ["goto __l0", "__l0:"])
         self.assertEqual([line.strip() for _, line in compiled.bodies["g"]
@@ -1989,7 +1990,7 @@ while (x.val < 5) {
             run_page("on p.down:\n  var case = 1\n")
         # A component may keep such a name.
         compiled = compile_nxlang_page("on p.down:\n  case.val = 1\n", "p", COMPONENTS + ["case"],
-                                       ProgramNames())
+                                       ProgramNames(), page_events=None)
         self.assertEqual(preprocess(compiled.events[KEY], NO_NAMES), ["case.val=1"])
 
 
@@ -2016,7 +2017,7 @@ class FewerObjectsTest(unittest.TestCase):
 
     def test_globals_are_named_after_the_page(self):
         compiled = compile_nxlang_page("on p.down:\n  x.val = a.val - b.val * c.val\n", "p",
-                                       COMPONENTS, ProgramNames(), page_id=3)
+                                       COMPONENTS, ProgramNames(), page_id=3, page_events=None)
         self.assertEqual(compiled.globals, ["__g3_0"])
         self.assertEqual(compiled.generated, [])
 
@@ -2029,7 +2030,7 @@ class FewerObjectsTest(unittest.TestCase):
     def test_events_share_temporaries(self):
         text = ("on p.down:\n  x.val = a.val - b.val * c.val\n\n"
                 "on p.up:\n  r.val = a.val - b.val * d.val\n")
-        compiled = compile_nxlang_page(text, "p", COMPONENTS, ProgramNames())
+        compiled = compile_nxlang_page(text, "p", COMPONENTS, ProgramNames(), page_events=None)
         self.assertEqual(compiled.globals, ["__g0_0"])
 
     def test_program_int_names_may_not_start_with_the_prefix(self):
@@ -2047,7 +2048,7 @@ class FewerObjectsTest(unittest.TestCase):
                      "function g(n: number) -> number:\n  return h(n) * 2\n\n"
                      "function f(n: number) -> number:\n  return g(n) + h(n)\n\n")
         text = functions + "on p.down:\n  x.val = f(1)\n  r.val = h(5)\n"
-        compiled = compile_nxlang_page(text, "p", COMPONENTS, ProgramNames())
+        compiled = compile_nxlang_page(text, "p", COMPONENTS, ProgramNames(), page_events=None)
         self.assertEqual([(name, function.depth, function.hotspot)
                           for name, function in compiled.functions.items()],
                          [("h", 3, "__f2"), ("g", 2, "__f1"), ("f", 1, "__f0")])
@@ -2076,7 +2077,7 @@ class FewerObjectsTest(unittest.TestCase):
 def text_variables(text: str) -> list:
     """Returns the names of the long-lived text variables, __v0 and on, that compiling
     `text` as page p generates."""
-    compiled = compile_nxlang_page(text, "p", COMPONENTS, ProgramNames())
+    compiled = compile_nxlang_page(text, "p", COMPONENTS, ProgramNames(), page_events=None)
     return [variable.name for variable in compiled.generated if variable.name.startswith("__v")]
 
 
@@ -2155,7 +2156,7 @@ class SharedVariablesTest(unittest.TestCase):
         text = ('function f(s: text) -> number:\n  var n = 0\n  switch (s) {\n    case "a":\n      n = 1\n'
                 '  }\n  return n\n\n'
                 'on p.down:\n  x.val = f("a")\n')
-        compiled = compile_nxlang_page(text, "p", COMPONENTS, ProgramNames())
+        compiled = compile_nxlang_page(text, "p", COMPONENTS, ProgramNames(), page_events=None)
         # The hotspot, then the parameter and the switch's value.
         self.assertEqual([variable.name for variable in compiled.generated],
                          ["__f0", "__v0", "__v1"])
@@ -2178,21 +2179,21 @@ class SharedVariablesTest(unittest.TestCase):
     def test_a_cycle_through_clicks_is_refused(self):
         text = "on t0.down:\n  click p,1\n\non p.down:\n  click t0,1\n"
         with self.assertRaisesRegex(NxwrightError, "t0.down -> p.down -> t0.down"):
-            compile_nxlang_page(text, "p", COMPONENTS, ProgramNames())
+            compile_nxlang_page(text, "p", COMPONENTS, ProgramNames(), page_events=None)
         text = "function f():\n  click p,1\n\non p.down:\n  f()\n"
         with self.assertRaisesRegex(NxwrightError, "p.down -> f -> p.down"):
-            compile_nxlang_page(text, "p", COMPONENTS, ProgramNames())
+            compile_nxlang_page(text, "p", COMPONENTS, ProgramNames(), page_events=None)
 
     def test_a_click_must_name_its_component_and_event(self):
         for click in ("click b[3],1", "click t0,c.val", "click t0", "click 3,1"):
             with self.subTest(click=click):
                 with self.assertRaisesRegex(NxwrightError, "line 2: .*click"):
                     compile_nxlang_page("on p.down:\n  %s\n" % click, "p", COMPONENTS,
-                                        ProgramNames())
+                                        ProgramNames(), page_events=None)
         # A constant stands for its value: the click names no component.
         with self.assertRaisesRegex(NxwrightError, "line 3: .*click"):
             compile_nxlang_page("const B = 3\non p.down:\n  click B,1\n", "p", COMPONENTS,
-                                ProgramNames())
+                                ProgramNames(), page_events=None)
 
 
 FIXED = """const SCALE = 1000
@@ -2224,7 +2225,8 @@ class IncludeTest(unittest.TestCase):
     def test_only_called_functions_generate_anything(self):
         files = {"pages/lib/fixed.nx": FIXED, "pages/lib/units.nx": UNITS}
         page = 'include "lib/units.nx"\n\non p.down:\n  x.val = inchesToMm(a.val)\n'
-        compiled = compile_nxlang_page(page, "p", COMPONENTS, ProgramNames(), read=reader(files))
+        compiled = compile_nxlang_page(page, "p", COMPONENTS, ProgramNames(), read=reader(files),
+                                       page_events=None)
         self.assertEqual({name: function.depth for name, function in compiled.functions.items()},
                          {"toFixed": 2, "toWhole": 2, "inchesToMm": 1})
         # inchesToMm has the depth 1 hotspot, and toFixed and toWhole share the depth 2
@@ -2238,14 +2240,15 @@ class IncludeTest(unittest.TestCase):
                                    "function themeP():\n  x.pco=pic_x\n"}
         page = 'include "theme.nx"\n\non p.load:\n  themeP()\n'
         program = ProgramNames(variables=frozenset({"pic_x"}))
-        compiled = compile_nxlang_page(page, "p", COMPONENTS, program, read=reader(files))
+        compiled = compile_nxlang_page(page, "p", COMPONENTS, program, read=reader(files),
+                                       page_events=None)
         self.assertEqual(list(compiled.functions), ["themeP"])
 
     def test_a_page_split_into_two_files(self):
         files = {"pages/p/keys.nx": "on b.down:\n  r.val = 2\n"}
         page = 'include "p/keys.nx"\n\non p.down:\n  r.val = 1\n'
         compiled = compile_nxlang_page(page, "p", COMPONENTS + ["b"], ProgramNames(),
-                                       read=reader(files))
+                                       read=reader(files), page_events=None)
         self.assertEqual(preprocess(compiled.events[("b", "down")], NO_NAMES), ["r.val=2"])
         self.assertEqual(compiled.sources[("b", "down")], "pages/p/keys.nx")
 
@@ -2280,9 +2283,15 @@ class IncludeTest(unittest.TestCase):
                  "pages/c.nx line 1: SCALE is already a constant"),
                 ('include "lib/fixed.nx"\n\nfunction toFixed() -> number:\n  return 1\n',
                  "function toFixed is also defined in pages/lib/fixed.nx"),
-                ('on p.up:\n  r.val = 1\ninclude "lib/fixed.nx"\n', "pages/p.nx line 3: expected")]:
+                ('on p.up:\n  r.val = 1\ninclude "lib/fixed.nx"\n', "pages/p.nx line 3: expected"),
+                ('include "lib/fixed.nx" all\non p.up:\n  r.val = 1\n',
+                 'pages/p.nx line 1: an include is written include "<path>.nx", '
+                 'include "<path>.nx" partial, or include "<path>.nx" strict'),
+                ('include "lib/fixed.nx" partial strict\non p.up:\n  r.val = 1\n',
+                 'pages/p.nx line 1: an include is written')]:
             with self.subTest(page=page), self.assertRaisesRegex(NxwrightError, message):
-                compile_nxlang_page(page, "p", COMPONENTS, ProgramNames(), read=reader(files))
+                compile_nxlang_page(page, "p", COMPONENTS, ProgramNames(), read=reader(files),
+                                    page_events=None)
 
 
 class IncludeSourceFolderTest(NxlangFolderTestCase):
@@ -2327,6 +2336,30 @@ class IncludeSourceFolderTest(NxlangFolderTestCase):
         (self.source / "lib" / "constants.nx").write_text(
             "const LIMIT = 9\n\nfunction f() -> number:\n  return 1\n", encoding="utf-8", newline="\n")
         self.assert_export_refused("program.nx line 1: program.nx can include constants only")
+
+    def test_program_has_no_partial_include(self):
+        (self.source / "program.nx").write_text(
+            'include "lib/constants.nx" partial\nint sys0=0\nsys0 = LIMIT\n', encoding="utf-8",
+            newline="\n")
+        self.assert_export_refused("program.nx line 1: partial is only for the files a page "
+                                   "includes, since program.nx takes no events")
+        # Nor in a file program.nx includes.
+        (self.source / "program.nx").write_text(
+            'include "lib/constants.nx"\nint sys0=0\nsys0 = LIMIT\n', encoding="utf-8",
+            newline="\n")
+        (self.source / "lib" / "more.nx").write_text("const MORE = 1\n", encoding="utf-8",
+                                                     newline="\n")
+        (self.source / "lib" / "constants.nx").write_text(
+            'include "more.nx" partial\nconst LIMIT = 9\n', encoding="utf-8", newline="\n")
+        self.assert_export_refused("lib/constants.nx line 1: partial is only for the files a "
+                                   "page includes")
+
+    def test_program_has_no_strict_include(self):
+        (self.source / "program.nx").write_text(
+            'include "lib/constants.nx" strict\nint sys0=0\nsys0 = LIMIT\n', encoding="utf-8",
+            newline="\n")
+        self.assert_export_refused("program.nx line 1: strict is only for the files a page "
+                                   "includes, since program.nx takes no events")
 
 
 class AnnotationTest(unittest.TestCase):

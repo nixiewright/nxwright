@@ -74,7 +74,9 @@ from nxwright.project.ffmpeg import find_ffmpeg
 from nxwright.project.replacing import held_by_the_nextion_editor, is_project_file, written_beside
 from nxwright.project.screen_models import model_with_id
 from nxwright.source.defines import DEFINE_OPTION, define_arguments, overriding_defines
+from nxwright.source.lint import left_out_event_warnings
 from nxwright.source.project_files import build
+from nxwright.source.source_folder import folder_reader, read_app
 
 from nxwright.tft import firmware_versions, frame
 from nxwright.tft.firmware import find_firmware
@@ -89,7 +91,8 @@ from nxwright.tft.tft_file import device_id_of
 class Compiled(NamedTuple):
     """A compile's result: the TFT file's bytes, `data`, where its firmware
     came from, `firmware_source`, what the user should know of the project,
-    `warnings` (compile_warnings), and the bytes of the project file built
+    `warnings` (lint.left_out_event_warnings for a source folder, then
+    compile_warnings), and the bytes of the project file built
     on the way, `project_file`, when it was asked for."""
     data: bytes
     firmware_source: str
@@ -209,9 +212,11 @@ def compile_folder(source: Path, output: Path, firmware_file: Path = None,
         _refuse_unless_replacing(project_file, overwrite, is_project_file, "project file")
     if not source.exists():
         raise NxwrightError("%s does not exist" % source)
+    warnings = []
     if source.is_dir():
         with overriding_defines(defines or {}):
             project, built = project_and_file_of_folder(source, lock_pages)
+            warnings = left_out_event_warnings(read_app(source), folder_reader(source))
     elif is_project_file(source):
         if project_file is not None:
             raise NxwrightError("--project-file writes the project file built from a source "
@@ -230,7 +235,7 @@ def compile_folder(source: Path, output: Path, firmware_file: Path = None,
             raise NxwrightError(message)
         raise FirmwareMissing(message, version_text(max(firmware_versions.MATCHED_VERSIONS)))
     return Compiled(compile_project(project, found.firmware, find_ffmpeg(ffmpeg_file)),
-                    found.source, tuple(compile_warnings(project)),
+                    found.source, tuple(warnings + compile_warnings(project)),
                     built if project_file is not None else None)
 
 
