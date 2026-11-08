@@ -26,7 +26,7 @@ from nxwright.language.code_preprocessor import (Owner, preprocess, preprocess_w
                                                  with_own_attributes)
 from nxwright.language.nxlang import GENERATED_GLOBAL, GENERATED_NAME, int_starting_value
 from nxwright.language.resource_names import ResourceNames
-from nxwright.project.component_defaults import defaults_from_toml
+from nxwright.project.component_defaults import folder_defaults
 from nxwright.project.device_settings import DEFAULT_ENCODING, TextCodec
 from nxwright.project.editor_limits import lacked_attributes
 from nxwright.project.object_types import TYPES_BY_NAME
@@ -316,7 +316,7 @@ def _read_page_tables(source_folder: Path, read) -> FolderPageTables:
     page files through `read`. Raises NxwrightError for a file that is
     missing or cannot be parsed."""
     app = _app(source_folder)
-    defaults = defaults_from_toml(read("defaults.toml"), "defaults.toml")
+    defaults = folder_defaults(read("defaults.toml"), "defaults.toml")
     texts, names, types, globals_, text_limits, system_pages = {}, {}, {}, {}, {}, {}
     absent_attributes, events = {}, {}
     screen = screen_model(app)

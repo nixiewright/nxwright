@@ -10,12 +10,16 @@ from nxwright.source.project_files import build
 from nxwright.project.dumper import ProjectDumper
 from nxwright import NxwrightError
 from nxwright.project.component_defaults import (DEFAULTS_FILE, TypeDefaults, defaults_from_pages,
-                                                 defaults_from_toml, defaults_to_toml)
+                                                 defaults_from_toml, defaults_to_toml,
+                                                 folder_defaults, nxwright_defaults)
 from nxwright.project.page_block import Attribute, Event, Marker
 from nxwright.source.page_source import PageSource, page_from_source, page_to_source
 from nxwright.project.page_text import page_from_text
 from nxwright.language.resource_names import ResourceNames
-from nxwright.source.source_folder import export_dump, import_dump
+from nxwright.project.device_settings import DeviceSettings
+from nxwright.project.screen_models import model_named
+from nxwright.source.source_folder import (export_dump, folder_reader, import_dump,
+                                          new_source_folder, read_folder_source)
 from tests.test_project_writer import edit_text, small_page, write_small_project
 from tests.test_source_folder import _dump_text
 
@@ -210,6 +214,33 @@ class SourceFolderDefaultsTest(unittest.TestCase):
         (self.source / "defaults.toml").unlink()
         with self.assertRaisesRegex(NxwrightError, "defaults.toml is missing"):
             export_dump(self.source, self.folder / "again")
+
+
+class FolderDefaultsTest(unittest.TestCase):
+    """How the build reads a folder's defaults.toml. The file is nearly always
+    a copy of nxwright's own, and then the build parses it only once a run."""
+
+    def test_nxwright_s_own_file_gives_its_defaults_parsed_once(self):
+        own = DEFAULTS_FILE.read_text(encoding="utf-8")
+        self.assertIs(folder_defaults(own, "defaults.toml"), nxwright_defaults())
+        with tempfile.TemporaryDirectory() as name:
+            folder = Path(name) / "app"
+            new_source_folder(folder, DeviceSettings(model_named("NX4832T035"), 0, "iso-8859-1"),
+                              "nextion")
+            self.assertIs(read_folder_source(folder_reader(folder)).defaults, nxwright_defaults())
+
+    def test_another_file_is_parsed(self):
+        text = DEFAULTS_FILE.read_text(encoding="utf-8")
+        self.assertIn("[text.attributes]\nvscope = 0\n", text)
+        text = text.replace("[text.attributes]\nvscope = 0\n", "[text.attributes]\nvscope = 1\n")
+        read = folder_defaults(text, "defaults.toml")
+        self.assertEqual(read, defaults_from_toml(text, "defaults.toml"))
+        self.assertNotEqual(read, nxwright_defaults())
+
+    def test_errors_give_the_folder_s_file(self):
+        with self.assertRaisesRegex(NxwrightError, r"^defaults\.toml: \[text\] is not a component "
+                                                   r"type's defaults"):
+            folder_defaults("[text]\nevents = []\n", "defaults.toml")
 
 
 if __name__ == "__main__":

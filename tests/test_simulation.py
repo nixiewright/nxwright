@@ -247,7 +247,12 @@ class StartTest(SimulationTestCase):
 
         with mock.patch.object(tomllib, "loads", counted):
             Simulation(self.root)
-        self.assertEqual(len(parsed), 5)    # app.toml, defaults.toml, and the three pages'
+        # Count only the folder's own files. nxwright parses its own tables,
+        # such as its component defaults, once a run, so an earlier test may
+        # already have parsed them.
+        own = [self.text(path) for path in ("app.toml", "pages/page0.page.toml",
+                                            "pages/second.page.toml", "pages/third.page.toml")]
+        self.assertEqual([1 <= parsed[text] <= 2 for text in own], [True] * len(own))
         self.assertLessEqual(max(parsed.values()), 2)
 
     def test_tells_each_page_before_it_compiles_then_the_app(self):

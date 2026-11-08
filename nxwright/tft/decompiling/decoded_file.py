@@ -35,8 +35,8 @@ import re
 import struct
 import tomllib
 
-from nxwright.project.component_defaults import (DEFAULTS_FILE, DERIVED_ATTRIBUTES,
-                                                 NAME_PREFIXES, defaults_from_toml)
+from nxwright.project.component_defaults import (DERIVED_ATTRIBUTES, NAME_PREFIXES,
+                                                 nxwright_defaults)
 from nxwright.project.device_settings import ENCODINGS, DeviceSettings
 from nxwright.project.editor_limits import NAME_LIMIT
 from nxwright.project.object_types import TYPE_NAMES
@@ -599,7 +599,7 @@ def _known_attribute_names() -> dict:
     """Returns {the checksum of a name: the name} of every attribute
     nxwright knows: each type's, as its component defaults give them, and
     those it derives, such as objname."""
-    defaults = defaults_from_toml(DEFAULTS_FILE.read_text(encoding="utf-8"), DEFAULTS_FILE.name)
+    defaults = nxwright_defaults()
     names = set(DERIVED_ATTRIBUTES).union(*(each.names() for each in defaults.values()))
     return {_unpadded_crc(name): name for name in names}
 

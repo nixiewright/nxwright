@@ -66,10 +66,10 @@ class UploadCommandTest(unittest.TestCase):
         given = iter(answers)
         with mock.patch("nxwright.tft.commands.upload.at_terminal", lambda: at_terminal), \
                 mock.patch("builtins.input", lambda prompt="": next(given)), \
-                mock.patch("nxwright.tft.upload.ANSWER_WAIT", 0.05), \
                 redirect_stdout(printed), redirect_stderr(errors):
             code = command.main([str(file), "--port", "COM5", "--baud", "9600", *options],
-                                open_port=opened)
+                                open_port=opened, pause_of=lambda rate: 0, settle=0,
+                                answer_wait=0.05)
         return code, printed.getvalue(), errors.getvalue()
 
     def assert_nothing_past_connect(self, screen: StandInScreen):

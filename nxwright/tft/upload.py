@@ -142,7 +142,8 @@ def _screen_of(answer: str, rate: int) -> Screen:
 
 
 def upload(port, screen: Screen, data: bytes, upload_rate: int, progress=None,
-           answer_wait: float = None, fast: bool = False, on_skip=None):
+           answer_wait: float = None, fast: bool = False, on_skip=None, pause_of=pause,
+           settle: float = None):
     """Uploads `data`, a TFT file, to `screen` on `port`, at `upload_rate`,
     with `whmi-wri`, or, when `fast`, with `whmi-wris`, after which the
     screen may skip what it has (the module's docstring). Calls
@@ -151,17 +152,27 @@ def upload(port, screen: Screen, data: bytes, upload_rate: int, progress=None,
     the screen skips some. Returns once the screen has answered the last
     packet: it then restarts with the file.
 
+    The upload waits at several points, and three arguments set how long.
+    `pause_of(rate)` gives the pause at `rate`, in seconds, and is `pause`
+    by default. The upload pauses once after the instructions it sends
+    first and, if it moves the screen to `upload_rate`, after each message
+    it sends to find the screen there (find_screen). `settle` is how long it
+    waits, once the port's output is empty, before it changes the port's
+    rate, and is _SETTLE by default. `answer_wait` is how long it waits for
+    each of the screen's answers, and is ANSWER_WAIT by default.
+
     Raises UploadError when the screen does not answer the upload command,
-    or a packet, within `answer_wait` seconds, ANSWER_WAIT by default, or
-    gives a place before what was sent or past the file."""
+    or a packet, in time, or gives a place before what was sent or past the
+    file."""
     answer_wait = ANSWER_WAIT if answer_wait is None else answer_wait
+    settle = _SETTLE if settle is None else settle
     for instruction in ("sleep=0", "thsp=0"):
         port.write(_instruction(screen, instruction))
     # Bytes the app sent before must not be taken for the screen's answer.
     port.flush()
-    time.sleep(pause(screen.rate))
+    time.sleep(pause_of(screen.rate))
     if upload_rate != screen.rate:
-        _move_to(port, screen, upload_rate, answer_wait)
+        _move_to(port, screen, upload_rate, answer_wait, pause_of, settle)
     port.reset_input_buffer()
     command = "whmi-wris" if fast else "whmi-wri"
     port.write(_instruction(screen, "%s %d,%d,0" % (command, len(data), upload_rate)))
@@ -201,21 +212,24 @@ def upload(port, screen: Screen, data: bytes, upload_rate: int, progress=None,
             progress(place, len(data))
 
 
-def _move_to(port, screen: Screen, rate: int, wait: float):
-    """Moves `screen` and `port` to `rate` before the upload command, as the
-    upload command's own change of rate went unanswered on a real screen
-    (ResearchNotes/tft/uploading.md): `baud=<rate>` at the screen's rate, then
-    the port, once the instruction has left it, then `connect` at the new
-    rate, which the screen must answer within `wait` seconds. A real screen
-    took a moment to move, so it is asked again until then.
+def _move_to(port, screen: Screen, rate: int, wait: float, pause_of, settle: float):
+    """Moves `screen` and `port` to `rate` before the upload command is sent,
+    because a real screen did not answer when the upload command itself
+    changed the rate (ResearchNotes/tft/uploading.md). It sends `baud=<rate>`
+    at the screen's current rate, waits until that instruction has left the
+    port, and moves the port to `rate`. Then it sends `connect` at the new
+    rate until the screen answers, for up to `wait` seconds, because a real
+    screen took a moment to move. `pause_of` and `settle` are the waits
+    passed to upload().
 
-    Raises UploadError when it does not answer. The screen may then run at
-    `rate` until it restarts, and takes no upload yet."""
+    Raises UploadError when the screen does not answer in time. The screen
+    may then stay at `rate` until it restarts, and does not take an upload
+    yet."""
     port.write(_instruction(screen, "baud=%d" % rate))
-    _drained(port, screen.rate)
+    _drained(port, screen.rate, settle)
     port.baudrate = rate
     deadline = time.monotonic() + wait
-    while find_screen(port, [rate]) is None:
+    while find_screen(port, [rate], pause_of) is None:
         if time.monotonic() >= deadline:
             raise UploadError("the screen did not answer at %d bauds once moved to that rate; "
                               "try a lower --upload-baud, after powering the screen off and on"
@@ -281,16 +295,17 @@ class _Answers:
                                            else "")
 
 
-def _drained(port, rate: int):
-    """Returns once the bytes written to `port` have left it, at `rate`:
-    once the port's output is empty, which pyserial's `out_waiting` gives,
-    and then _SETTLE seconds more, or two bytes' time at `rate` when that is
-    longer. Gives up waiting for the output after ANSWER_WAIT seconds."""
+def _drained(port, rate: int, settle: float):
+    """Returns once the bytes written to `port` have left it. It waits until
+    the port's output is empty (pyserial's `out_waiting` is 0), then
+    `settle` seconds more, or two bytes' time at `rate` if that is longer.
+    If the output is still not empty after ANSWER_WAIT seconds, it stops
+    waiting for it."""
     port.flush()
     deadline = time.monotonic() + ANSWER_WAIT
     while getattr(port, "out_waiting", 0) and time.monotonic() < deadline:
         time.sleep(0.001)
-    time.sleep(max(_SETTLE, 20 / rate))
+    time.sleep(max(settle, 20 / rate))
 
 
 def _read_for(port, seconds: float, enough=None) -> bytes:

@@ -20,7 +20,8 @@ def uploaded(screen: StandInScreen, data: bytes, upload_rate: int = 115200,
     """Finds `screen`, then uploads `data` to it, with waits of a moment, and
     returns whether the screen received the whole of `data`."""
     found = find_screen(screen, upload.RATES_TRIED, pause_of=lambda rate: 0)
-    upload.upload(screen, found, data, upload_rate, progress, answer_wait=0.05)
+    upload.upload(screen, found, data, upload_rate, progress, answer_wait=0.05,
+                  pause_of=lambda rate: 0, settle=0)
     return screen.uploaded == data
 
 
@@ -103,7 +104,8 @@ class UploadTest(unittest.TestCase):
         screen = StandInScreen(deaf_after_move=4)
         found = find_screen(screen, [9600], pause_of=lambda rate: 0)
         # Long enough for a second round of find_screen at the new rate.
-        upload.upload(screen, found, bytes(100), 115200, answer_wait=1.0)
+        upload.upload(screen, found, bytes(100), 115200, answer_wait=1.0,
+                      pause_of=lambda rate: 0, settle=0)
         self.assertEqual(screen.uploaded, bytes(100))
 
     def test_no_move_at_the_screen_s_own_rate(self):
@@ -134,7 +136,8 @@ class UploadTest(unittest.TestCase):
         found = find_screen(screen, [9600], pause_of=lambda rate: 0)
         screen.app_sends(b"\x05")
         with self.assertRaises(UploadError) as raised:
-            upload.upload(screen, found, bytes(5000), 9600, answer_wait=0.05)
+            upload.upload(screen, found, bytes(5000), 9600, answer_wait=0.05,
+                          pause_of=lambda rate: 0, settle=0)
         self.assertEqual(str(raised.exception),
                          "the screen did not answer the upload command; power it off and on "
                          "before you try again")
@@ -162,7 +165,8 @@ class UploadTest(unittest.TestCase):
                 screen.app_sends(b"\x1a" + END)
         screen.write = write
         with self.assertRaises(UploadError) as raised:
-            upload.upload(screen, found, bytes(10), 9600, answer_wait=0.05)
+            upload.upload(screen, found, bytes(10), 9600, answer_wait=0.05,
+                          pause_of=lambda rate: 0, settle=0)
         self.assertIn("it sent 1a ff ff ff instead", str(raised.exception))
 
     def test_the_rate_changes_once_the_command_is_out(self):
@@ -172,7 +176,8 @@ class UploadTest(unittest.TestCase):
         waiting = [3, 2, 0]
         type(screen).out_waiting = property(lambda self: waiting.pop(0) if waiting else 0)
         try:
-            upload.upload(screen, found, bytes(10), 115200, answer_wait=0.05)
+            upload.upload(screen, found, bytes(10), 115200, answer_wait=0.05,
+                          pause_of=lambda rate: 0, settle=0)
         finally:
             del type(screen).out_waiting
         self.assertEqual(waiting, [])
@@ -185,7 +190,8 @@ class UploadTest(unittest.TestCase):
         found = find_screen(screen, [9600], pause_of=lambda rate: 0)
         places, skipped = [], []
         upload.upload(screen, found, data, 115200, lambda place, size: places.append(place),
-                      answer_wait=0.05, fast=True, on_skip=skipped.append)
+                      answer_wait=0.05, fast=True, on_skip=skipped.append,
+                      pause_of=lambda rate: 0, settle=0)
         return places, skipped
 
     def test_the_fast_upload_skips_what_the_screen_has(self):
@@ -270,7 +276,8 @@ class UploadTest(unittest.TestCase):
         screen = StandInScreen()
         found = find_screen(screen, [9600], pause_of=lambda rate: 0)
         start = time.monotonic()
-        upload.upload(screen, found, bytes(100), 9600, answer_wait=5.0)
+        upload.upload(screen, found, bytes(100), 9600, answer_wait=5.0,
+                      pause_of=lambda rate: 0, settle=0)
         self.assertLess(time.monotonic() - start, 1.0)
         self.assertEqual(screen.uploaded, bytes(100))
 

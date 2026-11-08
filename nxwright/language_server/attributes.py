@@ -10,7 +10,7 @@ from nxwright import NxwrightError
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.source.folder_index import FolderIndex
 from nxwright.project.attribute_descriptions import describe
-from nxwright.project.component_defaults import DEFAULTS_FILE, defaults_from_toml
+from nxwright.project.component_defaults import folder_defaults, nxwright_defaults
 
 
 def type_defaults(index: FolderIndex) -> dict:
@@ -19,10 +19,10 @@ def type_defaults(index: FolderIndex) -> dict:
     lines = index.lines("defaults.toml")
     if lines is not None:
         try:
-            return defaults_from_toml("\n".join(lines), "defaults.toml")
+            return folder_defaults("\n".join(lines), "defaults.toml")
         except NxwrightError:
             pass    # a half-edited file: nxwright's own still name the attributes
-    return defaults_from_toml(DEFAULTS_FILE.read_text(encoding="utf-8"), str(DEFAULTS_FILE))
+    return nxwright_defaults()
 
 
 def has_attribute(defaults: dict, type_name: str, attribute: str) -> bool:

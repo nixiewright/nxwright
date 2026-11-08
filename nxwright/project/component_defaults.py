@@ -112,10 +112,29 @@ DEFAULTS_FILE = Path(__file__).resolve().parent / "component_defaults.toml"
 
 
 @functools.cache
+def _nxwright_defaults_text() -> str:
+    """Returns the text of nxwright's own component defaults (DEFAULTS_FILE), read once."""
+    return DEFAULTS_FILE.read_text(encoding="utf-8")
+
+
+@functools.cache
 def nxwright_defaults() -> dict:
-    """Returns nxwright's own component defaults (DEFAULTS_FILE), read once,
-    as defaults_from_toml returns them."""
-    return defaults_from_toml(DEFAULTS_FILE.read_text(encoding="utf-8"), str(DEFAULTS_FILE))
+    """Returns nxwright's own component defaults (DEFAULTS_FILE), parsed
+    once, in the form defaults_from_toml returns. Every caller gets the same
+    dict, so a caller must not change it."""
+    return defaults_from_toml(_nxwright_defaults_text(), str(DEFAULTS_FILE))
+
+
+def folder_defaults(text: str, source: str) -> dict:
+    """Returns the component defaults in `text`, the text of a source
+    folder's defaults.toml, in the form defaults_from_toml returns. `source`
+    is the file name that errors give. Extract and `nxwright new` copy
+    nxwright's own defaults file into the folder. When `text` is still that
+    copy, this returns the dict from nxwright_defaults(), which is parsed once
+    a run and shared by every caller, so a caller must not change it."""
+    if text == _nxwright_defaults_text():
+        return nxwright_defaults()
+    return defaults_from_toml(text, source)
 
 
 def defaults_from_toml(text: str, source: str) -> dict:

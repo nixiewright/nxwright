@@ -91,9 +91,12 @@ _FAILED, _NOBODY_TO_PROMPT = 1, 3
 _DEFAULT_UPLOAD_RATE = 115200
 
 
-def main(arguments: list, open_port=None) -> int:
-    """Runs the command. `open_port(name)` opens the port called `name`,
-    pyserial's by default; the tests give a stand-in screen in its place."""
+def main(arguments: list, open_port=None, pause_of=upload.pause, settle: float = None,
+         answer_wait: float = None) -> int:
+    """Runs the command. `open_port(name)` opens the port called `name`, and
+    is pyserial's by default. The tests pass one that gives a stand-in
+    screen. `pause_of`, `settle`, and `answer_wait` set how long the upload
+    waits (see upload.upload), and the tests pass shorter waits."""
     parser = argparse.ArgumentParser(prog="nxwright upload",
                                      description="Uploads a TFT file to a screen over its "
                                      "serial port.")
@@ -134,7 +137,8 @@ def main(arguments: list, open_port=None) -> int:
     except (OSError, NxwrightError) as error:
         return _failed(error)
     try:
-        screen = upload.find_screen(port, [options.baud] if options.baud else upload.RATES_TRIED)
+        screen = upload.find_screen(port, [options.baud] if options.baud else upload.RATES_TRIED,
+                                    pause_of)
         if screen is None:
             return _failed("no screen answered on %s at %s" % (
                 options.port, options.baud or "any rate it takes"))
@@ -164,7 +168,8 @@ def main(arguments: list, open_port=None) -> int:
             upload.upload(port, screen, data, options.upload_baud,
                           _json_progress if options.json else _print_progress,
                           fast=not options.full,
-                          on_skip=_json_skipped if options.json else _print_skipped)
+                          on_skip=_json_skipped if options.json else _print_skipped,
+                          answer_wait=answer_wait, pause_of=pause_of, settle=settle)
         except KeyboardInterrupt:
             stopped_by_user = True
         finally:

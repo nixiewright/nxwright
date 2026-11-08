@@ -16,10 +16,8 @@ what the components add at the start of the page's load section, which the
 page's load and loadend code follow (page.page_load_runs); and what they
 add at the end of the page's unload event, as a file stream's close.
 """
-from functools import lru_cache
-
 from nxwright.project.attribute_values import number_to_bytes
-from nxwright.project.component_defaults import DEFAULTS_FILE, defaults_from_toml
+from nxwright.project.component_defaults import nxwright_defaults
 from nxwright.project.device_settings import TextCodec, encoding_code
 from nxwright.project.page_block import (HEADER_SIZE, Attribute, Event, Marker, PageBlock,
                                          PageObject)
@@ -50,7 +48,7 @@ def page_files(decoded_page: DecodedPage, decoded_file: DecodedFile, names) -> t
     folder's ResourceNames, naming its fonts and pictures. Raises
     DecodeError for what a decoder cannot read, and NxwrightError for what
     nxwright's page files cannot keep."""
-    defaults = component_defaults()
+    defaults = nxwright_defaults()
     codec = TextCodec(decoded_file.encoding)
     values = [decoded_page_values(decoded_page, decoded_file)] + [
         decoded_values(each, decoded_page, decoded_file) for each in decoded_page.objects[1:]]
@@ -69,13 +67,6 @@ def page_files(decoded_page: DecodedPage, decoded_file: DecodedFile, names) -> t
                      header_40(encoding_code(decoded_file.encoding)), objects)
     source = page_to_source(page, names, defaults, decoded_file.encoding)
     return source.toml, source.events
-
-
-@lru_cache(maxsize=None)
-def component_defaults() -> dict:
-    """Returns nxwright's component defaults, {type number: TypeDefaults},
-    read once."""
-    return defaults_from_toml(DEFAULTS_FILE.read_text(encoding="utf-8"), DEFAULTS_FILE.name)
 
 
 def _runs(decoded_page: DecodedPage, decoded_file: DecodedFile, values: list) -> dict:

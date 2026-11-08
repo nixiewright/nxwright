@@ -52,6 +52,7 @@ import struct
 from typing import Optional
 
 from nxwright.language.resource_names import ResourceNames
+from nxwright.project.component_defaults import nxwright_defaults
 from nxwright.project.editor_limits import check_component_places
 from nxwright.source.series_components import check_series_components
 from nxwright.source.device_keys import settings_from_keys
@@ -337,18 +338,30 @@ def _folder_options(probe) -> dict:
 
 
 def probe_facts(probe, series: str = None) -> Project:
-    """Returns a Project of facts of `probe`'s pages, as a type's own
-    functions read it, such as its memory, its entries, or its drawing:
-    page0, then each other page the probe adds (_probe_pages); the pictures
-    the probe adds, the lines of program.nx and the macros it adds, its
-    encoding, and the base folder's fonts. A change of strict Nextion
-    syntax, as a probe of code makes, gives its pages and program.s in it.
-    Its pages are on `series`, unless given the probe's own, so that a
-    probe's change is laid on another series."""
+    """Returns a Project of the facts of `probe`'s pages, in the form a type's
+    own functions read them, such as its memory, its entries, or its
+    drawing. The Project holds page0, then each other page the probe adds
+    (_probe_pages), along with the pictures, the lines of program.nx, and
+    the macros the probe adds, its encoding, and the base folder's fonts.
+    If the probe's change is in strict Nextion syntax, which probes of code
+    use, the pages and program.s are in strict syntax too.
+
+    The pages are on `series`, which is the probe's own series by default.
+    Pass another series to lay the probe's change on that series.
+
+    The Project is built once a run for each probe and series, and every
+    caller gets the same one, so do not change it."""
+    return _probe_facts(probe, series or probe.base)
+
+
+@lru_cache(maxsize=None)
+def _probe_facts(probe, series: str) -> Project:
+    """Returns probe_facts(probe, series), with `series` always given, so
+    that a call without it and a call with the probe's own series share
+    one result."""
     change = probe_change(probe)
     pictures = getattr(change, "picture_names", ())
     strict = getattr(change, "strict", False)
-    series = series or probe.base
     return project_of(*_probe_pages(probe, series, strict=strict), series=series,
                       strict=strict, pictures=len(pictures), **_folder_options(probe))
 
@@ -709,7 +722,7 @@ def rebuilt_user_code(project: Project, values_of) -> tuple:
             lines = {item.name: item.lines for item in own.items if isinstance(item, Event)}
             rebuilt_object = page_files.page_block_object(
                 decoded_object, values, lines,
-                page_files.component_defaults()[decoded_object.type_number])
+                nxwright_defaults()[decoded_object.type_number])
             objects.append(replace(rebuilt_object, items=[
                 replace(item, value=own.attribute("objname"))
                 if isinstance(item, Attribute) and item.name == "objname" else item

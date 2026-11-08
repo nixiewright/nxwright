@@ -62,7 +62,7 @@ from nxwright.project.truetype import NOTO_SANS, noto_sans
 from nxwright.project.zi_font import UTF8
 from nxwright.source.keyboards import UTF8_CHARACTERS
 from nxwright.project.attribute_values import number_from_bytes
-from nxwright.project.component_defaults import DEFAULTS_FILE, defaults_from_toml
+from nxwright.project.component_defaults import DEFAULTS_FILE, folder_defaults, nxwright_defaults
 from nxwright.project.dump_folder import (MACROS_FILE, check_dump_format,
                                           check_ids_without_gaps, copied_contents,
                                           copied_file_name, dump_device_settings, dump_encoding,
@@ -907,7 +907,7 @@ def _source_files_from_dump(dump_folder: Path, project_name: str,
     chosen = {kind: _choose_names(kind, contents) for kind, contents in resources.items()}
     names = ResourceNames.of_app(chosen)
     defaults_text = DEFAULTS_FILE.read_bytes()
-    defaults = defaults_from_toml(defaults_text.decode("utf-8"), DEFAULTS_FILE.name)
+    defaults = nxwright_defaults()
     files["defaults.toml"] = defaults_text
     for kind, contents in resources.items():
         for number, (name, parts) in enumerate(zip(chosen[kind], contents)):
@@ -1240,7 +1240,7 @@ def read_folder_source(read, skip_broken_pages: bool = False,
     are not checked against the memory table (FolderSource.refuse_by_table)."""
     app = _in_file("app.toml", lambda: parse_app(read("app.toml")))
     defaults = _in_file("defaults.toml",
-                        lambda: defaults_from_toml(read("defaults.toml"), "defaults.toml"))
+                        lambda: folder_defaults(read("defaults.toml"), "defaults.toml"))
     program = _in_file("program.nx", lambda: read("program.nx"))
     declared = program_variables = None
     if app["language"] == NXLANG:
@@ -1290,7 +1290,7 @@ def read_page_toml(read, page_name: str) -> PageToml:
     components. Raises NxwrightError naming the file at fault."""
     app = _in_file("app.toml", lambda: parse_app(read("app.toml")))
     defaults = _in_file("defaults.toml",
-                        lambda: defaults_from_toml(read("defaults.toml"), "defaults.toml"))
+                        lambda: folder_defaults(read("defaults.toml"), "defaults.toml"))
     path = page_toml_path(page_name)
     return PageToml(app, ResourceNames.of_app(app), defaults,
                     app.get("encoding", DEFAULT_ENCODING), _in_file(path, lambda: read(path)))

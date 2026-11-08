@@ -88,9 +88,12 @@ class ObjectOrderTest(unittest.TestCase):
     def test_objects_out_of_id_order(self):
         from nxwright.tft import frame
         from tools.tft.probing.frame_probes import stand_in_code
+        # The Project is shared with other tests, so this test swaps the objects in a copy.
         project = facts("text-two")
-        objects = project.pages[0].objects
+        objects = list(project.pages[0].objects)
         objects[1], objects[2] = objects[2], objects[1]
+        project = replace(project, pages=[replace(project.pages[0], objects=objects)]
+                          + project.pages[1:])
         with self.assertRaisesRegex(frame.FrameError, "t1's ID is 2, but it is object 1"):
             frame.user_code(project, stand_in_code)
 

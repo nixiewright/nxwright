@@ -20,7 +20,7 @@ import tomllib
 from nxwright import NxwrightError
 from nxwright.language.resource_names import FONT, NOUNS
 from nxwright.language_server.attributes import attribute_tooltip
-from nxwright.project.component_defaults import defaults_from_toml
+from nxwright.project.component_defaults import folder_defaults
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.page_header import SYSTEM_PAGES
 from nxwright.project.page_text import is_string_attribute
@@ -172,7 +172,7 @@ def object_events(index, read, page: str) -> list:
     none, when nxwright does not know its type, or when defaults.toml cannot
     be read."""
     try:
-        defaults = defaults_from_toml(read("defaults.toml"), "defaults.toml")
+        defaults = folder_defaults(read("defaults.toml"), "defaults.toml")
     except NxwrightError:
         defaults = {}
     found = []
