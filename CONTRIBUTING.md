@@ -106,16 +106,14 @@ Maintainers review each pull request. An accepted change is merged into the main
 
 The toolchain and the VS Code extension each have a version of their own: the toolchain's in `pyproject.toml`, the extension's in `editors/vscode/package.json`. They need not match.
 
-Do not raise a version in your pull request. The maintainers raise versions when they publish.
+Do not raise a version in your pull request. The maintainers raise versions when they merge it. If your change makes the extension rely on something that only a newer toolchain has, such as a new request to the language server, say so in your pull request. The maintainers then raise `OLDEST_TOOLCHAIN`, in `editors/vscode/src/toolchainVersion.ts`, to the toolchain version that has it. The extension warns when the toolchain it runs is older than that.
 
-There is one exception. The extension warns when the toolchain it runs is older than `OLDEST_TOOLCHAIN`, which is set in `editors/vscode/src/toolchainVersion.ts`. If your change makes the extension rely on something that only a newer toolchain has, such as a new request to the language server, raise `OLDEST_TOOLCHAIN` to the toolchain version that has it. If that version does not exist yet, raise the toolchain's version in `pyproject.toml` to that number in the same change, and add an entry for it to [CHANGELOG.md](CHANGELOG.md).
-
-- Each time the maintainers publish changes to the code of the toolchain or the extension, that part's version goes up once, however many changes they publish together. Publishing only docs or tests raises neither version.
-- Below 1.0, a version changes in one of two ways:
-  - The middle number goes up for a new feature, or for anything that stops working as it did, such as a command that behaves differently or a source folder that needs `nxwright upgrade`. For example, 0.1.0 becomes 0.2.0.
-  - The last number goes up for fixes alone. For example, 0.1.0 becomes 0.1.1.
-- A part reaches 1.0 when the maintainers decide it is stable. From then on, the first number goes up only for a change that stops something working as it did.
-- The change that raises a version also adds its entry to [CHANGELOG.md](CHANGELOG.md).
+- Each change to how the toolchain or the extension behaves raises that part's version, and adds a line for it to [CHANGELOG.md](CHANGELOG.md). A change to docs or tests alone raises neither version.
+- The changelog has a section for each first and middle number, such as 0.2 or 1.4. Each feature or fix adds one line at the top of its section. The line starts with its version, is written for the people who use nxwright, and leaves the details to the docs.
+- Versions follow [semantic versioning](https://semver.org). A change breaks the public API when people must change their project, its code, their settings, or their scripts to keep them working.
+- The first number goes up for a change that breaks the public API, the middle number for a feature, and the last number for a fix. For example, 1.4.2 becomes 2.0.0, 1.5.0, or 1.4.3.
+- Before 1.0, a change that breaks the public API raises the middle number instead, and a feature or a fix raises the last number. For example, 0.2.5 becomes 0.3.0 or 0.2.6.
+- The maintainers decide when a part reaches 1.0.
 - The source folder's `format`, in `app.toml`, is a separate version number for the folder's layout. It goes up only when the layout changes, in the same change as the `nxwright upgrade` step that brings older folders forward.
 
 ## License

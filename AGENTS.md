@@ -10,7 +10,8 @@ A toolchain for Nextion Editor projects (`.HMI` files): it turns a project into 
 - After every change: `python -m unittest discover -s tests -t .`. After changing the package or the demo, also `python run.py test examples/thermostat/tests`.
 - After changing the extension's client: `npm run compile` in `editors/vscode`. `npm install` comes first, once, with the user's go.
 - The tests compare written project files byte for byte. A change to what nxwright writes is a change of behavior: say so in the commit message, and never adjust a test to hide it.
-- Versions follow CONTRIBUTING.md, Versions. Only the user publishes, so raise a version only when the user says a publish is coming, or asks for it. Then, for each part whose code changed since its last version, raise the version and add its `CHANGELOG.md` entry, in a commit of its own. Ask the user which number to raise unless the change is plainly a fix. Whenever the extension starts relying on something only a newer toolchain has, raise `OLDEST_TOOLCHAIN` in the same change, as that section says.
+- For versions and the changelog, follow CONTRIBUTING.md, Versions, and do what it says the maintainers do. Every commit that changes how the toolchain or the extension behaves raises a version, including a commit that adopts a pull request. Never raise a part to 1.0 on your own.
+- If a commit already on main took the same version as yours, `git sync` stops on a conflict in `CHANGELOG.md`. Give your change the next version: put your line above the other one, and raise the version again in `pyproject.toml`, or in `package.json` and `package-lock.json`. Git shows no conflict in those files, because both commits made the same edit there.
 
 ## Writing
 
