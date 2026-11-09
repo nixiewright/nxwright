@@ -110,11 +110,16 @@ const BODY = `
 <p id="facts" class="hint"></p>
 <div id="picture"></div>`;
 
-// The styles of the editor: the picture at its own size, its pixels sharp.
+// The picture is shown at its own size, and in a smaller editor it shrinks to
+// fit and keeps its shape. VS Code's own styles limit the width and height of
+// an image. The page also sets the picture's width and height, and together
+// the two would squash it, so these styles set both back to auto.
 const STYLES = `
-  body { padding: 8px 16px 16px; }
-  #picture { overflow: auto; }
-  #picture img { image-rendering: pixelated;
+  html, body { height: 100%; }
+  body { box-sizing: border-box; margin: 0; padding: 8px 16px 16px;
+         display: flex; flex-direction: column; }
+  #picture { flex: 1; min-height: 0; }
+  #picture img { display: block; box-sizing: border-box; width: auto; height: auto;
                  border: 1px solid var(--vscode-panel-border, transparent); }
   .hint { color: var(--vscode-descriptionForeground); }
   .problem { color: var(--vscode-errorForeground); white-space: pre-wrap; }`;

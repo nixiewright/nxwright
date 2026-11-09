@@ -74,6 +74,10 @@ First public release.
 
 ## VS Code extension
 
+### [0.3.7] - 2026-11-09
+
+- An SVG picture now shrinks to fit a small editor.
+
 ### [0.3.6] - 2026-11-09
 
 Needs nxwright 0.2.9 or later.
