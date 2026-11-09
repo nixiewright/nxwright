@@ -130,6 +130,22 @@ class MatchingTest(unittest.TestCase):
                       "that can be encoded",
                       str(raised.exception))
 
+    def test_a_refused_line_of_code_is_an_unsupported_statement(self):
+        # A rule of code gives no reason, so the line it refuses is listed
+        # as an unsupported statement.
+        any_line = Rule("code", None, "no line", covers=lambda need: False)
+        with self.assertRaises(NxwrightError) as raised:
+            refuse_unmatched(project_needs(self.project), [any_line])
+        self.assertIn("- code event = 't0.txt=\"Hi\"' (page0: t0, up, line 1): unsupported "
+                      "statement, please file a bug",
+                      str(raised.exception))
+        # So is a line whose characters past ASCII no rule takes.
+        past_ascii = Need("text in code", "iso-8859-1", 't0.txt="中"')
+        self.assertEqual(matching.refusal_reasons(past_ascii, []),
+                         [reasons.UNSUPPORTED_STATEMENT])
+        # A need of any other kind gets only the reasons that its rules give.
+        self.assertEqual(matching.refusal_reasons(Need("attribute", "text.txt", b"Yo"), []), [])
+
     def test_a_rule_refuses_only_for_one_of_the_reasons(self):
         with self.assertRaises(ValueError):
             Rule("attribute", "text.txt", "a text of one byte",

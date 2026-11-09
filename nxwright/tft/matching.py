@@ -1,12 +1,12 @@
 """The check that a compile writes a file only for what nxwright can write, and
 refuses anything else, listing it.
 
-nxwright's build runs first, and decides what a project may hold, so the
-check does not repeat its checks. A rule that takes fewer values than fit
-in their bytes names why, as one of the reasons in reasons.py, and the
-refusal's message gives it. Nothing is refused because no probe tried it. A
-value nxwright writes by a rule it knows is taken, whether or not a probe
-showed it.
+nxwright's build runs first and decides what a project may hold, so the
+check does not repeat its checks. A value that nxwright writes by a rule it
+knows is taken, whether or not a probe showed it. When a rule refuses some
+values that fit in their bytes, it gives one of the reasons in reasons.py,
+and the refusal's message includes it. A line of code that no rule takes is
+refused as an unsupported statement.
 
 A project is turned into needs: each thing in it that its TFT file depends
 on. A Need has a kind, a subject, and a value:
@@ -80,7 +80,7 @@ from nxwright.project.page_text import is_string_attribute
 
 from nxwright.tft.component_types import is_global, place_and_size, type_name
 from nxwright.tft.project import Project, plain_lines, program_variables
-from nxwright.tft.reasons import REASONS
+from nxwright.tft.reasons import REASONS, UNSUPPORTED_STATEMENT
 
 # The modules, then the packages of modules, that keep a MATCHED list.
 _PIECE_MODULES = ("packaging", "frame", "statements", "overlaps")
@@ -376,15 +376,20 @@ def _is_pattern(subject: str) -> bool:
 
 
 def refusal_reasons(need: Need, rules: list) -> list:
-    """Returns why `rules` refuse `need`: the reasons that the rules of its
-    kind and subject on its series give, each once, in the order of
-    REASONS. Rules of its very subject come before rules of a pattern, such
-    as text.vscope's before *.vscope's."""
+    """Returns the reasons that `rules` give for refusing `need`, each once and
+    in the order of REASONS. Only the rules of the need's kind and subject
+    that apply on its series count, and rules of the need's own subject, such
+    as text.vscope, take precedence over rules of a pattern, such as
+    *.vscope. If no rule gives a reason for a line of code, or for a line's
+    characters past ASCII, returns [UNSUPPORTED_STATEMENT]."""
     about = [rule for rule in rules if rule.kind == need.kind and rule.is_about(need.subject)
              and rule.applies_on(need.series)]
     own = [rule for rule in about if rule.subject == need.subject]
     given = {rule.refuses_because for rule in own or about}
-    return [reason for reason in REASONS if reason in given]
+    found = [reason for reason in REASONS if reason in given]
+    if not found and need.kind in ("code", "text in code"):
+        return [UNSUPPORTED_STATEMENT]
+    return found
 
 
 def refuse_unmatched(needs: list, rules: list = None):

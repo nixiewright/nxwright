@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.7] - 2026-11-09
+
+- Better message for unexpected compilation errors due to unsupported code.
+
 ### [0.2.6] - 2026-11-09
 
 - Added caching for resource name hints.
