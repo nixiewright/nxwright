@@ -4,6 +4,12 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.9] - 2026-11-09
+
+- Added support for SVG as a first class citizen of nxwright projects (with defines as var(--ACCENT)).
+- A simulation's launch configuration can now override defines.
+- The thermostat demo's pictures now use both SVG and PNG files.
+
 ### [0.2.8] - 2026-11-09
 
 - `nxwright report` now works on a project with a page nxwright cannot read.
@@ -67,6 +73,14 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.6] - 2026-11-09
+
+Needs nxwright 0.2.9 or later.
+
+- The Media section can now add SVG pictures.
+- Launch configurations can now take the `defines` parameter.
+- SVG pictures can now be opened to show how nxwright draws them (with default define values).
 
 ### [0.3.5] - 2026-11-08
 

@@ -27,7 +27,7 @@ interface PageDrawing {
 }
 
 // The types of the files a drawing reads; the page's code plays no part.
-export const DRAWN_FILE_TYPES = ["toml", "png", "jpg", "jpeg", "bmp", "gif", "zi"];
+export const DRAWN_FILE_TYPES = ["toml", "png", "jpg", "jpeg", "bmp", "gif", "svg", "zi"];
 const DRAWN_FILE = new RegExp(`\\.(${DRAWN_FILE_TYPES.join("|")})$`);
 
 // What a preview needs of the extension.

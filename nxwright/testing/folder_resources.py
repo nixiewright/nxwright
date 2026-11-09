@@ -8,7 +8,6 @@ that a picture changed while the app runs counts.
 from pathlib import Path
 
 from nxwright import NxwrightError
-from nxwright.project.pictures import picture_size
 from nxwright.project.zi_font import decode_font, read_font_header
 from nxwright.source import source_folder as folders
 
@@ -59,7 +58,7 @@ class FolderResources:
         path = folders.picture_file(pictures[picture],
                                     lambda relative: (self.source_folder / relative).is_file())
         try:
-            return picture_size(self.source_folder / path)
+            return folders.picture_file_size(self.source_folder / path)
         except NxwrightError:
             return None
 

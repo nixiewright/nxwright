@@ -1,0 +1,18 @@
+<?xml-stylesheet href="../css/theme.css" type="text/css"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" class="page-about">
+<!-- The About page: a card with the app's name, which the define APP_NAME
+     gives (data-nxwright-text), and a button back to the settings. The
+     logo beside the name is a PNG picture of its own, pictures/nxwright.png. -->
+<g id="about">
+<rect class="page" width="800" height="480"/>
+
+<circle class="round-button" cx="752" cy="36" r="23.5"/>
+<circle class="round-button-pressed only-pressed" cx="752" cy="36" r="23.5"/>
+<path class="glyph" d="M756 27 L747 36 L756 45" stroke-linejoin="round"/>
+
+<rect class="card" x="16.5" y="72.5" width="767" height="315" rx="22"/>
+<rect class="well" x="48.5" y="104.5" width="143" height="143" rx="22"/>
+<text data-nxwright-text="APP_NAME" x="224" y="150" font-size="32" fill="var(--TEXT)">Thermostat demo</text>
+<line class="rule" x1="224" y1="172.5" x2="752" y2="172.5"/>
+</g>
+</svg>

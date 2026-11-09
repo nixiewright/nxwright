@@ -44,6 +44,7 @@ The rest of this page describes the folder's files. See [commands.md](commands.m
 | `pages/<page>.page.toml` | The page and its components, in ID order. The `.page.toml` ending marks a page file, so VS Code opens it in the page preview. |
 | `pages/<page>.nx` | The page's event code. |
 | `pictures/<name>.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | A picture. `nxwright picture` adds one ([commands.md](commands.md#picture)). |
+| `pictures/<name>.svg` | A picture that nxwright draws from an SVG file ([SVG pictures](#svg-pictures)). |
 | `pictures/<name>.source.png`, or `.jpg`, `.jpeg`, `.bmp`, `.gif` | The file a picture had before you resized it in the Nextion Editor's picture viewer. Only a resized picture has one. |
 | `pictures/<name>.screen` | The picture as the screen draws it, called its screen copy. Only a picture whose file is of a type nxwright does not decode, such as `pictures/logo.tif`, has this file. |
 | `fonts/<name>.zi` | A font. `nxwright font` draws one from a typeface file, such as a `.ttf` file, or adds a ready-made font file ([commands.md](commands.md#font)). |
@@ -72,6 +73,43 @@ About picture files:
   - nxwright cannot make a screen copy from such a file, so the build writes the `.screen` file as it is, and warns you. If you edit the picture's file, the screen does not show the change.
   - Without the `.screen` file, the build stops.
   - To change the picture, save it as a PNG, JPEG, BMP, or GIF file, and delete the old file and its `.screen` file.
+
+### SVG pictures
+
+A picture can be an SVG file, such as `pictures/background.svg`. nxwright draws it each time it builds, checks, previews, or simulates, and the project file it builds stores the drawing as a PNG picture (with caching).
+
+```
+<?xml-stylesheet href="css/theme.css" type="text/css"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480">
+  <rect class="page" width="800" height="480"/>
+  <use href="shapes.svg#frame" x="16" y="16"/> <!-- optional: include from another svg -->
+  <text x="40" y="60" font-family="sans-serif" font-size="24">Living room</text>
+</svg>
+```
+
+- The `<svg>` element gives the picture's size in whole pixels, such as `width="800" height="480"`.
+- A picture can use other files of the source folder, with a path relative to the file that contains it:
+  - **A style sheet**, linked by `<?xml-stylesheet?>` before the `<svg>` element.
+  - **Shapes of another SVG file**, with `<use href="shapes.svg#frame"/>`. A shape brings along what it refers to in its own file, such as a gradient, but not that file's style.
+  - **An image**, with `<image href="texture.png"/>`.
+- A picture can also use another picture's file. For example, a page's pressed picture can use the drawing of its normal one and tweak it.
+- `nxwright rename` and `nxwright remove` do not change paths in <use> statements. `nxwright check` reports each path that points at missing files.
+- Texts use Noto Sans by default, which also stands in for the generic families, such as `sans-serif`. To use another font, put its file in the folder and name it in a style sheet: `@font-face { font-family: "Inter"; src: url(Inter.ttf); }`. The family must be the one inside the font file. Noto Sans has no bold, so bold text also needs a font file of its own.
+- nxwright never uses the fonts installed on your computer, so a picture comes out the same on every computer. If a text's font family has no font file, nxwright refuses the picture instead of leaving the text out. It also refuses the `font` shorthand, so give a text's font with `font-family`.
+
+An SVG picture can take its colours and texts from the defines of `app.toml` ([app.toml](#apptoml)), so that a build with `--define`, or a simulation, can change them:
+
+```
+<style>
+  :root { --ACCENT: #ff8a45; }
+  .title { fill: var(--ACCENT); }
+</style>
+<text class="title" data-nxwright-text="TITLE">Living room</text>
+```
+
+- To use a define's value in a style, write a CSS variable named after the define, such as `var(--ACCENT)`. This works in a style sheet, a `style` attribute, or another attribute such as `fill`. Every `var()` must name a define. A define used this way cannot contain `;`, `{`, `}`, `/*`, a backslash, or a line break, because these would change the CSS around it.
+- A `<text>` or `<tspan>` with `data-nxwright-text="TITLE"` shows the value of `TITLE` in place of its own text. That text appears only in other SVG viewers, so it can be a sample, such as the longest text you expect.
+- Other SVG viewers, such as a browser, use the values the file declares, as in `:root { --ACCENT: #ff8a45; }`, or a fallback, as in `var(--ACCENT, #ff8a45)`. nxwright always draws the define's value, and `nxwright check` warns when a declared value differs from the define's default.
 
 ## app.toml
 
@@ -141,12 +179,13 @@ fonts = [
 
   - A define's name is made of letters, digits, and `_`, and does not start with a digit. The value you give it is its default, and must be a whole number or a text.
   - nxlang code on every page can use each define as a constant ([language.md](language.md#constants)).
+  - An SVG picture can use a define's value as a colour or another style value, and as a text ([SVG pictures](#svg-pictures)). A colour written as `"#rrggbb"` suits both the pictures and the components, so one define can set a theme's colour everywhere.
   - A key of `app.toml` or of a page file can take a define's value. Write the define's name between two `%` signs, as the key's whole value: `rotation = "%ROTATION%"`, or `bco = "%BCOLOR%"`. The build checks the define's value the same way as a value written in the key.
     - `format` and `language` in `app.toml`, and `name` and `type` in a page file, cannot take a define's value.
     - If the folder has no defines, a text such as `"%BCOLOR%"` stays a plain text.
     - A command or an edit that writes a new value in such a key replaces the define's name with that value, as when `nxwright device` changes the rotation, or when you move a component in VS Code's page preview. The Attributes section cannot change a key that takes a define's value.
     - A define only puts its value in place: the build does not resize the pages or make the videos again. So a define can switch `rotation` between 0 and 180 degrees, or between 90 and 270, in a folder without videos. For a quarter turn, run `nxwright device` on a copy of the folder ([A new rotation](commands.md#a-new-rotation)).
-  - `nxwright build` and `nxwright compile` can change a define's value for one build, as in `--define LIMIT=40` ([commands.md](commands.md#build)). Everything else, such as the page preview, the simulator, and the tests, uses the defaults.
+  - `nxwright build` and `nxwright compile` can change a define's value for one build, as in `--define LIMIT=40` ([commands.md](commands.md#build)). A simulation's launch configuration can too, with `defines` ([simulator.md](simulator.md#other-values-for-the-defines)). Everything else, such as the page preview and the tests, uses the defaults.
   - An older nxwright cannot read a folder that has this table.
 
 ## Page files

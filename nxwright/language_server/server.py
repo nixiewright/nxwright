@@ -67,6 +67,7 @@ from nxwright.language_server.font_panel import add as add_font_to_folder
 from nxwright.language_server.hovers import hover
 from nxwright.language_server.live_checks import LiveChecks
 from nxwright.language_server.media_viewer import media_frames
+from nxwright.language_server.picture_view import svg_picture_view
 from nxwright.language_server.nxlang_switch import nxlang_switch
 from nxwright.language_server.page_editing import (component_events, default_event,
                                                    key_binding, locked_objects, object_events,
@@ -212,6 +213,7 @@ class NxwrightServer(LanguageServer):
                                "fontSample": self._font_sample,
                                "fontFile": self._font_file,
                                "mediaFrames": self._media_frames,
+                               "svgPicture": self._svg_picture,
                                "nxlangSamples": self._nxlang_samples,
                                "nxlangMoreFeatures": self._nxlang_more_features,
                                "nxlangSwitch": self._nxlang_switch,
@@ -928,6 +930,12 @@ class NxwrightServer(LanguageServer):
         """Returns the frames of the animation or video file "file", for the
         media viewer (media_viewer.media_frames)."""
         return media_frames(Path(params["file"]))
+
+    def _svg_picture(self, params: dict) -> dict:
+        """Returns the SVG picture file "file" as nxwright draws it, from the
+        files as open in the editor, for the picture editor
+        (picture_view.svg_picture_view)."""
+        return svg_picture_view(Path(params["file"]), self._texts)
 
     def _nxlang_samples(self, params) -> list:
         """Returns the sections of the panel explaining the switch to nxlang

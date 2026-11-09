@@ -1,0 +1,23 @@
+<?xml-stylesheet href="../css/theme.css" type="text/css"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" class="page-day">
+<!-- A day under the schedule. The chart is a waveform 672 pixels wide, a
+     day of 96 quarter hours at 7 pixels each, and 201 high: 10 pixels to the
+     degree, from 10 to 30 degrees Celsius. The legend's colours are the
+     waveform's channels. -->
+<g id="day">
+<use href="../shapes.svg#frame"/>
+<rect class="card" x="16.5" y="72.5" width="767" height="315" rx="22"/>
+
+<line x1="40" y1="100" x2="62" y2="100" stroke="#ff8a45" stroke-width="3" stroke-linecap="round"/>
+<line x1="150" y1="100" x2="172" y2="100" stroke="#4cb6ff" stroke-width="3" stroke-linecap="round"/>
+
+<line class="grid" x1="80" y1="124.5" x2="752" y2="124.5"/>
+<line class="grid" x1="80" y1="174.5" x2="752" y2="174.5"/>
+<line class="grid" x1="80" y1="224.5" x2="752" y2="224.5"/>
+<line class="grid" x1="80" y1="274.5" x2="752" y2="274.5"/>
+<line class="axis" x1="80" y1="324.5" x2="752" y2="324.5"/>
+<line class="grid" x1="248.5" y1="124" x2="248.5" y2="324"/>
+<line class="grid" x1="416.5" y1="124" x2="416.5" y2="324"/>
+<line class="grid" x1="584.5" y1="124" x2="584.5" y2="324"/>
+</g>
+</svg>

@@ -2,7 +2,7 @@
   "name": "nxwright-language",
   "displayName": "nxwright",
   "description": "Design, write, simulate, test, compile, and upload Nextion screen apps in VS Code.",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "publisher": "nxwright",
   "icon": "images/icon.png",
   "license": "Apache-2.0",
@@ -820,6 +820,16 @@
         "priority": "default"
       },
       {
+        "viewType": "nxwright.pictureView",
+        "displayName": "nxwright picture",
+        "selector": [
+          {
+            "filenamePattern": "**/pictures/**/*.svg"
+          }
+        ],
+        "priority": "default"
+      },
+      {
         "viewType": "nxwright.fontViewer",
         "displayName": "nxwright font",
         "selector": [
@@ -931,6 +941,14 @@
                 "type": "object",
                 "description": "Optional, if starting on a page: the values to start with, by component and attribute.",
                 "examples": [{"t0.txt": "Hello", "n0.val": 5}]
+              },
+              "defines": {
+                "type": "object",
+                "description": "Optional: other values for app.toml's [defines], for this simulation. Give a whole number for a define whose default is a number, and a text for one whose default is a text.",
+                "additionalProperties": {
+                  "type": ["integer", "string"]
+                },
+                "examples": [{"ACCENT": "#ff3030", "LIMIT": 40}]
               },
               "eeprom": {
                 "type": "string",

@@ -21,14 +21,14 @@ from nxwright.language.code_lines import split_line
 from nxwright.language.nxlang import PARAMETER, is_constant_line, token_spans
 from nxwright.language.resource_names import LISTS
 from nxwright.project.page_file_names import page_of_file_stem
-from nxwright.project.resources import PICTURE_SUFFIXES
 from nxwright.project.screen_models import model_named
 from nxwright.source.defines import checked_defines, filled, is_define_name
 from nxwright.source.macros_source import MACROS_PATH
 from nxwright.source.nx_files import (FUNCTION_HEADING, INCLUDE, MACRO_HEADING,
                                       read_event_heading, resolve)
 from nxwright.source.page_source import KEY_LINE, page_nx_path, page_toml_path
-from nxwright.source.source_folder import NXLANG, language_of_value, picture_file
+from nxwright.source.source_folder import (NXLANG, RESOURCE_FILES, language_of_value,
+                                           picture_file)
 
 APP_FILE = "app.toml"
 PROGRAM_FILE = "program.nx"
@@ -69,7 +69,8 @@ def page_of(path: str):
 
 def picture_of(path: str):
     """Returns the name of the picture whose file is `path`, or None."""
-    match = re.fullmatch(r"pictures/(.+)(?:%s)" % "|".join(map(re.escape, PICTURE_SUFFIXES)),
+    match = re.fullmatch(r"pictures/(.+)(?:%s)" % "|".join(map(re.escape,
+                                                                RESOURCE_FILES["pictures"])),
                          path)
     return match[1] if match else None
 
@@ -239,7 +240,7 @@ class FolderIndex:
 
     def picture_path(self, picture: str) -> str:
         """Returns the path, within the folder, of the picture `picture`'s
-        file, its PNG or its JPEG (source_folder.picture_file)."""
+        file, such as its PNG or its SVG file (source_folder.picture_file)."""
         return picture_file(picture, lambda path: (self.root / path).is_file())
 
     def lines(self, path: str):

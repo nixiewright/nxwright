@@ -71,15 +71,16 @@ from nxwright.project.component_defaults import nxwright_defaults
 from nxwright.project.media_files import VIDEO_HEAD_SIZE, sound_file_problem, sound_form_problem
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.pictures import picture_problem
-from nxwright.project.resources import decodes_picture
 from nxwright.project.screen_arithmetic import int32
 from nxwright.source.nx_files import (FUNCTION_HEADING, PageFiles, event_blocks,
                                       read_event_heading, read_nx_file, read_page_files)
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.page_source import page_data, page_nx_path, page_toml_path
 from nxwright.source.source_folder import (check_picture_file, check_picture_source, code_files,
-                                           line_naming, picture_file, picture_source_file,
+                                           is_svg_picture, line_naming, picture_file,
+                                           picture_source_file, reads_picture, stored_picture,
                                            types_in_page_data, video_rotation_problem)
+from nxwright.source.svg_pictures import prepared_svg_picture
 
 ERROR, WARNING = "error", "warning"
 
@@ -229,10 +230,12 @@ def picture_errors(app: dict, read, read_bytes, exists, listed=None) -> list:
     the folder whose settings are `app`, whose files' text `read(path)`
     returns, and their bytes `read_bytes(path)`: each opened without its
     pixels decoded, to find the ones the build would refuse
-    (pictures.picture_problem). A resized picture's source file is checked
-    the same way. The function skips a picture's file if the picture has no
-    file or more than one, and its source file if it has more than one,
-    because the checks already report those (source_folder.resource_problems).
+    (pictures.picture_problem). An SVG picture is drawn, so that one that
+    cannot be drawn is an error too (svg_pictures.py). A resized picture's source
+    file is checked the same way. The function skips a picture's file if
+    the picture has no file or more than one, and its source file if it has
+    more than one, because the checks already report those
+    (source_folder.resource_problems).
     It also skips a picture's file of a type nxwright does not decode, which
     it finds with `listed` (source_folder.kept_picture_paths). The build
     uses the screen copy of that picture as it is."""
@@ -242,7 +245,7 @@ def picture_errors(app: dict, read, read_bytes, exists, listed=None) -> list:
         try:
             check_picture_file(name, exists, listed)
             path = picture_file(name, exists, listed)
-            if decodes_picture(Path(path).suffix):
+            if reads_picture(Path(path).suffix):
                 paths.append(path)
         except NxwrightError:
             pass    # the checks report the problem
@@ -255,12 +258,48 @@ def picture_errors(app: dict, read, read_bytes, exists, listed=None) -> list:
             pass    # the checks report the problem
         for path in paths:
             try:
-                problem = picture_problem(read_bytes(path))
+                problem = picture_problem(stored_picture(path, read, read_bytes,
+                                                         app["defines"])[0])
+                message = "%s: %s" % (path, problem) if problem else None
             except OSError:
                 continue    # the check reports a missing file
-            if problem:
+            except NxwrightError as error:
+                message = str(error)    # an SVG picture's, which names its files
+            if message:
                 found.append(Finding("app.toml", line_naming(read("app.toml"), name), ERROR,
-                                     "%s: %s" % (path, problem), "picture-unreadable"))
+                                     message, "picture-unreadable"))
+    return found
+
+
+def svg_picture_warnings(app: dict, read, read_bytes, exists, listed=None) -> list:
+    """Returns a warning Finding for each value that an SVG picture of the
+    folder, or a file it shares, declares for other viewers, as in
+    `--ACCENT: #ff0000`, that differs from that define's default in app.toml:
+    other SVG viewers would show the picture differently from how nxwright draws
+    it (svg_pictures.py). `app` is the folder's settings, read with the
+    defaults, and `read(path)`, `read_bytes(path)`, `exists(path)`, and
+    `listed` read the folder. A picture that cannot be drawn is left to
+    picture_errors."""
+    found = []
+    for name in app["pictures"]:
+        path = picture_file(name, exists, listed)
+        if not is_svg_picture(path) or not exists(path):
+            continue
+        try:
+            drawing = prepared_svg_picture(path, read, read_bytes, app["defines"])
+        except NxwrightError:
+            continue    # picture_errors reports it
+        for file, define, value in dict.fromkeys(drawing.declared):
+            default = app["defines"].get(define)
+            # A text may be quoted in CSS, and a value of another variable
+            # cannot be compared.
+            shown = value.strip("\"'").lower()
+            if default is not None and "var(" not in shown and shown != str(default).lower():
+                found.append(Finding(
+                    "app.toml", line_naming(read("app.toml"), name), WARNING,
+                    "%s: %s declares --%s: %s for other SVG viewers, but the define's default "
+                    "is %s, which nxwright draws" % (path, file, define, value, default),
+                    "svg-declared-value"))
     return found
 
 

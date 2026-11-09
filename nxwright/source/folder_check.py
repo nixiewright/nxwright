@@ -32,7 +32,8 @@ from nxwright import NxwrightError
 from nxwright.project.page_memory import measure_page, project_memory
 from nxwright.project.screen_models import ScreenModel
 from nxwright.source.lint import (ERROR, WARNING, Finding, picture_errors, sound_errors,
-                                 sound_warnings, video_rotation_errors, warnings)
+                                 sound_warnings, svg_picture_warnings, video_rotation_errors,
+                                 warnings)
 from nxwright.source.page_source import page_toml_path
 from nxwright.source.source_folder import (RESOURCE_FILES, check_globals_count,
                                            check_page_count, line_naming, memory_refusal,
@@ -146,6 +147,8 @@ def check_folder(read, exists, pages: list = None, read_bytes=None,
     result.folder_findings += warnings(folder.app, read)
     if read_bytes is not None:
         result.folder_findings += (picture_errors(folder.app, read, read_bytes, exists, listed)
+                                   + svg_picture_warnings(folder.app, read, read_bytes, exists,
+                                                          listed)
                                    + video_rotation_errors(folder.app, read, read_bytes)
                                    + sound_errors(folder.app, read, read_bytes)
                                    + sound_warnings(folder.app, read, read_bytes))

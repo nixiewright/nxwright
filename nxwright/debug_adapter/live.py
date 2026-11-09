@@ -38,6 +38,7 @@ import threading
 import time
 
 from nxwright.debug_adapter.replay import Timeline, path_key
+from nxwright.source.defines import LAUNCH_CONFIGURATION, overriding_defines
 from nxwright.testing.recording import Recorder
 from nxwright.testing.simulation import Simulation
 
@@ -87,13 +88,17 @@ class LiveSimulation:
     with why the app could not start. `start` starts the thread. The other
     methods are the debugger's, called from the adapter's thread. `sending`,
     `cards`, `eeprom_file`, `pinyin_table`, and `inputs` are the
-    simulation's (simulation.py). `wall` is the clock on the wall the
-    simulation's time follows, a WallClock unless given."""
+    simulation's (simulation.py). `defines` gives app.toml's defines new
+    values, {name: value as text}, for all the simulation reads. `wall` is
+    the clock on the wall the simulation's time follows, a WallClock unless
+    given."""
 
     def __init__(self, source_folder, page=None, values=None, eeprom=b"", notify=None,
                  sending=None, cards=None, log_formats=None, wall: WallClock = None,
-                 eeprom_file: Path = None, pinyin_table=None, inputs: dict = None):
+                 eeprom_file: Path = None, pinyin_table=None, inputs: dict = None,
+                 defines: dict = None):
         self.recorder = Recorder(keep=KEEP)
+        self._defines = defines or {}
         self.timeline = Timeline(self.recorder)
         self.simulation = None
         self.breakpoints = set()     # {(path_key, line)}
@@ -207,6 +212,12 @@ class LiveSimulation:
     # The thread's side.
 
     def _main(self):
+        # The thread starts with no context of its own, so the simulation's
+        # new values of app.toml's defines are set here for all it reads.
+        with overriding_defines(self._defines, LAUNCH_CONFIGURATION):
+            self._run()
+
+    def _run(self):
         (source_folder, page, values, eeprom, sending, cards, log_formats,
          eeprom_file, pinyin_table, inputs) = self._arguments
         self.recorder.watch = self._watch

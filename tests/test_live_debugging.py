@@ -10,6 +10,7 @@ from unittest import mock
 from nxwright.debug_adapter.adapter import DebugAdapter
 from nxwright.debug_adapter.live import LIVE_DRAWING, LiveSimulation, WallClock
 from nxwright.drawing.screen_pictures import ScreenPictures
+from nxwright.source.source_folder import read_app
 from nxwright.testing.simulation import Simulation
 from tests.test_simulation import SimulationTestCase, placed, table
 
@@ -602,6 +603,61 @@ class AgentRequestsTest(LiveTestCase):
         reply = self.request("nxwright/press", x=10, y=10, agent=True)
         self.assertFalse(reply["success"])
         self.assertIn("handled", reply["message"])
+
+
+class LaunchDefinesTest(LiveTestCase):
+    """A launch configuration's `defines`, new values of app.toml's defines
+    for the simulation. The app starts `count` at START, and places "go" at
+    x = LEFT through a placeholder."""
+
+    def setUp(self):
+        super().setUp()
+        self.write("app.toml", self.text("app.toml") + "\n[defines]\nSTART = 7\nLEFT = 0\n")
+        self.program("int count=0, ticks=0\ncount=START\n\npage page0\n")
+        self.page("page0", [placed("go", "button", "%LEFT%", 0)])
+
+    def started(self, **arguments):
+        self.launch(**arguments)
+        self.wait_for("nxwright/drawing")
+        return self.adapter._live.simulation
+
+    def test_the_simulations_thread_reads_the_new_values(self):
+        simulation = self.started(defines={"START": 40, "LEFT": 200})
+        self.assertEqual(simulation.globals["count"], 40)
+        self.assertEqual(self.drawn_at(simulation, "go"), (200, 0))
+
+    def test_without_defines_the_simulation_reads_the_defaults(self):
+        simulation = self.started()
+        self.assertEqual(simulation.globals["count"], 7)
+        self.assertEqual(self.drawn_at(simulation, "go"), (0, 0))
+
+    def test_the_adapters_thread_reads_the_new_values(self):
+        # The adapter answers requests on its own thread, which reads the
+        # folder too, such as the pictures of a look at the screen.
+        self.started(defines={"START": 40})
+        self.adapter._requests["test/start"] = lambda arguments: read_app(self.root)["defines"]
+        reply = self.request("test/start")
+        self.assertEqual(reply["body"]["START"], 40)
+
+    def test_a_value_app_toml_does_not_allow_stops_the_launch(self):
+        for defines, said in (({"STRAT": 40}, "does not declare STRAT (it declares LEFT, START)"),
+                              ({"START": "many"}, "START is a number"),
+                              ({"START": True}, "a whole number or a text"),
+                              ([40], "must be an object")):
+            with self.subTest(defines=defines):
+                self.request("initialize")
+                reply = self.request("launch", sourceFolder=str(self.root), defines=defines)
+                self.assertFalse(reply["success"])
+                self.assertIn(said, reply["message"])
+                self.assertIn("launch configuration's defines", reply["message"])
+                self.assertIsNone(self.adapter._live)
+
+    def test_a_test_takes_no_defines(self):
+        self.request("initialize")
+        reply = self.request("launch", testFolder=str(self.root), test="test_x.Test.test_x",
+                             defines={"START": 40})
+        self.assertFalse(reply["success"])
+        self.assertIn("defines is only for a simulation", reply["message"])
 
 
 class DrawingInProgressTest(SimulationTestCase):

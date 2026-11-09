@@ -30,6 +30,7 @@ nxwright turns your project into ordinary text files, and back. With it, you can
 - keep it in Git, with readable diffs, branches, and reviews;
 - test your pages and functions on your PC;
 - write in nxlang, a friendlier version of the Nextion language, when you want more;
+- design your screens as SVG pictures, set colors and texts with build-time defines;
 - use the VS Code extension: a page preview you can edit, a font generator, a simulator, and more.
 
 nxwright takes your app all the way to the screen: it compiles the TFT file the screen runs, and uploads it. If you prefer, you can still compile and upload in the Nextion Editor, from the project file nxwright builds ([Putting your app on a screen](https://github.com/nixiewright/nxwright/blob/main/docs/screens.md)).
@@ -47,7 +48,7 @@ app/
     home.nx             the code of the page and its components
     settings.page.toml
     settings.nx
-  pictures/             your pictures, as PNG, JPEG, or other picture files
+  pictures/             your pictures, as PNG, JPEG, SVG, or other picture files
   fonts/                your fonts
   animations/, videos/, sounds/
 ```
@@ -454,7 +455,7 @@ A few more commands you will use:
 
 ## A demo
 
-[examples/thermostat](https://github.com/nixiewright/nxwright/tree/main/examples/thermostat) is a thermostat screen written with nxwright. It has tests, and four pages in nxlang that share a library of functions. Open `thermostat.HMI` in the Nextion Editor's simulator, then read the source folder.
+[examples/thermostat](https://github.com/nixiewright/nxwright/tree/main/examples/thermostat) is a thermostat screen written with nxwright. It has tests, five pages in nxlang that share a library of functions, and uses both SVG and PNG for its screens. Open `thermostat.HMI` in the Nextion Editor's simulator, then read the source folder.
 
 ## Learn more
 

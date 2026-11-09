@@ -58,7 +58,7 @@ class AddPicturesTest(FolderTestCase):
         self.assertRefused("damaged.png", [self.picture("good.png"), damaged])
         text = self.files / "notes.txt"
         text.write_text("hello", encoding="utf-8")
-        self.assertRefused("notes.txt: a picture is a .png, .jpg, .jpeg, .bmp, or .gif file",
+        self.assertRefused("notes.txt: a picture is a .png, .jpg, .jpeg, .bmp, .gif, or .svg file",
                            [text])
 
     def test_a_name_the_folder_has_in_another_case_is_refused(self):

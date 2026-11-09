@@ -29,6 +29,8 @@ export interface MediaSettings {
 }
 
 const PICTURES = { Pictures: ["png", "jpg", "jpeg", "bmp", "gif"] };
+// A source folder's picture can also be an SVG file, which nxwright draws.
+const FOLDER_PICTURES = { Pictures: [...PICTURES.Pictures, "svg"] };
 // An animation's pictures, or a file of GmovMaker's, which keeps its own durations.
 const ANIMATION_SOURCES = {
   "Pictures and GmovMaker files": [...PICTURES.Pictures, "gmov"],
@@ -149,7 +151,7 @@ export async function soundArguments(folder: string, ask: MediaQuestions):
 export async function pictureArguments(folder: string, ask: MediaQuestions, one = false):
     Promise<string[] | undefined> {
   const pictures = await ask.files(one ? "nxwright picture: the new picture"
-    : "nxwright picture: the pictures to add", PICTURES, !one);
+    : "nxwright picture: the pictures to add", FOLDER_PICTURES, !one);
   return pictures?.length ? ["picture", folder, ...pictures] : undefined;
 }
 

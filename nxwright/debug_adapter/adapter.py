@@ -92,6 +92,8 @@ from nxwright.debug_adapter.python_steps import PythonTracer
 from nxwright.debug_adapter.replay import Timeline, path_key
 from nxwright.debug_adapter.serial_port import RATES, SerialLink, port_names
 from nxwright.drawing.screen_pictures import ScreenPictures
+from nxwright.source.defines import LAUNCH_CONFIGURATION, launch_defines, overriding_defines
+from nxwright.source.source_folder import read_app
 from nxwright.testing import looks
 from nxwright.testing.gpio_pins import checked_level, checked_levels, levels_by_name
 from nxwright.testing.looks import value_group
@@ -133,6 +135,7 @@ class DebugAdapter:
         self._stop_on_entry = True
         self._live = None            # the LiveSimulation of a simulation's session
         self._link = None            # its serial line's SerialLink
+        self._defines = {}           # its new values of app.toml's defines, {name: text}
         self._after = []             # what to do once the reply being made is sent
         self._emitting = threading.Lock()
         self._main_thread = threading.current_thread()
@@ -173,6 +176,13 @@ class DebugAdapter:
         session: the reply says it failed, and the trace goes to standard error."""
         if message.get("type") != "request":
             return
+        # A simulation's defines also apply to what this thread reads of the
+        # folder. The simulation's own thread sets them in live.py.
+        with overriding_defines(self._defines, LAUNCH_CONFIGURATION):
+            self._answer(message)
+
+    def _answer(self, message: dict):
+        """Answers the request `message` (handle)."""
         # The protocol sends a request's reply before the events it causes,
         # such as the stop after a step, so those wait for the reply.
         self._held = []
@@ -229,6 +239,9 @@ class DebugAdapter:
         folder, test = arguments.get("testFolder"), arguments.get("test")
         if not folder or not test:
             raise NxwrightError("a launch names the test's folder (testFolder) and its id (test)")
+        if arguments.get("defines") is not None:
+            raise NxwrightError("defines is only for a simulation (sourceFolder): a test uses the "
+                                "defaults of app.toml's [defines]")
         self._stop_on_entry = arguments.get("stopOnEntry", True)
         recorder = Recorder()
         output, self._failures = run_test(Path(folder), test, recorder)
@@ -247,7 +260,16 @@ class DebugAdapter:
         `logSent` say: text, hex, or both. Its pinyin table is the one
         `pinyinTable` names, which stops the launch when it holds none, or
         else the installed Nextion Editor's, if found. Its GPIO inputs start
-        at the levels `gpioInputs` gives, as {"pio2": 0} (gpio_pins.py)."""
+        at the levels `gpioInputs` gives, as {"pio2": 0} (gpio_pins.py).
+        `defines` gives app.toml's defines new values, as {"LIMIT": 40}."""
+        source_folder = Path(arguments["sourceFolder"])
+        defines = {}
+        if arguments.get("defines") is not None:
+            defines = launch_defines(arguments["defines"])
+            # Read now, so that a name app.toml does not declare, or a value
+            # of the wrong type, stops the launch rather than the simulation.
+            with overriding_defines(defines, LAUNCH_CONFIGURATION):
+                read_app(source_folder)
         port = arguments.get("serialPort")
         if port is not None:
             port = _port_settings(port)
@@ -273,11 +295,12 @@ class DebugAdapter:
                                                  "empty EEPROM.\n" % eeprom_file})
         self._stop_on_entry = arguments.get("stopOnEntry", False)
         self._link = SerialLink(lambda work: self._live.act(work), self._serial_news)
-        self._live = LiveSimulation(Path(arguments["sourceFolder"]), arguments.get("page"),
+        self._defines = defines
+        self._live = LiveSimulation(source_folder, arguments.get("page"),
                                     arguments.get("values"), eeprom, self._live_news,
                                     self._link.send, cards, log_formats,
                                     eeprom_file=eeprom_file, pinyin_table=pinyin_table,
-                                    inputs=inputs)
+                                    inputs=inputs, defines=defines)
         # Connected before the app starts, so that what it sends first goes
         # out. Either way the side bar hears the port's state.
         if port is not None:

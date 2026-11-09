@@ -13,7 +13,8 @@ Layout:
   pages/<page>.page.toml   the page and its components (see page_source.py)
   pages/<page>.nx          their event code
   pictures/<name>.png      or .jpg, the picture's file as the project keeps it;
-                           a "/" in a name makes a subfolder (resource_names.py)
+                           a "/" in a name makes a subfolder (resource_names.py);
+                           or .svg, an SVG file the build draws (svg_pictures.py)
   pictures/<name>.source.png   or .jpg, the picture's file from before it
                            was resized in the Editor, which the Editor keeps
                            as the picture's source; a picture never resized
@@ -37,6 +38,7 @@ Adding one of nxwright's keyboard pages to a folder is keyboard_adding.py's.
 Adding pictures, fonts, animations, videos, and sounds is
 resource_adding.py's, and removing one is resource_removal.py's.
 """
+import contextlib
 from dataclasses import dataclass
 from functools import cache, partial
 from itertools import count
@@ -57,7 +59,8 @@ from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.page_memory import measure_page, project_memory
 from nxwright.project.font_drawing import draw_font_block, drawn_codes, lacking_words
 from nxwright.project.media_files import sound_form_problem, video_rotation
-from nxwright.project.pictures import picture_problem
+from nxwright.project.picture_cache import opened_cache
+from nxwright.project.pictures import picture_problem, picture_size
 from nxwright.project.truetype import NOTO_SANS, noto_sans
 from nxwright.project.zi_font import UTF8
 from nxwright.source.keyboards import UTF8_CHARACTERS
@@ -77,6 +80,7 @@ from nxwright.project.device_settings import (DEFAULT_ENCODING, ENCODINGS, Devic
 from nxwright.source.defines import checked_defines, filled, placeholder_name
 from nxwright.source.device_keys import (DEVICE_KEYS, app_encoding, device_keys, screen_model,
                                          settings_from_keys)
+from nxwright.source.svg_pictures import SVG_SUFFIX, draw_svg_picture, svg_picture_size
 from nxwright.source.unknown_content import checked, unknown_in_dump
 from nxwright.source.nx_files import (blank_lines_dropped, read_include_line, read_nx_file,
                                       read_page_files, resolve)
@@ -114,7 +118,9 @@ _PAGE_NAME = re.compile(r'[ !#-\xff]+')
 # The kinds of resource a source folder holds, by their list in app.toml,
 # which is also their folder: the suffixes of each one's files. A picture has
 # one file, of any of its suffixes (picture_file); the others, a file of each.
-RESOURCE_FILES = {"pictures": PICTURE_SUFFIXES,
+# A picture's file can be an SVG file, which a project never stores: the
+# build stores the PNG picture drawn from it (svg_pictures.py).
+RESOURCE_FILES = {"pictures": PICTURE_SUFFIXES + (SVG_SUFFIX,),
                   **{kind.folder: kind.suffixes for kind in COPIED_KINDS}}
 # The suffix of the file that keeps the project's screen copy of a picture
 # whose file is of a type nxwright does not decode, such as
@@ -425,10 +431,10 @@ def kept_picture_paths(name: str, exists, listed) -> list:
     the function finds no files.
 
     A picture has a file of such a type only if it has its screen copy
-    (screen_copy_path) and no file with one of PICTURE_SUFFIXES.
-    `exists(path)` is true when the folder has a file at `path`. Any other
-    file with the picture's name, such as pictures/logo.svg beside
-    pictures/logo.png, is not the picture's file."""
+    (screen_copy_path) and no file with one of the suffixes of
+    RESOURCE_FILES. `exists(path)` is true when the folder has a file at
+    `path`. Any other file with the picture's name, such as
+    pictures/logo.psd beside pictures/logo.png, is not the picture's file."""
     if not exists(screen_copy_path(name)) or any(exists(path) for path in picture_paths(name)):
         return []
     return _other_type_paths(name, listed)
@@ -445,7 +451,7 @@ def _other_type_paths(name: str, listed) -> list:
     for file_name in listed(folder):
         before, dot, suffix = file_name.rpartition(".")
         if (before == stem and suffix.isalnum() and suffix.isascii()
-                and not decodes_picture(dot + suffix) and dot + suffix != SCREEN_COPY_SUFFIX):
+                and not reads_picture(dot + suffix) and dot + suffix != SCREEN_COPY_SUFFIX):
             found.append("%s/%s" % (folder, file_name))
     return found
 
@@ -491,8 +497,45 @@ def folder_file_exists(source_folder: Path):
     return lambda path: (Path(source_folder) / path).is_file()
 
 
+def reads_picture(suffix: str) -> bool:
+    """Returns whether nxwright reads a picture's file of `suffix`, such as
+    ".png", in a source folder: one it decodes (resources.decodes_picture),
+    or an SVG file, which it draws."""
+    return decodes_picture(suffix) or suffix.lower() == SVG_SUFFIX
+
+
+def is_svg_picture(path: str) -> bool:
+    """Returns whether the picture's file `path` is an SVG file."""
+    return path.lower().endswith(SVG_SUFFIX)
+
+
+def stored_picture(path: str, read_text, read_bytes, defines: dict, cache=None) -> tuple:
+    """Returns (the bytes, the suffix) of the picture's file `path`, a path
+    within the source folder, as a project stores it: an SVG file's PNG
+    picture (svg_pictures.py), and any other file as it is.
+    `read_text(path)` and `read_bytes(path)` return the folder's files, and
+    `defines` the values of app.toml's defines, which an SVG picture can
+    take. An SVG picture drawn before is taken from `cache`
+    (picture_cache.PictureCache), when given. Raises NxwrightError for an
+    SVG file that cannot be drawn, and OSError for another file that cannot
+    be read."""
+    if is_svg_picture(path):
+        return draw_svg_picture(path, read_text, read_bytes, defines, cache), ".png"
+    return read_bytes(path), Path(path).suffix
+
+
+def picture_file_size(file: Path) -> tuple:
+    """Returns the (width, height) of the picture file `file`: from its
+    start alone, or from an SVG file's root, without drawing it. Raises
+    NxwrightError for a file that is not a picture nxwright reads."""
+    if is_svg_picture(file.name):
+        return svg_picture_size(file.name, read_text(file))
+    return picture_size(file)
+
+
 def picture_paths(name: str) -> list:
-    """The paths the picture `name`'s file may have, in PICTURE_SUFFIXES' order."""
+    """The paths the picture `name`'s file may have, in the order of
+    RESOURCE_FILES' suffixes."""
     return ["pictures/%s%s" % (name, suffix) for suffix in RESOURCE_FILES["pictures"]]
 
 
@@ -501,9 +544,8 @@ def picture_source_paths(name: str) -> list:
     have, in the order of PICTURE_SUFFIXES: pictures/<name>.source.png, and
     so on. When a picture is resized in the Nextion Editor's picture viewer,
     the Editor keeps the file the picture had before as its source
-    (resources.py)."""
-    return ["pictures/%s%s%s" % (name, SOURCE_SUFFIX, suffix)
-            for suffix in RESOURCE_FILES["pictures"]]
+    (resources.py). The Editor makes it, so it is never an SVG file."""
+    return ["pictures/%s%s%s" % (name, SOURCE_SUFFIX, suffix) for suffix in PICTURE_SUFFIXES]
 
 
 def resource_file_paths(source_folder: Path, listed: str, name: str) -> list:
@@ -1413,23 +1455,41 @@ def _resource_dump_files(app: dict, source_folder: Path) -> tuple:
     Raises NxwrightError naming a picture nxwright cannot read, a video
     made for another rotation, or a sound a screen does not play
     (media_files.sound_form_problem)."""
+    files, pictures = {}, {}
+    with contextlib.ExitStack() as opened:
+        _picture_dump_files(app, source_folder, opened, files, pictures)
+    _media_dump_files(app, source_folder, files)
+    return files, pictures
+
+
+def _picture_dump_files(app: dict, source_folder: Path, opened: contextlib.ExitStack,
+                        files: dict, pictures: dict):
+    """Adds the dump's pictures to `files`, {relative path: bytes}, and {the
+    dump's file of each picture: the folder's} to `pictures`
+    (_resource_dump_files). The picture cache keeps the SVG pictures drawn,
+    so it is opened, into `opened`, at the first SVG picture."""
     def exists(path: str) -> bool:
         return (source_folder / path).is_file()
     listed = folder_lister(source_folder)
-    files, pictures = {}, {}
+    picture_cache, cache_opened = None, False
     for picture_id, name in enumerate(app["pictures"]):
         check_picture_file(name, exists, listed)
         path = picture_file(name, exists, listed)
-        content = read_bytes(source_folder / path)
-        if decodes_picture(Path(path).suffix):
+        if is_svg_picture(path) and not cache_opened:
+            picture_cache, cache_opened = opened.enter_context(opened_cache()), True
+        if reads_picture(Path(path).suffix):
+            content, suffix = stored_picture(path, folder_reader(source_folder),
+                                             folder_byte_reader(source_folder), app["defines"],
+                                             picture_cache)
             problem = picture_problem(content)
             if problem:
                 raise NxwrightError("%s: %s" % (path, problem))
         else:
+            content, suffix = read_bytes(source_folder / path), Path(path).suffix
             # The build writes the project's own screen copy as it is.
             files["images/%04d.i" % picture_id] = read_bytes(source_folder
                                                              / screen_copy_path(name))
-        dump_path = "images/%04d%s" % (picture_id, Path(path).suffix)
+        dump_path = "images/%04d%s" % (picture_id, suffix)
         files[dump_path] = content
         pictures[dump_path] = path
         check_picture_source(name, exists)
@@ -1441,6 +1501,11 @@ def _resource_dump_files(app: dict, source_folder: Path) -> tuple:
                 raise NxwrightError("%s: %s" % (source_path, problem))
             files["images/%04d%s%s" % (picture_id, SOURCE_SUFFIX, Path(source_path).suffix)] = \
                 source
+
+
+def _media_dump_files(app: dict, source_folder: Path, files: dict):
+    """Adds the dump's animations, videos, and sounds to `files`, {relative
+    path: bytes} (_resource_dump_files)."""
     for kind in COPIED_KINDS:
         for resource_id, name in enumerate(app[kind.folder]):
             for suffix in kind.suffixes:
@@ -1452,7 +1517,6 @@ def _resource_dump_files(app: dict, source_folder: Path) -> tuple:
                 if problem:
                     raise NxwrightError("%s %s" % (path, problem))
                 files["%s/%s" % (kind.folder, copied_file_name(resource_id, suffix))] = content
-    return files, pictures
 
 
 def _checked_memory(folder: FolderSource, measured: dict, program_s: bytes, generated: int):

@@ -1,0 +1,61 @@
+<?xml-stylesheet href="../css/theme.css" type="text/css"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" class="page-home">
+<!-- The home page. The pressed variant shows every button pressed: a button
+     shows its part of it while touched, and the selected mode and the
+     schedule switch show theirs while on. -->
+<defs>
+  <linearGradient id="heat" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#ff9a4d"/>
+    <stop offset="1" stop-color="#ff5a3c"/>
+  </linearGradient>
+  <linearGradient id="cool" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#4cc3ff"/>
+    <stop offset="1" stop-color="#3a7dff"/>
+  </linearGradient>
+  <linearGradient id="schedule-on" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#3fe0b8"/>
+    <stop offset="1" stop-color="#22b597"/>
+  </linearGradient>
+  <linearGradient id="scale" gradientUnits="userSpaceOnUse" x1="100" y1="0" x2="372" y2="0">
+    <stop offset="0" stop-color="#3aa8ff"/>
+    <stop offset="0.5" stop-color="#a483ff"/>
+    <stop offset="1" stop-color="#ff6a3d"/>
+  </linearGradient>
+</defs>
+<g id="home">
+<use href="../shapes.svg#frame"/>
+
+<!-- The room: a dial from 10 to 30 degrees, a tick every half degree. -->
+<rect class="card" x="16.5" y="72.5" width="439" height="315" rx="22"/>
+<circle cx="236" cy="228" r="104" fill="#11161d" stroke="#1d242d" stroke-width="1"/>
+<path d="M148.32 315.68 A124 124 0 1 1 323.68 315.68" fill="none" stroke="url(#scale)"
+      stroke-width="12" stroke-dasharray="2.2 12.3535" opacity="0.55"/>
+<path d="M147.61 316.39 A125 125 0 1 1 324.39 316.39" fill="none" stroke="url(#scale)"
+      stroke-width="20" stroke-dasharray="3 143.51"/>
+
+<!-- The target, with lower and raise buttons, and the schedule switch. -->
+<rect class="card" x="472.5" y="72.5" width="311" height="175" rx="22"/>
+<circle class="round-button" cx="528" cy="148" r="31.5"/>
+<circle class="round-button-pressed only-pressed" cx="528" cy="148" r="31.5"/>
+<path class="glyph" d="M518 148 H538"/>
+<circle class="round-button" cx="728" cy="148" r="31.5"/>
+<circle class="round-button-pressed only-pressed" cx="728" cy="148" r="31.5"/>
+<path class="glyph" d="M718 148 H738 M728 138 V158"/>
+<line class="rule" x1="496" y1="192.5" x2="760" y2="192.5"/>
+<rect x="712" y="202" width="56" height="32" rx="16" fill="#252d38"/>
+<circle cx="728" cy="218" r="12" fill="#6b7686"/>
+<g class="only-pressed">
+  <rect x="712" y="202" width="56" height="32" rx="16" fill="url(#schedule-on)"/>
+  <circle cx="752" cy="218" r="12" fill="#f4f7fa"/>
+</g>
+
+<!-- The mode: Off, Heat, and Cool. -->
+<rect class="card" x="472.5" y="260.5" width="311" height="127" rx="22"/>
+<rect class="well" x="488.5" y="304.5" width="279" height="67" rx="16"/>
+<g class="only-pressed">
+  <rect x="492" y="308" width="88" height="60" rx="12" fill="#3a4555"/>
+  <rect x="584" y="308" width="88" height="60" rx="12" fill="url(#heat)"/>
+  <rect x="676" y="308" width="88" height="60" rx="12" fill="url(#cool)"/>
+</g>
+</g>
+</svg>

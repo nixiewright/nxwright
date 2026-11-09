@@ -274,7 +274,7 @@ class CheckTest(FolderTestCase):
         self.write("app.toml", app)
         # At the line of its name.
         line = next(number for number, text in enumerate(app.splitlines(), 1) if '"logo"' in text)
-        missing = "pictures/logo.png, .jpg, .jpeg, .bmp, or .gif is missing"
+        missing = "pictures/logo.png, .jpg, .jpeg, .bmp, .gif, or .svg is missing"
         self.assertEqual(self.findings(), [Finding("app.toml", line, ERROR, missing)])
 
     def test_some_pages(self):

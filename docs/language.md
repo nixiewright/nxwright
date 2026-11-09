@@ -105,7 +105,7 @@ const UNIT = " mm/s"
 A constant's value is a number or a text. The build replaces each use with the value.
 
 - Constants for one page go at the top of its `.nx` file, before the first `on` heading.
-- Constants for every page go anywhere in `program.nx`, or in the `[defines]` table of `app.toml`, where a build can change their values with `--define` ([source-folder.md](source-folder.md#apptoml)).
+- Constants for every page go anywhere in `program.nx`, or in the `[defines]` table of `app.toml`, where a build can change their values with `--define`, and a simulation with its launch configuration's `defines` ([source-folder.md](source-folder.md#apptoml)).
 - A constant cannot share its name with another constant, a component of a page, an `int` variable of `program.nx`, a system variable (`dim`, `baud`, ...), or a keyword.
 
 ## Local variables

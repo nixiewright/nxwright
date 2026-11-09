@@ -1,0 +1,60 @@
+[page]
+name = "about"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+sta = 2
+pic = "about/normal"
+
+[[component]]
+name = "title"
+type = "text"
+x = 24
+y = 20
+w = 400
+h = 32
+sta = 0
+font = "SansBold24"
+picc = "about/normal"
+pco = "%TEXT%"
+xcen = 0
+txt = "About"
+txt_maxl = 20
+
+[[component]]
+name = "back"
+type = "button"
+x = 728
+y = 12
+w = 48
+h = 48
+sta = 0
+picc = "about/normal"
+picc2 = "about/pressed"
+txt = ""
+
+[[component]]
+name = "logo"
+type = "picture"
+x = 56
+y = 112
+w = 128
+h = 128
+pic = "nxwright"
+
+[[component]]
+name = "madeWith"
+type = "text"
+x = 224
+y = 188
+w = 528
+h = 28
+sta = 0
+font = "Sans20"
+picc = "about/normal"
+pco = "#8c96a5"
+xcen = 0
+txt = "Made with nxwright, a toolchain for Nextion screens."
+txt_maxl = 60

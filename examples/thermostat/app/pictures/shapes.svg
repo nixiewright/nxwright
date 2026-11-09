@@ -1,0 +1,94 @@
+<?xml-stylesheet href="css/theme.css" type="text/css"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480">
+<!-- What the pictures share: the frame of every page, which is its
+     background and its navigation bar, and line icons on a 24 by 24 grid.
+     A <use> with class="icon" draws an icon in its CSS color. -->
+<defs>
+  <symbol id="i-home" viewBox="0 0 24 24">
+    <path d="M3 10.5 L12 3 L21 10.5"/>
+    <path d="M5.5 9 V19.5 a1.5 1.5 0 0 0 1.5 1.5 H17 a1.5 1.5 0 0 0 1.5 -1.5 V9"/>
+    <path d="M10 21 V15.5 H14 V21"/>
+  </symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M12 7 V12 L15.5 14"/>
+  </symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24">
+    <path d="M3 3.5 V20.5 H21"/>
+    <path d="M7 15.5 L11 10.5 L14 13.5 L20 6.5"/>
+  </symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24">
+    <path d="M4 6 H6.5 M11.5 6 H20 M4 12 H13 M18 12 H20 M4 18 H5.5 M10.5 18 H20"/>
+    <circle cx="9" cy="6" r="2.5"/>
+    <circle cx="15.5" cy="12" r="2.5"/>
+    <circle cx="8" cy="18" r="2.5"/>
+  </symbol>
+  <symbol id="i-sunrise" viewBox="0 0 24 24">
+    <path d="M3 19 H21"/>
+    <path d="M7 19 a5 5 0 0 1 10 0"/>
+    <path d="M12 6 V9.5 M5.2 10.8 L7 12.6 M18.8 10.8 L17 12.6 M2.5 15 H4 M20 15 H21.5"/>
+  </symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24">
+    <rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/>
+    <path d="M9 7.5 V5.5 a1.5 1.5 0 0 1 1.5 -1.5 H13.5 a1.5 1.5 0 0 1 1.5 1.5 V7.5"/>
+    <path d="M3 13 H21"/>
+  </symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24">
+    <path d="M19.5 14.5 A8 8 0 1 1 9.5 4.5 A6.3 6.3 0 0 0 19.5 14.5 Z"/>
+  </symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24">
+    <!-- Filled, the inner flame is a hole (even-odd rule); outlined, a second line. -->
+    <path fill-rule="evenodd" d="M12 2.5 C12.6 5.5 11.8 7.8 10.2 9.6 C9.5 8.6 9.3 7.6 9.3 6.6 C7.2 8.6 6 11 6 13.8 A6 6 0 0 0 18 13.8 C18 9.6 15 6.4 12 2.5 Z M12 18.4 A2.3 2.3 0 0 1 9.7 16.1 C9.7 14.6 10.9 13.5 12 12 C13.1 13.5 14.3 14.6 14.3 16.1 A2.3 2.3 0 0 1 12 18.4 Z"/>
+  </symbol>
+  <symbol id="i-snowflake" viewBox="0 0 24 24">
+    <g id="snow-arm">
+      <path d="M12 2.5 V21.5"/>
+      <path d="M9 4.5 L12 7 L15 4.5 M9 19.5 L12 17 L15 19.5"/>
+    </g>
+    <use href="#snow-arm" transform="rotate(60 12 12)"/>
+    <use href="#snow-arm" transform="rotate(120 12 12)"/>
+  </symbol>
+  <symbol id="i-check" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M8 12.3 L10.9 15.2 L16.2 9.4"/>
+  </symbol>
+  <symbol id="i-power" viewBox="0 0 24 24">
+    <path d="M12 3 V11.5"/>
+    <path d="M6.6 6.6 A7.6 7.6 0 1 0 17.4 6.6"/>
+  </symbol>
+  <symbol id="i-sun-small" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="3.2"/>
+    <path d="M12 4.5 V6 M12 18 V19.5 M4.5 12 H6 M18 12 H19.5"/>
+  </symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="4.2"/>
+    <path d="M12 2 V4.5 M12 19.5 V22 M2 12 H4.5 M19.5 12 H22 M4.9 4.9 L6.7 6.7 M17.3 17.3 L19.1 19.1 M4.9 19.1 L6.7 17.3 M17.3 6.7 L19.1 4.9"/>
+  </symbol>
+</defs>
+<g id="frame">
+<rect class="page" width="800" height="480"/>
+<rect class="nav" y="400" width="800" height="80"/>
+<line class="rule" x1="0" y1="400.5" x2="800" y2="400.5"/>
+
+<g class="tab tab-home">
+  <rect class="pressed-tab only-pressed" x="14" y="406" width="172" height="68" rx="14"/>
+  <rect class="indicator" x="76" y="400" width="48" height="3" rx="1.5" fill="currentColor"/>
+  <use href="#i-home" class="icon" x="86" y="413" width="28" height="28"/>
+</g>
+<g class="tab tab-schedule">
+  <rect class="pressed-tab only-pressed" x="214" y="406" width="172" height="68" rx="14"/>
+  <rect class="indicator" x="276" y="400" width="48" height="3" rx="1.5" fill="currentColor"/>
+  <use href="#i-clock" class="icon" x="286" y="413" width="28" height="28"/>
+</g>
+<g class="tab tab-day">
+  <rect class="pressed-tab only-pressed" x="414" y="406" width="172" height="68" rx="14"/>
+  <rect class="indicator" x="476" y="400" width="48" height="3" rx="1.5" fill="currentColor"/>
+  <use href="#i-chart" class="icon" x="486" y="413" width="28" height="28"/>
+</g>
+<g class="tab tab-settings">
+  <rect class="pressed-tab only-pressed" x="614" y="406" width="172" height="68" rx="14"/>
+  <rect class="indicator" x="676" y="400" width="48" height="3" rx="1.5" fill="currentColor"/>
+  <use href="#i-sliders" class="icon" x="686" y="413" width="28" height="28"/>
+</g>
+</g>
+</svg>

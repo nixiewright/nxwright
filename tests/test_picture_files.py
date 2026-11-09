@@ -236,7 +236,7 @@ class SourceFolderTest(SourceFolderTestCase):
         self.assertIn(Finding("app.toml", self.photo_line(), ERROR, two), self.findings())
 
     def test_a_picture_with_no_file_is_named_by_each_suffix(self):
-        missing = "pictures/photo.png, .jpg, .jpeg, .bmp, or .gif is missing"
+        missing = "pictures/photo.png, .jpg, .jpeg, .bmp, .gif, or .svg is missing"
         with self.assertRaisesRegex(NxwrightError, missing):
             self.built()
         self.assertIn(Finding("app.toml", self.photo_line(), ERROR, missing), self.findings())
@@ -255,12 +255,19 @@ class KeptScreenCopyTest(SourceFolderTestCase):
 
     def test_another_file_beside_a_png_is_not_the_picture_s(self):
         self.picture(".png", write_png(4, 4, bytes(4 * 4 * 4)))
-        self.picture(".svg", b"<svg/>")
+        self.picture(".psd", b"8BPS")
         self.assertEqual(self.listed_findings(), [])
         self.built()
         removed, _ = remove_resource_files(self.source, "pictures", "photo")
         self.assertEqual(removed, ["pictures/photo.png"])
-        self.assertTrue((self.source / "pictures" / "photo.svg").is_file())
+        self.assertTrue((self.source / "pictures" / "photo.psd").is_file())
+
+    def test_an_svg_file_beside_a_png_is_a_second_file(self):
+        # An SVG file is a picture's file too (svg_pictures.py).
+        self.picture(".png", write_png(4, 4, bytes(4 * 4 * 4)))
+        self.picture(".svg", b'<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>')
+        two = "pictures/photo.png and pictures/photo.svg exist; a picture can have only one file"
+        self.assertIn(two, [finding.message for finding in self.listed_findings()])
 
     def test_without_its_screen_copy_it_is_refused(self):
         self.picture(".tif", b"II*\0")

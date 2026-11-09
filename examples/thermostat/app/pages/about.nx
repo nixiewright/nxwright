@@ -1,0 +1,4 @@
+// The About page, opened from the settings page's About card. Its background
+// is drawn from an SVG file, and its logo is a PNG file.
+on back.up:
+  page settings

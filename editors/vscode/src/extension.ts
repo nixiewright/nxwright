@@ -19,6 +19,7 @@ import { CurrentProject, NO_PROJECT_ERROR, projectFileKey } from "./currentProje
 import { EditorCodeViews } from "./editorCodeViews";
 import { FontPanels } from "./fontPanel";
 import { FontViewer } from "./fontViewer";
+import { PictureView } from "./pictureView";
 import { animationArguments, MediaQuestions, pictureArguments, sdPictureArguments,
   soundArguments, videoArguments } from "./mediaCommands";
 import { findNxwright, NxwrightSearch, programOnPath, runsCleanly } from "./nxwrightCommand";
@@ -135,6 +136,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       runSubcommand, questions: MEDIA_QUESTIONS, workingFolder: firstWorkspaceFolder,
     }).register(),
     new FontViewer(context, getClient, fontPanels).register(),
+    new PictureView(context, getClient).register(),
     ...new MediaViewers(context, getClient).register(),
     vscode.commands.registerCommand("nxwright.showPreview", () => previews.show()),
     vscode.commands.registerCommand("nxwright.showPageText", () => previews.showText()),
@@ -244,11 +246,14 @@ async function startServer(searched: NxwrightSearch): Promise<void> {
       { scheme: "file", language: "nxwright" },
       { scheme: "file", pattern: "**/pages/*.page.toml" },
       { scheme: "file", pattern: "**/app.toml" },
+      // SVG pictures and the files they use, so that the picture editor
+      // can draw a picture from their unsaved text.
+      { scheme: "file", pattern: "**/*.{svg,css}" },
     ],
     // Changes on disk, such as an extract or a git checkout, are checked too.
     synchronize: {
       fileEvents: vscode.workspace.createFileSystemWatcher(
-        "**/*.{nx,toml,png,jpg,jpeg,bmp,gif,zi,gmov,video,wav}"),
+        "**/*.{nx,toml,png,jpg,jpeg,bmp,gif,svg,css,ttf,otf,zi,gmov,video,wav}"),
     },
   };
   const starting = new LanguageClient("nxwright", "nxwright", serverOptions, clientOptions);

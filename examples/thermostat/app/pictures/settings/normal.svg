@@ -1,0 +1,42 @@
+<?xml-stylesheet href="../css/theme.css" type="text/css"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" class="page-settings">
+<!-- Settings: the units, the brightness, the clock, and about. The pressed
+     variant also holds the slider's filled track, which the slider shows up
+     to its knob. -->
+<g id="settings">
+<use href="../shapes.svg#frame"/>
+
+<!-- Units -->
+<rect class="card" x="16.5" y="72.5" width="375" height="127" rx="22"/>
+<rect class="well" x="32.5" y="116.5" width="343" height="67" rx="16"/>
+<g class="only-pressed">
+  <rect x="36" y="120" width="166" height="60" rx="12" fill="#3a4555"/>
+  <rect x="206" y="120" width="166" height="60" rx="12" fill="#3a4555"/>
+</g>
+
+<!-- Brightness -->
+<rect class="card" x="16.5" y="212.5" width="375" height="175" rx="22"/>
+<use href="../shapes.svg#i-sun-small" class="icon" x="34" y="290" width="22" height="22" style="color: #66717f"/>
+<use href="../shapes.svg#i-sun" class="icon" x="352" y="288" width="26" height="26" style="color: #c9d0da"/>
+<rect x="64" y="297" width="280" height="8" rx="4" fill="#252d38"/>
+<rect class="only-pressed" x="64" y="297" width="280" height="8" rx="4" fill="#ffb547"/>
+
+<!-- Clock -->
+<rect class="card" x="408.5" y="72.5" width="375" height="203" rx="22"/>
+<circle class="round-button" cx="448" cy="220" r="23.5"/>
+<circle class="round-button-pressed only-pressed" cx="448" cy="220" r="23.5"/>
+<path class="glyph" d="M440 220 H456"/>
+<circle class="round-button" cx="568" cy="220" r="23.5"/>
+<circle class="round-button-pressed only-pressed" cx="568" cy="220" r="23.5"/>
+<path class="glyph" d="M560 220 H576 M568 212 V228"/>
+<circle class="round-button" cx="624" cy="220" r="23.5"/>
+<circle class="round-button-pressed only-pressed" cx="624" cy="220" r="23.5"/>
+<path class="glyph" d="M616 220 H632"/>
+<circle class="round-button" cx="744" cy="220" r="23.5"/>
+<circle class="round-button-pressed only-pressed" cx="744" cy="220" r="23.5"/>
+<path class="glyph" d="M736 220 H752 M744 212 V228"/>
+
+<!-- About -->
+<rect class="card" x="408.5" y="288.5" width="375" height="99" rx="22"/>
+</g>
+</svg>

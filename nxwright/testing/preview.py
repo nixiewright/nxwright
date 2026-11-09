@@ -18,13 +18,15 @@ from nxwright.language.resource_names import ANIMATION, LISTS
 from nxwright.project.media_files import (animation_frames, is_card_picture, read_card_picture,
                                           video_frames)
 from nxwright.project.page_file_names import page_of_file_stem
-from nxwright.project.pictures import (data_url, exif_orientation, picture_size, read_picture,
-                                       write_png)
+from nxwright.project.pictures import data_url, exif_orientation, read_picture, write_png
 from nxwright.project.screen_copy import FORMAT_COMPRESSED, OPAQUE
 from nxwright.project.screen_models import model_named
 from nxwright.project.zi_font import decode_font, read_font_header
 from nxwright.source.page_source import page_header_of_text, page_toml_path
-from nxwright.source.source_folder import picture_file, played_file, read_page_components
+from nxwright.source.source_folder import (folder_byte_reader, folder_reader, is_svg_picture,
+                                           picture_file, picture_file_size, played_file,
+                                           read_page_components)
+from nxwright.source.svg_pictures import svg_picture_data_url
 from nxwright.testing.sd_cards import CardRefusal
 
 # A page's own files: pages/<name>.page.toml and pages/<name>.nx.
@@ -216,10 +218,13 @@ class _FolderResources(DrawingResources):
         picture's data URL, and "mask", a PNG data URL of its transparency,
         when it has some (_card_picture_parts); or, for a project's picture
         whose file asks to be turned, "data", its pixels as they are stored
-        (_unturned_picture). And "version", the file's
+        (_unturned_picture); or, for an SVG picture, "data", the PNG picture
+        drawn from it (_svg_picture). And "version", the file's
         modification time: the webview keeps pictures by their address, and
         the version gives a changed file a new one."""
         path = self.picture_path(name)
+        if name not in self._card_files and is_svg_picture(path.name):
+            return self._svg_picture(path)
         found = {"version": _modified(path)}
         parts = None
         try:
@@ -237,6 +242,22 @@ class _FolderResources(DrawingResources):
                 found["mask"] = parts[1]
         return found
 
+    def _svg_picture(self, path: Path) -> dict:
+        """What the webview loads the SVG picture whose file is `path` from:
+        "data", the PNG picture drawn from it, and "version", the key of its
+        drawing, which changes with any file it reads, not only its own. For
+        a picture that cannot be drawn, it gives neither data nor a path, so
+        nothing is drawn, the same as for a damaged file. It never gives a
+        path, because the webview's browser would then draw the SVG file
+        itself."""
+        relative = path.relative_to(self.root).as_posix()
+        try:
+            data, key = svg_picture_data_url(relative, folder_reader(self.root),
+                                             folder_byte_reader(self.root), self.app["defines"])
+        except NxwrightError:
+            return {"version": "0"}
+        return {"data": data, "version": key}
+
     def picture_path(self, name: str) -> Path:
         if name in self._card_files:
             return self._card_files[name]
@@ -247,7 +268,7 @@ class _FolderResources(DrawingResources):
         if name is None:
             return None
         try:
-            return self.previews.kept(self.picture_path(name), picture_size)
+            return self.previews.kept(self.picture_path(name), picture_file_size)
         except NxwrightError:
             return None
 

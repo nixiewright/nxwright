@@ -24,16 +24,17 @@ from nxwright.project.media_files import (CARD_PICTURE_QUALITIES, animation_file
                                           video_frame)
 from nxwright.project.pictures import (picture_problem, picture_size, read_picture,
                                        still_picture_size, write_png)
-from nxwright.project.resources import PICTURE_SUFFIXES
 from nxwright.project.truetype import NOTO_SANS, TrueTypeFont
 from nxwright.project.zi_font import (GRID_ENCODINGS, UTF8, decode_font, decodes, font_facts,
                                       turned_font)
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.keyboards import noto_sans_covers
 from nxwright.source.source_folder import (RESOURCE_FILES, app_text_in, delete_files,
-                                           drawn_font_name, name_part, parse_app, picture_paths,
+                                           drawn_font_name, folder_byte_reader, folder_reader,
+                                           is_svg_picture, name_part, parse_app, picture_paths,
                                            picture_source_paths, put_back, read_bytes,
                                            read_text, resource_file_paths)
+from nxwright.source.svg_pictures import draw_svg_picture
 
 # How long a frame of an animation's pictures shows when no duration is
 # chosen, in milliseconds, as GmovMaker's default.
@@ -82,7 +83,9 @@ def add_pictures(source_folder: Path, files: list, replacing: Slot = None,
 
     Raises NxwrightError, before writing anything, for a file whose suffix
     is not a picture's, or that nxwright cannot read as one
-    (pictures.picture_problem); a file whose name keeps no character; a
+    (pictures.picture_problem); an SVG file that cannot be drawn where it
+    goes, such as one whose shared files the folder lacks
+    (svg_pictures.py); a file whose name keeps no character; a
     name the folder has already, in any case, or that two files give; a
     name app.toml's pictures may not hold (check_names); and a file already
     there of a name it gives, under any picture suffix, as a picture has one
@@ -124,6 +127,9 @@ def add_pictures(source_folder: Path, files: list, replacing: Slot = None,
             raise NxwrightError("%s is already there, though app.toml does not list it"
                                 % (source_folder / relative))
     for relative, content in files_written.items():
+        if is_svg_picture(relative):
+            _check_svg_draws(source_folder, relative, content, app["defines"])
+    for relative, content in files_written.items():
         (source_folder / relative).parent.mkdir(parents=True, exist_ok=True)
         (source_folder / relative).write_bytes(content)
     text = app_text_in(source_folder, dict(app, pictures=pictures))
@@ -134,16 +140,40 @@ def add_pictures(source_folder: Path, files: list, replacing: Slot = None,
 def _picture_data(file: Path) -> tuple:
     """Returns (the picture file's suffix in small letters, its bytes).
     Raises NxwrightError for a suffix that is not a picture's, and a file
-    nxwright cannot read as one (pictures.picture_problem)."""
+    nxwright cannot read as one (pictures.picture_problem). An SVG file is
+    checked where it goes, because it may use files of the folder
+    (_check_svg_draws)."""
     suffix = file.suffix.lower()
-    if suffix not in PICTURE_SUFFIXES:
+    suffixes = RESOURCE_FILES["pictures"]
+    if suffix not in suffixes:
         raise NxwrightError("%s: a picture is a %s, or %s file" % (
-            file.name, ", ".join(PICTURE_SUFFIXES[:-1]), PICTURE_SUFFIXES[-1]))
+            file.name, ", ".join(suffixes[:-1]), suffixes[-1]))
     data = read_bytes(file)
+    if is_svg_picture(file.name):
+        return suffix, data
     problem = picture_problem(data)
     if problem:
         raise NxwrightError("%s: %s" % (file.name, problem))
     return suffix, data
+
+
+def _check_svg_draws(source_folder: Path, path: str, data: bytes, defines: dict):
+    """Raises NxwrightError unless the SVG file `data` draws once written at
+    `path`, within the folder, with the values `defines` of app.toml's
+    defines: the files it shares, and the defines it names, must be there."""
+    folder_text, folder_bytes = folder_reader(source_folder), folder_byte_reader(source_folder)
+
+    def text_with_new_file(relative: str) -> str:
+        if relative != path:
+            return folder_text(relative)
+        try:
+            return data.decode("utf-8-sig").replace("\r\n", "\n")
+        except UnicodeDecodeError:
+            raise NxwrightError("%s is not UTF-8 text" % path) from None
+
+    def bytes_with_new_file(relative: str, size: int = None) -> bytes:
+        return data if relative == path else folder_bytes(relative, size)
+    draw_svg_picture(path, text_with_new_file, bytes_with_new_file, defines)
 
 
 def _picture_into_slot(source_folder: Path, files: list, slot: Slot, name: str = None) -> str:
@@ -158,6 +188,8 @@ def _picture_into_slot(source_folder: Path, files: list, slot: Slot, name: str =
     # A picture has only one file, so a file of its name with any suffix is
     # in the way, unless it is the old picture's.
     _check_not_in_the_way(source_folder, picture_paths(name) + picture_source_paths(name), own)
+    if is_svg_picture(suffix):
+        _check_svg_draws(source_folder, "pictures/%s%s" % (name, suffix), data, app["defines"])
     _write_into_slot(source_folder, app, "pictures", name,
                      [(source_folder / "pictures" / (name + suffix), data)], slot)
     return name

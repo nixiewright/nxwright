@@ -1,0 +1,10 @@
+<?xml-stylesheet href="css/theme.css" type="text/css"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28">
+<!-- The brightness slider's knob, on the card's colour. -->
+<g id="knob">
+<rect width="28" height="28" fill="#161b23"/>
+<circle cx="14" cy="14" r="13" fill="#0b0e12" fill-opacity="0.5"/>
+<circle cx="14" cy="14" r="11.5" fill="#f4f7fa"/>
+<circle cx="14" cy="14" r="4" fill="#ffb547"/>
+</g>
+</svg>

@@ -130,7 +130,7 @@ nxwright build app thermostat.HMI
 - Close the project in the Nextion Editor before you build over it, because the Nextion Editor locks a project it has open.
 - The build prints each page's memory, such as `page0: 292 of 524288 bytes`. If nxwright could not count all the memory of any page, every page's line says `at least` ([Memory](build-rules.md#memory)).
 - The screen copies of your pictures are kept in a cache, so that later builds are faster ([The picture cache](source-folder.md#the-picture-cache)).
-- `--define NAME=VALUE` changes the value of one of the defines in `app.toml` for this build only ([source-folder.md](source-folder.md#apptoml)). Repeat it for each define, as in `--define LIMIT=40 --define TITLE=Lab`. A define whose default is a number takes only a whole number, and one whose default is a text takes everything after the `=`.
+- `--define NAME=VALUE` changes the value of one of the defines in `app.toml` for this build only, in the code, the page files, and the SVG pictures ([source-folder.md](source-folder.md#apptoml)). Repeat it for each define, as in `--define LIMIT=40 --define TITLE=Lab`. A define whose default is a number takes only a whole number, and one whose default is a text takes everything after the `=`.
 
 To put your app on a screen, compile it with [compile](#compile) and send it with [upload](#upload). You can also open the built project in the Nextion Editor, and compile and upload it from there.
 
@@ -258,6 +258,7 @@ pages/home.nx line 12: error: unknown name speed
 - If `app.toml`, `defaults.toml`, or the declarations of `program.nx` have an error, the check reports only that error, since every page depends on these files.
 - The check also finds:
   - a picture file, or a picture's source file, that nxwright cannot read, reported as `pictures/logo.png: not a picture nxwright reads: no kind of picture Pillow knows`. The check does not decode the pixels, so only the build finds a picture whose pixels are damaged;
+  - an SVG picture that cannot be drawn, such as `pictures/home/pressed.svg: pictures/home/normal.svg is missing`;
   - a page that takes more memory than the Nextion Editor's compile allows ([Memory](build-rules.md#memory));
   - a sound that the Nextion Editor's compile rejects ([source-folder.md](source-folder.md#animations-videos-and-sounds)).
 
@@ -277,6 +278,7 @@ The check also warns of likely mistakes that the build accepts. Each warning giv
 - `page-place`: a page file gives the page an `x`, `y`, `w`, or `h` that does not match the screen. The build makes the page fill the screen, whatever these values are.
 - `text-cut`, in nxlang: a line that puts a text into one of nxlang's hidden variables, when the text may be too long for the variable and get cut. The warning shows only when a part of the text is a component's text, or a hidden variable with room for more than 255 bytes, such as a parameter that a caller gave a long text. The warning gives how many bytes the text may need. To keep the whole text, use a variable component with a `txt_maxl` of that size.
 - `sound-file-form`: a sound file without the `hmic` chunk that the Nextion Editor's Audio panel writes, or whose chunk has a check value that does not match its samples. The warning shows on the line of `app.toml` that gives the sound. The Nextion Editor accepts such a file, but a screen might check the value. `nxwright sound` writes the chunk and its check value.
+- `svg-declared-value`: an SVG picture, or a file it uses, declares a value such as `--ACCENT: #00ff00` that differs from the define's default in `app.toml`. Other SVG viewers show the value in the SVG, but nxwright draws the default from the project ([SVG pictures](source-folder.md#svg-pictures)).
 - `memory-not-checked`: the folder has something whose memory nxwright cannot count, so the pages are checked without it ([Memory](build-rules.md#memory)). The warning shows on the page with it.
 
 ## format
@@ -367,11 +369,12 @@ nxwright new-page app settings
 nxwright picture app "My Icon.jpg" logo.png
 ```
 
-`picture` copies picture files into the folder's `pictures/`, and lists them after its other pictures, in the order given. It takes `.png`, `.jpg`, `.jpeg`, `.bmp`, and `.gif` files.
+`picture` copies picture files into the folder's `pictures/`, and lists them after its other pictures, in the order given. It takes `.png`, `.jpg`, `.jpeg`, `.bmp`, `.gif`, and `.svg` files.
 
 - Each picture is named after its file, keeping only letters, digits, `_`, and `-`: `My Icon.jpg` gives `MyIcon`.
-- The command fails, and writes nothing, in these cases:
+- The command fails in these cases:
   - a file nxwright cannot read as a picture;
+  - an SVG file that cannot be drawn, such as one with a <use ...> that points at a non-existant file;
   - a name the folder already has, in any letter case;
   - a name whose file, or source file, is already in `pictures/`, though `app.toml` does not list it;
   - two files that give the same name.
@@ -579,6 +582,7 @@ The command fails while the folder still uses the resource, and lists each use i
 Details:
 
 - A number that code computes, or keeps in a variable, as in `p0.pic=n0.val`, is not found.
+- A path to the picture's file in another SVG picture, as in `<use href="normal.svg#home"/>`, is not found either. After the removal, `nxwright check` reports that path ([SVG pictures](source-folder.md#svg-pictures)).
 - The command also fails on a folder whose checks find an error, since the error could hide a use.
 - A file that cannot be deleted is listed, and stays, though `app.toml` no longer lists it.
 - A folder that a picture's name made, such as `icons/`, stays, even when empty.
@@ -636,6 +640,7 @@ Details:
 
 - A change of letter case alone, such as `logo` to `Logo`, is a rename too.
 - A name in another folder, such as `icons/logo`, makes that folder. The old folder stays, even when empty.
+- `rename` does not change paths inside SVG <use> statements. A path to a renamed picture's file stops working, and so does a relative path inside a picture that moves to another folder. `nxwright check` then reports each path you need to fix ([SVG pictures](source-folder.md#svg-pictures)).
 - A page's new name must be one that [new-page](#new-page) would accept.
 - `rename` does not change your Python tests or launch configurations, so update any that use the page's old name.
 - The command fails and changes nothing if another page, or another resource of the same kind, has the new name in any letter case, or if the folder's checks find an error, before or after the rename.

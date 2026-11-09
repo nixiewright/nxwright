@@ -767,7 +767,8 @@ _SUBCOMMANDS = [
                               "(.ttf, .otf, or .ttc), to draw its font from"}),
       ("--font", {"help": "for chinese-input: a gb2312 font of the folder's, by name"})]),
     ("picture", _run_picture, "add pictures to a source folder",
-     "Copies picture files (.png, .jpg, .jpeg, .bmp, or .gif) into the folder's pictures/, "
+     "Copies picture files (.png, .jpg, .jpeg, .bmp, .gif, or .svg) into the folder's "
+     "pictures/, "
      "and lists them after its other pictures, in the order given. Each is named after its "
      "file, kept to letters, digits, _ and -: \"My Icon.jpg\" gives MyIcon. A file nxwright "
      "cannot read as a picture, a name the folder has, in any case, or two files giving one "

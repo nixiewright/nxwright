@@ -1,0 +1,33 @@
+/* The demo's theme, which every picture links. nxwright draws the colours of
+   app.toml's defines. The values below are for other SVG viewers, such as a
+   browser, and nxwright check warns when one differs from its default. */
+:root { --BACKGROUND: #0d1116; --TEXT: #eff3f7; --ACCENT: #ff8a42; }
+
+/* The colours and shapes every picture shares. Large areas are flat, since
+   the screen's 16-bit colours would show a slow gradient as bands. */
+  .page { fill: var(--BACKGROUND); }
+  .card { fill: #161b23; stroke: #232a35; stroke-width: 1; }
+  .well { fill: #0f1319; stroke: #1d232c; stroke-width: 1; }
+  .nav { fill: #12161d; }
+  .rule { stroke: #1f262f; stroke-width: 1; }
+  .grid { stroke: #242c37; stroke-width: 1; stroke-dasharray: 4 6; }
+  .axis { stroke: #2e3744; stroke-width: 1; }
+  .icon { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .round-button { fill: #212833; stroke: #2a3340; stroke-width: 1; }
+  .round-button-pressed { fill: #354050; stroke: #475466; stroke-width: 1; }
+  .glyph { fill: none; stroke: var(--TEXT); stroke-width: 2.5; stroke-linecap: round; }
+
+/* The navigation bar (shapes.svg#frame): the page's tab lights up. The
+   picture's root names its page, as in class="page-home". */
+  .tab { color: #66717f; }
+  .tab .indicator { display: none; }
+  .tab .pressed-tab { fill: #1b212a; }
+  .page-home .tab-home, .page-schedule .tab-schedule,
+  .page-day .tab-day, .page-settings .tab-settings { color: var(--ACCENT); }
+  .page-home .tab-home .indicator, .page-schedule .tab-schedule .indicator,
+  .page-day .tab-day .indicator, .page-settings .tab-settings .indicator { display: inline; }
+
+/* Variants: a class on a picture's root, such as class="pressed", shows
+   the parts that only that variant has. */
+.only-pressed, .only-heating, .only-cooling, .only-idle, .only-off, .only-on { display: none; }
+.pressed .only-pressed, .heating .only-heating, .cooling .only-cooling, .idle .only-idle, .off .only-off, .on .only-on { display: inline; }

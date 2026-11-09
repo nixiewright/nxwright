@@ -22,6 +22,9 @@ on fahrenheit.up:
   unit = UNIT_FAHRENHEIT
   showUnit()
 
+on aboutCard.up:
+  page about
+
 // The screen dims as the slider is pressed and moved. A press away from the
 // knob moves it there, but runs only the press's event, not `slide`.
 on brightness.down:

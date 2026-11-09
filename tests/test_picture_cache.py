@@ -102,6 +102,29 @@ class LookupTest(CacheTestCase):
         self.assertEqual(cache.size(), len(newest))
         self.assertIsNone(cache.get(PNG, FORMAT_COMPRESSED, 0))
 
+    def test_a_drawn_svg_picture_is_found_by_its_key(self):
+        cache = self.open()
+        cache.add_drawn_svg("key", PNG)
+        cache.save()
+        self.assertEqual(self.open().get_drawn_svg("key"), PNG)
+        self.assertIsNone(self.open().get_drawn_svg("another key"))
+        with sqlite3.connect(self.cache_folder / FILE_NAME) as connection:
+            connection.execute("UPDATE svg_pictures SET png = x'00'")
+        connection.close()
+        self.assertIsNone(self.open().get_drawn_svg("key"))
+
+    def test_the_size_counts_drawn_svg_pictures_too(self):
+        # Those used longest ago go first, whichever they are.
+        cache = self.open()
+        cache.add_drawn_svg("old", OTHER_PNG)
+        cache.save()
+        made = self.stored(PNG)
+        cache = self.open()
+        self.assertEqual(cache.size(), len(OTHER_PNG) + len(made.block))
+        cache._keep_under(cache.size() - 1, len(made.block) + 1)
+        self.assertIsNone(cache.get_drawn_svg("old"))
+        self.assertIsNotNone(cache.get(PNG, FORMAT_COMPRESSED, 0))
+
 
 class BuildTest(CacheTestCase):
     """Writing a project anew, through the cache."""

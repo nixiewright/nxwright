@@ -1,0 +1,4 @@
+<?xml-stylesheet href="../css/theme.css" type="text/css"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" class="page-day pressed">
+  <use href="normal.svg#day"/>
+</svg>

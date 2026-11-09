@@ -30,6 +30,18 @@ A launch configuration's `page` gives the page to start on, and its `values` giv
 - A key may also give a component of another page, such as `page0.t0.txt`. That component's scope must be global.
 - To start on a keyboard page, set `loadpageid.val` and `loadcmpid.val` to the page and the ID of the component that opens it. Without them, the simulator adds a page of its own that opens the keyboard, and shows the text the keyboard returns.
 
+### Changing define values
+
+To simulate with non-default values for the defines of `app.toml`, specify them in a launch configuration's `defines` ([source-folder.md](source-folder.md#apptoml)). For example, to try another colour and a longer title:
+
+```json
+"defines": {"ACCENT": "#ff3030", "TITLE": "A much longer application title"}
+```
+
+- A define whose default is a number takes a whole number, and one whose default is a text takes a text.
+- A name that `app.toml` does not declare, or a value of the wrong type, stops the launch.
+- **Simulate page** and the page preview use the defaults. To see other values there, change the defaults in `app.toml` temporarily.
+
 ### The EEPROM
 
 A launch configuration's `eeprom` gives a file that keeps the EEPROM between simulations. Without one, the EEPROM starts empty each time.

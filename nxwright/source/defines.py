@@ -6,11 +6,13 @@ through a placeholder, which is the define's name between two %, as in
 (filled), and the commands that rewrite the files keep them.
 
 `build` and `compile` take new values from the command line, with
-`--define NAME=VALUE`. A build reads app.toml in many places, so rather
-than pass the new values to each one, the command sets them in a context
-variable for as long as it runs (overriding_defines), and parse_app
-applies them each time it reads app.toml. Outside the command, every
-reader gets the defaults.
+`--define NAME=VALUE`, and a simulation from its launch configuration's
+`defines`. A build reads app.toml in many places, so rather than pass the
+new values to each one, the command sets them in a context variable for as
+long as it runs (overriding_defines), and parse_app applies them each time
+it reads app.toml. A context variable belongs to one thread, so a
+simulation, which reads the folder on two, sets the values on each.
+Outside these, every reader gets the defaults.
 """
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -29,9 +31,14 @@ DEFINE_OPTION = {"action": "append", "default": [], "metavar": "NAME=VALUE",
                  "help": "give app.toml's define NAME the value VALUE for this build "
                          "(repeat for each define)"}
 
-# The new values that the running `build` or `compile` was given, {name:
-# the text after "="}, empty outside one.
-_OVERRIDES = ContextVar("define_overrides", default={})
+# Where new values come from, so that their messages can say so: the
+# command line's --define, or a simulation's launch configuration.
+COMMAND_LINE = "--define"
+LAUNCH_CONFIGURATION = "launch configuration"
+
+# The new values that the running command or simulation was given, {name:
+# the value as text}, with where they come from.
+_OVERRIDES = ContextVar("define_overrides", default=({}, COMMAND_LINE))
 
 
 def define_arguments(arguments: list) -> dict:
@@ -50,16 +57,36 @@ def define_arguments(arguments: list) -> dict:
     return overrides
 
 
+def launch_defines(given) -> dict:
+    """Returns {name: value as text} from a launch configuration's
+    `defines`, an object such as {"LIMIT": 40, "TITLE": "Lab"}. A value is a
+    whole number or a text, as in app.toml. Raises NxwrightError for any
+    other form."""
+    if not isinstance(given, dict):
+        raise NxwrightError("the launch configuration's defines must be an object, as in "
+                            '"defines": {"LIMIT": 40}')
+    overrides = {}
+    for name, value in given.items():
+        # JSON's true is Python's True, which is an int: only real numbers count.
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            raise NxwrightError("the launch configuration's defines: %s must be a whole number "
+                                "or a text" % name)
+        overrides[name] = str(value)
+    return overrides
+
+
 def is_define_name(name: str) -> bool:
     """Whether `name` can name a define."""
     return bool(_NAME.fullmatch(name))
 
 
 @contextmanager
-def overriding_defines(overrides: dict):
+def overriding_defines(overrides: dict, source: str = COMMAND_LINE):
     """Within the `with` block, app.toml's defines take the new values
-    `overrides`, {name: value as text}, wherever app.toml is read."""
-    token = _OVERRIDES.set(dict(overrides))
+    `overrides`, {name: value as text}, wherever app.toml is read on this
+    thread. `source`, COMMAND_LINE or LAUNCH_CONFIGURATION, is where they
+    come from, so that a message about one of them can say so."""
+    token = _OVERRIDES.set((dict(overrides), source))
     try:
         yield
     finally:
@@ -87,12 +114,13 @@ def checked_defines(table) -> dict:
             raise NxwrightError("app.toml: the define %s must be a whole number or a text"
                                 % name)
         defines[name] = value
-    for name, text in _OVERRIDES.get().items():
+    overrides, source = _OVERRIDES.get()
+    for name, text in overrides.items():
         if name not in defines:
             declared = ", ".join(sorted(defines)) or "none"
-            raise NxwrightError("--define %s: app.toml's [defines] does not declare %s "
-                                "(it declares %s)" % (name, name, declared))
-        defines[name] = _typed(name, text, defines[name])
+            raise NxwrightError("%s: app.toml's [defines] does not declare %s (it declares %s)"
+                                % (_given(source, name), name, declared))
+        defines[name] = _typed(name, text, defines[name], source)
     return defines
 
 
@@ -129,15 +157,28 @@ def filled(table: dict, defines: dict, fixed_keys: tuple, where: str) -> dict:
     return result
 
 
-def _typed(name: str, text: str, default):
+def _typed(name: str, text: str, default, source: str):
     """Returns the value `text` given for the define `name`, of the type of
     its `default`: a whole number for a number, and the text as it is for
-    a text."""
+    a text. `source` is where the value comes from (overriding_defines)."""
     if isinstance(default, str):
         return text
     # int() raises ValueError for a text of thousands of digits, so a value is
     # limited to 100 digits.
     if not re.fullmatch(r"-?[0-9]{1,100}", text):
-        raise NxwrightError("--define %s=%s: %s is a number, so its value must be a whole "
-                            "number, such as 30 or -5" % (name, text, name))
+        raise NxwrightError("%s: %s is a number, so its value must be a whole number, such as "
+                            "30 or -5" % (_given(source, name, text), name))
     return int(text)
+
+
+def _given(source: str, name: str, text: str = None) -> str:
+    """Returns the start of a message about the define `name`, and its new
+    value `text` if given, in the words of its `source`: "--define
+    LIMIT=abc", or "the launch configuration's defines give LIMIT the value
+    abc". Without `text`, the launch configuration's start leaves out the
+    name, which the message then gives."""
+    if source == COMMAND_LINE:
+        return "--define %s" % (name if text is None else "%s=%s" % (name, text))
+    if text is None:
+        return "the launch configuration's defines"
+    return "the launch configuration's defines give %s the value %s" % (name, text)

@@ -18,7 +18,7 @@ h = 32
 sta = 0
 font = "SansBold24"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 0
 txt = "Schedule"
 txt_maxl = 20
@@ -33,7 +33,7 @@ h = 32
 sta = 0
 font = "SansBold24"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 2
 txt = "00:00"
 txt_maxl = 5
@@ -49,7 +49,7 @@ sta = 0
 picc = "schedule/normal"
 picc2 = "schedule/pressed"
 pco = "#63717b"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 ycen = 2
 txt = "Home"
 
@@ -63,8 +63,8 @@ h = 72
 sta = 0
 picc = "schedule/normal"
 picc2 = "schedule/pressed"
-pco = "#ff8a42"
-pco2 = "#ff8a42"
+pco = "%ACCENT%"
+pco2 = "%ACCENT%"
 ycen = 2
 txt = "Schedule"
 
@@ -79,7 +79,7 @@ sta = 0
 picc = "schedule/normal"
 picc2 = "schedule/pressed"
 pco = "#63717b"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 ycen = 2
 txt = "Day"
 
@@ -94,7 +94,7 @@ sta = 0
 picc = "schedule/normal"
 picc2 = "schedule/pressed"
 pco = "#63717b"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 ycen = 2
 txt = "Settings"
 
@@ -122,7 +122,7 @@ h = 30
 sta = 0
 font = "Sans20"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 0
 txt = "Wake"
 
@@ -136,7 +136,7 @@ h = 36
 sta = 0
 font = "SansBold24"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 0
 txt = "06:30"
 
@@ -150,7 +150,7 @@ h = 36
 sta = 0
 font = "SansBold24"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 2
 txt = "21.0°"
 
@@ -187,7 +187,7 @@ h = 36
 sta = 0
 font = "SansBold24"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 0
 txt = "08:30"
 
@@ -201,7 +201,7 @@ h = 36
 sta = 0
 font = "SansBold24"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 2
 txt = "17.0°"
 
@@ -238,7 +238,7 @@ h = 36
 sta = 0
 font = "SansBold24"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 0
 txt = "17:30"
 
@@ -252,7 +252,7 @@ h = 36
 sta = 0
 font = "SansBold24"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 2
 txt = "21.5°"
 
@@ -289,7 +289,7 @@ h = 36
 sta = 0
 font = "SansBold24"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 0
 txt = "22:30"
 
@@ -303,7 +303,7 @@ h = 36
 sta = 0
 font = "SansBold24"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 2
 txt = "18.0°"
 
@@ -317,7 +317,7 @@ h = 30
 sta = 0
 font = "SansBold24"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 0
 txt = "Wake"
 
@@ -356,7 +356,7 @@ h = 40
 sta = 0
 font = "SansBold32"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 txt = "06:30"
 
 [[component]]
@@ -407,7 +407,7 @@ h = 40
 sta = 0
 font = "SansBold32"
 picc = "schedule/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 txt = "21.0°"
 
 [[component]]

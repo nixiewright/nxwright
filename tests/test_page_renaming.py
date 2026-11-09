@@ -46,9 +46,9 @@ class PageRenamingTest(unittest.TestCase):
     def test_a_page_and_each_use_of_its_name_are_renamed(self):
         written = rename_page(self.source, "settings", "config")
         self.assertEqual(written, ["pages/config.page.toml", "pages/config.nx",
-                                   "pages/lib/frame.nx", "app.toml"])
+                                   "pages/lib/frame.nx", "pages/about.nx", "app.toml"])
         # The page keeps its place, and so its ID.
-        self.assertEqual(self.pages(), ["home", "schedule", "day", "config"])
+        self.assertEqual(self.pages(), ["home", "schedule", "day", "config", "about"])
         self.assertFalse((self.source / "pages/settings.page.toml").exists())
         self.assertFalse((self.source / "pages/settings.nx").exists())
         self.assertIn('name = "config"', self.text("pages/config.page.toml"))
@@ -61,7 +61,7 @@ class PageRenamingTest(unittest.TestCase):
 
     def test_a_change_of_letter_case_alone(self):
         rename_page(self.source, "settings", "Settings")
-        self.assertEqual(self.pages(), ["home", "schedule", "day", "Settings"])
+        self.assertEqual(self.pages(), ["home", "schedule", "day", "Settings", "about"])
         listed = {path.name for path in (self.source / "pages").iterdir()}
         self.assertLessEqual({"Settings.page.toml", "Settings.nx"}, listed)
         self.assertNotIn("settings.nx", listed)
@@ -125,7 +125,7 @@ class PageRenamingTest(unittest.TestCase):
                          encoding="utf-8")
         self.assertTrue(self.builds())
         rename_page(self.source, "a:b", "day")
-        self.assertEqual(self.pages(), ["home", "schedule", "day", "settings"])
+        self.assertEqual(self.pages(), ["home", "schedule", "day", "settings", "about"])
         self.assertIn('name = "day"', self.text("pages/day.page.toml"))
         self.assertFalse((self.source / page_toml_path("a:b")).exists())
         self.assertTrue(self.builds())
@@ -136,7 +136,7 @@ class PageRenamingTest(unittest.TestCase):
             code = main(["rename", str(self.source), "page", "settings", "config"])
         self.assertEqual(code, 0)
         self.assertIn("Renamed the page settings to config", printed.getvalue())
-        self.assertEqual(self.pages(), ["home", "schedule", "day", "config"])
+        self.assertEqual(self.pages(), ["home", "schedule", "day", "config", "about"])
 
 
 if __name__ == "__main__":

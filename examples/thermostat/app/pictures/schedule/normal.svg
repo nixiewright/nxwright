@@ -1,0 +1,41 @@
+<?xml-stylesheet href="../css/theme.css" type="text/css"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" class="page-schedule">
+<!-- The schedule: four periods of the day on the left, and the selected
+     period's start and target on the right. The selected period's marker is
+     a picture of its own (marker/on.svg). -->
+<g id="schedule">
+<use href="../shapes.svg#frame"/>
+
+<rect class="card" x="16.5" y="72.5" width="503" height="72" rx="18"/>
+<circle cx="64" cy="108.5" r="22" fill="#ffc24a" fill-opacity="0.14"/>
+<use href="../shapes.svg#i-sunrise" class="icon" x="52" y="96.5" width="24" height="24" style="color: #ffc24a"/>
+
+<rect class="card" x="16.5" y="153.5" width="503" height="72" rx="18"/>
+<circle cx="64" cy="189.5" r="22" fill="#6aa8ff" fill-opacity="0.14"/>
+<use href="../shapes.svg#i-briefcase" class="icon" x="52" y="177.5" width="24" height="24" style="color: #6aa8ff"/>
+
+<rect class="card" x="16.5" y="234.5" width="503" height="72" rx="18"/>
+<circle cx="64" cy="270.5" r="22" fill="#3fd6a4" fill-opacity="0.14"/>
+<use href="../shapes.svg#i-home" class="icon" x="52" y="258.5" width="24" height="24" style="color: #3fd6a4"/>
+
+<rect class="card" x="16.5" y="315.5" width="503" height="72" rx="18"/>
+<circle cx="64" cy="351.5" r="22" fill="#a88bff" fill-opacity="0.14"/>
+<use href="../shapes.svg#i-moon" class="icon" x="52" y="339.5" width="24" height="24" style="color: #a88bff"/>
+
+<!-- The selected period. -->
+<rect class="card" x="536.5" y="72.5" width="247" height="315" rx="22"/>
+<line class="rule" x1="552" y1="124.5" x2="768" y2="124.5"/>
+<circle class="round-button" cx="580" cy="188" r="27.5"/>
+<circle class="round-button-pressed only-pressed" cx="580" cy="188" r="27.5"/>
+<path class="glyph" d="M571 188 H589"/>
+<circle class="round-button" cx="740" cy="188" r="27.5"/>
+<circle class="round-button-pressed only-pressed" cx="740" cy="188" r="27.5"/>
+<path class="glyph" d="M731 188 H749 M740 179 V197"/>
+<circle class="round-button" cx="580" cy="292" r="27.5"/>
+<circle class="round-button-pressed only-pressed" cx="580" cy="292" r="27.5"/>
+<path class="glyph" d="M571 292 H589"/>
+<circle class="round-button" cx="740" cy="292" r="27.5"/>
+<circle class="round-button-pressed only-pressed" cx="740" cy="292" r="27.5"/>
+<path class="glyph" d="M731 292 H749 M740 283 V301"/>
+</g>
+</svg>

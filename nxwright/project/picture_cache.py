@@ -1,4 +1,5 @@
-"""Screen copies made from pictures, kept between builds.
+"""Screen copies made from pictures, and pictures drawn from SVG files, kept
+between builds.
 
 Making a picture's screen copy from its file (screen_copy.py) is slow: the
 Editor's arithmetic and compression, in Python, pixel by pixel. So screen
@@ -18,6 +19,12 @@ default ~/.cache/nxwright) elsewhere. The environment variable NXWRIGHT_CACHE
 names another folder, or turns the cache off with "off". Past MOST_BYTES of
 screen copies, those used longest ago are removed down to KEPT_BYTES, and the
 file is compacted.
+
+The cache also keeps the PNG pictures drawn from SVG files
+(source/svg_pictures.py), under the key of their drawing, which covers
+everything a picture depends on. Both kinds of entry count toward the
+cache's size, and those used longest ago are removed first, whatever their
+kind.
 
 A cache never makes a build fail: one that cannot be opened, read, or written
 is left aside with a warning, and screen copies are made as without it.
@@ -51,6 +58,8 @@ _SCHEMA = """CREATE TABLE IF NOT EXISTS screen_copies (
     png_hash TEXT, kind INTEGER, rotation INTEGER, fingerprint TEXT,
     width INTEGER, height INTEGER, block BLOB, block_hash TEXT, last_used REAL,
     PRIMARY KEY (png_hash, kind, rotation, fingerprint))"""
+_SVG_SCHEMA = """CREATE TABLE IF NOT EXISTS svg_pictures (
+    key TEXT PRIMARY KEY, png BLOB, png_hash TEXT, last_used REAL)"""
 
 
 @dataclass
@@ -90,6 +99,7 @@ class PictureCache:
         self._connection = sqlite3.connect(str(path), timeout=30)
         try:
             self._connection.execute(_SCHEMA)
+            self._connection.execute(_SVG_SCHEMA)
             self._connection.commit()
         except sqlite3.Error:
             # Such as a file that is not a database: no one else will close it.
@@ -97,6 +107,8 @@ class PictureCache:
             raise
         self._added = []    # rows to insert
         self._used = []     # keys of the entries read
+        self._added_svgs = []   # rows of drawn SVG pictures to insert
+        self._used_svgs = []    # keys of the drawn SVG pictures read
         self._unreadable = False
 
     def get(self, picture: bytes, kind: int, rotation: int):
@@ -123,6 +135,29 @@ class PictureCache:
         self._added.append((_hash(picture), kind, rotation, self.fingerprint, made.width, made.height,
                             made.block, _hash(made.block)))
 
+    def get_drawn_svg(self, key: str):
+        """Returns the PNG picture drawn for the SVG drawing `key`
+        (svg_pictures.SvgDrawing.key), or None. An entry whose picture no
+        longer matches its hash is not used."""
+        if self._unreadable:
+            return None
+        try:
+            row = self._connection.execute(
+                "SELECT png, png_hash FROM svg_pictures WHERE key = ?", (key,)).fetchone()
+        except sqlite3.Error as error:
+            self._unreadable = True
+            _warn("cannot be read (%s); pictures are encoded without it" % error)
+            return None
+        if row is None or _hash(row[0]) != row[1]:
+            return None
+        self._used_svgs.append(key)
+        return row[0]
+
+    def add_drawn_svg(self, key: str, png: bytes):
+        """Notes a PNG picture drawn now for the SVG drawing `key`, to be
+        written by `save`."""
+        self._added_svgs.append((key, png, _hash(png)))
+
     def save(self):
         """Writes the entries added and when the ones read were used, then
         keeps the cache under its size."""
@@ -134,30 +169,41 @@ class PictureCache:
             self._connection.executemany(
                 "UPDATE screen_copies SET last_used = ? WHERE png_hash = ? AND kind = ? AND "
                 "rotation = ? AND fingerprint = ?", [(now,) + key for key in self._used])
-        self._added, self._used = [], []
+            self._connection.executemany(
+                "INSERT OR REPLACE INTO svg_pictures VALUES (?, ?, ?, ?)",
+                [row + (now,) for row in self._added_svgs])
+            self._connection.executemany("UPDATE svg_pictures SET last_used = ? WHERE key = ?",
+                                         [(now, key) for key in self._used_svgs])
+        self._added, self._used, self._added_svgs, self._used_svgs = [], [], [], []
         self._keep_under(MOST_BYTES, KEPT_BYTES)
 
     def _keep_under(self, most: int, kept: int):
-        """Past `most` bytes of screen copies, removes those used longest ago
-        until under `kept`, then compacts the file so that it shrinks too."""
+        """Past `most` bytes of screen copies and drawn SVG pictures, removes
+        those used longest ago until under `kept`, then compacts the file so
+        that it shrinks too."""
         total = self.size()
         if total <= most:
             return
-        removed = []
-        for rowid, length in self._connection.execute(
-                "SELECT rowid, length(block) FROM screen_copies ORDER BY last_used"):
+        removed = {"screen_copies": [], "svg_pictures": []}
+        for table, rowid, length, _ in self._connection.execute(
+                "SELECT 'screen_copies', rowid, length(block), last_used FROM screen_copies "
+                "UNION ALL SELECT 'svg_pictures', rowid, length(png), last_used FROM svg_pictures "
+                "ORDER BY last_used"):
             if total < kept:
                 break
-            removed.append((rowid,))
+            removed[table].append((rowid,))
             total -= length
         with self._connection:
-            self._connection.executemany("DELETE FROM screen_copies WHERE rowid = ?", removed)
+            for table, rows in removed.items():
+                self._connection.executemany("DELETE FROM %s WHERE rowid = ?" % table, rows)
         self._connection.execute("VACUUM")
 
     def size(self) -> int:
-        """Returns the bytes of the screen copies the cache holds."""
+        """Returns the bytes of the screen copies and the drawn SVG pictures
+        the cache holds."""
         return self._connection.execute(
-            "SELECT coalesce(sum(length(block)), 0) FROM screen_copies").fetchone()[0]
+            "SELECT (SELECT coalesce(sum(length(block)), 0) FROM screen_copies) + "
+            "(SELECT coalesce(sum(length(png)), 0) FROM svg_pictures)").fetchone()[0]
 
     def close(self):
         self._connection.close()

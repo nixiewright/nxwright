@@ -18,7 +18,7 @@ h = 32
 sta = 0
 font = "SansBold24"
 picc = "home/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 0
 txt = "Living room"
 txt_maxl = 20
@@ -33,7 +33,7 @@ h = 32
 sta = 0
 font = "SansBold24"
 picc = "home/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 2
 txt = "00:00"
 txt_maxl = 5
@@ -48,8 +48,8 @@ h = 72
 sta = 0
 picc = "home/normal"
 picc2 = "home/pressed"
-pco = "#ff8a42"
-pco2 = "#ff8a42"
+pco = "%ACCENT%"
+pco2 = "%ACCENT%"
 ycen = 2
 txt = "Home"
 
@@ -64,7 +64,7 @@ sta = 0
 picc = "home/normal"
 picc2 = "home/pressed"
 pco = "#63717b"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 ycen = 2
 txt = "Schedule"
 
@@ -79,7 +79,7 @@ sta = 0
 picc = "home/normal"
 picc2 = "home/pressed"
 pco = "#63717b"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 ycen = 2
 txt = "Day"
 
@@ -94,7 +94,7 @@ sta = 0
 picc = "home/normal"
 picc2 = "home/pressed"
 pco = "#63717b"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 ycen = 2
 txt = "Settings"
 
@@ -125,7 +125,7 @@ h = 100
 sta = 0
 font = "Sans100"
 picc = "home/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 txt = "20.5°"
 
 [[component]]
@@ -187,7 +187,7 @@ h = 56
 sta = 0
 font = "Sans56"
 picc = "home/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 txt = "21.0°"
 
 [[component]]
@@ -212,7 +212,7 @@ h = 30
 sta = 0
 font = "Sans20"
 picc = "home/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 0
 txt = "Follow schedule"
 txt_maxl = 20
@@ -254,7 +254,7 @@ font = "Sans20"
 picc = "home/normal"
 picc2 = "home/pressed"
 pco = "#8c96a5"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 txt = "Off"
 
 [[component]]
@@ -268,8 +268,8 @@ sta = 0
 font = "Sans20"
 picc = "home/pressed"
 picc2 = "home/pressed"
-pco = "#eff3f7"
-pco2 = "#eff3f7"
+pco = "%TEXT%"
+pco2 = "%TEXT%"
 txt = "Heat"
 
 [[component]]
@@ -284,5 +284,5 @@ font = "Sans20"
 picc = "home/normal"
 picc2 = "home/pressed"
 pco = "#8c96a5"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 txt = "Cool"

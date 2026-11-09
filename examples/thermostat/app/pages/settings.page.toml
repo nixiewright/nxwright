@@ -18,7 +18,7 @@ h = 32
 sta = 0
 font = "SansBold24"
 picc = "settings/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 0
 txt = "Settings"
 txt_maxl = 20
@@ -33,7 +33,7 @@ h = 32
 sta = 0
 font = "SansBold24"
 picc = "settings/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 2
 txt = "00:00"
 txt_maxl = 5
@@ -49,7 +49,7 @@ sta = 0
 picc = "settings/normal"
 picc2 = "settings/pressed"
 pco = "#63717b"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 ycen = 2
 txt = "Home"
 
@@ -64,7 +64,7 @@ sta = 0
 picc = "settings/normal"
 picc2 = "settings/pressed"
 pco = "#63717b"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 ycen = 2
 txt = "Schedule"
 
@@ -79,7 +79,7 @@ sta = 0
 picc = "settings/normal"
 picc2 = "settings/pressed"
 pco = "#63717b"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 ycen = 2
 txt = "Day"
 
@@ -93,8 +93,8 @@ h = 72
 sta = 0
 picc = "settings/normal"
 picc2 = "settings/pressed"
-pco = "#ff8a42"
-pco2 = "#ff8a42"
+pco = "%ACCENT%"
+pco2 = "%ACCENT%"
 ycen = 2
 txt = "Settings"
 
@@ -127,8 +127,8 @@ sta = 0
 font = "Sans20"
 picc = "settings/normal"
 picc2 = "settings/pressed"
-pco = "#eff3f7"
-pco2 = "#eff3f7"
+pco = "%TEXT%"
+pco2 = "%TEXT%"
 txt = "Celsius"
 
 [[component]]
@@ -143,7 +143,7 @@ font = "Sans20"
 picc = "settings/normal"
 picc2 = "settings/pressed"
 pco = "#8c96a5"
-pco2 = "#eff3f7"
+pco2 = "%TEXT%"
 txt = "Fahrenheit"
 
 [[component]]
@@ -168,7 +168,7 @@ w = 88
 h = 22
 sta = 0
 picc = "settings/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 2
 txt = "80%"
 
@@ -226,7 +226,7 @@ h = 56
 sta = 0
 font = "Sans56"
 picc = "settings/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 txt = "00:00"
 txt_maxl = 5
 
@@ -321,9 +321,9 @@ h = 28
 sta = 0
 font = "Sans20"
 picc = "settings/normal"
-pco = "#eff3f7"
+pco = "%TEXT%"
 xcen = 0
-txt = "Thermostat demo"
+txt = "%APP_NAME%"
 txt_maxl = 20
 
 [[component]]
@@ -339,3 +339,11 @@ pco = "#8c96a5"
 xcen = 0
 txt = "Made with nxwright"
 txt_maxl = 20
+
+[[component]]
+name = "aboutCard"
+type = "hotspot"
+x = 408
+y = 288
+w = 376
+h = 100

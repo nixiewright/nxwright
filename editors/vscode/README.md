@@ -77,6 +77,8 @@ Open a font file to see it with a sample text, and to create a variation of it.
 
 The Media section lets you add pictures, and make animations, videos, and sounds from ordinary files. You can play the animations, videos, and sounds in VS Code.
 
+Open an SVG picture to see how nxwright draws it, with your defaults defines in any ([SVG pictures](https://github.com/nixiewright/nxwright/blob/main/docs/source-folder.md#svg-pictures)). The drawing updates when you edit the picture or a file it uses. To edit the file as text, switch with the editor picker, the same way you switch between a page's source and its preview.
+
 Right-click a resource to replace, rename, or delete it. Replacing keeps its ID, and deleting can leave an empty slot in its place, so that numbers in your code still point to the right resources.
 
 ### Simulate your app
@@ -153,6 +155,7 @@ A launch configuration of type `nxwright` simulates the source folder given by `
 | --- | --- |
 | `page` | The page to start on, instead of running `program.nx`. |
 | `values` | With `page`, the values to start with, such as `{"t0.txt": "Hello"}`. |
+| `defines` | Other values for `app.toml`'s defines, such as `{"LIMIT": 40}`. |
 | `eeprom` | A file that keeps the EEPROM's contents between simulations. It is created if missing. Without it, the EEPROM starts empty every time. |
 | `serialPort` | The serial port connected to the screen's serial line, such as `{"name": "COM4", "baud": 115200}`. |
 | `gpioInputs` | The levels the GPIO inputs start at, such as `{"pio2": 0}`. Without it, every input reads 1, like a pull-up input with nothing driving it. |

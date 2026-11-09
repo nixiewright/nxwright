@@ -8,6 +8,7 @@ pages = [
     "schedule",
     "day",
     "settings",
+    "about",
 ]
 pictures = [
     "logo",
@@ -26,6 +27,9 @@ pictures = [
     "marker/on",
     "marker/off",
     "knob",
+    "about/normal",
+    "about/pressed",
+    "nxwright",
 ]
 fonts = [
     "Sans16",
@@ -35,3 +39,9 @@ fonts = [
     "Sans56",
     "Sans100",
 ]
+
+[defines]
+BACKGROUND = "#0d1116"
+TEXT = "#eff3f7"
+ACCENT = "#ff8a42"
+APP_NAME = "Thermostat demo"
