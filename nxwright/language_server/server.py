@@ -37,9 +37,12 @@ nxwright's own code counts a line's columns in Python's characters. The
 server takes and gives them in the editor's units, UTF-16 unless the editor
 offers another.
 
-Each request reads the source folder afresh: its open files as the editor
-has them, the others from disk (file_texts.py). So a change made outside the
-editor, such as an extract, is always seen.
+Each request reads the source folder afresh, with its open files as the
+editor has them and the others from disk (file_texts.py). The server therefore
+always sees a change made outside the editor, such as an extract. It does keep
+the numbers that stand for resources between requests, for inlay hints and
+code actions, but only until a file they came from changes
+(resource_number_cache.py).
 """
 import asyncio
 from pathlib import Path
@@ -77,6 +80,7 @@ from nxwright.language_server.page_components import (add_component, clear_event
                                                        reorder_components)
 from nxwright.testing.preview import Previews, page_of_file
 from nxwright.language_server.quick_fixes import quick_fix
+from nxwright.language_server.resource_number_cache import ResourceNumberCache
 from nxwright.source.references import references
 from nxwright.language_server.symbols import file_symbols, folder_symbols
 from nxwright.language_server.rename import rename
@@ -148,6 +152,7 @@ class NxwrightServer(LanguageServer):
         self._checks = LiveChecks(self._texts, self, self._units)
         self._previews = Previews()
         self._font_panel = FontPanelAnswers()
+        self._resource_numbers = ResourceNumberCache(self._texts)
         self._initialized = False
         self.shut_down = False
         self._pause = None          # the checks to run once changes pause
@@ -292,11 +297,20 @@ class NxwrightServer(LanguageServer):
     def _folder(self, uri: str):
         """Returns (FolderIndex, path within the folder) of the file `uri`, or
         None outside a source folder."""
+        found = self._root_and_path(uri)
+        if found is None:
+            return None
+        root, path = found
+        return FolderIndex(root, self._texts.read), path
+
+    def _root_and_path(self, uri: str):
+        """Returns (the source folder's root, path within the folder) of the
+        file `uri`, or None outside a source folder."""
         path = path_of(uri)
         root = find_source_folder(path, self._texts.read) if path else None
         if root is None:
             return None
-        return FolderIndex(root, self._texts.read), path.relative_to(root).as_posix()
+        return root, path.relative_to(root).as_posix()
 
     def _folder_of(self, params: dict):
         """Returns (FolderIndex, path within the folder) of the file of one of
@@ -445,19 +459,18 @@ class NxwrightServer(LanguageServer):
 
     def _numbers_of(self, uri: str):
         """Returns (FolderIndex, path, the folder's source, the file's
-        PlacedNumbers) for a .nx file or a page file. Returns None for any
-        other file, or when the folder cannot be read."""
-        found = self._folder(uri)
-        if found is None:
+        PlacedNumbers) for a .nx file or a page file, or None for any other
+        file or when the folder cannot be read. The numbers are kept until a
+        file they came from changes (resource_number_cache.py)."""
+        found = self._root_and_path(uri)
+        if found is None or not found[1].endswith((".nx", PAGE_FILE_SUFFIX)):
             return None
-        index, path = found
-        if not path.endswith((".nx", PAGE_FILE_SUFFIX)):
+        root, path = found
+        kept = self._resource_numbers.numbers_of(root, path)
+        if kept is None:
             return None
-        try:
-            folder = read_folder_source(self._texts.folder_reader(index.root))
-        except NxwrightError:
-            return None
-        return index, path, folder, placed_numbers(folder, index, path)
+        index, folder, numbers = kept
+        return index, path, folder, numbers
 
     def _inlay_hints(self, params) -> list:
         """Returns the protocol's InlayHints of the request's file: after each

@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.6] - 2026-11-09
+
+- Added caching for resource name hints.
+
 ### [0.2.5] - 2026-11-08
 
 - The build now rejects another page's own attributes, and its components of local scope.

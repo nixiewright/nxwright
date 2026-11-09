@@ -2,9 +2,11 @@
 file's own text; and what the language server makes of them: an inlay hint
 with the resource's name, a code action writing the number as the name, and
 the request that does so across the folder."""
+from unittest import mock
+
 from nxwright.language_server.file_texts import uri_of
 from nxwright.source.folder_index import FolderIndex, text_on_disk
-from nxwright.source.resource_numbers import as_name, placed_numbers
+from nxwright.source.resource_numbers import as_name, code_lines, placed_numbers
 from nxwright.source.source_folder import folder_reader, read_folder_source, switch_to_nxlang
 from tests.language_server_connection import INITIALIZE_PARAMS, ServerConnection
 from tests.test_remove_resource import RemoveResourceTestCase
@@ -99,6 +101,49 @@ class ServerTest(PlacedNumbersTestCase):
             "textDocument": {"uri": uri_of(self.source / CODE)}, "range": self.whole_file(CODE)})
         self.assertEqual([(hint["position"], hint["label"]) for hint in hints],
                          [({"line": 1, "character": 10}, "b"), ({"line": 2, "character": 14}, "b")])
+
+    def test_the_code_is_compiled_again_only_after_a_change(self):
+        compiled = []
+
+        def counting(folder, index, only=None):
+            compiled.append(only)
+            return code_lines(folder, index, only)
+
+        hints = {"textDocument": {"uri": uri_of(self.source / CODE)},
+                 "range": self.whole_file(CODE)}
+        actions = {"textDocument": {"uri": uri_of(self.source / CODE)},
+                   "range": {"start": {"line": 1, "character": 9},
+                             "end": {"line": 1, "character": 9}},
+                   "context": {"diagnostics": []}}
+        with mock.patch("nxwright.source.resource_numbers.code_lines", counting):
+            self.ask("textDocument/inlayHint", hints)
+            self.ask("textDocument/inlayHint", hints)
+            self.ask("textDocument/codeAction", actions)
+            self.assertEqual(compiled, [CODE])
+            # The server sees a change on disk even if the editor does not report it.
+            self.write_code("p0.pic=0")
+            self.assertEqual([hint["label"] for hint in self.ask("textDocument/inlayHint", hints)],
+                             ["a"])
+            self.assertEqual(compiled, [CODE, CODE])
+            # The server also sees a change to another file the numbers came from,
+            # here a picture's name in app.toml.
+            app = self.source / "app.toml"
+            app.write_text(app.read_text(encoding="utf-8").replace('"a"', '"logo"'),
+                           encoding="utf-8", newline="\n")
+            self.assertEqual([hint["label"] for hint in self.ask("textDocument/inlayHint", hints)],
+                             ["logo"])
+
+    def test_a_folder_that_cannot_be_read_is_read_again_once_it_can(self):
+        hints = {"textDocument": {"uri": uri_of(self.source / CODE)},
+                 "range": self.whole_file(CODE)}
+        page = self.source / PAGE
+        text = page.read_text(encoding="utf-8")
+        page.unlink()
+        self.assertEqual(self.ask("textDocument/inlayHint", hints), [])
+        self.assertEqual(self.ask("textDocument/inlayHint", hints), [])
+        page.write_text(text, encoding="utf-8", newline="\n")
+        self.assertEqual([hint["label"] for hint in self.ask("textDocument/inlayHint", hints)],
+                         ["b", "b"])
 
     def test_a_code_action_on_a_number(self):
         actions = self.ask("textDocument/codeAction", {
