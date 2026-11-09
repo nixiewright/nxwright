@@ -80,7 +80,7 @@ nxwright extract thermostat.HMI app
   - **Kept exactly**, such as a component type nxwright does not know, or an attribute it does not know. A page file keeps such an attribute as its stored bytes ([source-folder.md](source-folder.md#page-files)). A warning gives each thing kept.
   - **Written otherwise** by the next build, in a form nxwright knows. For example, the build writes a page header of an unfamiliar form in the current form, and puts an object's records back in their usual order. A warning gives each thing, and extract goes on without prompting.
   - **May be lost** by the next build, such as a block of a kind nxwright does not handle, or a screen model it does not know. Extract lists each one, warns that the project may then lack parameters the Nextion Editor needs, and prompts you to choose whether to go on. `--continue-with-unknown` goes on without prompting. In a script, without that option, extract stops with exit code 3.
-  - **Cannot be kept**, such as a component without its type, ID, or name. Extract rejects the project.
+  - **Cannot be kept**, such as a component without its type, ID, or name, or a page nxwright cannot read. Extract rejects the project.
 
   `nxwright report` writes a report on these things that you can send to nxwright's maintainers ([report](#report)).
 - `nxwright extract --list-unknown thermostat.HMI` prints each thing in the project that nxwright does not know, one JSON object per line, and writes nothing. Each object gives what the thing is, where it is, its group from the list above (as `sort`), its size, and its first 16 bytes in hexadecimal.

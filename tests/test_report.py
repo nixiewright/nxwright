@@ -31,6 +31,12 @@ class ReportTest(PatchedDemoTestCase):
         self.assertIn("newattr, on a page", text)
         self.assertIn("block 0.pa, object 0, attribute newattr", text)
 
+    def test_a_page_nxwright_cannot_read_is_reported(self):
+        # The page's header size, 60, is 3c 00 00 00 at bytes 8 to 11.
+        text = report_text(self.with_unreadable_page("report-layout.HMI"))
+        self.assertRegex(text, r"\| a page nxwright cannot read \| block 0\.pa \| "
+                               r"cannot be kept \| 16 \| (\w\w ){8}3c 00 00 00 ")
+
     def test_a_project_without_unknown_content_says_so(self):
         self.assertIn("nxwright knows everything in this project.", report_text(self.demo))
 

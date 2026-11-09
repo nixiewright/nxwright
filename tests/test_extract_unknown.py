@@ -98,6 +98,15 @@ class PatchedDemoTestCase(unittest.TestCase):
     def target(self, name: str) -> Path:
         return self.folder / ("source-" + name)
 
+    def with_unreadable_page(self, name: str) -> Path:
+        """Returns a copy of the demo's project, named `name`, whose first
+        page block has a header size of 60 bytes. nxwright knows only a
+        header size of 56, so it cannot read that page. A newer Nextion
+        Editor might write such a page."""
+        page = bytearray(HmiContainer.from_file(self.demo).blocks["0.pa"])
+        page[8:12] = struct.pack("<I", 60)
+        return self.patched(name, blocks={"0.pa": bytes(page)})
+
 
 class ExtractUnknownTest(PatchedDemoTestCase):
 
@@ -143,6 +152,21 @@ class ExtractUnknownTest(PatchedDemoTestCase):
             self.assertFalse(self.target("text").exists())
             extract(self.demo, self.target("text"), continue_with_unknown=True)
         self.assertTrue((self.target("text") / "app.toml").exists())
+
+    def test_a_page_nxwright_cannot_read_is_listed_then_refused(self):
+        # unknown_in_project_file lists the page rather than raising, so
+        # that `nxwright report` still works.
+        project = self.with_unreadable_page("layout.HMI")
+        found = unknown_in_project_file(project)
+        self.assertEqual([(each.what, each.where, each.sort) for each in found],
+                         [("a page nxwright cannot read", "block 0.pa",
+                           CANNOT_BE_KEPT)])
+        with self.assertRaises(NxwrightError) as raised:
+            extract(project, self.target("layout"))
+        self.assertIn("a page nxwright cannot read (block 0.pa)",
+                      str(raised.exception))
+        self.assertIn("nxwright report", str(raised.exception))
+        self.assertFalse(self.target("layout").exists())
 
     def test_a_page_that_has_no_text_form_is_listed_not_raised(self):
         # So that `nxwright report` and `--list-unknown` still list the rest.
@@ -548,6 +572,13 @@ class ExtractCommandTest(PatchedDemoTestCase):
         self.assertIn("(manifest header, byte 14)", said)
         self.assertIn("nxwright report", said.splitlines()[-1])
         self.assertTrue((self.folder / "dumped" / "project.txt").is_file())
+
+    def test_dump_of_a_page_nxwright_cannot_read_points_to_the_report(self):
+        project = self.with_unreadable_page("dumped-layout.HMI")
+        code, _, said = self.run_command("dump", project, self.folder / "dumped-layout")
+        self.assertEqual(code, 1)
+        self.assertIn("a page nxwright cannot read (block 0.pa)", said)
+        self.assertIn("nxwright report", said)
 
     def test_import_asks_about_what_its_dump_shows(self):
         # The dump keeps the manifest header, so import finds its byte too.

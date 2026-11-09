@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.8] - 2026-11-09
+
+- `nxwright report` now works on a project with a page nxwright cannot read.
+- Extract and dump now say which page block they cannot read, and suggest `nxwright report`.
+
 ### [0.2.7] - 2026-11-09
 
 - Better message for unexpected compilation errors due to unsupported code.

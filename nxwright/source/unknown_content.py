@@ -5,6 +5,8 @@ Nextion Editor may write any of them:
   - a picture's header that the build would write differently;
   - a resized picture's source that nxwright cannot keep;
   - a screen model or a character encoding that nxwright has no entry for;
+  - a page that nxwright cannot read, such as one whose header has a
+    size nxwright does not know;
   - a page header's value or form that nxwright has not seen;
   - a page whose text form does not give back its bytes;
   - a component type or an attribute that nxwright's tables do not list.
@@ -83,9 +85,24 @@ def unknown_in_project_file(project: Path) -> list:
     function only reads the file."""
     blocks = HmiContainer.from_file(project).blocks
     manifest = parse_manifest(blocks["main.HMI"])
-    pages = {"block %s" % name: parse_page(blocks[name]) for name in manifest.block_names("pa")}
-    return (unknown_in_project(blocks, manifest, pages)
-            + unknown_in_page_texts({name: blocks[name] for name in manifest.block_names("pa")}))
+    pages, unreadable = {}, []
+    for name in manifest.block_names("pa"):
+        try:
+            pages[name] = parse_page(blocks[name])
+        except NxwrightError:
+            # List the page rather than raise, so that the report can
+            # still be written. A newer Nextion Editor may store pages in a
+            # form nxwright cannot read, and the report is how the user
+            # tells nxwright's maintainers about it.
+            # The report shows the page's first 16 bytes. They include the
+            # header size, and stop before the page's name, because the
+            # report never shows a name the user chose.
+            unreadable.append(UnknownContent("a page nxwright cannot read",
+                                             "block %s" % name, blocks[name][:16],
+                                             CANNOT_BE_KEPT))
+    return (unknown_in_project(blocks, manifest,
+                               {"block %s" % name: page for name, page in pages.items()})
+            + unreadable + unknown_in_page_texts({name: blocks[name] for name in pages}))
 
 
 def unknown_in_page_texts(blocks: dict) -> list:
