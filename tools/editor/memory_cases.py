@@ -25,10 +25,10 @@ from nxwright.project.screen_models import model_named
 from nxwright.project.font_drawing import draw_font_block
 from nxwright.project.truetype import NOTO_SANS, noto_sans
 from nxwright.project.attribute_descriptions import describe
+from nxwright.project.attribute_ranges import attribute_range
 from nxwright.project.component_defaults import nxwright_defaults
 from nxwright.project.page_text import is_string_attribute
-from nxwright.source.page_source import (attribute_range, page_file_text, page_toml_path,
-                                         reference_kind)
+from nxwright.source.page_source import page_file_text, page_toml_path, reference_kind
 from nxwright.source.project_files import build
 from nxwright.language.resource_names import ANIMATION, FONT, PICTURE, SOUND, VIDEO
 from nxwright.source.source_folder import new_source_folder
@@ -249,15 +249,21 @@ def _page_text(project: Project, page_name: str, case: Case, width: int, height:
 
 
 def varied_values(kind: str, attribute: str, base: dict) -> list:
-    """The values to try in place of an attribute's base value, so as to see
-    whether its value changes the type's cost, best first; [] for one no case
-    changes. A choice: the other choices. A picture, a font, or what a
-    component plays: another the probe folder holds. A number: one more,
-    then one less, as its bytes hold them; where the build knows the
-    Editor's range (page_source.attribute_range), within that range. A
-    text: as long, of other characters; an empty one, "x", where its buffer
-    holds one; and a value of a byte or two kept as text, its other choices,
-    or its last byte changed by one."""
+    """Returns the values to try in place of an attribute's base value, best
+    first, to see whether the attribute's value changes the type's cost.
+    Returns [] for an attribute that no case changes. The values depend on
+    the attribute:
+
+    - A choice: the other choices.
+    - A picture, a font, or what a component plays: another one that the
+      probe folder holds.
+    - A number: one more, then one less, as its bytes store them. Where the
+      build knows the Nextion Editor's range
+      (attribute_ranges.attribute_range), only values within that range.
+    - A text: one as long, of other characters. For an empty text, "x", if
+      its buffer has room for it.
+    - A value of a byte or two kept as text: its other choices, or its last
+      byte changed by one."""
     if attribute in KEPT or is_buffer(attribute):
         return []
     value = base[attribute]

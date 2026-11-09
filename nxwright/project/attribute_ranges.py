@@ -2,13 +2,15 @@
 and components, where it takes fewer than the attributes' bytes can store
 (attribute_ranges.toml, which says where they come from).
 
-A range is the same on every series, or differs by series. The build checks
-the first as it reads a page file, whatever the screen
-(page_source.attribute_range). It checks the second once it knows the
-folder's screen (series_components.check_series_components)."""
+A range can be the same on every series, or differ by series. The build
+checks the first kind when it reads a page file or defaults.toml
+(attribute_descriptions.allowed_number_bytes), and the second once it knows
+the folder's screen (series_components.check_series_components)."""
 from functools import lru_cache
 from pathlib import Path
 import tomllib
+
+from nxwright.project.object_types import TYPE_NAMES
 
 TABLE_FILE = Path(__file__).resolve().parent / "attribute_ranges.toml"
 # The table that gives an attribute the same range on every type that has it.
@@ -35,6 +37,16 @@ def range_on_every_series(type_name: str, attribute: str):
     it is the same on every series, or None."""
     found = _range(type_name, attribute)
     return tuple(found) if isinstance(found, list) else None
+
+
+def attribute_range(object_type: int, attribute: str):
+    """Returns the values the build takes for the number attribute `attribute`
+    of a component of type `object_type`, as a range. Returns None if the
+    Nextion Editor's compile takes every value the attribute's bytes can
+    store, or if the attribute's range differs by series. series_components.py
+    checks such a range once the screen is known."""
+    found = range_on_every_series(TYPE_NAMES.get(object_type, ""), attribute)
+    return None if found is None else range(found[0], found[1] + 1)
 
 
 def ranges_on_series(type_name: str, series: str) -> dict:

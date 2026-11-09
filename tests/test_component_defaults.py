@@ -159,6 +159,18 @@ class DefaultsFileTest(unittest.TestCase):
                 with self.assertRaisesRegex(NxwrightError, "test: " + where):
                     defaults_from_toml(text, "test")
 
+    def test_a_value_outside_its_range_or_its_choices_is_refused(self):
+        # A component that leaves the attribute out takes its default, so the
+        # default must be a value its page file could give.
+        for type_name, value, refusal in (
+                ("text", "vscope = 2", r"vscope must be 0 \(local\) or 1 \(global\)$"),
+                ("button", "style = 5", r"style must be from 0 to 4$")):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(NxwrightError, r"test: \[%s\.attributes\] %s"
+                                            % (type_name, refusal)):
+                    defaults_from_toml("[%s]\nevents = []\n\n[%s.attributes]\n%s\n"
+                                       % (type_name, type_name, value), "test")
+
     def test_toml_round_trip(self):
         defaults = {116: TypeDefaults([("vscope", b"\0"), ("pco", b"\x1f\x00"), ("txt", b"newtxt")],
                                       ["down", "up"])}

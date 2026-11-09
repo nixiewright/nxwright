@@ -97,7 +97,7 @@ A picture can be an SVG file, such as `pictures/background.svg`. nxwright draws 
 - Texts use Noto Sans by default, which also stands in for the generic families, such as `sans-serif`. To use another font, put its file in the folder and name it in a style sheet: `@font-face { font-family: "Inter"; src: url(Inter.ttf); }`. The family must be the one inside the font file. Noto Sans has no bold, so bold text also needs a font file of its own.
 - nxwright never uses the fonts installed on your computer, so a picture comes out the same on every computer. If a text's font family has no font file, nxwright refuses the picture instead of leaving the text out. It also refuses the `font` shorthand, so give a text's font with `font-family`.
 
-An SVG picture can take its colours and texts from the defines of `app.toml` ([app.toml](#apptoml)), so that a build with `--define`, or a simulation, can change them:
+An SVG picture can take its colours and texts from `app.toml`'s defines ([app.toml](#apptoml)), so that a build with `--define`, or a simulation, can change them:
 
 ```
 <style>
@@ -409,8 +409,8 @@ A project built from nxlang is extracted in strict Nextion syntax, with the code
 `defaults.toml` lists what a newly added component of each type has, so that page files can leave it out.
 
 - A new source folder gets a copy of nxwright's own, `nxwright/project/component_defaults.toml`.
-- The build reads the folder's copy.
 - nxwright's own copy comes from a sample project made with the Nextion Editor 1.68.2: one page with one newly added component of each type. `nxwright defaults` writes a defaults file from such a sample ([commands.md](commands.md#defaults)).
+- The build reads the folder's copy, and fails if a value is outside its attribute's range or choices, such as a text's `vscope` of 2.
 
 ## The picture cache
 

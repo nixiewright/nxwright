@@ -6,10 +6,13 @@ whose opening comment gives its form. The language server shows them in
 hovers, in completion, and in the Attributes section.
 
 An attribute's choices are the few numbers its value may take, each with a
-label, such as a text's `sta`: 0 a crop of a picture, 1 a colour. Code can
-change an attribute when the Editor's Attribute panel shows its name green;
-an attribute the panel never showed counts as one code can change, so that
-the build refuses no code that may be valid.
+label. For example, a text's `sta` is 0 for a crop of a picture, and 1 for a
+colour. The build refuses any other value in a page file or in defaults.toml
+(allowed_number_bytes).
+
+Code can change an attribute when the Nextion Editor's Attribute panel shows
+its name in green. An attribute the panel never showed is treated as one code
+can change, so that the build does not refuse code that may be valid.
 
 What the screen keeps of a number code stores is given by `code_range`, the
 lowest and highest it takes, refusing others, or by `code_wraps`, the bytes
@@ -23,8 +26,11 @@ import functools
 from pathlib import Path
 import tomllib
 
+from nxwright import NxwrightError
+from nxwright.project.attribute_ranges import attribute_range
+from nxwright.project.attribute_values import number_to_bytes
 from nxwright.project.component_defaults import nxwright_defaults
-from nxwright.project.object_types import TYPES_BY_NAME
+from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 
 DESCRIPTIONS_FILE = Path(__file__).resolve().parent / "attribute_descriptions.toml"
 # The table holding the attributes that mean the same on every type having them.
@@ -104,6 +110,33 @@ def describe(type_name: str, attribute: str):
                                in entry.get("choices", {}).items()},
         entry["code_can_change"], entry.get("properties", SHOWN), entry.get("method", False),
         tuple(code_range) if code_range is not None else None, entry.get("code_wraps"))
+
+
+def allowed_number_bytes(object_type: int, attribute: str, value: int, width: int,
+                         where: str) -> bytes:
+    """Returns `value` as the `width` bytes stored for the number attribute
+    `attribute` of a component of type `object_type`. Raises NxwrightError if
+    the value is outside the attribute's range (attribute_ranges.attribute_range)
+    or its choices, or does not fit in `width` bytes. The error starts with
+    `where`, which must end with the attribute's name, such as
+    "defaults.toml: [text.attributes] vscope"."""
+    allowed = attribute_range(object_type, attribute)
+    if allowed is not None and value not in allowed:
+        raise NxwrightError("%s must be from %d to %d" % (where, allowed.start, allowed.stop - 1))
+    try:
+        stored = number_to_bytes(value, width)
+    except OverflowError:
+        raise NxwrightError("%s does not fit in %d bytes" % (where, width)) from None
+    # The Nextion Editor's compile takes some values outside an attribute's
+    # choices. The build still rejects them, because such a value has no
+    # meaning, and the Nextion Editor's Attribute panel cannot set it.
+    described = describe(TYPE_NAMES.get(object_type, ""), attribute)
+    if described is not None and described.choices and value not in described.choices:
+        chosen = ["%d (%s)" % item for item in sorted(described.choices.items())]
+        listed = (" or ".join(chosen) if len(chosen) < 3
+                  else "%s, or %s" % (", ".join(chosen[:-1]), chosen[-1]))
+        raise NxwrightError("%s must be %s" % (where, listed))
+    return stored
 
 
 def described_by_type(type_name: str, attribute: str) -> bool:

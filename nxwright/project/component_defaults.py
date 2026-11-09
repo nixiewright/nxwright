@@ -26,7 +26,7 @@ import tomllib
 import tomli_w
 
 from nxwright import NxwrightError
-from nxwright.project.attribute_values import number_from_bytes, number_to_bytes
+from nxwright.project.attribute_values import number_from_bytes
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.page_block import Attribute, Event
 from nxwright.project.page_text import expected_width, is_string_attribute, text_form_number
@@ -200,7 +200,7 @@ def _bytes(attribute: str, value, object_type: int, source: str, type_name: str)
     width = expected_width(object_type, attribute)
     if width is None or not isinstance(value, int) or isinstance(value, bool):
         raise NxwrightError("%s must be a number of a known width" % where)
-    try:
-        return number_to_bytes(value, width)
-    except OverflowError:
-        raise NxwrightError("%s does not fit in %d bytes" % (where, width)) from None
+    # Imported here rather than at the top of the module, because
+    # attribute_descriptions imports this module to read nxwright's own defaults.
+    from nxwright.project.attribute_descriptions import allowed_number_bytes
+    return allowed_number_bytes(object_type, attribute, value, width, where)

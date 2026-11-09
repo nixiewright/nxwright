@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.10] - 2026-11-09
+
+- Limit values in `defaults.toml` to their valid ranges.
+
 ### [0.2.9] - 2026-11-09
 
 - Added support for SVG as a first class citizen of nxwright projects (with defines as var(--ACCENT)).

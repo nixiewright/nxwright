@@ -68,9 +68,8 @@ from nxwright.source.nx_files import (CODE_INDENT, EVENT_COMMENT_MARKER, EventBl
                                       blank_lines_dropped, event_blocks, event_heading,
                                       event_label, read_page_files)
 from nxwright.project.page_text import expected_width, is_string_attribute, text_form_number
-from nxwright.project.attribute_values import number_from_bytes, number_to_bytes
-from nxwright.project.attribute_descriptions import describe
-from nxwright.project.attribute_ranges import range_on_every_series
+from nxwright.project.attribute_values import number_from_bytes
+from nxwright.project.attribute_descriptions import allowed_number_bytes
 from nxwright.language.resource_names import (ANIMATION, FONT, PICTURE, SOUND, VIDEO,
                                               ResourceNames)
 from nxwright.language.nxlang import HOTSPOT, HOTSPOT_SIZE, TEXT, ProgramNames, compile_page
@@ -122,16 +121,6 @@ def reference_kind(object_type, attribute: str):
     if attribute == "vid":
         return _PLAYED_KINDS.get(object_type)
     return _REFERENCE_KINDS.get(attribute)
-
-
-def attribute_range(object_type: int, attribute: str):
-    """Returns the range of values the build takes for `attribute` of a
-    component of type `object_type`, a number, where the Nextion Editor's
-    compile takes fewer than the attribute's bytes can store, the same on every
-    series (attribute_ranges.py); None elsewhere. A range that differs by
-    series is checked once the screen is known (series_components.py)."""
-    found = range_on_every_series(TYPE_NAMES.get(object_type, ""), attribute)
-    return None if found is None else range(found[0], found[1] + 1)
 
 
 @dataclass
@@ -1363,24 +1352,7 @@ def _value_to_bytes(key: str, value, object_type: int, names: ResourceNames, cod
         value = value if number is None else number
     if not isinstance(value, int) or isinstance(value, bool):
         raise NxwrightError("%s: %s must be a number" % (where, key))
-    allowed = attribute_range(object_type, key)
-    if allowed is not None and value not in allowed:
-        raise NxwrightError("%s: %s must be from %d to %d" % (where, key, allowed.start,
-                                                             allowed.stop - 1))
-    try:
-        stored = number_to_bytes(value, width)
-    except OverflowError:
-        raise NxwrightError("%s: %s does not fit in %d bytes" % (where, key, width)) from None
-    # A value outside the attribute's choices has no meaning, and the
-    # Nextion Editor's panel cannot set it. The Nextion Editor's compile
-    # still takes some such values.
-    described = describe(TYPE_NAMES.get(object_type, ""), key)
-    if described is not None and described.choices and value not in described.choices:
-        chosen = ["%d (%s)" % item for item in sorted(described.choices.items())]
-        listed = (" or ".join(chosen) if len(chosen) < 3
-                  else "%s, or %s" % (", ".join(chosen[:-1]), chosen[-1]))
-        raise NxwrightError("%s: %s must be %s" % (where, key, listed))
-    return stored
+    return allowed_number_bytes(object_type, key, value, width, "%s: %s" % (where, key))
 
 
 def _check_least_size(attributes: list, type_name: str, name: str, where: str):
