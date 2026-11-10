@@ -2,6 +2,7 @@
 adapter's requests, as VS Code sends them; and how the simulation shares its
 time, on a clock the tests move by hand."""
 import base64
+from pathlib import Path
 import threading
 import time
 import unittest
