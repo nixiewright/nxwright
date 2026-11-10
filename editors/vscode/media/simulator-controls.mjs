@@ -1,15 +1,22 @@
-// The Simulator section of nxwright's side bar (src/simulator.ts). While a
-// simulation runs: the line saying that an agent drives it, while one does
-// (simulator-agent-model.mjs), its buttons, the field whose text goes to the
-// screen as an instruction from the serial line, the serial port the line is
-// connected to, the port of a real screen beside the simulation, which the
-// field can reach too, and the GPIO pins, whose inputs a click sets. While none
-// runs: buttons that simulate the current project with the Simulator
-// settings, from program.nx or from the page shown, run each launch
-// configuration that simulates it, or create one.
+// The Simulator section of nxwright's side bar (src/simulator.ts).
+// While a simulation runs, it shows:
+//  - the line saying that an agent drives it, while one does
+//    (simulator-agent-model.mjs);
+//  - its buttons;
+//  - the field whose text goes to the screen as an instruction from the
+//    serial line;
+//  - the MCU port, which the serial line is connected to;
+//  - the screen port, for a real screen beside the simulation. The field
+//    can send that screen instructions too, and the MCU port can be joined
+//    to it in place of the simulator;
+//  - the GPIO pins, whose inputs a click sets.
+// While none runs, it shows buttons that simulate the current project with
+// the Simulator settings, from program.nx or from the page shown, run each
+// launch configuration that simulates it, or create one.
 import { glyphButton } from "./glyph-button.mjs";
 import { pinRows } from "./gpio-pins-model.mjs";
 import { agentLine } from "./simulator-agent-model.mjs";
+import { bridgeControls } from "./simulator-bridge-model.mjs";
 
 const vscode = acquireVsCodeApi();
 
@@ -88,6 +95,19 @@ document.getElementById("serial").addEventListener("submit", (event) => {
   }
 });
 
+// The choice of where the MCU port goes (showBridge).
+const bridgeRow = document.getElementById("bridge-row");
+const bridgeChoice = document.getElementById("bridge");
+const sendButton = document.querySelector("#serial button[type=submit]");
+bridgeChoice.addEventListener("change", () =>
+  vscode.postMessage({ type: "bridge", on: bridgeChoice.value === "screen" }));
+
+// Whether each port is connected, and whether the bridge joins the MCU port
+// to the real screen, in place of the simulator.
+let mcuConnected = false;
+let screenConnected = false;
+let bridged = false;
+
 // The MCU port, which the simulation's serial line is connected to.
 const mcuPort = portControls({
   portList: document.getElementById("port"),
@@ -95,6 +115,10 @@ const mcuPort = portControls({
   connectButton: document.getElementById("connect"),
   stateLine: document.getElementById("port-state"),
   connectType: "connect", disconnectType: "disconnect",
+  shown: (connected) => {
+    mcuConnected = connected;
+    showBridge();
+  },
 });
 
 // The screen port, which a real screen beside the simulation is on. While
@@ -121,8 +145,28 @@ const screenPort = portControls({
     }
     destinations.hidden = !connected;
     screenStarts.hidden = !connected;
+    screenConnected = connected;
+    showBridge();
   },
 });
+
+// Shows the choice of where the MCU port goes, and enables or disables the
+// controls the bridge affects (simulator-bridge-model.mjs). Called from the
+// message handlers only, because it uses controls declared further down,
+// such as `findButton`.
+function showBridge() {
+  const shown = bridgeControls({ bridged, mcuConnected, screenConnected, finding });
+  bridgeRow.hidden = !shown.choiceShown;
+  bridgeChoice.value = shown.choice;
+  for (const control of [field, sendButton, toSimulator, toScreen,
+                         ...screenStarts.querySelectorAll("button")]) {
+    control.disabled = shown.typingDisabled;
+  }
+  for (const id of ["port", "rate", "screen-port", "screen-rate"]) {
+    document.getElementById(id).disabled = shown.listsDisabled;
+  }
+  findButton.disabled = shown.findDisabled;
+}
 
 findButton.addEventListener("click", () => {
   const name = screenPort.chosenPort();
@@ -135,8 +179,8 @@ findButton.addEventListener("click", () => {
 
 function setFinding(value) {
   finding = value;
-  findButton.disabled = value;
   screenConnect.disabled = value;
+  showBridge();
 }
 document.getElementById("start-screen").addEventListener("click", () =>
   vscode.postMessage({ type: "serial", text: "rest", to: ["screen"] }));
@@ -146,6 +190,7 @@ document.getElementById("start-both").addEventListener("click", () =>
 window.addEventListener("message", (event) => {
   const message = event.data;
   if (message.type === "ports") {
+    bridged = message.bridged === true;
     mcuPort.offer(message.ports, message.rates, message.state);
     // While Find is looking, leave its "Looking for a screen" note in place
     // until Find answers.
@@ -157,6 +202,9 @@ window.addEventListener("message", (event) => {
   } else if (message.type === "screenState") {
     setFinding(false);
     screenPort.show(message.state);
+  } else if (message.type === "bridgeState") {
+    bridged = message.bridged === true;
+    showBridge();
   } else if (message.type === "idle") {
     showIdle(message);
   } else if (message.type === "pins") {

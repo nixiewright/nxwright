@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.13] - 2026-11-09
+
+- Added support in the simulator for bridging an MCU and a real screen, logging their communications.
+
 ### [0.2.12] - 2026-11-09
 
 - Added support in the simulator for connecting a real screen on a serial port of its own.
@@ -85,6 +89,12 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.9] - 2026-11-09
+
+Needs nxwright 0.2.13 or later.
+
+- The Simulator section can join the MCU port to a real screen, in place of the simulator.
 
 ### [0.3.8] - 2026-11-09
 

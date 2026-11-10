@@ -13,9 +13,10 @@ from unittest import mock
 import serial
 
 from nxwright.debug_adapter import adapter as adapter_module
+from nxwright.debug_adapter import bridge as bridge_module
 from nxwright.debug_adapter import serial_port as serial_port_module
-from nxwright.debug_adapter.serial_port import (LoggedReplies, SerialLink, SerialPort,
-                                                port_names, screen_rate)
+from nxwright.debug_adapter.serial_port import (REPLY_LENGTHS, LoggedPieces, SerialLink,
+                                                SerialPort, port_names, screen_rate)
 from nxwright.tft.upload import RATES_TRIED
 from tests.test_live_debugging import _PATIENCE, LiveTestCase
 
@@ -34,6 +35,7 @@ class StandInPort:
         self.written = []
         self.taken = None            # how many bytes a write takes; all when None
         self.closed = False
+        self.rates = [rate]          # each rate it was set to, the first when opened
 
     def read(self) -> bytes:
         try:
@@ -47,6 +49,10 @@ class StandInPort:
     def write(self, data: bytes) -> int:
         self.written.append(data)
         return len(data) if self.taken is None else self.taken
+
+    def set_rate(self, rate: int):
+        self.rate = rate
+        self.rates.append(rate)
 
     def close(self):
         self.closed = True
@@ -156,6 +162,26 @@ class SerialLinkTest(unittest.TestCase):
         self.assertEqual(self.logged(), ["screen port COM7 connected at 9600 bits per second",
                                          "screen port COM7 disconnected"])
 
+    def test_changing_the_rate_of_the_port_connected(self):
+        self.link.connect("COM4")
+        self.assertIsNone(self.link.set_rate(115200))
+        self.assertEqual(self.ports.opened[0].rates, [9600, 115200])
+        self.assertEqual(self.link.state()["baud"], 115200)
+        self.assertEqual(self.logged()[-1], "MCU port COM4 now at 115200 bits per second")
+
+    def test_a_whole_write_waits_for_the_port_to_take_it_all(self):
+        self.link.connect("COM4")
+        port = self.ports.opened[0]
+        port.taken = 1
+        self.assertIsNone(self.link.send_whole(b"ok", 1.0))
+        self.assertEqual(port.written, [b"ok", b"k"])
+        port.taken = 0
+        self.assertEqual(self.link.send_whole(b"ok", 0.05),
+                         "MCU port COM4 did not send 6f 6b: the port did not take it in 0.05 s")
+        self.link.disconnect()
+        self.assertEqual(self.link.send_whole(b"ok", 0.05),
+                         "MCU port did not send 6f 6b: it is not connected")
+
     def test_finding_the_rate_closes_the_port_first_then_connects_at_it(self):
         self.link.connect("COM7")
         asked = []
@@ -185,12 +211,12 @@ class SerialLinkTest(unittest.TestCase):
         self.assertEqual(self.logged(), ["MCU port COM7 could not open: Access is denied."])
 
 
-class LoggedRepliesTest(unittest.TestCase):
+class LoggedPiecesTest(unittest.TestCase):
     """What a real screen sends, cut into the replies the log shows."""
 
     def setUp(self):
         self.shown = []
-        self.replies = LoggedReplies(self.shown.append, quiet=0.05)
+        self.replies = LoggedPieces(self.shown.append, REPLY_LENGTHS, quiet=0.05)
         self.addCleanup(self.replies.stop)
 
     def test_replies_end_at_their_ff_ff_ff_across_pieces(self):
@@ -292,8 +318,9 @@ class SerialPortSessionTest(LiveTestCase):
         self.assertFalse(self.wait_for("nxwright/serialState")["connected"])
         self.wait_for("nxwright/drawing")
         offered = self.request("nxwright/serialPorts")["body"]
-        self.assertEqual(set(offered), {"ports", "rates", "state", "screen"})
+        self.assertEqual(set(offered), {"ports", "rates", "state", "screen", "bridged"})
         self.assertFalse(offered["screen"]["connected"])
+        self.assertFalse(offered["bridged"])
         self.assertIn(115200, offered["rates"])
         self.assertEqual(offered["ports"], port_names())
         self.assertFalse(offered["state"]["connected"])
@@ -351,9 +378,9 @@ class SerialPortSessionTest(LiveTestCase):
         self.assertTrue(self.ports.opened[0].closed)
 
 
-class ScreenPortSessionTest(LiveTestCase):
-    """A real screen beside the simulation, on the screen port, through the
-    debug adapter, with stand-in ports."""
+class ScreenPortTestCase(LiveTestCase):
+    """A simulation running with stand-in ports, and the helpers that the
+    tests of the screen port share."""
 
     def setUp(self):
         super().setUp()
@@ -389,6 +416,11 @@ class ScreenPortSessionTest(LiveTestCase):
                              "arguments": arguments})
         wait_until(lambda: any(message.get("request_seq") == sequence for message in self.sent))
         return next(message for message in self.sent if message.get("request_seq") == sequence)
+
+
+class ScreenPortSessionTest(ScreenPortTestCase):
+    """A real screen beside the simulation, on the screen port, through the
+    debug adapter, with stand-in ports."""
 
     def test_typed_input_goes_where_it_is_sent(self):
         screen = self.connect_screen()
@@ -482,6 +514,160 @@ class ScreenPortSessionTest(LiveTestCase):
         screen = self.connect_screen()
         self.request("disconnect")
         self.assertTrue(screen.closed)
+
+
+class BridgeSessionTest(ScreenPortTestCase):
+    """The MCU port joined to a real screen's port (bridge.py), through the
+    debug adapter, with stand-in ports: the MCU's on COM3, the screen's on
+    COM7, both at 9600."""
+
+    def setUp(self):
+        super().setUp()
+        self.request("nxwright/serialPort", name="COM3", baud=9600)
+        self.mcu = self.ports.opened[-1]
+        self.screen = self.connect_screen()
+
+    def join(self, bauds: int = 9600):
+        """Joins the ports, and answers the bridge's `get bauds` with `bauds`."""
+        self.assertTrue(self.request("nxwright/bridge", on=True)["body"]["bridged"])
+        wait_until(lambda: b"get bauds\xff\xff\xff" in self.screen.written)
+        self.screen.arriving.put(b"\x71" + bauds.to_bytes(4, "little") + b"\xff\xff\xff")
+        wait_until(lambda: any(line.startswith("bridge: did not pass 71")
+                               for line in self.log_lines("console")))
+
+    def test_joining_needs_both_ports(self):
+        self.request("nxwright/serialPort", name="")
+        refused = self.request("nxwright/bridge", on=True)
+        self.assertFalse(refused["success"])
+        self.assertIn("both", refused["message"])
+
+    def test_bytes_pass_both_ways_unchanged(self):
+        self.join()
+        # The screen's answer to the bridge's own `get bauds` is not passed on.
+        self.assertEqual(self.mcu.written, [])
+        self.mcu.arriving.put(b"get n\xff\xff\xff\x01\xff")
+        wait_until(lambda: b"".join(self.screen.written).endswith(b"get n\xff\xff\xff\x01\xff"))
+        self.screen.arriving.put(b"\x71\xff\xff\xff\xff\xff\xff\xff")
+        wait_until(lambda: b"".join(self.mcu.written) == b"\x71\xff\xff\xff\xff\xff\xff\xff")
+        wait_until(lambda: "SCR SEND: 71 ff ff ff ff ff ff ff" in self.log_lines())
+        self.assertIn("SCR RECV: get n", self.log_lines())
+        # The simulation takes nothing from the MCU, and sends it nothing.
+        self.request("nxwright/press", x=10, y=10)
+        wait_until(lambda: self.count() == 11)
+        self.assertNotIn(b"pressed", b"".join(self.mcu.written))
+
+    def test_typed_input_to_the_screen_is_refused_while_joined(self):
+        self.join()
+        refused = self.request("nxwright/serial", text="count=5", to=["screen"])
+        self.assertFalse(refused["success"])
+        self.assertIn("joined", refused["message"])
+
+    def test_no_port_connects_anew_while_joined(self):
+        # The other port would keep its rate, and the line would break.
+        self.join()
+        for command, arguments in (("nxwright/serialPort", {"name": "COM4", "baud": 115200}),
+                                   ("nxwright/screenPort", {"name": "COM7", "baud": 115200}),
+                                   ("nxwright/findScreen", {"name": "COM7"})):
+            with self.subTest(command=command):
+                refused = self.request(command, **arguments)
+                self.assertFalse(refused["success"])
+                self.assertIn("joined", refused["message"])
+        self.assertEqual((self.mcu.rates, self.screen.rates), ([9600], [9600]))
+        self.assertFalse(self.mcu.closed or self.screen.closed)
+
+    def test_closing_either_port_ends_the_bridge_and_closes_both(self):
+        self.join()
+        self.request("nxwright/screenPort", name="")
+        self.assertTrue(self.screen.closed and self.mcu.closed)
+        self.assertFalse(self.events("nxwright/bridgeState")[-1]["bridged"])
+        self.assertTrue(any(line.startswith("the bridge ended, and closed both ports: screen port "
+                                            "COM7 closed") for line in self.log_lines("console")))
+        # The MCU port goes back to the simulation, closed.
+        self.assertFalse(self.request("nxwright/serialPorts")["body"]["bridged"])
+
+    def test_losing_the_mcu_port_ends_the_bridge_and_closes_both(self):
+        self.join()
+        self.mcu.arriving.put(OSError(22, "The device does not recognize the command."))
+        wait_until(lambda: self.mcu.closed and self.screen.closed)
+        self.assertTrue(any(line.startswith("the bridge ended, and closed both ports: MCU port "
+                                            "COM3 closed") for line in self.log_lines("console")))
+
+    def test_bytes_with_no_ff_ff_ff_do_not_pile_up(self):
+        self.join()
+        self.mcu.arriving.put(bytes(range(200)))
+        wait_until(lambda: bytes(range(200)) in b"".join(self.screen.written))
+        self.assertLessEqual(len(self.adapter._bridge._instruction), 32)
+        # A rate instruction after them is still seen.
+        self.mcu.arriving.put(b"\xff\xff\xffbaud=115200\xff\xff\xff")
+        wait_until(lambda: self.screen.rates[-1] == 115200)
+
+    def test_a_write_not_taken_in_time_ends_the_bridge(self):
+        self.join()
+        self.screen.taken = 0
+        with mock.patch.object(bridge_module, "WRITE_WAIT", 0.05):
+            self.mcu.arriving.put(b"get n\xff\xff\xff")
+            wait_until(lambda: self.mcu.closed and self.screen.closed)
+        self.assertTrue(any("did not take it in 0.05 s" in line
+                            for line in self.log_lines("console")))
+
+    def test_joining_the_simulation_again(self):
+        self.join()
+        self.request("nxwright/bridge", on=False)
+        self.mcu.arriving.put(b"count=3\xff\xff\xff")
+        wait_until(lambda: self.count() == 3)
+        self.assertFalse(self.screen.closed)
+
+    def test_both_ports_follow_baud_after_the_screens_answer(self):
+        self.join()
+        self.mcu.arriving.put(b"baud=115200\xff\xff\xff")
+        wait_until(lambda: b"baud=115200\xff\xff\xff" in self.screen.written)
+        self.assertEqual(self.screen.rates, [9600])
+        # The answer goes to the MCU at the old rate, then both switch.
+        self.screen.arriving.put(b"\x01\xff\xff\xff")
+        wait_until(lambda: self.screen.rates == [9600, 115200])
+        self.assertEqual(self.mcu.rates, [9600, 115200])
+        self.assertEqual(self.mcu.written, [b"\x01\xff\xff\xff"])
+        # An FF FF FF ends the stray bytes, and its error code is not passed on.
+        wait_until(lambda: self.screen.written[-1] == b"\xff\xff\xff")
+        self.screen.arriving.put(b"\x1a\xff\xff\xff")
+        wait_until(lambda: "bridge: did not pass 1a ff ff ff on to the MCU"
+                   in self.log_lines("console"))
+        self.assertEqual(self.mcu.written, [b"\x01\xff\xff\xff"])
+
+    def test_with_no_answer_both_ports_follow_baud_after_the_vendors_pause(self):
+        self.join()
+        self.mcu.arriving.put(b"baud=115200\xff\xff\xff")
+        wait_until(lambda: self.screen.rates == [9600, 115200])
+        self.assertEqual(self.mcu.rates, [9600, 115200])
+
+    def test_after_rest_both_ports_go_to_bauds(self):
+        self.join(bauds=9600)
+        self.mcu.arriving.put(b"baud=115200\xff\xff\xff")
+        wait_until(lambda: self.screen.rates == [9600, 115200])
+        self.mcu.arriving.put(b"rest\xff\xff\xff")
+        wait_until(lambda: self.screen.rates[-1] == 9600)
+        self.assertEqual(self.mcu.rates, [9600, 115200, 9600])
+
+    def test_bauds_set_by_the_mcu_is_the_rate_after_rest(self):
+        self.join(bauds=9600)
+        self.mcu.arriving.put(b"bauds=115200\xff\xff\xff")
+        wait_until(lambda: self.screen.rates == [9600, 115200])
+        self.mcu.arriving.put(b"baud=57600\xff\xff\xff")
+        wait_until(lambda: self.screen.rates[-1] == 57600)
+        self.mcu.arriving.put(b"rest\xff\xff\xff")
+        wait_until(lambda: self.screen.rates[-1] == 115200)
+
+    def test_a_rate_not_in_the_vendors_list_changes_nothing(self):
+        self.join()
+        self.mcu.arriving.put(b"baud=12345\xff\xff\xff")
+        wait_until(lambda: b"baud=12345\xff\xff\xff" in self.screen.written)
+        time.sleep(0.1)
+        self.assertEqual(self.screen.rates, [9600])
+
+    def test_disconnecting_the_session_ends_the_bridge(self):
+        self.join()
+        self.request("disconnect")
+        self.assertTrue(self.screen.closed and self.mcu.closed)
 
 
 class RefusingPort:

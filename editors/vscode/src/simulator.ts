@@ -4,13 +4,14 @@
 //    releases the screen (media/simulator.mjs); until the first page is
 //    drawn, it says how far the app's start has come, as its pages compile;
 //  - the Simulator section of nxwright's side bar (media/simulator-controls.mjs).
-//    While a simulation runs: pause, resume, start again, the log, a field
-//    for what the serial line brings the screen, the serial port the line
-//    is connected to, and a real screen on a port of its own, which the
-//    field can reach too, and which can be started again. While none
-//    runs: simulating the current project with the Simulator settings,
-//    from program.nx or from the page shown, running each launch
-//    configuration that simulates it, and creating one;
+//    While a simulation runs, it has pause, resume, start again, the log, a
+//    field for what the serial line brings the screen, and the MCU port the
+//    line is connected to. It also has a port for a real screen beside the
+//    simulation. The field can send that screen instructions too, a button
+//    starts it again, and the MCU port can be joined to it in place of the
+//    simulator. While none runs, it can simulate the current project with
+//    the Simulator settings, from program.nx or from the page shown, run
+//    each launch configuration that simulates it, and create one;
 //  - the button "Simulate this page" above a page file's text and its
 //    preview, which simulates the app from that page while none runs;
 //  - for the agent channel (agentChannelServer.ts), starting a simulation
@@ -373,6 +374,8 @@ export class Simulator implements vscode.WebviewViewProvider {
       void this.offerPorts();
     } else if (event.event === "nxwright/screenState") {
       void this.controls?.webview.postMessage({ type: "screenState", state: event.body });
+    } else if (event.event === "nxwright/bridgeState") {
+      void this.controls?.webview.postMessage({ type: "bridgeState", ...event.body });
     } else if (event.event === "nxwright/gpio") {
       this.lastPins = (event.body as { pins: GpioPin[] | null }).pins;
       this.showPins();
@@ -459,6 +462,20 @@ export class Simulator implements vscode.WebviewViewProvider {
     } catch {
       // The session ended meanwhile.
     }
+  }
+
+  // Joins the MCU port to the real screen when `on` is true, or back to the
+  // simulator when it is false, then shows whether the two are joined. If the
+  // debug adapter refuses, for example because a port is not connected, it
+  // shows them not joined.
+  private async joinPorts(on: boolean): Promise<void> {
+    let bridged = false;
+    try {
+      bridged = (await this.session?.customRequest("nxwright/bridge", { on }))?.bridged === true;
+    } catch {
+      // Refused, or the session ended meanwhile.
+    }
+    void this.controls?.webview.postMessage({ type: "bridgeState", bridged });
   }
 
   // Sends the request `command` to connect, find, or disconnect the screen
@@ -597,13 +614,20 @@ export class Simulator implements vscode.WebviewViewProvider {
   </div>
 </form>
 <div id="port-group" class="port-group">
-  <label for="port">Serial port</label>
+  <label for="port">MCU port</label>
   <div class="row">
-    <select id="port" title="The computer's serial port"></select>
+    <select id="port" title="The serial port of the program the screen talks to"></select>
     <select id="rate" title="Its rate, in bits per second"></select>
     <button id="connect">Connect</button>
   </div>
   <div id="port-state" class="port-state"></div>
+  <div id="bridge-row" class="row" hidden>
+    <label for="bridge" class="inline">Goes to</label>
+    <select id="bridge">
+      <option value="simulator">the simulator</option>
+      <option value="screen">the real screen</option>
+    </select>
+  </div>
 </div>
 <div id="screen-group" class="port-group">
   <label for="screen-port">Screen port</label>
@@ -665,6 +689,8 @@ export class Simulator implements vscode.WebviewViewProvider {
         void this.chooseScreenPort("nxwright/screenPort", { name: "" });
       } else if (message.type === "findScreen" && message.name) {
         void this.chooseScreenPort("nxwright/findScreen", { name: message.name });
+      } else if (message.type === "bridge" && typeof message.on === "boolean") {
+        void this.joinPorts(message.on);
       } else if (message.type === "pin" && Number.isInteger(message.pin)
                  && (message.level === 0 || message.level === 1)) {
         void this.session?.customRequest("nxwright/gpioInput",
@@ -700,7 +726,9 @@ const STYLES = `
   .port-state { margin-top: 4px; color: var(--vscode-descriptionForeground); }
   .port-state.problem { color: var(--vscode-errorForeground); }
   #destinations { width: 100%; gap: 12px; }
-  #destinations[hidden], #screen-starts[hidden] { display: none; }
+  #destinations[hidden], #screen-starts[hidden], #bridge-row[hidden] { display: none; }
+  #bridge-row { margin-top: 4px; }
+  label.inline { width: auto; }
   label.check { width: auto; display: flex; gap: 4px; align-items: center; }
   label.check input { flex: none; }
   #screen-starts { margin: 6px 0 0; }

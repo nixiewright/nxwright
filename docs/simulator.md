@@ -464,7 +464,7 @@ On Linux, a port has a name such as `/dev/ttyUSB0`.
 - When the screen starts again, for example with `rest`, it drops what it has received but not yet run.
 - While the simulation is paused, instructions that arrive wait, and do not count against the screen's serial buffer ([Holding instructions](#holding-instructions)).
 - You can connect the simulator to a program on the same computer by using a virtual pair of ports. On Windows, com0com creates one. On Linux or macOS, `socat -d -d pty,raw,echo=0 pty,raw,echo=0` creates one, and prints the two ports' names.
-- The log calls the port the MCU port, named after the microcontroller (MCU) usually at its other end, as in `MCU port COM4 connected at 115200 bits per second`.
+- The Simulator section and the log call this port the MCU port, because a microcontroller (MCU) is usually at its other end.
 - When a port cannot open, or is lost, the log shows the reason. The simulation keeps running without the port.
 - When the port does not take what the simulator sends in time, for example because nothing reads the other end, the simulator drops the rest of the write and logs it, so that the simulation does not freeze.
 
@@ -511,6 +511,15 @@ A real screen can run beside the simulation, so that you can compare the two, li
 - You compare the two yourself, from the log, because nxwright does not match up the screen's replies with the simulator's. They can also drift apart, because a touch on the panel reaches only the simulation, and a touch on the real screen reaches only the screen.
 - The Start the screen again button sends `rest` to the screen, and Start both again sends it to the screen and the simulation at once.
 - An agent can't reach the real screen. Its instructions go to the simulator only, and the log it reads leaves out the screen's lines.
+
+You can also join the MCU port to the real screen, in place of the simulator. The program on the MCU port then talks to the real screen through nxwright, and the log shows what passes in both directions. To join them, connect both ports, then choose the real screen in Goes to, under the MCU port.
+
+- Bytes pass on unchanged, as they arrive.
+- To end the join, choose the simulator in Goes to again. Until then, the controls that send the screen instructions, or that change either port, are disabled.
+- Both ports close when either one is closed or lost, or does not take a write within a second. The log gives the reason.
+- When the program changes the screen's rate with `baud=` or `bauds=`, or starts the screen again with `rest`, both ports change to the screen's new rate.
+- nxwright sends the screen two instructions of its own, and does not pass the screen's answers to them on to the program. When the ports are joined, it asks the screen `get bauds`, to learn the rate the screen starts at. After each change of rate, it sends FF FF FF, to end the stray bytes that the change can put on the line. The log shows each of these in a line starting with `bridge:`.
+- nxwright cannot see a rate change made by the app's own code, such as `baud=115200` in an event. The line then stops working. To fix it, choose the simulator in Goes to, connect both ports again at the new rate, and join them again.
 
 ### Holding instructions
 

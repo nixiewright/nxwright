@@ -14,7 +14,7 @@ does the same for a running simulation (live.py):
 
 A second SerialLink connects a real screen beside the simulation, on a port
 of its own called the screen port. Instructions typed in the Simulator section can go to the
-screen, and LoggedReplies cuts what the screen sends into replies for the
+screen, and LoggedPieces cuts what the screen sends into replies for the
 log. screen_rate finds the screen's rate by sending it `connect` at each
 rate.
 
@@ -24,6 +24,7 @@ and 1 stop bit, with no flow control.
 """
 import re
 import threading
+import time
 
 import serial
 from serial.tools import list_ports
@@ -56,7 +57,7 @@ _QUIET = 0.1
 # place (0x67, and 0x68 while asleep), and a number (0x71). Their bytes may be
 # FF, as in the reply to `get` of -1, so such a reply cannot be cut at the
 # first FF FF FF.
-_REPLY_LENGTHS = {0x65: 3, 0x66: 1, 0x67: 5, 0x68: 5, 0x71: 4}
+REPLY_LENGTHS = {0x65: 3, 0x66: 1, 0x67: 5, 0x68: 5, 0x71: 4}
 
 
 def port_names() -> list:
@@ -85,14 +86,12 @@ class SerialPort:
     def __init__(self, name: str, rate: int):
         if rate <= 0:
             raise OSError("%d is no rate" % rate)
-        # A byte is 10 bits on the line.
-        piece_time = _PIECE * 10 / rate
         try:
             # pyserial opens a port with DTR and RTS held on.
             self._port = serial.serial_for_url(
                 name, baudrate=rate, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE, xonxoff=False, rtscts=False, dsrdtr=False,
-                timeout=_READ_WAIT / 1000, write_timeout=_WRITE_WAIT / 1000 + piece_time)
+                timeout=_READ_WAIT / 1000, write_timeout=_write_wait(rate))
         except (serial.SerialException, ValueError) as error:
             raise OSError(_opening_words(error)) from None
         try:
@@ -120,8 +119,26 @@ class SerialPort:
                 break
         return written
 
+    def set_rate(self, rate: int):
+        """Changes the port's rate once everything already written has gone
+        out, so that those bytes still go at the old rate. Raises OSError if
+        the port refuses the rate."""
+        try:
+            self._port.flush()
+            self._port.baudrate = rate
+            self._port.write_timeout = _write_wait(rate)
+        except (serial.SerialException, ValueError) as error:
+            raise OSError(str(error)) from None
+
     def close(self):
         self._port.close()
+
+
+def _write_wait(rate: int) -> float:
+    """Returns how long a write waits for the port to take each piece, in
+    seconds. That is _WRITE_WAIT, plus the time the piece's bytes take to go
+    out at `rate`, at 10 bits a byte."""
+    return _WRITE_WAIT / 1000 + _PIECE * 10 / rate
 
 
 def _opening_words(error: Exception) -> str:
@@ -236,6 +253,54 @@ class SerialLink:
                 self._label, self._name, hex_bytes(data[written:]))
         return None
 
+    def send_whole(self, data: bytes, wait: float):
+        """Writes all of `data` to the connected port, and gives the port up
+        to `wait` seconds in all to take it. Returns a line for the log if
+        the port is not connected or did not take all of `data`, or None if
+        it did."""
+        deadline = time.monotonic() + wait
+        with self._lock:
+            connection = self._connection
+        if connection is None:
+            return "%s did not send %s: it is not connected" % (self._label, hex_bytes(data))
+        with connection.writing:
+            written = 0
+            while written < len(data):
+                if connection.closing.is_set():
+                    return "%s %s did not send %s: it closed" % (
+                        self._label, self._name, hex_bytes(data[written:]))
+                try:
+                    taken = connection.port.write(data[written:])
+                except OSError as error:
+                    return "%s %s did not send %s: %s" % (
+                        self._label, self._name, hex_bytes(data[written:]), _words(error))
+                written += taken
+                if written < len(data):
+                    if time.monotonic() >= deadline:
+                        return "%s %s did not send %s: the port did not take it in %g s" % (
+                            self._label, self._name, hex_bytes(data[written:]), wait)
+                    if not taken:
+                        time.sleep(0.001)
+        return None
+
+    def set_rate(self, rate: int):
+        """Changes the rate of the port connected, once what was written has
+        gone out. Returns a line for the log when it could not, or None."""
+        with self._lock:
+            connection = self._connection
+        if connection is None:
+            return "%s is not connected" % self._label
+        with connection.writing:
+            try:
+                connection.port.set_rate(rate)
+            except OSError as error:
+                return "%s %s could not change to %d bits per second: %s" % (
+                    self._label, self._name, rate, _words(error))
+        with self._lock:
+            self._rate = rate
+        self._tell("%s %s now at %d bits per second" % (self._label, self._name, rate))
+        return None
+
     def _read(self, connection):
         """The reading thread: hands what arrives to `received`, until the
         port is disconnected or lost. It closes the port, once no write
@@ -284,19 +349,22 @@ def _words(error: OSError) -> str:
     return (error.strerror or str(error)).strip()
 
 
-class LoggedReplies:
-    """Cuts the bytes a real screen sends into replies for the log, and hands
-    each reply, with its FF FF FF, to `show(reply)` in order. It hands on:
-      - a reply of a fixed length (_REPLY_LENGTHS) once all its bytes have
+class LoggedPieces:
+    """Cuts the bytes a port receives into the pieces the log shows, and
+    hands each, with its FF FF FF, to `show(piece)` in order. It hands on:
+      - a piece whose first byte is in `lengths`, once all its bytes have
         arrived, even if some of them are FF;
-      - any other reply once an FF FF FF ends it;
+      - any other piece once an FF FF FF ends it;
       - bytes that no FF FF FF ends, as they are, once `quiet` seconds pass
         without more bytes.
-    `add` takes each piece of bytes as it arrives, on the port's reading
-    thread. The bytes still waiting are shown from a timer's thread."""
+    To cut the screen's replies, pass REPLY_LENGTHS. To cut instructions,
+    pass an empty dict. `add` takes each piece of bytes as it arrives, on the port's
+    reading thread. The bytes still waiting are shown from a timer's
+    thread."""
 
-    def __init__(self, show, quiet: float = _QUIET):
+    def __init__(self, show, lengths: dict, quiet: float = _QUIET):
         self._show = show
+        self._lengths = lengths
         self._quiet = quiet
         self._lock = threading.Lock()
         self._waiting = b""
@@ -307,11 +375,11 @@ class LoggedReplies:
             self._stop_timer()
             self._waiting += data
             while True:
-                end = _reply_end(self._waiting)
+                end = piece_end(self._waiting, self._lengths)
                 if end is None:
                     break
-                reply, self._waiting = self._waiting[:end], self._waiting[end:]
-                self._show(reply)
+                piece, self._waiting = self._waiting[:end], self._waiting[end:]
+                self._show(piece)
             if self._waiting:
                 self._timer = threading.Timer(self._quiet, self._show_waiting)
                 self._timer.daemon = True
@@ -341,10 +409,12 @@ class LoggedReplies:
             self._timer = None
 
 
-def _reply_end(data: bytes):
-    """Returns where the first reply in `data` ends, after its FF FF FF, or
-    None while it has not ended (LoggedReplies)."""
-    length = _REPLY_LENGTHS.get(data[0]) if data else None
+def piece_end(data: bytes, lengths: dict):
+    """Returns where the first piece in `data` ends, just after its FF FF FF,
+    or None if it has not ended yet. If the piece's first byte is in
+    `lengths`, that many bytes follow it before its FF FF FF, whatever they
+    are. Any other piece ends at its first FF FF FF (LoggedPieces)."""
+    length = lengths.get(data[0]) if data else None
     if length is not None:
         end = 1 + length + len(END)
         return end if len(data) >= end else None
