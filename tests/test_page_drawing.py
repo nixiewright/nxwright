@@ -18,6 +18,7 @@ from nxwright.project.zi_font import decode_font
 from nxwright.drawing.combo_box_drawing import items, list_layout
 from nxwright.drawing.page_drawing import DrawingResources, draw_page
 from nxwright.drawing.screen_pictures import paint_drawing
+from nxwright.drawing.waveform_drawing import wave_pixels
 from nxwright.drawing.drawing_shared import NO_RESOURCE
 from nxwright.language.resource_names import ResourceNames
 from nxwright.project.component_defaults import DEFAULTS_FILE, defaults_from_toml
@@ -33,6 +34,14 @@ from tests.test_zi_font import (chosen_characters_fixture, font_block, gb2312_fo
 FONTS = Path(__file__).resolve().parent / "fixtures" / "fonts"
 SANS20 = decode_font((FONTS / "Sans20.zi").read_bytes())
 WHITE = (255, 255, 255)
+
+
+def wave_ink(shape: dict) -> set:
+    """Returns the page's pixels that a "wave" shape, a waveform's channel,
+    paints, as (x, y) (waveform_drawing.wave_pixels)."""
+    return {(shape["x"] + column, shape["y"] + row)
+            for column, row in wave_pixels(shape["w"], shape["h"], shape["points"],
+                                           shape["dis"], shape["dir"])}
 
 
 class Resources(DrawingResources):
@@ -278,7 +287,10 @@ class DrawingTest(unittest.TestCase):
     def test_a_waveform(self):
         wave = Component("w", "waveform", {"x": 10, "y": 10, "w": 100, "h": 50, "sta": 1,
                                            "bco": 0, "gdc": 0xffff, "gdw": 40, "gdh": 20})
-        shapes = self.shapes(wave)
+        # Its one channel has no points yet, but still has a shape, after the
+        # background and grid, which paints nothing.
+        *shapes, channel = self.shapes(wave)
+        self.assertEqual((channel["kind"], channel["points"]), ("wave", []))
         # Lines up and down from the left edge, and across from the bottom
         # row up, as the Editor's simulator drew them (EditorAssumptionsTest).
         self.assertEqual([(shape["x"], shape["y"], shape["w"], shape["h"]) for shape in shapes],
@@ -286,8 +298,8 @@ class DrawingTest(unittest.TestCase):
                           (10, 59, 100, 1), (10, 39, 100, 1), (10, 19, 100, 1)])
         self.assertEqual(shapes[1]["colour"], "#ffffff")
         # The demo's chart: no grid.
-        self.assertEqual(len(self.shapes(Component("w", "waveform", dict(wave.values, gdw=0,
-                                                                         gdh=0)))), 1)
+        self.assertEqual([shape["kind"] for shape in self.shapes(
+            Component("w", "waveform", dict(wave.values, gdw=0, gdh=0)))], ["colour", "wave"])
 
     def test_a_waveform_draws_its_first_ch_channels(self):
         # Given points on its four channels, a waveform of ch 2 drew channels
@@ -310,24 +322,17 @@ class DrawingTest(unittest.TestCase):
         drawing = draw_page([Component("page", "page", {"x": 0, "y": 0, "w": 100, "h": 50}), wave],
                             Resources(), waves={"w": {0: [0, 2, 2, 99]}})
         points = drawing["shapes"][-1]
-        image = read_picture(base64.b64decode(points["image"].split(",")[1]))
-        ink = {(points["x"] + index % image.width, points["y"] + index // image.width)
-               for index, pixel in enumerate(image.get_flattened_data()) if pixel[3]}
         # From the bottom row, 29, a pixel per unit, each joined in its own
         # column to the one before; 99 is past the top, 10.
-        self.assertEqual(ink, {(10, 29), (11, 29), (11, 28), (11, 27), (12, 27)} |
+        self.assertEqual(wave_ink(points), {(10, 29), (11, 29), (11, 28), (11, 27), (12, 27)} |
                          {(13, row) for row in range(10, 28)})
-        self.assertEqual({pixel[:3] for pixel in image.get_flattened_data() if pixel[3]},
-                         {(255, 0, 0)})
+        self.assertEqual((points["kind"], points["colour"]), ("wave", "#ff0000"))
         # dir 0, the default: at the left, so the oldest point is at the right.
         wave.values["dir"] = 0
         drawing = draw_page([Component("page", "page", {"x": 0, "y": 0, "w": 100, "h": 50}), wave],
                             Resources(), waves={"w": {0: [0, 2, 2, 99]}})
-        points = drawing["shapes"][-1]
-        image = read_picture(base64.b64decode(points["image"].split(",")[1]))
-        ink = {(points["x"] + index % image.width, points["y"] + index // image.width)
-               for index, pixel in enumerate(image.get_flattened_data()) if pixel[3]}
-        self.assertEqual(ink, {(10, 10)} | {(11, row) for row in range(10, 28)} | {(12, 27)} |
+        self.assertEqual(wave_ink(drawing["shapes"][-1]),
+                         {(10, 10)} | {(11, row) for row in range(10, 28)} | {(12, 27)} |
                          {(13, 27), (13, 28), (13, 29)})
 
     def test_a_button_held_down(self):
@@ -976,10 +981,8 @@ class EditorWaveformTest(unittest.TestCase):
         waves = {"chart": {int(channel): points for channel, points in data["points"].items()}}
         shapes = draw_page([page, wave], Resources(), waves=waves)["shapes"]
         drawn = set()
-        for shape in [shape for shape in shapes if shape["kind"] == "text"]:
-            image = read_picture(base64.b64decode(shape["image"].split(",")[1]))
-            drawn |= {(shape["x"] + index % image.width, shape["y"] + index // image.width)
-                      for index, pixel in enumerate(image.get_flattened_data()) if pixel[3]}
+        for shape in [shape for shape in shapes if shape["kind"] == "wave"]:
+            drawn |= wave_ink(shape)
         screenshot = read_picture((self.FOLDER / name).read_bytes())
         shown = set()
         for y in range(chart["y"], chart["y"] + chart["h"]):

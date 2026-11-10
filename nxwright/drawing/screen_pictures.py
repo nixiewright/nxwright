@@ -15,9 +15,11 @@ unpainted, so that an app turning between such pages keeps no endless chain
 of them: what lay under it then shows black, where none of the later pages
 painted.
 
-The panel paints with a browser, this module with Pillow. Where the two may
-differ, this one is the one compared with the Nextion Editor's pictures
-(tests/test_page_drawing.py). The two kinds of shape the panel writes in a
+The panel paints with a browser, this module with Pillow. A waveform's
+channel, a "wave" shape, is painted pixel by pixel in both, by the same
+rule (waveform_drawing.py). Where the two may differ, this one is the one
+compared with the Nextion Editor's pictures (tests/test_page_drawing.py).
+The two kinds of shape the panel writes in a
 browser's font, "plainText", a text whose font cannot be drawn, and
 "outline", a component's frame with its name, are written in Pillow's
 default font: close enough to read, not the same pixels.
@@ -30,6 +32,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from nxwright import NxwrightError
 from nxwright.drawing.page_drawing import OPAQUE
+from nxwright.drawing.waveform_drawing import wave_pixels
 from nxwright.project.pictures import read_picture
 from nxwright.project.screen_colours import rgb565_to_rgb
 from nxwright.project.screen_copy import FORMAT_RAW, stored_pixels
@@ -206,11 +209,27 @@ def _laid(shape: dict, backdrop, pictures):
         # preview-model.mjs).
         image = _turned_back(_picture_of_data(shape["image"]), shape.get("rotation", 0))
         return image.crop((0, 0, min(w, image.width), min(h, image.height)))
+    if kind == "wave":
+        return _wave(shape)
     if kind == "plainText":
         return _plain_text(shape)
     if kind == "outline":
         return _outline(shape)
     return None
+
+
+def _wave(shape: dict):
+    """Returns a waveform's channel: its pixels in its colour, the rest of
+    its box clear (waveform_drawing.wave_pixels), or None for one without
+    pixels, as a channel without points."""
+    width, height = shape["w"], shape["h"]
+    if width <= 0 or height <= 0 or not shape["points"]:
+        return None
+    laid = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    colour = _rgba(shape["colour"])
+    for pixel in wave_pixels(width, height, shape["points"], shape["dis"], shape["dir"]):
+        laid.putpixel(pixel, colour)
+    return laid
 
 
 def _plain_text(shape: dict) -> Image.Image:

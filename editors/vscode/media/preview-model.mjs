@@ -4,6 +4,7 @@
 // it holds): the server knows what each attribute means, and this only
 // paints its shapes, in order.
 
+import { waveRgba } from "./wave-painter.mjs";
 import { inView } from "./zoom-model.mjs";
 
 // The colour of outlines: hotspots, and components of types not drawn in full.
@@ -195,6 +196,11 @@ export function paint(context, drawing, images, backdrop = null) {
       if (image) {
         paintFrame(context, image, shape);
       }
+    } else if (shape.kind === "wave") {
+      const picture = wavePicture(shape);
+      if (picture) {
+        context.drawImage(picture, x, y);
+      }
     } else if (shape.kind === "plainText") {
       paintPlainText(context, shape);
     } else if (shape.kind === "outline") {
@@ -209,6 +215,20 @@ export function paint(context, drawing, images, backdrop = null) {
     }
   }
   context.globalAlpha = 1;
+}
+
+// Returns a canvas holding the picture of a "wave" shape, a waveform's
+// channel, or null for a shape without pixels, such as a channel without points
+// (wave-painter.mjs).
+function wavePicture(shape) {
+  if (shape.w <= 0 || shape.h <= 0 || shape.points.length === 0) {
+    return null;
+  }
+  const picture = document.createElement("canvas");
+  picture.width = shape.w;
+  picture.height = shape.h;
+  picture.getContext("2d").putImageData(new ImageData(waveRgba(shape), shape.w, shape.h), 0, 0);
+  return picture;
 }
 
 // How dark the screen shows, from 0 to 1, as a black layer's opacity over a

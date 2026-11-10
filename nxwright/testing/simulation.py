@@ -58,6 +58,14 @@ wakes, by code too, it then shows the page `wup` names, unless that is 255
 vendor's instruction set says too. All of this was seen in the Editor's
 simulator.
 
+The waveform generator. A simulation may run one waveform generator, which
+stands for a device on the serial line that sends points to waveforms, as
+`add` instructions at regular times (start_generator, wave_generators.py).
+Unlike the screen's timers, it sends while the screen sleeps, and when the
+app starts again. Its points take the serial line's path, so `com_stop` holds
+them and they count as serial data for `ussp` and `usup`. The log says when
+the generator starts and stops, not each point.
+
 Touch coordinates. A press at a pixel of the page, as the simulator's panel
 makes one, puts its place in `tch0` and `tch1`, and in `tch2` and `tch3`,
 before its events run, and a move of the press moves them. A release sets
@@ -209,6 +217,7 @@ from nxwright.testing.simulation_log import END, LOGGED, SENT, hex_bytes, shown,
 from nxwright.source.page_source import table_limits
 from nxwright.testing.source_runner import (FolderPageTables, SourceFolderRunner,
                                             component_start_values)
+from nxwright.testing.wave_generators import GeneratorRun, GeneratorSettings, WaveformName
 
 # The commands of "other commands" that hold and resume the serial line, as
 # the machine records them (_take_serial).
@@ -321,6 +330,14 @@ class _HeldDrawing:
     components: dict    # {name: Component}
     hidden: set
     changed: set
+
+
+@dataclass(frozen=True)
+class _HeldInstruction:
+    """An instruction `com_stop` holds, and whether the waveform generator
+    sent it."""
+    text: str
+    generated: bool = False
 
 
 @dataclass
@@ -456,6 +473,11 @@ class Simulation:
         self._time_at = ((time or datetime.now()).replace(microsecond=0), 0)
         # How many times the state changed: a drawing is needed again once it grows.
         self.changes = 0
+        # How many times the waveforms' points changed, by `add` or `cle`.
+        # They are counted separately, because new points need only the
+        # waveforms' channels painted again (page_drawing.draw_waves), not a drawing of
+        # the page.
+        self.wave_changes = 0
         self.log = []                # [(clock, line)]: what reached outside the screen
         # Whether a page's load event runs: until it ends, the screen still
         # shows the page before.
@@ -485,6 +507,10 @@ class Simulation:
         # The serial line's bytes not yet used (serial_line.py), which each
         # start empties (_begin).
         self._line = SerialLine()
+        # The waveform generator running, a GeneratorRun, or None. It stands
+        # for a device outside the screen, so it outlives each start
+        # (wave_generators.py).
+        self._generator = None
         self._start = (start_page, values, eeprom)
         self._begin()
 
@@ -550,6 +576,11 @@ class Simulation:
                        FILE_BROWSER_LISTINGS, COMBO_BOX_CHOICES, UNSETTLED):
             self.globals[record] = {}
         self.fields = {name: dict(page.start) for name, page in self.pages.items()}
+        if hasattr(self, "clock"):
+            # The clock starts again from 0, and the waveform generator
+            # keeps sending at its pace.
+            if self._generator is not None:
+                self._generator.shift(-self.clock)
         self.clock = 0
         self.page = None
         self.starts += 1
@@ -587,6 +618,7 @@ class Simulation:
         # line is not stopped. `rest` drops them, the line staying stopped
         # (_start_again_by_rest).
         self._held = None
+        self._hold_ended()
         self._resuming = False       # whether code ran com_star, which runs them once it ends
         self._overflowed = False     # whether the piece arriving has overflowed the buffer
         # A screen that starts again has an empty serial buffer: the bytes
@@ -768,16 +800,21 @@ class Simulation:
         elif word == "com_stop":
             self._stop_serial()
         elif self._held is not None:
-            if self._held and (self._waiting_size() + self._held_size(text)
-                               > SERIAL_BUFFER_SIZE):
-                # As the vendor says: the overflow loses the instructions
-                # held before, and the screen goes on receiving this one.
-                self._overflow(sum(map(self._held_size, self._held)), "held instructions")
-                self._held = []
-            self._held.append(text)
+            self._hold(text)
             self._write_log("held: the serial line is stopped")
         else:
             self._run_serial(text)
+
+    def _hold(self, text: str, generated: bool = False):
+        """Holds an instruction while `com_stop` stops the serial line,
+        `generated` when the waveform generator sent it."""
+        if self._held and (self._waiting_size() + self._held_size(text) > SERIAL_BUFFER_SIZE):
+            # As the vendor says: the overflow loses the instructions held
+            # before, and the screen goes on receiving this one.
+            self._overflow(sum(self._held_size(held.text) for held in self._held),
+                           "held instructions")
+            self._held = []
+        self._held.append(_HeldInstruction(text, generated))
 
     def _stop_serial(self):
         """Holds the serial line's instructions from now on, as `com_stop`
@@ -790,15 +827,29 @@ class Simulation:
         starts the screen again drops those after it, as `rest` does; one
         whose code runs `com_stop` holds them again."""
         held, self._held = self._held or [], None
+        self._hold_ended()
         starts = self.starts
-        for position, text in enumerate(held):
+        told = False
+        for position, instruction in enumerate(held):
             if self.starts != starts:
                 return
             if self._held is not None:
                 self._held.extend(held[position:])
                 return
-            self._write_log("runs %s, held until com_star" % self._received(text))
-            self._run_serial(text)
+            if not instruction.generated:
+                self._write_log("runs %s, held until com_star" % self._received(instruction.text))
+            elif not told:
+                # The generator's held points are logged once, not one by one.
+                told = True
+                self._write_log("the waveform generator's held points run")
+            self._run_serial(instruction.text)
+
+    def _hold_ended(self):
+        """A hold of the serial line ended, by `com_star` or by a start: the
+        log reports again the next time the waveform generator's points are
+        held."""
+        if self._generator is not None:
+            self._generator.held_noted = False
 
     def _resume_when_asked(self):
         """Runs the held serial instructions when the code that just ran
@@ -812,12 +863,52 @@ class Simulation:
         """Runs an instruction of the serial line, and sends its answer, as
         serial_input says."""
         page = self.page
+        machine = self._serial_machine(page)
+        code, succeeded, keep = self._run_on(machine, text, page)
+        if keep:
+            self._commit(machine.values, self.page)
+        self._after_code(lambda: self._return_code(code, succeeded))
+
+    def _run_points(self, texts: list):
+        """Runs the waveform generator's points, `texts` their `add`
+        instructions, one after another the same way as the serial line runs
+        them. The screen answers each one in turn, as `bkcmd` specifies. The
+        points share one view of the page's values, which is kept once at
+        the end. That gives the same result as keeping it after each point,
+        because an `add` changes no value of the page, and what it leaves in
+        the view, such as the record of a refusal
+        (EditorMachine._check_waveform), is what the next point would have
+        started from anyway."""
+        page = self.page
+        machine = self._serial_machine(page)
+        answers = [self._run_on(machine, text, page) for text in texts]
+        if any(keep for _, _, keep in answers):
+            # If every point succeeded, only the waveforms' points changed,
+            # and those changes are counted in wave_changes.
+            self._commit(machine.values, self.page,
+                         counted=not all(succeeded for _, succeeded, _ in answers))
+
+        def answer():
+            for code, succeeded, _ in answers:
+                self._return_code(code, succeeded)
+        self._after_code(answer)
+
+    def _serial_machine(self, page: str) -> EditorMachine:
+        """Returns the machine that runs the serial line's instructions while
+        `page` shows."""
         # As before an event's code (_run), the page's clocked components are
         # brought up to the clock: a player's `tim` reads where its run is.
         if page is not None:
             self._catch_up(self.fields[page])
         # Before any page shows, it runs as program.nx's code does.
-        machine = self._machine(page, self._view(page))
+        return self._machine(page, self._view(page))
+
+    def _run_on(self, machine: EditorMachine, text: str, page: str) -> tuple:
+        """Runs `text`, an instruction of the serial line, on `machine`, made
+        while `page` showed. Returns (code, succeeded, keep): the return code
+        to answer, None for none; whether it succeeded; and whether the
+        machine's values are to be kept, as they are once the instruction
+        succeeded or changed page."""
         known = set(machine.values)
         self._answered = False
         self._refused = None
@@ -851,13 +942,12 @@ class Simulation:
             self._running = None
         succeeded = code == 0x01
         changed_page = self.page != page
-        if succeeded or changed_page:
-            self._commit(machine.values, self.page)
+        keep = succeeded or changed_page
         if succeeded and (self._answered or changed_page):
             code = None     # the answer, or the new page's events, stand for it
         if succeeded and self._refused is not None:
             code, succeeded = self._refused, False
-        self._after_code(lambda: self._return_code(code, succeeded))
+        return code, succeeded, keep
 
     def _serial_arrived(self):
         """Serial data arrived: `ussp` counts again from now, and a sleeping
@@ -916,7 +1006,8 @@ class Simulation:
         """The bytes waiting in the screen's serial buffer: the instructions
         `com_stop` holds, each with its FF FF FF, and the buffer of protocol
         reparse mode."""
-        return sum(map(self._held_size, self._held or [])) + len(self.globals["serial buffer"])
+        return (sum(self._held_size(held.text) for held in self._held or [])
+                + len(self.globals["serial buffer"]))
 
     def _held_size(self, text: str) -> int:
         """The bytes a held instruction takes: its text in the project's
@@ -1258,17 +1349,29 @@ class Simulation:
     def advance(self, milliseconds: int):
         """Lets `milliseconds` pass: the timers of the page shown fall due and
         run, and its clocked components (clocked.py) step, in time order, and
-        a screen idle for `thsp` seconds sleeps."""
+        a screen idle for `thsp` seconds sleeps. The waveform generator sends
+        its points on time, even while the screen sleeps. Points due at the
+        same time as a step of the screen come after it."""
         end = self.clock + milliseconds
         while True:
-            due = [(when, name) for name, when in self._dues() if when <= end]
-            if not due:
+            # Nothing of the screen steps while it sleeps.
+            due = [] if self.asleep else [(when, name) for name, when in self._dues()
+                                          if when <= end]
+            sent = self._generator_due()
+            if sent is not None and sent > end:
+                sent = None
+            if not due and sent is None:
                 break
+            if not due or (sent is not None and sent < min(due)[0]):
+                self.clock = max(self.clock, sent)
+                self._check_sleep()
+                self._generator_tick()
+                continue
             when, name = min(due)
             self.clock = max(self.clock, when)
             self._check_sleep()
             if self.asleep:
-                break       # nothing steps while the screen sleeps
+                continue
             if name in self._clocked:
                 self._step(name)
             elif name == _OPENING:
@@ -1321,9 +1424,17 @@ class Simulation:
             self.globals["painted"] = _compacted(painted + marks, self.page)
 
     def next_due(self):
-        """Returns when the next timer of the page shown runs, or its next
-        clocked component steps, or None, as while the screen sleeps."""
-        return None if self.asleep else min((when for _, when in self._dues()), default=None)
+        """Returns when the next timer of the page shown runs, its next
+        clocked component steps, or the waveform generator sends its next
+        points, or None. While the screen sleeps, only the generator sends."""
+        dues = [] if self.asleep else [when for _, when in self._dues()]
+        sent = self._generator_due()
+        return min(dues + ([] if sent is None else [sent]), default=None)
+
+    def _generator_due(self):
+        """Returns when the waveform generator sends its next points, or
+        None when none runs."""
+        return None if self._generator is None else self._generator.due()
 
     def _dues(self) -> list:
         """Returns (name, when it next falls due) for each timer of the page
@@ -1958,6 +2069,117 @@ class Simulation:
                 component, event = edge
                 self._run(self.page, ["click %s,%d" % (component, event == "down")], [None])
 
+    # The waveform generator: a device outside the screen sending points to
+    # waveforms (wave_generators.py).
+
+    def start_generator(self, settings: GeneratorSettings):
+        """Starts the waveform generator with `settings`, its first points
+        one interval from now. One running is replaced, its waves starting
+        again. Raises NxwrightError, changing nothing, for a waveform the
+        app's pages lack, or a channel its waveform lacks."""
+        self._check_generator(settings)
+        self._generator = GeneratorRun(settings, self.clock)
+        channels = ", ".join(str(channel.channel) for channel in settings.channels)
+        self._write_log("the waveform generator starts, sending to channel%s %s of %s"
+                        % ("s" if len(settings.channels) > 1 else "", channels,
+                           ", ".join("%s.%s" % (name.page, name.waveform)
+                                     for name in settings.waveforms)))
+
+    def change_generator(self, settings: GeneratorSettings):
+        """Gives the running waveform generator new settings, from its next
+        points on. Each channel it keeps goes on from its place in its wave
+        (GeneratorRun.change). Raises NxwrightError, changing nothing, when
+        none runs, or for settings start_generator refuses."""
+        run = self._running_generator()
+        self._check_generator(settings)
+        run.change(settings, self.clock)
+        self._write_log("the waveform generator takes new settings")
+
+    def stop_generator(self):
+        """Stops the waveform generator. Its points held by `com_stop` stay
+        held. Raises NxwrightError when none runs."""
+        self._running_generator()
+        self._generator = None
+        self._write_log("the waveform generator stops")
+
+    def generator(self):
+        """Returns the settings of the waveform generator running, a
+        GeneratorSettings, or None."""
+        return None if self._generator is None else self._generator.settings
+
+    def waveforms(self) -> list:
+        """Returns the waveforms a generator can feed, [(WaveformName, its
+        number of channels)]: those of every page, in page order."""
+        return [(WaveformName(page, name), self.fields[page].get(name + ".ch", 1))
+                for page in self.pages for name in self._of_kind(page, "waveform")]
+
+    def _running_generator(self) -> GeneratorRun:
+        if self._generator is None:
+            raise NxwrightError("no waveform generator is running")
+        return self._generator
+
+    def _check_generator(self, settings: GeneratorSettings):
+        """Raises NxwrightError for a waveform of `settings` that the app's
+        pages lack, or a channel that none of its waveforms has. A channel
+        that only some of them have goes to those alone (_generator_tick)."""
+        for name in settings.waveforms:
+            if name.page not in self.pages:
+                raise NxwrightError("waveform generator: the app has no page %s" % name.page)
+            if self._kinds[name.page].get(name.waveform) != "waveform":
+                raise NxwrightError("waveform generator: the page %s has no waveform %s"
+                                    % (name.page, name.waveform))
+        most = max(self.fields[name.page].get(name.waveform + ".ch", 1)
+                   for name in settings.waveforms)
+        for channel in settings.channels:
+            if channel.channel >= most:
+                raise NxwrightError("waveform generator: none of its waveforms has a channel "
+                                    "%d. The most channels any of them has is %d"
+                                    % (channel.channel, most))
+
+    def _generator_tick(self):
+        """Sends the points the waveform generator has due now: an `add` for
+        each, to each of its waveforms on the page shown that has the
+        point's channel, by its `ch` now. A waveform's ID is looked up by its
+        page and name at each tick, because a start compiles the pages again. A
+        waveform not shown gets nothing, and its wave goes on."""
+        run = self._generator
+        points = run.tick()
+        texts = []
+        for name in run.settings.waveforms:
+            if name.page != self.page or self._kinds[self.page].get(name.waveform) != "waveform":
+                continue
+            component_id = self._ids(self.page).index(name.waveform)
+            count = self.fields[self.page].get(name.waveform + ".ch", 1)
+            texts += ["add %d,%d,%d" % (component_id, channel, value)
+                      for channel, value in points if channel < count]
+        if texts:
+            self._generated_serial(texts)
+
+    def _generated_serial(self, texts: list):
+        """Takes the waveform generator's points, `texts` their `add`
+        instructions, the same way as the serial line takes typed
+        instructions (serial_input). During a transfer or in protocol
+        reparse mode they arrive as bytes. While `com_stop` holds the line
+        they are held, and otherwise they run together (_run_points). A point held or run has no line of its own in the log.
+        Bytes are logged as the serial line logs any (serial_received): a
+        transfer may take part of a point as its data, and the rest then
+        arrives as an instruction the screen refuses, which the log shows."""
+        if self._line.transfer() is not None or self._line.in_reparse():
+            self.serial_received(b"".join(text.encode("ascii") + END for text in texts))
+            return
+        self._overflowed = False
+        self._serial_arrived()
+        if self._held is not None:
+            run = self._generator
+            if not run.held_noted:
+                run.held_noted = True
+                self._write_log("the waveform generator's points are held: the serial line "
+                                "is stopped")
+            for text in texts:
+                self._hold(text, True)
+            return
+        self._run_points(texts)
+
     def pins(self):
         """Returns each GPIO pin as {"mode", "component", "level"}, by pin
         number (gpio_pins.py), or None for a screen without GPIO. The level
@@ -2231,7 +2453,7 @@ class Simulation:
             points = channels.setdefault(entry[2], [])
             points.append(entry[3])
             del points[:max(len(points) - max(values.get(component + ".w", 0), 1), 0)]
-        self.changes += 1
+        self.wave_changes += 1
 
     def waves(self) -> dict:
         """Returns the points of the waveforms of the page shown, as
@@ -2284,9 +2506,12 @@ class Simulation:
             values["text limits"] = dict(self.pages[page].text_limits)
         return values
 
-    def _commit(self, values: dict, page: str):
-        """Keeps the values a machine left, as `page`'s code names them."""
-        self.changes += 1
+    def _commit(self, values: dict, page: str, counted: bool = True):
+        """Keeps the values a machine left, as `page`'s code names them.
+        Unless `counted` is False, the state counts as changed, so that the
+        page is drawn again."""
+        if counted:
+            self.changes += 1
         own = self.pages[page].owned if page else set()
         if page:
             # A `vis 255` or `tsw 255` takes back what each component was given.

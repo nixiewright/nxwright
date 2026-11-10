@@ -362,6 +362,12 @@ class VsCodeSimulation(DrivenSimulation):
     def start_again(self):
         self._call("startAgain")
 
+    def start_generator(self, settings: dict):
+        self._call("startGenerator", settings=settings)
+
+    def stop_generator(self):
+        self._call("stopGenerator")
+
     def stop(self):
         self._call("stop")
 
@@ -381,6 +387,9 @@ class VsCodeSimulation(DrivenSimulation):
         if names is None:
             return self._call("values")["values"]
         return self._call("values", names=names)["values"]
+
+    def generator(self):
+        return self._call("generator")["generator"]
 
     def log(self, after: int = 0) -> list:
         return self._call("log", after=after)["lines"]

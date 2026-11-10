@@ -20,6 +20,12 @@ ready to send as JSON:
         data, in place, cut to the rectangle, in its own colours: a text, a
         rounded progress bar, a QR code, a line or circle a drawing command
         painted, or a frame of an animation or a video;
+      - "wave": a channel of a waveform, over the waveform's rectangle:
+        its "colour", its "points", the channel's latest values, oldest
+        first, as many as the waveform is wide at most, none for a channel
+        without points, and the waveform's "dis" and "dir". Whoever paints
+        the drawing works out its pixels (waveform_drawing.py), so that a
+        simulation can send new points alone;
       - "plainText": "text" in an ordinary font, for a font that cannot be
         drawn: "colour", "size" in pixels, and "xcen" and "ycen";
       - "outline": a frame, with a "label";
@@ -371,7 +377,7 @@ from nxwright.drawing.slider_drawing import paint_slider
 from nxwright.drawing.sliding_text_drawing import paint_sliding_text
 from nxwright.drawing.switch_drawing import paint_switch
 from nxwright.drawing.text_pictures import MissingCharacter, lacking_note, text_picture
-from nxwright.drawing.waveform_drawing import paint_waveform
+from nxwright.drawing.waveform_drawing import paint_channels, paint_waveform
 from nxwright.project.pictures import data_url, drawing_png
 from nxwright.project.screen_colours import rgb565_to_hex, rgb565_to_rgb
 from nxwright.source.component_groups import group_of
@@ -463,6 +469,24 @@ class DrawingResources:
             return self.font(font_id).height
         except NxwrightError:
             return None
+
+
+def draw_waves(components: list, hidden=(), waves: dict = None) -> list:
+    """Returns the channels of each waveform among `components` that shows,
+    as [{"component": its name, "shapes": its "wave" shapes}], the shapes as
+    draw_page gives them for the same `hidden` and `waves`. A simulation
+    sends them when its waveforms' points alone changed, in place of a
+    drawing of the page."""
+    found = []
+    for component in components:
+        if component.type != "waveform" or component.name in hidden \
+                or not all(key in component.values for key in PLACE):
+            continue
+        drawing = {"shapes": []}
+        paint_channels(ComponentPainter(drawing, component, None,
+                                        (waves or {}).get(component.name, {})))
+        found.append({"component": component.name, "shapes": drawing["shapes"]})
+    return found
 
 
 def draw_page(components: list, resources: DrawingResources, painted=(),

@@ -61,6 +61,18 @@ class DrivenSimulation(ABC):
         """Starts the app again, as a screen switched off and on."""
 
     @abstractmethod
+    def start_generator(self, settings: dict):
+        """Starts the waveform generator with `settings`, a generator as a
+        settings file gives it (testing/wave_generators.py), in place of one
+        running. Its points arrive as time passes. Raises NxwrightError for
+        settings that cannot be used."""
+
+    @abstractmethod
+    def stop_generator(self):
+        """Stops the waveform generator. Raises NxwrightError when none
+        runs."""
+
+    @abstractmethod
     def stop(self):
         """Ends the simulation."""
 
@@ -84,6 +96,11 @@ class DrivenSimulation(ABC):
         of the page shown names them, such as "t0.txt" or "sys0"; a
         component's name alone, such as "t0", gives each of its attributes.
         Raises NxwrightError for a name that code does not know."""
+
+    @abstractmethod
+    def generator(self):
+        """Returns the settings of the waveform generator running, as a
+        settings file gives them, or None."""
 
     @abstractmethod
     def log(self, after: int = 0) -> list:

@@ -2,7 +2,7 @@
   "name": "nxwright-language",
   "displayName": "nxwright",
   "description": "Design, write, simulate, test, compile, and upload Nextion screen apps in VS Code.",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "publisher": "nxwright",
   "icon": "images/icon.png",
   "license": "Apache-2.0",
@@ -971,6 +971,10 @@
                 "required": [
                   "name"
                 ]
+              },
+              "waveGenerator": {
+                "type": "string",
+                "description": "Optional: the full path of a file saved from the Waveform generator panel. The generator in that file starts with the simulation."
               },
               "gpioInputs": {
                 "type": "object",

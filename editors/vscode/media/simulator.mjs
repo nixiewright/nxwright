@@ -4,10 +4,14 @@
 // as the screen draws it. Pressing the mouse on it presses the screen there,
 // moving it while pressed moves the press, as a slider is dragged, and
 // letting go releases it. Until the first drawing is painted, the canvas is
-// hidden, and a message says how far the app's start has come. The zoom bar
+// hidden, and a message says how far the app's start has come. When only
+// the points of the page's waveforms changed, the adapter sends those alone,
+// and they are painted over the last drawing (wave-painter.mjs), so that a
+// waveform fed fast moves smoothly. The zoom bar
 // above it shows the screen larger or smaller (zoom.mjs); a press's place is
 // divided back to the screen's pixels.
 import { backdropChoice, dimScreen, imageSources, loadImage, paint } from "./preview-model.mjs";
+import { wavesBelongTo, withWaves } from "./wave-painter.mjs";
 import { ZoomBar } from "./zoom.mjs";
 import { pagePixel } from "./zoom-model.mjs";
 
@@ -34,6 +38,9 @@ let loaded = new Map();
 let painting = Promise.resolve();
 let received = 0;
 const newestOfEntry = new Map();      // "start:entry" -> the number of its newest drawing
+// The drawing last painted, with its images: what the waveforms' new points
+// are painted over.
+let shown;
 let pressed = false;
 // Where the press moved to, sent once per frame at most.
 let moved = undefined;
@@ -42,6 +49,13 @@ window.addEventListener("message", (event) => {
   const message = event.data;
   if (message.type === "starting") {
     showStarting(message.progress);
+    return;
+  }
+  if (message.type === "waves") {
+    // In turn with the drawings, so that the points go over the drawing
+    // they came after.
+    painting = painting.then(() => paintWaves(message.waves))
+      .catch((error) => console.error(error));
     return;
   }
   if (message.type !== "drawing") {
@@ -57,6 +71,7 @@ window.addEventListener("message", (event) => {
     if (newestOfEntry.get(entry) === number) {
       newestOfEntry.delete(entry);
       paintDrawing(message.drawing, ready);
+      shown = { drawing: message.drawing, images: ready };
     }
   }).catch((error) => console.error(error));
 });
@@ -82,6 +97,18 @@ function paintDrawing(drawing, images) {
   startingMessage.hidden = true;
   canvas.hidden = false;
   zoomBar.hidden = false;
+}
+
+// Paints the waveforms' new points over the drawing last painted, if they
+// belong to it (wavesBelongTo). The adapter sends the points on their own
+// when nothing else changed.
+function paintWaves(waves) {
+  const drawing = shown?.drawing;
+  if (!wavesBelongTo(drawing, waves)) {
+    return;
+  }
+  shown.drawing = { ...drawing, shapes: withWaves(drawing.shapes, waves.waveforms) };
+  paintDrawing(shown.drawing, shown.images);
 }
 
 // Says how far the app's start has come, until the first drawing is

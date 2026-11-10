@@ -8,10 +8,11 @@ import unittest
 from unittest import mock
 
 from nxwright.debug_adapter.adapter import DebugAdapter
-from nxwright.debug_adapter.live import LIVE_DRAWING, LiveSimulation, WallClock
+from nxwright.debug_adapter.live import LIVE_DRAWING, WAVES_PACE, LiveSimulation, WallClock
 from nxwright.drawing.screen_pictures import ScreenPictures
 from nxwright.source.source_folder import read_app
 from nxwright.testing.simulation import Simulation
+from nxwright.testing.wave_generators import generator_settings, generator_to_json
 from tests.test_simulation import SimulationTestCase, placed, table
 
 # How long a test waits for the simulation's thread, in seconds.
@@ -77,6 +78,29 @@ on bad.down:
         with self.lock:
             return [message for message in self.sent
                     if message.get("request_seq") == self.sequence][-1]
+
+    def request_later(self, command: str, **arguments) -> int:
+        """Sends a request whose reply may come later, from the simulation's
+        thread, and returns its number."""
+        self.sequence += 1
+        self.adapter.handle({"type": "request", "seq": self.sequence, "command": command,
+                             "arguments": arguments})
+        return self.sequence
+
+    def replies_to(self, sequence: int) -> list:
+        with self.lock:
+            return [message for message in self.sent if message.get("type") == "response"
+                    and message.get("request_seq") == sequence]
+
+    def reply_to(self, sequence: int) -> dict:
+        """Waits for the reply to the request numbered `sequence`."""
+        deadline = time.monotonic() + _PATIENCE
+        while time.monotonic() < deadline:
+            replies = self.replies_to(sequence)
+            if replies:
+                return replies[0]
+            time.sleep(0.01)
+        self.fail("request %d had no reply" % sequence)
 
     def events(self, name: str) -> list:
         with self.lock:
@@ -348,29 +372,6 @@ class AgentRequestsTest(LiveTestCase):
     """What an agent asks of a simulation through the extension: actions
     answered once handled, and looks at what the simulation holds."""
 
-    def request_later(self, command: str, **arguments) -> int:
-        """Sends a request whose reply may come later, from the simulation's
-        thread, and returns its number."""
-        self.sequence += 1
-        self.adapter.handle({"type": "request", "seq": self.sequence, "command": command,
-                             "arguments": arguments})
-        return self.sequence
-
-    def replies_to(self, sequence: int) -> list:
-        with self.lock:
-            return [message for message in self.sent if message.get("type") == "response"
-                    and message.get("request_seq") == sequence]
-
-    def reply_to(self, sequence: int) -> dict:
-        """Waits for the reply to the request numbered `sequence`."""
-        deadline = time.monotonic() + _PATIENCE
-        while time.monotonic() < deadline:
-            replies = self.replies_to(sequence)
-            if replies:
-                return replies[0]
-            time.sleep(0.01)
-        self.fail("request %d had no reply" % sequence)
-
     def count(self) -> int:
         return self.adapter._live.simulation.globals["count"]
 
@@ -605,6 +606,129 @@ class AgentRequestsTest(LiveTestCase):
         self.assertIn("handled", reply["message"])
 
 
+class GeneratorRequestsTest(LiveTestCase):
+    """The waveform generator's requests, on the page "second", which has a
+    waveform of two channels, "chart"."""
+
+    def setUp(self):
+        super().setUp()
+        self.page("second", [table("chart", "waveform", x=0, y=0, w=50, h=50, ch=2)])
+        self.feeding = {"waveforms": [{"page": "second", "waveform": "chart"}],
+                        "interval": 10, "channels": [{"channel": 0}]}
+
+    def later(self, command: str, **arguments) -> dict:
+        """Sends a request answered by the simulation's thread, and returns
+        its reply."""
+        return self.reply_to(self.request_later(command, **arguments))
+
+    def points(self) -> list:
+        """The points of the chart's channel 0, none while the app starts."""
+        simulation = self.adapter._live.simulation
+        return [] if simulation is None else simulation.waves().get("chart", {}).get(0, [])
+
+    def wait_for_points(self, count: int):
+        deadline = time.monotonic() + _PATIENCE
+        while time.monotonic() < deadline:
+            if len(self.points()) >= count:
+                return
+            time.sleep(0.01)
+        self.fail("%d points did not come" % count)
+
+    def test_the_waveforms_a_generator_can_feed(self):
+        self.launch(page="second")
+        self.assertEqual(self.later("nxwright/waveforms")["body"],
+                         {"waveforms": [{"page": "second", "waveform": "chart", "channels": 2}]})
+
+    def test_the_generator_starts_changes_and_stops(self):
+        self.launch(page="second")
+        self.assertEqual(self.later("nxwright/generator")["body"], {"generator": None})
+        self.assertTrue(self.later("nxwright/startGenerator", settings=self.feeding)["success"])
+        self.wait_for_points(3)
+        self.assertEqual(self.later("nxwright/generator")["body"], {"generator": self.feeding})
+        changed = dict(self.feeding, shape="custom", values=[77])
+        self.assertTrue(self.later("nxwright/changeGenerator", settings=changed)["success"])
+        self.wait_for_points(len(self.points()) + 3)
+        self.assertEqual(self.points()[-1], 77)
+        self.assertTrue(self.later("nxwright/stopGenerator")["success"])
+        self.assertEqual(self.later("nxwright/generator")["body"], {"generator": None})
+        lines = [line for body in self.events("output") if body["category"] == "stdout"
+                 for line in body["output"].splitlines()]
+        self.assertTrue(any("the waveform generator starts" in line for line in lines), lines)
+
+    def test_a_generators_points_come_on_their_own_between_drawings(self):
+        self.launch(page="second")
+        self.wait_for("nxwright/drawing")
+        self.later("nxwright/startGenerator", settings=self.feeding)
+        sent = self.wait_for("nxwright/waves", 5)
+        self.assertEqual((sent["page"], [wave["component"] for wave in sent["waveforms"]]),
+                         ("second", ["chart"]))
+        shape = sent["waveforms"][0]["shapes"][0]
+        self.assertEqual((shape["kind"], shape["component"], shape["w"]), ("wave", "chart", 50))
+        self.assertGreaterEqual(len(shape["points"]), 5)
+        # They belong to the drawing sent before them, the only one.
+        drawings = self.events("nxwright/drawing")
+        self.assertEqual(len(drawings), 1)
+        self.assertEqual((sent["start"], sent["entry"]),
+                         (drawings[0]["start"], drawings[0]["entry"]))
+
+    def test_a_refused_generator_leaves_the_simulation_running(self):
+        self.launch(page="second")
+        for settings, refusal in (
+                (dict(self.feeding, shape="saw"), "settings: shape 'saw' is not a shape"),
+                (dict(self.feeding, waveforms=[{"page": "second", "waveform": "none"}]),
+                 "the page second has no waveform none")):
+            with self.subTest(refusal=refusal):
+                reply = self.later("nxwright/startGenerator", settings=settings)
+                self.assertFalse(reply["success"])
+                self.assertIn(refusal, reply["message"])
+        for command, arguments in (("nxwright/stopGenerator", {}),
+                                   ("nxwright/changeGenerator", {"settings": self.feeding})):
+            reply = self.later(command, **arguments)
+            self.assertEqual((reply["success"], reply["message"]),
+                             (False, "no waveform generator is running"))
+        self.assertEqual(self.events("stopped"), [])
+        self.assertTrue(self.later("nxwright/startGenerator", settings=self.feeding)["success"])
+
+    def test_the_generator_starts_while_the_debugger_holds_the_simulation(self):
+        self.launch(page="second")
+        self.wait_for("nxwright/drawing")
+        self.request("pause", threadId=1)
+        self.wait_for("stopped")
+        self.assertTrue(self.later("nxwright/startGenerator", settings=self.feeding)["success"])
+        self.assertEqual(self.points(), [])
+        self.request("continue", threadId=1)
+        self.wait_for_points(2)
+
+    def test_a_launch_starts_the_generator_of_its_file(self):
+        file = self.root / "waves.json"
+        file.write_text(generator_to_json(generator_settings(self.feeding, "test")),
+                        encoding="utf-8")
+        self.launch(page="second", waveGenerator=str(file))
+        self.wait_for_points(2)
+        self.assertEqual(self.later("nxwright/generator")["body"], {"generator": self.feeding})
+
+    def test_a_launch_is_refused_for_a_file_it_cannot_use(self):
+        self.request("initialize")
+        for file, refusal in ((str(self.root / "missing.json"), "cannot be read"),
+                              (["waves.json"], "must be a settings file's path")):
+            with self.subTest(file=file):
+                reply = self.request("launch", sourceFolder=str(self.root), page="second",
+                                     waveGenerator=file)
+                self.assertFalse(reply["success"])
+                self.assertIn(refusal, reply["message"])
+
+    def test_a_launch_fails_for_a_waveform_the_app_lacks(self):
+        file = self.root / "waves.json"
+        settings = dict(self.feeding, waveforms=[{"page": "second", "waveform": "none"}])
+        file.write_text(generator_to_json(generator_settings(settings, "test")),
+                        encoding="utf-8")
+        self.launch(page="second", waveGenerator=str(file))
+        self.wait_for("terminated")
+        failed = [body["output"] for body in self.events("output")
+                  if body["category"] == "stderr"]
+        self.assertIn("the page second has no waveform none", "".join(failed))
+
+
 class LaunchDefinesTest(LiveTestCase):
     """A launch configuration's `defines`, new values of app.toml's defines
     for the simulation. The app starts `count` at START, and places "go" at
@@ -766,12 +890,15 @@ class CostedLiveSimulation(LiveSimulation):
         super().__init__(source_folder, notify=self._news, wall=wall)
         self.statement_cost, self.drawing_cost = statement, drawing
         self.drawings = []
+        self.waves = []         # when the waveforms' points were sent on their own
         self.troubles = []
 
     def _news(self, kind: str, body):
         if kind == "drawing":
             self.drawings.append(self._wall.now())
             self._wall.move(self.drawing_cost)
+        elif kind == "waves":
+            self.waves.append(self._wall.now())
         elif kind in ("stopped", "failed"):
             self.troubles.append(body)
             self.end()
@@ -909,6 +1036,60 @@ on tick.timer:
         work = took - len(during) * drawing
         self.assertGreater(len(during), 1)
         self.assertLessEqual(len(during) * drawing, work + statement)
+
+    def test_a_generators_points_are_sent_alone_a_frame_apart_at_least(self):
+        # A point every 2 ms, for a second: the points go on their own,
+        # WAVES_PACE apart at least, and no drawing of the page is made.
+        self.program("page page0\n")
+        self.page("page0", [table("chart", "waveform", x=0, y=100, w=200, h=50, ch=1)])
+        live = CostedLiveSimulation(self.root, self.wall, statement=0)
+        feeding = generator_settings({"waveforms": [{"page": "page0", "waveform": "chart"}],
+                                      "interval": 2, "channels": [{"channel": 0}]}, "test")
+        self.wall.at(0.5, lambda: live.act(lambda simulation:
+                                           simulation.start_generator(feeding)))
+        self.run_until(live, 1.5)
+        self.assertEqual([moment for moment in live.drawings if moment > 0.5], [])
+        apart = [later - earlier for earlier, later in zip(live.waves, live.waves[1:])]
+        self.assertGreater(len(live.waves), 40)
+        self.assertGreaterEqual(min(apart), WAVES_PACE - 1e-9)
+        # Each goes as soon as a tick comes once its pace allows.
+        self.assertLess(max(apart), WAVES_PACE + 0.004)
+        self.assertGreater(len(live.simulation.waves()["chart"][0]), 190)
+
+    def test_a_waveform_generator_slower_than_its_interval_lets_presses_through(self):
+        # Each tick of the generator takes three times its interval. Its
+        # ticks take turns with the presses, as a timer's do, so a press
+        # waits for one tick at most, and the points fall behind the clock.
+        self.program("int count=0\n\npage page0\n")
+        self.page("page0", [placed("go", "button", 0, 0),
+                            table("chart", "waveform", x=0, y=100, w=200, h=50, ch=1)], """\
+on go.down:
+  count = count + 1
+""")
+        live = CostedLiveSimulation(self.root, self.wall, statement=0.0005)
+        feeding = generator_settings({"waveforms": [{"page": "page0", "waveform": "chart"}],
+                                      "interval": 1, "channels": [{"channel": 0}]}, "test")
+        ticks = []
+        tick = Simulation._generator_tick
+
+        def costly_tick(simulation):
+            ticks.append(self.wall.now())
+            self.wall.move(0.003)
+            tick(simulation)
+
+        self.wall.at(0.5, lambda: live.act(lambda simulation:
+                                           simulation.start_generator(feeding)))
+        presses = [self.press_at(live, 1.0 * number) for number in range(1, 4)]
+        with mock.patch.object(Simulation, "_generator_tick", autospec=True,
+                               side_effect=costly_tick):
+            self.run_until(live, 3.5)
+        # The ticks fell behind their interval, as this test needs.
+        self.assertGreater(len(ticks), 100)
+        self.assertLess(len(ticks), 3.0 / 0.002)
+        self.assertEqual(live.simulation.globals["count"], 3)
+        for number, times in enumerate(presses, 1):
+            self.assertEqual(len(times), 2, "press %d was not answered" % number)
+            self.assertLess(times[1] - times[0], 0.01, "press %d" % number)
 
 
 if __name__ == "__main__":

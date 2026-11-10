@@ -92,6 +92,7 @@ You can also:
 - Connect a real screen beside the simulation, and send both the same instructions to compare them.
 - Let the program on the serial port talk to the real screen in place of the simulation, or to both at once, and watch what passes between them.
 - Flip the screen's GPIO inputs, in place of buttons or switches wired to them.
+- Feed your waveforms with test waves from the Waveform generator panel, in place of a device sending points.
 - Use folders on your computer as the screen's SD cards, so the app reads and writes real files.
 - Set breakpoints in your code, step through it, and step back.
 
@@ -161,6 +162,7 @@ A launch configuration of type `nxwright` simulates the source folder given by `
 | `eeprom` | A file that keeps the EEPROM's contents between simulations. It is created if missing. Without it, the EEPROM starts empty every time. |
 | `serialPort` | The serial port connected to the screen's serial line, such as `{"name": "COM4", "baud": 115200}`. |
 | `gpioInputs` | The levels the GPIO inputs start at, such as `{"pio2": 0}`. Without it, every input reads 1, like a pull-up input with nothing driving it. |
+| `waveGenerator` | The full path of a file saved from the Waveform generator panel. The generator in that file starts with the simulation. |
 | `sdCard0`, `sdCard1` | The full paths of folders on your computer to use as the screen's SD cards. Without them, each card is kept in memory. |
 | `logReceived`, `logSent` | How the log shows the serial line: `text`, `hex`, or `both`. |
 | `pinyinTable` | The screen's pinyin table, for Chinese input: the Nextion Editor's `input.bin`, or a TFT file. Without it, the installed Nextion Editor's table is used, if one is found. |

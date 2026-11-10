@@ -137,6 +137,19 @@ test("the GPIO methods go to the host, one pin or several", async () => {
                                 ["gpioInputs", { session: "s", levels: { pio2: 1 } }]]);
 });
 
+test("the waveform generator methods go to the host", async () => {
+  const host = standInHost();
+  const settings = { waveforms: [{ page: "day", waveform: "chart" }], channels: [{ channel: 0 }] };
+  await talk(new Conversation(TOKEN, host),
+             { id: 1, method: "hello", params: { token: TOKEN } },
+             { id: 2, method: "startGenerator", params: { session: "s", settings } },
+             { id: 3, method: "generator", params: { session: "s" } },
+             { id: 4, method: "stopGenerator", params: { session: "s" } });
+  assert.deepEqual(host.calls, [["startGenerator", { session: "s", settings }],
+                                ["generator", { session: "s" }],
+                                ["stopGenerator", { session: "s" }]]);
+});
+
 test("an agent may act on a simulation whose serial line reaches a device", () => {
   // Without a port connected, or with the question turned off, it may.
   assert.equal(serialRule({ connected: false, ask: true, answer: undefined }), "act");

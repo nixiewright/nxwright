@@ -35,7 +35,9 @@ TFT file holding it; without one, the installed Nextion Editor's
 (testing/pinyin_table.py). Its `serialPort`, {"name":
 "COM4", "baud": 115200}, connects the screen's serial line to that port
 (serial_port.py). Its `gpioInputs`, {"pio2": 0}, gives the GPIO inputs'
-starting levels (testing/gpio_pins.py). Custom requests carry
+starting levels (testing/gpio_pins.py). Its `waveGenerator` names the
+settings file of the waveform generator that starts with it
+(testing/wave_generators.py). Custom requests carry
 what happens to the screen: "nxwright/press" at (x, y), "nxwright/move" to
 (x, y) while pressed, "nxwright/release", "nxwright/serial" with an
 instruction's text, "nxwright/startAgain", "nxwright/gpioInput",
@@ -44,6 +46,16 @@ setting several at the same moment, {"levels": {"pio2": 0, "pio5": 0}}; and
 the serial port's settings: "nxwright/serialPorts" answers with the
 computer's ports, the rates, and the port's state, and "nxwright/serialPort"
 connects the port `name` at `baud`, or disconnects it when `name` is empty.
+The waveform generator has its own custom requests: "nxwright/waveforms"
+answers with the waveforms it can feed, each with its page, its name, and
+its number of channels; "nxwright/startGenerator" starts it with
+`settings`, the generator's JSON form, replacing any generator running;
+"nxwright/changeGenerator" gives the running generator new `settings`;
+"nxwright/stopGenerator" stops it; and "nxwright/generator" answers with
+the running generator's settings, `generator`, or null. These requests
+change nothing on the screen, so they are answered the same way as a
+look: once the simulation's thread has taken them, or at once while the
+debugger holds the thread stopped.
 
 A real screen can be connected beside the simulation, on a port of its own
 called the screen port. These requests act on it:
@@ -78,7 +90,10 @@ an agent's, which `handled` must come with: while a serial port is
 connected, it is refused unless also `allowed`, which the extension gives
 once the user agreed, since what the app sends then reaches a device. An
 agent's press or move is refused too when the screen cannot take it, as
-a second press while one is held (looks.touch_refusal). An agent never
+a second press while one is held (looks.touch_refusal). If `agent` is
+given, a start, change, or stop of the waveform generator is refused the
+same way while a serial port is connected, because the screen's answers to
+the generator's points reach the device too. An agent never
 reaches the real screen. A "nxwright/serial" from an agent is refused if
 its `to` includes the screen, and the log an agent reads leaves out the
 screen's lines. An agent also looks at what the simulation holds (testing/looks.py):
@@ -94,7 +109,10 @@ each start of the app compiles its pages, with the number of the page
 compiling, the page count, and the page's name, or no page once all are
 compiled; "nxwright/drawing", with the page shown, its drawing, the files
 of its pictures, and which start of the screen and which entry of the page
-it belongs to; "nxwright/serialState", with the MCU port's state when it
+it belongs to; "nxwright/waves", when only the points of the page's
+waveforms changed, with each waveform's channels in the drawing's form, and
+the page, start, and entry of the drawing that the panel paints them over
+(page_drawing.draw_waves); "nxwright/serialState", with the MCU port's state when it
 changes, "nxwright/screenState", with the screen port's, and
 "nxwright/bridgeState", with whether the bridge runs; and "nxwright/gpio",
 with each GPIO pin's mode, bound component, and level, or none for a
@@ -131,6 +149,8 @@ from nxwright.testing.pinyin_table import installed_pinyin_table, read_pinyin_ta
 from nxwright.testing.sd_cards import card_folder
 from nxwright.testing.simulation import read_eeprom_file
 from nxwright.testing.simulation_log import END, log_format, shown, shown_instruction
+from nxwright.testing.wave_generators import (generator_dict, generator_settings,
+                                              read_generator_file)
 from nxwright.testing.preview import Previews
 from nxwright.testing.recording import PythonPlace, Recorder, recording
 
@@ -213,7 +233,12 @@ class DebugAdapter:
                           "nxwright/startScreenAgain": self._start_screen_again,
                           "nxwright/components": self._components,
                           "nxwright/values": self._values, "nxwright/log": self._log,
-                          "nxwright/screen": self._screen}
+                          "nxwright/screen": self._screen,
+                          "nxwright/waveforms": self._waveforms,
+                          "nxwright/generator": self._generator,
+                          "nxwright/startGenerator": self._start_generator,
+                          "nxwright/changeGenerator": self._change_generator,
+                          "nxwright/stopGenerator": self._stop_generator}
 
     def handle(self, message: dict):
         """Answers one request. A mistake in answering it must not end the
@@ -305,7 +330,10 @@ class DebugAdapter:
         `pinyinTable` names, which stops the launch when it holds none, or
         else the installed Nextion Editor's, if found. Its GPIO inputs start
         at the levels `gpioInputs` gives, as {"pio2": 0} (gpio_pins.py).
-        `defines` gives app.toml's defines new values, as {"LIMIT": 40}."""
+        `defines` gives app.toml's defines new values, as {"LIMIT": 40}.
+        `waveGenerator` names a settings file (wave_generators.py), whose
+        waveform generator starts with the simulation; a file that cannot be
+        read or used stops the launch."""
         source_folder = Path(arguments["sourceFolder"])
         defines = {}
         if arguments.get("defines") is not None:
@@ -328,6 +356,7 @@ class DebugAdapter:
         inputs = arguments.get("gpioInputs")
         if inputs is not None:
             levels_by_name(inputs)
+        generator = _launch_generator(arguments.get("waveGenerator"))
         # Last of the checks, as a missing file is made here.
         eeprom, eeprom_file = b"", None
         if arguments.get("eeprom"):
@@ -348,7 +377,7 @@ class DebugAdapter:
                                     arguments.get("values"), eeprom, self._live_news,
                                     self._simulation_sends, cards, log_formats,
                                     eeprom_file=eeprom_file, pinyin_table=pinyin_table,
-                                    inputs=inputs, defines=defines)
+                                    inputs=inputs, defines=defines, generator=generator)
         # Connected before the app starts, so that what it sends first goes
         # out. Either way the side bar hears the port's state.
         if port is not None:
@@ -402,6 +431,10 @@ class DebugAdapter:
             with self._pictures_lock:
                 self._pictures.shown(drawing)
             self._event("nxwright/drawing", drawing)
+        elif kind == "waves":
+            simulation = body
+            self._event("nxwright/waves", self._previews.simulation_waves(
+                simulation, simulation.drawing_inputs()))
         elif kind == "log":
             self._event("output", {"category": "stdout",
                                    "output": "".join(_log_line(time, text)
@@ -803,15 +836,78 @@ class DebugAdapter:
             return shown
         return self._look(read)
 
+    def _waveforms(self, arguments: dict):
+        """The waveforms a generator can feed (Simulation.waveforms)."""
+        return self._look(lambda simulation: {"waveforms": [
+            {"page": name.page, "waveform": name.waveform, "channels": channels}
+            for name, channels in simulation.waveforms()]})
+
+    def _generator(self, arguments: dict):
+        """The settings of the waveform generator running, as a settings
+        file gives them (wave_generators.py), or None."""
+        def running(simulation):
+            settings = simulation.generator()
+            return {"generator": None if settings is None else generator_dict(settings)}
+        return self._look(running)
+
+    def _start_generator(self, arguments: dict):
+        """Starts the waveform generator with `settings`, a generator as a
+        settings file gives it, in place of one running."""
+        settings = generator_settings(arguments.get("settings"), "settings")
+
+        def start(simulation):
+            simulation.start_generator(settings)
+            return {}
+        return self._change_outside(arguments, start)
+
+    def _change_generator(self, arguments: dict):
+        """Gives the waveform generator running new `settings`."""
+        settings = generator_settings(arguments.get("settings"), "settings")
+
+        def change(simulation):
+            simulation.change_generator(settings)
+            return {}
+        return self._change_outside(arguments, change)
+
+    def _stop_generator(self, arguments: dict):
+        """Stops the waveform generator."""
+        def stop(simulation):
+            simulation.stop_generator()
+            return {}
+        return self._change_outside(arguments, stop)
+
     def _look(self, read):
         """Has the simulation's thread answer with `read(simulation)`, which
         changes nothing (LiveSimulation.look)."""
+        return self._answered_by_thread(read, LiveSimulation.look)
+
+    def _change_outside(self, arguments: dict, change):
+        """Has the simulation's thread answer with `change(simulation)`,
+        which changes what is outside the screen, such as its waveform
+        generator (LiveSimulation.change_outside). If `change` raises
+        NxwrightError, that error is the reply's error, and the simulation
+        goes on. An agent's change (`agent`) is refused while a serial port is
+        connected, unless the user `allowed` the agent, the same way as an
+        agent's action (_agent_refusal)."""
+        agent, allowed = arguments.get("agent") is True, arguments.get("allowed") is True
+
+        def checked(simulation):
+            refusal = _agent_refusal(self._link, agent, allowed)
+            if refusal is not None:
+                raise NxwrightError(refusal)
+            return change(simulation)
+        return self._answered_by_thread(checked, LiveSimulation.change_outside)
+
+    def _answered_by_thread(self, work, give):
+        """Gives the simulation's thread `work(simulation)`, whose result is
+        the request's reply, through `give`, LiveSimulation's look or
+        change_outside."""
         live = self._running_simulation()
-        look = _Look(read, _Reply(self, self._request), self._reply_settled)
+        look = _Look(work, _Reply(self, self._request), self._reply_settled)
         self._wait_for_reply(look)
-        live.look(look)
+        give(live, look)
         if live.over:
-            # The thread ended as the look was given: none will take it.
+            # The thread ended as the work was given: none will take it.
             look.end()
         return _LATER
 
@@ -1122,6 +1218,19 @@ class _Reply:
         self._adapter._respond(self._request, error is None, body, error)
 
 
+def _agent_refusal(link, agent: bool, allowed: bool):
+    """Returns why an agent may not act on the simulation whose serial line
+    is `link`, or None when it may: while a serial port is connected, what
+    the app sends reaches a device, so the user must have `allowed` the
+    agent. It is checked on the simulation's thread just before the act
+    runs, so that a port connected while the act waited counts."""
+    state = link.state()
+    if agent and not allowed and state["connected"]:
+        return ("the serial port %s is connected, so what the app sends reaches a device, and "
+                "the user has not allowed an agent to act on this simulation" % state["name"])
+    return None
+
+
 class _HandledAction:
     """An action for the simulation's thread, with the replies that wait
     until it is handled: its own, when `reply` is given, and those of moves
@@ -1148,11 +1257,9 @@ class _HandledAction:
             if self._dropped:
                 return
             self._started = True
-        state = self._link.state()
-        if self._agent and not self._allowed and state["connected"]:
-            self._finish("the serial port %s is connected, so what the app sends reaches a "
-                         "device, and the user has not allowed an agent to act on this "
-                         "simulation" % state["name"])
+        refusal = _agent_refusal(self._link, self._agent, self._allowed)
+        if refusal is not None:
+            self._finish(refusal)
             return
         refusal = self._touch(simulation) if self._touch is not None else None
         if refusal is not None:
@@ -1225,7 +1332,8 @@ class _HandledAction:
 
 class _Look:
     """A look at what the simulation holds, `read(simulation)`, sent as its
-    reply. `settled(self)` is called once it is answered."""
+    reply; or a change to what is outside the screen, answered the same
+    way. `settled(self)` is called once it is answered."""
 
     def __init__(self, read, reply: _Reply, settled):
         self._read, self._reply, self._settled = read, reply, settled
@@ -1345,6 +1453,18 @@ def _port_settings(settings) -> tuple:
             not isinstance(settings.get("baud", 0), int):
         raise NxwrightError('a serial port is given as {"name": "COM4", "baud": 115200}')
     return settings["name"], settings.get("baud")
+
+
+def _launch_generator(file):
+    """Returns the GeneratorSettings of the settings file a launch's
+    `waveGenerator` names, or None when it names none. Raises NxwrightError,
+    which stops the launch, for anything but a path, or a file that cannot
+    be read or used (wave_generators.read_generator_file)."""
+    if file is None:
+        return None
+    if not isinstance(file, str):
+        raise NxwrightError("waveGenerator must be a settings file's path")
+    return read_generator_file(Path(file))
 
 
 def serve(input_stream, output_stream) -> int:

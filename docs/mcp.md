@@ -55,6 +55,9 @@ After the page's line, each line gives a visible component's name, type, box, an
 | `values` | Reads values, such as `t0.txt` or `sys0`, or every attribute of a component, such as `t0`. |
 | `set_input` | Sets a GPIO input's level. |
 | `set_inputs` | Sets several GPIO inputs' levels at the same moment. Once every level has changed, the events bound to those pins run in pin order. nxwright chose this order, and it has not been checked on a real screen. |
+| `start_generator` | Starts the waveform generator, which sends points to the app's waveforms the way a device would ([The waveform generator](simulator.md#the-waveform-generator)). It takes the generator's settings, or a file saved from the Waveform generator panel, and replaces a generator that is running. |
+| `stop_generator` | Stops the waveform generator. |
+| `generator` | Gives the settings of the waveform generator that is running, if one is. |
 | `start_again` | Starts the app again, like a screen being switched off and on. |
 | `stop_simulation` | Ends a simulation. |
 

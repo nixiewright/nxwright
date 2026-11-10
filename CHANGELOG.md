@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.14] - 2026-11-10
+
+- Added a waveform generator to the simulator.
+
 ### [0.2.13] - 2026-11-09
 
 - Added support in the simulator for bridging an MCU and a real screen, logging their communications.
@@ -89,6 +93,12 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.10] - 2026-11-10
+
+Needs nxwright 0.2.14 or later.
+
+- Added the Waveform generator panel, opened from the Simulator section.
 
 ### [0.3.9] - 2026-11-09
 

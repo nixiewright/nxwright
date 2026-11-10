@@ -1,8 +1,9 @@
 // The agent channel, VS Code's side. With the setting
 // nxwright.agents.allowControl on, a local connection through which a
 // program on the same computer, such as `nxwright mcp`, starts a simulation
-// in this window and drives it: presses, typed instructions, and looks at
-// what the screen shows. Its rules, apart from VS Code, are agentChannel.ts's.
+// in this window and drives it: presses, typed instructions, the waveform
+// generator, and looks at what the screen shows. Its rules, apart from VS
+// Code, are agentChannel.ts's.
 //
 // The channel listens on this computer's own address, 127.0.0.1, on a port
 // the system picks free each time it opens, and its file says which, with
@@ -52,11 +53,12 @@ const HELLO_WAIT = 10000;
 const ACTIONS: Record<string, string> = {
   press: "nxwright/press", move: "nxwright/move", release: "nxwright/release",
   serial: "nxwright/serial", startAgain: "nxwright/startAgain", gpioInput: "nxwright/gpioInput",
-  gpioInputs: "nxwright/gpioInputs",
+  gpioInputs: "nxwright/gpioInputs", startGenerator: "nxwright/startGenerator",
+  stopGenerator: "nxwright/stopGenerator",
 };
 const LOOKS: Record<string, string> = {
   screen: "nxwright/screen", components: "nxwright/components", values: "nxwright/values",
-  log: "nxwright/log",
+  log: "nxwright/log", generator: "nxwright/generator",
 };
 
 // The channel while it is open: its port, its token, and its file.
@@ -375,6 +377,8 @@ function actionArguments(method: string, params: Record<string, unknown>): Recor
       return { pin: params.pin, level: params.level };
     case "gpioInputs":
       return { levels: params.levels };
+    case "startGenerator":
+      return { settings: params.settings };
     default:
       return {};
   }

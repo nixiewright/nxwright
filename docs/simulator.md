@@ -89,7 +89,7 @@ A file that does not contain a pinyin table stops the launch. Without `pinyinTab
 
 The panel draws the page the same way the page preview does, along with anything your code drew with commands such as `fill`, `line`, or `xstr`. It gets darker when your code lowers `dim`.
 
-- While an event runs long, such as one drawing a chart, the panel is updated about every tenth of a second, or less often when drawing takes longer. The same is true while instructions arrive faster than they run.
+- While an event runs long, such as one drawing a chart, or while instructions arrive faster than they run, the panel is updated about every tenth of a second, or less often if drawing takes longer than that. When only a waveform's points change, the panel is updated up to 60 times a second, so that the waveform moves smoothly.
 - A zoom bar above the panel works the same way as the page preview's, and Ctrl with the mouse wheel zooms around the pointer.
 
 Closing the panel does not stop the simulation. To open it again, use **Show the screen** in the Simulator section, or the command "nxwright: Show the Simulator".
@@ -398,6 +398,33 @@ A waveform draws the points that code adds with `add`, each channel in its colou
 - When `dir` is 2, the points move the same way as for `dir` 1, but the last one is always at the right edge.
 - A value of v is drawn v × `dis` / 100 pixels up from the bottom, cut toward zero.
 - `cle` clears the points. So does a new page.
+
+### The waveform generator
+
+To see a waveform move without a device, use the waveform generator. It sends points to your app's waveforms, the same way a device on the serial line would with `add`. Open it with **Waveform generator** in the Simulator section.
+
+| Setting | What it is |
+| --- | --- |
+| Shape | Sine, square, triangle, sawtooth, inverted sawtooth, pulse, random, or custom. |
+| Min, Max | The wave's lowest and highest values, from 0 to 255. |
+| Interval | The milliseconds between two points. |
+| Period | The number of points in one cycle of the wave. |
+| Duty | For a pulse, the percentage of the cycle spent at the highest value. |
+| Noise | The most that is added to or taken from each point, at random. |
+
+A custom wave plays a list of values in a loop, one value for each point. You can type the values, or read them from the first column of numbers in a CSV file.
+
+- Each channel starts a quarter of its wave's cycle after the channel before it, so that channels with the same wave do not draw over each other.
+- If you feed waveforms that have different numbers of channels, each waveform gets only the channels it has.
+- You can change the settings while the generator runs, and each change takes effect at the next point.
+- The generator keeps running when the app starts again, but a waveform gets points only while its page is shown.
+- To start a saved generator with the simulation, give its file as the launch configuration's `waveGenerator`.
+
+The points arrive the same way as instructions from the serial line:
+
+- `com_stop` holds the points until `com_star`.
+- The points count as serial data, so while they arrive, `ussp` does not put the screen to sleep, and a sleeping screen wakes if `usup` is 1.
+- The screen answers each point as `bkcmd` specifies. The log shows those answers, but not the points themselves.
 
 ### Opening effects
 

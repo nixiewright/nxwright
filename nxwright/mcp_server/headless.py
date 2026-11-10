@@ -21,6 +21,7 @@ from nxwright.testing.gpio_pins import checked_level
 from nxwright.testing.pinyin_table import installed_pinyin_table, read_pinyin_table
 from nxwright.testing.preview import Previews
 from nxwright.testing.simulation import Simulation
+from nxwright.testing.wave_generators import generator_dict, generator_settings
 
 
 class HeadlessSimulation(DrivenSimulation):
@@ -85,6 +86,12 @@ class HeadlessSimulation(DrivenSimulation):
     def start_again(self):
         _running_app(self._simulation.start_again)
 
+    def start_generator(self, settings: dict):
+        self._simulation.start_generator(generator_settings(settings, "settings"))
+
+    def stop_generator(self):
+        self._simulation.stop_generator()
+
     def stop(self):
         self._simulation = None
 
@@ -98,6 +105,10 @@ class HeadlessSimulation(DrivenSimulation):
 
     def values(self, names: list = None) -> dict:
         return looks.values(self._simulation, names)
+
+    def generator(self):
+        settings = self._simulation.generator()
+        return None if settings is None else generator_dict(settings)
 
     def log(self, after: int = 0) -> list:
         return looks.log(self._simulation, after)

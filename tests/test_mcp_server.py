@@ -15,6 +15,8 @@ import unittest
 
 from nxwright import NxwrightError
 from nxwright.mcp_server.server import GUIDE_FILE, about_text, docs_folder, mcp_server
+from nxwright.testing.wave_generators import generator_settings, generator_to_json
+from tests.test_simulation import SimulationTestCase, table
 
 APP = Path(__file__).resolve().parent / "fixtures" / "mcp" / "app"
 DOCS = Path(__file__).resolve().parents[1] / "docs"
@@ -85,9 +87,9 @@ class McpServerTest(unittest.TestCase):
         listed = self.agent.request({"jsonrpc": "2.0", "id": 100, "method": "tools/list"})
         tools = {tool["name"]: tool for tool in listed["result"]["tools"]}
         self.assertEqual(sorted(tools), [
-            "about", "components", "list_simulations", "log", "move", "press", "release",
-            "screen", "send", "set_input", "set_inputs", "start_again", "start_simulation",
-            "stop_simulation",
+            "about", "components", "generator", "list_simulations", "log", "move", "press",
+            "release", "screen", "send", "set_input", "set_inputs", "start_again",
+            "start_generator", "start_simulation", "stop_generator", "stop_simulation",
             "tap", "values", "wait"])
         # A tap goes to a component or to a point: neither is required.
         self.assertEqual(tools["tap"]["inputSchema"]["required"], ["simulation"])
@@ -354,6 +356,73 @@ class McpServerTest(unittest.TestCase):
                          "the app's code stopped with an error: ZeroDivisionError")
         # The simulation goes on, as the error left it.
         self.assertEqual(self.agent.data("components", simulation=failing)[0]["name"], "page0")
+
+
+class GeneratorToolsTest(SimulationTestCase):
+    """The waveform generator's tools, on a headless simulation of an app
+    whose page0 has a waveform of two channels, "chart"."""
+
+    def setUp(self):
+        super().setUp()
+        self.program("page page0\n")
+        self.page("page0", [table("chart", "waveform", x=0, y=0, w=50, h=50, ch=2)])
+        self.page("second", [])
+        pictures = tempfile.TemporaryDirectory()
+        self.addCleanup(pictures.cleanup)
+        self.agent = _Agent(mcp_server(Path(pictures.name)))
+        self.simulation = self.agent.data("start_simulation",
+                                          source_folder=str(self.root))["simulation"]
+        self.feeding = {"waveforms": [{"page": "page0", "waveform": "chart"}], "interval": 20,
+                        "channels": [{"channel": 0}]}
+
+    def log_lines(self) -> list:
+        return [entry["line"] for entry in self.agent.data("log", simulation=self.simulation)]
+
+    def running(self):
+        return self.agent.data("generator", simulation=self.simulation)["generator"]
+
+    def test_the_generator_sends_points_as_time_passes(self):
+        self.agent.text("send", simulation=self.simulation, instruction="bkcmd=3")
+        self.assertIsNone(self.running())
+        self.assertEqual(self.agent.text("start_generator", simulation=self.simulation,
+                                         settings=self.feeding), "Started.")
+        self.assertEqual(self.running(), self.feeding)
+        before = len(self.log_lines())
+        self.agent.text("wait", simulation=self.simulation, milliseconds=60)
+        # The screen answers each of the three points, as bkcmd asks.
+        self.assertEqual(self.log_lines()[before:], ["SIM SEND: 01 ff ff ff"] * 3)
+        self.assertEqual(self.agent.text("stop_generator", simulation=self.simulation),
+                         "Stopped.")
+        self.assertIsNone(self.running())
+        self.assertIn("the waveform generator stops", self.log_lines())
+
+    def test_a_file_starts_its_generator_in_place_of_the_one_running(self):
+        self.agent.text("start_generator", simulation=self.simulation, settings=self.feeding)
+        file = self.root.parent / "waves.json"
+        other = dict(self.feeding, channels=[{"channel": 1, "shape": "square"}])
+        file.write_text(generator_to_json(generator_settings(other, "test")), encoding="utf-8")
+        self.assertEqual(self.agent.text("start_generator", simulation=self.simulation,
+                                         file=str(file)), "Started.")
+        self.assertEqual(self.running(), other)
+
+    def test_what_cannot_start_or_stop_is_refused(self):
+        self.assertIn("no waveform generator is running",
+                      self.agent.refusal("stop_generator", simulation=self.simulation))
+        self.agent.text("start_generator", simulation=self.simulation, settings=self.feeding)
+        for arguments, refusal in (
+                ({}, "give the generator's settings, or its file: one of the two"),
+                ({"settings": self.feeding, "file": "waves.json"}, "one of the two"),
+                ({"settings": dict(self.feeding, shape="saw")},
+                 "settings: shape 'saw' is not a shape"),
+                ({"settings": dict(self.feeding,
+                                   waveforms=[{"page": "second", "waveform": "chart"}])},
+                 "the page second has no waveform chart"),
+                ({"file": str(self.root.parent / "missing.json")}, "cannot be read")):
+            with self.subTest(arguments=arguments):
+                self.assertIn(refusal, self.agent.refusal("start_generator",
+                                                          simulation=self.simulation, **arguments))
+        # A start that is refused leaves the generator running as it was.
+        self.assertEqual(self.running(), self.feeding)
 
 
 class McpCommandTest(unittest.TestCase):

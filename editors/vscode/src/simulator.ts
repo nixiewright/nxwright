@@ -4,7 +4,8 @@
 //    releases the screen (media/simulator.mjs); until the first page is
 //    drawn, it says how far the app's start has come, as its pages compile;
 //  - the Simulator section of nxwright's side bar (media/simulator-controls.mjs).
-//    While a simulation runs, it has pause, resume, start again, the log, a
+//    While a simulation runs, it has pause, resume, start again, the log, the
+//    button opening the waveform generator panel (waveGenerators.ts), a
 //    field for what the serial line brings the screen, and the MCU port the
 //    line is connected to. It also has a port for a real screen beside the
 //    simulation. The field can send that screen instructions too, a button
@@ -19,9 +20,10 @@
 //    of the agent acting with it, and the section's line saying that an
 //    agent drives the simulation, with a button connecting the Simulator
 //    settings' port while none is (media/simulator-agent-model.mjs).
-// The adapter sends the start's progress, each drawing, and the ports'
-// states as custom events, and takes presses, typed instructions, starting
-// again, and the ports' settings as custom requests
+// The adapter sends the start's progress, each drawing, the points of the
+// page's waveforms when they alone changed, and the ports' states as custom
+// events, and takes presses, typed instructions, starting again, and the
+// ports' settings as custom requests
 // (nxwright/debug_adapter/adapter.py). Its log goes to the Debug Console, as
 // a debugging session's output does.
 import * as crypto from "crypto";
@@ -35,6 +37,7 @@ import { Simulation, simulationsOf } from "./launchConfiguration";
 import { isPageFile, Pages, tomlOf } from "./pages";
 import { appName } from "./projectName";
 import { SimulatorSettings, withSimulatorSettings } from "./simulatorSettings";
+import { WaveGeneratorPanel } from "./waveGenerators";
 import { PictureFile, pictureSources, webviewPage, ZOOM_STYLES } from "./webviewPage";
 
 // The side bar's Simulator section, as package.json declares it.
@@ -92,6 +95,9 @@ export class Simulator implements vscode.WebviewViewProvider {
   private session: vscode.DebugSession | undefined;
   private lastDrawing: ScreenDrawing | undefined;
   private lastStarting: StartProgress | undefined;
+  // The waveforms' points the adapter sent on their own since the last
+  // drawing, which a panel opened again paints over it.
+  private lastWaves: unknown;
   private lastPins: GpioPin[] | null | undefined;
   // The news of simulations' sessions VS Code has not announced yet. VS Code
   // announces a session once the adapter has answered its launch, and the
@@ -115,9 +121,14 @@ export class Simulator implements vscode.WebviewViewProvider {
   private agentStarts = new Map<string, { started: (session: vscode.DebugSession) => void;
                                           allowed: boolean }>();
 
+  // The waveform generator panel of the simulation running.
+  private readonly generatorPanel: WaveGeneratorPanel;
+
   constructor(private readonly context: vscode.ExtensionContext,
               private readonly project: CurrentProject,
-              private readonly pages: Pages) {}
+              private readonly pages: Pages) {
+    this.generatorPanel = new WaveGeneratorPanel(context.extensionUri);
+  }
 
   register(): vscode.Disposable[] {
     return [
@@ -295,8 +306,12 @@ export class Simulator implements vscode.WebviewViewProvider {
     // The news of other sessions not announced yet will never show.
     const news = this.unannouncedNews.get(session);
     this.unannouncedNews.clear();
+    // The previous simulation's generator ended with that simulation, so its
+    // panel closes.
+    this.generatorPanel.close();
     this.session = session;
     this.lastDrawing = news?.drawing;
+    this.lastWaves = undefined;
     this.lastStarting = news?.starting;
     this.lastPins = news?.pins;
     this.portState = news?.port;
@@ -338,6 +353,7 @@ export class Simulator implements vscode.WebviewViewProvider {
     void vscode.commands.executeCommand("setContext", SIMULATING, false);
     this.offerIdle();
     this.panel?.dispose();
+    this.generatorPanel.close();
   }
 
   private received(event: vscode.DebugSessionCustomEvent): void {
@@ -364,7 +380,11 @@ export class Simulator implements vscode.WebviewViewProvider {
       this.showStarting();
     } else if (event.event === "nxwright/drawing") {
       this.lastDrawing = event.body as ScreenDrawing;
+      this.lastWaves = undefined;
       this.showDrawing();
+    } else if (event.event === "nxwright/waves") {
+      this.lastWaves = event.body;
+      this.showWaves();
     } else if (event.event === "nxwright/serialState") {
       this.portState = event.body as PortState;
       this.showAgent();
@@ -551,6 +571,7 @@ export class Simulator implements vscode.WebviewViewProvider {
       if (message.type === "ready") {
         this.showStarting();
         this.showDrawing();
+        this.showWaves();
       } else if (message.type === "press") {
         void this.session?.customRequest("nxwright/press", { x: message.x, y: message.y });
       } else if (message.type === "move") {
@@ -582,6 +603,13 @@ export class Simulator implements vscode.WebviewViewProvider {
     const { pictureUris, pictureMasks } = pictureSources(this.panel.webview,
                                                          drawing.pictureFiles ?? {});
     void this.panel.webview.postMessage({ type: "drawing", drawing, pictureUris, pictureMasks });
+  }
+
+  // Has the panel paint the waveforms' points sent since the last drawing.
+  private showWaves(): void {
+    if (this.lastWaves !== undefined) {
+      void this.panel?.webview.postMessage({ type: "waves", waves: this.lastWaves });
+    }
   }
 
   // The side bar's Simulator section.
@@ -619,6 +647,7 @@ export class Simulator implements vscode.WebviewViewProvider {
   <button data-command="startAgain">Start again</button>
   <button data-command="show">Show the screen</button>
   <button data-command="log">Open the log</button>
+  <button data-command="generator">Waveform generator</button>
 </div>
 <form id="serial">
   <label for="instruction">Serial input</label>
@@ -691,6 +720,10 @@ export class Simulator implements vscode.WebviewViewProvider {
         this.showPanel();
       } else if (message.type === "log") {
         void vscode.commands.executeCommand("workbench.debug.action.focusRepl");
+      } else if (message.type === "generator") {
+        if (this.session) {
+          this.generatorPanel.open(this.session);
+        }
       } else if (message.type === "serial" && message.text) {
         // `to` sets where the instruction goes: the simulator, the screen, or both.
         void this.session?.customRequest("nxwright/serial", {

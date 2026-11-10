@@ -22,6 +22,7 @@ from nxwright.mcp_server.headless import HeadlessSimulation
 from nxwright.mcp_server.simulations import DrivenSimulation
 from nxwright.mcp_server.vscode import VsCodeSimulation, VsCodeWindows, channel_folder
 from nxwright.testing.gpio_pins import levels_by_name
+from nxwright.testing.wave_generators import generator_dict, read_generator_file
 
 # What an agent reads of the server as it connects.
 _INSTRUCTIONS = (
@@ -246,6 +247,54 @@ def mcp_server(pictures_folder: Path) -> McpServer:
         the same moment, as buttons pressed together would."""
         simulations.get(simulation).set_inputs(levels_by_name(levels))
         return "Set."
+
+    @server.tool
+    @_refusals
+    def start_generator(simulation: SimulationId,
+                        settings: Annotated[dict | None, "The generator's settings. Give "
+                                                         "these or a file, not both."] = None,
+                        file: Annotated[str | None, "The full path of a generator's file, "
+                                                    "saved from VS Code's Waveform generator "
+                                                    "panel."] = None) -> str:
+        """Starts the waveform generator, which stands in for a device that sends points to
+        the app's waveforms with add instructions on the serial line. A simulation runs one
+        generator at most, so starting one replaces the one running.
+
+        The settings give the waveforms to feed, each by its page and name, and the
+        channels to send to. A channel uses the generator's settings, except the ones it
+        sets itself. For example: {"waveforms": [{"page": "day", "waveform": "chart"}],
+        "interval": 20, "shape": "sine", "minimum": 0, "maximum": 200, "period": 100,
+        "channels": [{"channel": 0}, {"channel": 1, "shape": "square"}]}. In the settings,
+        interval is the number of milliseconds between two points, period is the number of
+        points in one cycle, and noise is the most that is added to or taken from each
+        point, at random. The shapes are sine, square, triangle, sawtooth,
+        inverted-sawtooth, pulse (with duty, a percentage), random, and custom, which plays
+        its values in a loop.
+
+        Each channel starts a quarter of its cycle after the channel before it, so that the
+        same wave on several channels does not overlap. A channel goes only to the
+        waveforms that have it, and a waveform gets points only while its page is shown.
+        The points arrive as time passes, so wait before you look at the screen."""
+        if (settings is None) == (file is None):
+            raise NxwrightError("give the generator's settings, or its file: one of the two")
+        if file is not None:
+            settings = generator_dict(read_generator_file(Path(file)))
+        simulations.get(simulation).start_generator(settings)
+        return "Started."
+
+    @server.tool
+    @_refusals
+    def stop_generator(simulation: SimulationId) -> str:
+        """Stops the waveform generator."""
+        simulations.get(simulation).stop_generator()
+        return "Stopped."
+
+    @server.tool
+    @_refusals
+    def generator(simulation: SimulationId) -> dict:
+        """Returns the settings of the running waveform generator, in the form
+        start_generator takes, or null if none is running."""
+        return {"generator": simulations.get(simulation).generator()}
 
     @server.tool
     @_refusals

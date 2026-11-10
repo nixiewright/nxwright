@@ -18,7 +18,7 @@ import re
 
 from nxwright import NxwrightError
 from nxwright.drawing.kept_paintings import KeptPaintings, alike
-from nxwright.drawing.page_drawing import DrawingResources, draw_page
+from nxwright.drawing.page_drawing import DrawingResources, draw_page, draw_waves
 from nxwright.language.resource_names import ANIMATION, LISTS
 from nxwright.project.media_files import (animation_frames, is_card_picture, read_card_picture,
                                           video_frames)
@@ -127,6 +127,15 @@ class Previews:
                         "asleep": simulation.asleep, "start": simulation.starts,
                         "entry": inputs.entry})
         return drawing
+
+    def simulation_waves(self, simulation, inputs) -> dict:
+        """Returns the channels of the waveforms `simulation`'s screen shows,
+        from `inputs`, as simulation_drawing gives them in its drawing:
+        "waveforms", each waveform's name and "wave" shapes
+        (page_drawing.draw_waves); and "page", "start", and "entry", which
+        tell the drawing they belong to."""
+        return {"waveforms": draw_waves(inputs.components, inputs.hidden, inputs.waves),
+                "page": inputs.page, "start": simulation.starts, "entry": inputs.entry}
 
     def kept(self, path: Path, read, stamp: tuple = None):
         """Returns read(path), or what it returned before while the file is

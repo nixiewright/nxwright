@@ -21,12 +21,19 @@ wait meanwhile. After each thing that happens, the thread sends the drawing
 of the page shown and the log's new lines; while an event runs long, as one
 drawing a chart, it sends them too, from the values in progress, as the
 Editor's simulator shows a long event drawing: LIVE_DRAWING seconds after
-the last drawing ended, or as long as it took if longer.
+the last drawing ended, or as long as it took if longer. When only the points of
+the page's waveforms changed, such as while the waveform generator sends them,
+the thread sends those points on their own, at most once every WAVES_PACE
+seconds. The panel paints them over the last drawing, so that a waveform fed
+fast moves smoothly without the cost of drawing the whole page.
 
 A look at what the simulation holds, as its values, is taken on its
 thread too, so that it never reads the simulation half changed: in turn
 with the presses while the simulation runs, and at once while the debugger
-holds the thread stopped, as the debugger's own views read it then.
+holds the thread stopped, as the debugger's own views read it then. A
+change to what is outside the screen, such as starting the waveform
+generator (change_outside), takes its turn the same way, since it runs none
+of the app's code. The generator's points then take turns with the timers.
 
 An error in the code, such as a division by zero, stops the simulation as
 on an exception, at the last step recorded; continuing goes on from there.
@@ -48,6 +55,9 @@ KEEP = 1_000_000
 _LONGEST_WAIT = 0.25
 # How often, in seconds, a long event's drawing in progress is sent.
 LIVE_DRAWING = 0.1
+# The shortest time, in seconds, between two sendings of the waveforms' new
+# points: one frame of a display that shows 60 frames a second.
+WAVES_PACE = 1 / 60
 # What the GPIO pins were last sent as before any were: unlike any pins, so
 # that the first news sends them, None for a screen without GPIO included.
 _NOT_SENT = object()
@@ -83,20 +93,23 @@ class LiveSimulation:
     position and the reason, and the "description" of an error; "starting",
     with a StartProgress (simulation.py), as each start of the app compiles
     its pages; "drawing", with the simulation, after each thing that changed
-    it; "log", with the log's new lines; "gpio", with the GPIO pins
+    it; "waves", with the simulation, when its waveforms' points alone
+    changed; "log", with the log's new lines; "gpio", with the GPIO pins
     (Simulation.pins), at the start and whenever they change; and "failed",
     with why the app could not start. `start` starts the thread. The other
     methods are the debugger's, called from the adapter's thread. `sending`,
     `cards`, `eeprom_file`, `pinyin_table`, and `inputs` are the
     simulation's (simulation.py). `defines` gives app.toml's defines new
-    values, {name: value as text}, for all the simulation reads. `wall` is
-    the clock on the wall the simulation's time follows, a WallClock unless
-    given."""
+    values, {name: value as text}, for all the simulation reads. `generator`
+    is the GeneratorSettings (wave_generators.py) of the waveform generator
+    that starts with the simulation, if any; if the app refuses it, such as
+    for a waveform the app lacks, the start fails. `wall` is the clock on the wall
+    the simulation's time follows, a WallClock unless given."""
 
     def __init__(self, source_folder, page=None, values=None, eeprom=b"", notify=None,
                  sending=None, cards=None, log_formats=None, wall: WallClock = None,
                  eeprom_file: Path = None, pinyin_table=None, inputs: dict = None,
-                 defines: dict = None):
+                 defines: dict = None, generator=None):
         self.recorder = Recorder(keep=KEEP)
         self._defines = defines or {}
         self.timeline = Timeline(self.recorder)
@@ -104,6 +117,7 @@ class LiveSimulation:
         self.breakpoints = set()     # {(path_key, line)}
         self._arguments = (source_folder, page, values, eeprom, sending, cards, log_formats,
                            eeprom_file, pinyin_table, inputs)
+        self._generator = generator
         self._notify = notify
         self._wall = wall if wall is not None else WallClock()
         self._condition = threading.Condition()
@@ -122,6 +136,11 @@ class LiveSimulation:
         self._logged = 0
         self._drawn = None           # the simulation's `changes` when last drawn
         self._pins_sent = _NOT_SENT  # the GPIO pins as last sent
+        # The simulation's `wave_changes` when its waveforms' points were last
+        # sent, in a drawing or on their own, 0 before any point; and when
+        # they last were sent on their own, by the clock on the wall.
+        self._waves_sent = 0
+        self._waves_at = 0.0
         # When the drawing was last sent, or the work running began; when it
         # was last sent; both by the clock on the wall; and how long the last
         # drawing took, in seconds.
@@ -187,6 +206,18 @@ class LiveSimulation:
             self._actions.append((read, _LOOK))
             self._condition.notify_all()
 
+    def change_outside(self, change):
+        """Has the thread do `change(simulation)`, which changes something
+        outside the screen, such as its waveform generator, and runs none
+        of the app's code. It takes its turn the same way as a look, so it is done at
+        once while the debugger holds the simulation stopped. The log's new
+        lines are then sent. `change` must not raise."""
+        def changed(simulation):
+            change(simulation)
+            if simulation is not None:
+                self._send_news()
+        self.look(changed)
+
     @property
     def stopped(self) -> bool:
         """Whether the debugger holds the simulation stopped, at a step or
@@ -232,6 +263,8 @@ class LiveSimulation:
                                          inputs=inputs,
                                          starting=lambda progress: self._notify("starting",
                                                                                 progress))
+            if self._generator is not None:
+                self.simulation.start_generator(self._generator)
         except Ended:
             return
         except Exception as error:
@@ -291,9 +324,14 @@ class LiveSimulation:
                 due = self.simulation.next_due()
                 wait = _LONGEST_WAIT if due is None else \
                     min(max(due - self._now(), 0) / 1000, _LONGEST_WAIT)
-                if wait > 0 and self.simulation.changes != self._drawn:
-                    # Nothing to do now: a drawing held back while work waited goes.
+                if wait > 0 and (self.simulation.changes != self._drawn
+                                 or self.simulation.wave_changes != self._waves_sent):
+                    # Nothing to do now, so send any drawing held back while
+                    # work waited, and any points held back by their pace.
                     self._send_news()
+                    if self.simulation.wave_changes != self._waves_sent:
+                        # Points still held back go once their pace allows.
+                        wait = min(wait, WAVES_PACE)
                 self._wait(wait, True)
 
     def _skip_missed_ticks(self):
@@ -369,8 +407,10 @@ class LiveSimulation:
         """Sends the drawing, when the state changed since the last, or when
         `in_progress`, an event running long, and a page shows; and the log's
         new lines. `busy`, more work waiting, holds the drawing back until
-        its turn comes, as in progress. A failure to send them goes to the
-        log rather than ending the thread."""
+        its turn comes, as in progress. When no drawing goes, and the
+        waveforms' points changed since they were last sent, sends them
+        alone, WAVES_PACE apart at least. A failure to send any of them goes
+        to the log rather than ending the thread."""
         try:
             changed = in_progress or self.simulation.changes != self._drawn
             # While a new page's load event runs, the screen still shows the
@@ -380,8 +420,11 @@ class LiveSimulation:
             # them up; the last, with nothing waiting, is drawn at once.
             early = busy and self._wall.now() - self._drawn_at < max(LIVE_DRAWING,
                                                                      self._drawing_time)
-            if changed and self.simulation.page is not None and not loading and not early:
+            shows = self.simulation.page is not None and not loading
+            if changed and shows and not early:
                 self._drawn = self.simulation.changes
+                # A drawing has the waveforms' points as they are.
+                self._waves_sent = self.simulation.wave_changes
                 began = self._wall.now()
                 try:
                     self._notify("drawing", self.simulation)
@@ -391,6 +434,11 @@ class LiveSimulation:
                     # long one takes.
                     self._sent_at = self._drawn_at = self._wall.now()
                     self._drawing_time = self._sent_at - began
+            elif shows and self.simulation.wave_changes != self._waves_sent \
+                    and self._wall.now() - self._waves_at >= WAVES_PACE:
+                self._waves_sent = self.simulation.wave_changes
+                self._waves_at = self._wall.now()
+                self._notify("waves", self.simulation)
         except Exception as error:
             self.simulation.log.append((self.simulation.clock, "the panel could not be drawn: "
                                         "%s: %s" % (type(error).__name__, error)))
