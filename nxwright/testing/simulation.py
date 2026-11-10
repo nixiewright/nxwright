@@ -15,17 +15,18 @@ events leave is the app's state:
 Changing page. A `page` command runs the old page's `unload` event, then
 the new page's `load` and `loadend` events, inside the event that ran it
 (docs/nxlang-compiled.md, Functions). The rest of that event does not
-run, nor do the events whose clicks or calls led to it. Entering a page
-starts its components from its .page.toml file's values, shown and taking
-touches, but for those with global scope (`vscope` 1), which keep theirs;
-another page's components of global scope are named after their page. Only
-the timers of the page shown run. A component of global scope keeps being
-hidden (`vis`) or taking no touches (`tsw`); a `vis 255` or `tsw 255` gives
-each such component of the page shown its value too, which it keeps, while
-the next page's components start shown and taking touches. A button of
-global scope whose press changes page reads `val` 0 on the new page, and
-gets no release. All of this was seen in the Editor's simulator, but for a
-`vis 255` or `tsw 255` run on another page than a global component's own.
+run, nor do the events whose clicks or calls led to it. Only the timers of
+the page shown run. Entering a page starts its components from its
+.page.toml file's values, shown and taking touches, except those of global
+scope (`vscope` 1). These keep their values, whether they show (`vis`) and
+take touches (`tsw`), and a waveform's points. Another page's components of
+global scope are named after their page. A `vis 255` or `tsw 255` also
+applies to each component of global scope on the page shown, and those
+components keep it, while the next page's other components start shown and
+taking touches. A button of global scope whose press changes page reads
+`val` 0 on the new page, and gets no release. All of this was seen in the
+Nextion Editor's simulator, except for a `vis 255` or `tsw 255` run on a
+page other than the one a global component belongs to.
 
 Touches. A press lands on the topmost component under it that shows, or
 the page. When the page has a touch capture, its Touch Press event runs
@@ -627,6 +628,10 @@ class Simulation:
         self._line.empty()
         self.globals["serial buffer"] = b""
         self._waves = {}             # {waveform: {channel: [points]}} of the page shown
+        # {page: {waveform: {channel: [points]}}} for the waveforms of global
+        # scope on the pages not shown. _enter fills it when a page is left,
+        # and gives the points back when the page opens again.
+        self._kept_waves = {}
         self._random = random.Random(0)
         if self.recorder is not None:
             # One run from start to end: a run per event would keep a copy of
@@ -2542,10 +2547,16 @@ class Simulation:
         """Makes `name` the page shown: its local components start again from
         its .page.toml file, shown and taking touches, and its timers and
         clocked components start. Its components of global scope keep what
-        they had, whether they show and take touches included. `given` holds
-        the values given to the page the simulation starts on. They take the
-        place of its file's, so everything that starts as the page opens
-        starts from them."""
+        they had: their values, whether they show and take touches, and a
+        waveform's points. `given` holds the values given to the page the
+        simulation starts on. They replace its file's values, so everything
+        that starts when the page opens starts from them."""
+        left = self.page
+        if left is not None:
+            global_names = self.pages[left].global_names
+            self._kept_waves[left] = {waveform: channels
+                                      for waveform, channels in self._waves.items()
+                                      if waveform in global_names}
         page = self.pages[name]
         kept = {key: value for key, value in self.fields[name].items()
                 if _owner(key) in page.global_names}
@@ -2568,10 +2579,10 @@ class Simulation:
             if kind == "data-record":
                 self._open_data_record(component, self.fields[name])
             self._lists.opened(name, component, kind, self.fields[name], self.globals)
-        # The new page is drawn whole, over anything painted before, its
-        # waveforms empty.
+        # The new page is drawn whole, over anything painted before. Its
+        # local waveforms start empty.
         self.globals["painted"] = []
-        self._waves = {}
+        self._waves = self._kept_waves.pop(name, {})
         self._start_timers()
         self._start_clocked()
         # No slide runs until the page is drawn, once its load event ends.

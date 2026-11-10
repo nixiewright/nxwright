@@ -229,8 +229,7 @@ A `page` command takes the page's name, its number, or an expression that gives 
 - A `return` in a page's `load` event keeps its `loadend` event from running. This is also true when the simulation starts.
 - The panel keeps showing the old page until the new one's `load` event ends.
 - A page has no background when its `sta` is 0, or when `sta` is 2 and the page has no picture, or a picture the source folder does not have. Such a page, for example a dialog, is drawn over whatever the screen showed when the page opened. The first page after the screen starts is drawn over black.
-- Entering a page starts its components from its `.page.toml` file, shown and taking touches.
-- Components of global scope (`vscope` 1) keep their values instead. They also keep whether they show (`vis`) and take touches (`tsw`).
+- Entering a page starts its components from its `.page.toml` file, shown and taking touches, except those of global scope (`vscope` 1). These keep their values, whether they show (`vis`) and take touches (`tsw`), and a waveform's points ([Waveforms](#waveforms)).
 - A `vis 255` or `tsw 255` also applies to each component of global scope on the page shown, and those components keep it. The next page's other components start from their page file.
 
 ## Drawing commands
@@ -397,7 +396,8 @@ A waveform draws the points that code adds with `add`, each channel in its colou
 - When `dir` is 1, a new point enters at the right and pushes the others left. The first point stays at the left edge until the points fill the waveform.
 - When `dir` is 2, the points move the same way as for `dir` 1, but the last one is always at the right edge.
 - A value of v is drawn v × `dis` / 100 pixels up from the bottom, cut toward zero.
-- `cle` clears the points. So does a new page.
+- `cle` clears the points.
+- A waveform of global scope (`vscope` 1) keeps its points while another page shows. Other waveforms start empty each time their page opens. Starting the app again clears every waveform.
 
 ### The waveform generator
 

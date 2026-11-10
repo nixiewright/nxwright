@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.15] - 2026-11-10
+
+- Fixed waveforms of global scope losing their points when the page changes.
+
 ### [0.2.14] - 2026-11-10
 
 - Added a waveform generator to the simulator.

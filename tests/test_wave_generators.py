@@ -305,6 +305,18 @@ on go.down:
         # Two points went by unsent, at 20 and 40.
         self.assertEqual(simulation.waves(), {"other": {0: [50, 75]}})
 
+    def test_a_global_waveforms_new_points_follow_those_it_kept(self):
+        self.page("page0", [table("chart", "waveform", x=0, y=0, w=10, h=50, ch=2, vscope=1)])
+        simulation = Simulation(self.root)
+        simulation.start_generator(self.sine())
+        simulation.advance(40)
+        simulation.serial_input("page second")
+        # The points at 60 and 80 go by unsent.
+        simulation.advance(40)
+        simulation.serial_input("page page0")
+        simulation.advance(20)
+        self.assertEqual(simulation.waves(), {"chart": {0: [0, 50, 0]}})
+
     def test_a_timer_of_the_same_moment_runs_first(self):
         self.page("page0", [table("chart", "waveform", x=0, y=0, w=10, h=50, ch=2),
                             table("tick", "timer", tim=60, en=1)], """\

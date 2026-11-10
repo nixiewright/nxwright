@@ -816,6 +816,61 @@ on plot.down:
         self.assertEqual(simulation.waves(), {"chart": {1: [5]}})
 
 
+class GlobalWaveformTest(SimulationTestCase):
+    """page0 has a waveform of global scope, "kept", and a local one,
+    "lost". The tests check what the Nextion Editor's simulator was seen
+    to do with them."""
+
+    def setUp(self):
+        super().setUp()
+        self.program("page page0\n")
+        self.page("page0", [table("kept", "waveform", x=0, y=0, w=4, h=50, ch=1, vscope=1),
+                            table("lost", "waveform", x=0, y=100, w=4, h=50, ch=1)])
+        self.page("second", [placed("note", "text", 0, 0)])
+
+    def filled(self) -> Simulation:
+        simulation = Simulation(self.root)
+        for instruction in ("add kept.id,0,10", "add kept.id,0,20", "add lost.id,0,30"):
+            simulation.serial_input(instruction)
+        return simulation
+
+    def test_a_global_waveform_shows_its_points_again_when_its_page_comes_back(self):
+        simulation = self.filled()
+        simulation.serial_input("page second")
+        self.assertEqual(simulation.waves(), {})
+        # While another page shows, an add to kept's ID does not reach kept.
+        simulation.serial_input("add 1,0,90")
+        simulation.serial_input("page page0")
+        # The local waveform comes back empty.
+        self.assertEqual(simulation.waves(), {"kept": {0: [10, 20]}})
+        simulation.serial_input("add kept.id,0,40")
+        self.assertEqual(simulation.waves(), {"kept": {0: [10, 20, 40]}})
+
+    def test_entering_the_page_shown_again_keeps_the_global_waveforms_points(self):
+        simulation = self.filled()
+        simulation.serial_input("page page0")
+        self.assertEqual(simulation.waves(), {"kept": {0: [10, 20]}})
+
+    def test_points_cleared_stay_cleared_when_the_page_comes_back(self):
+        simulation = self.filled()
+        simulation.serial_input("cle kept.id,0")
+        simulation.serial_input("page second")
+        simulation.serial_input("page page0")
+        self.assertEqual(simulation.waves().get("kept", {}), {})
+
+    def test_a_start_again_empties_the_points_kept_for_another_page(self):
+        for start in ("rest", "start again"):
+            with self.subTest(start):
+                simulation = self.filled()
+                simulation.serial_input("page second")
+                if start == "rest":
+                    simulation.serial_input("rest")
+                else:
+                    simulation.start_again()
+                self.assertEqual(simulation.page, "page0")
+                self.assertEqual(simulation.waves(), {})
+
+
 class SliderPressTest(SimulationTestCase):
     """Presses on sliders whose `maxval` is 1000, so that a pixel moves
     `val` by about 5, each giving the `val` the Nextion Editor's simulator
