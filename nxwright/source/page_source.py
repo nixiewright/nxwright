@@ -819,41 +819,62 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
     return code, compiled.generated, compiled.globals, compiled.deepest_chain, compiled.cut_texts
 
 
-def editor_code_of_file(path: str, page_name: str, events_text: str, names: ResourceNames,
-                        component_names: list, program: ProgramNames, page_id: int, read,
-                        object_types: dict = None, codec: TextCodec = None, *,
-                        page_events: frozenset) -> list:
-    """Returns [(title, [(line, Editor code line)])] of the events and the
-    functions that the .nx file `path` defines, as page `page_name` compiles
-    them, its own .nx file's text being `events_text`. A title is as
-    "on save.up" or "function show"; `line` is the line of `path` that the
-    Editor line comes from, counted from 1, or 0 for a line the compiler
-    adds. With `program`, what program.nx declares, the code is nxlang, and
-    only the functions the page calls are compiled; without it, the code is
-    in the Editor's own language. `read(path)` returns an included file.
-    `object_types` gives the types of the pages' objects nxlang compiles
-    with, {page: {name: type}}, and `codec` the project's encoding
-    (nxlang.compile_page). `page_events` gives the events the page has,
-    as compile_page_files takes them.
+def editor_code_of_files(paths: list, page_name: str, events_text: str, names: ResourceNames,
+                         component_names: list, program: ProgramNames, page_id: int, read,
+                         object_types: dict = None, codec: TextCodec = None, *,
+                         page_events: frozenset) -> dict:
+    """Returns the code of each .nx file in `paths`, built into strict
+    Nextion syntax for page `page_name`:
+    {path: [(title, [(line, code)])]}. A file's list has one entry for each
+    of its events and functions, with a title such as "on save.up" or
+    "function show". `line` is the line of the file that the code comes
+    from, counted from 1, or 0 for a line the compiler adds.
+
+    `events_text` is the text of the page's own .nx file, and `read(path)`
+    returns the text of an included file.
+
+    `program` is what program.nx declares, or None if the folder does not
+    use nxlang. Without nxlang, each file's code is only preprocessed. With
+    nxlang, the page is compiled as a whole, so one compile covers every
+    file in `paths`. A function that the page never calls is not compiled,
+    and has no entry. Neither has an event that the page leaves out of an
+    included file (compile_page_files).
+
+    `object_types` gives the types of the pages' objects that nxlang
+    compiles with, {page: {name: type}}, and `codec` gives the project's
+    encoding (nxlang.compile_page). `page_events` gives the events the page
+    has, in the form compile_page_files takes.
 
     Raises NxwrightError as the build does."""
     if program is None:
-        text = events_text if path == page_nx_path(page_name) else read(path)
-        sections = []
-        for key, block in event_blocks(text, path).items():
-            comment = [(number, marked) for (number, _), marked
-                       in zip(block.comment, block.marked_comment())]
-            sections.append((event_label(*key),
-                             preprocess_with_places(comment + block.code_lines(), names,
-                                                    owner=Owner.among(key[0],
-                                                                      component_names))))
-        return sections
+        return {path: _preprocessed_events(events_text if path == page_nx_path(page_name)
+                                           else read(path), path, names, component_names)
+                for path in paths}
     compiled = compile_nxlang_page(events_text, page_name, component_names, program, page_id,
                                    read, object_types, codec=codec, page_events=page_events)
-    sections = [(event_label(*key), preprocess_with_places(lines, names))
-                for key, lines in compiled.events.items() if compiled.sources.get(key) == path]
-    sections += [("function " + name, preprocess_with_places(compiled.bodies[name], names))
-                 for name, function in compiled.functions.items() if function.file == path]
+    found = {}
+    for path in paths:
+        sections = [(event_label(*key), preprocess_with_places(lines, names))
+                    for key, lines in compiled.events.items()
+                    if compiled.sources.get(key) == path]
+        sections += [("function " + name, preprocess_with_places(compiled.bodies[name], names))
+                     for name, function in compiled.functions.items() if function.file == path]
+        found[path] = sections
+    return found
+
+
+def _preprocessed_events(text: str, path: str, names: ResourceNames,
+                         component_names: list) -> list:
+    """Returns the events of the .nx file `path`, in a folder that does not
+    use nxlang, as [(title, [(line, code)])]. `text` is the file's text, and
+    the code returned is preprocessed into strict Nextion syntax."""
+    sections = []
+    for key, block in event_blocks(text, path).items():
+        comment = [(number, marked) for (number, _), marked
+                   in zip(block.comment, block.marked_comment())]
+        sections.append((event_label(*key),
+                         preprocess_with_places(comment + block.code_lines(), names,
+                                                owner=Owner.among(key[0], component_names))))
     return sections
 
 

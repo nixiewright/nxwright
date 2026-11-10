@@ -103,10 +103,11 @@ def code_lines(folder, index: FolderIndex, only: str = None) -> dict:
     pages = folder.app["pages"] if only is None else index.pages_using(only)
     for page in pages:
         object_names = [page_object.name for page_object in index.page_objects[page]]
-        for path in index.page_files[page]:
-            if only is not None and path != only:
-                continue
-            for title, lines in folder.editor_code(page, path):
+        paths = [path for path in index.page_files[page] if only is None or path == only]
+        # Asking for all of the page's files in one call compiles the page only once.
+        sections = folder.editor_code_of_files(page, paths)
+        for path in paths:
+            for title, lines in sections[path]:
                 # An event's own attributes, such as '&pic&', are read the way the
                 # Nextion Editor reads them.
                 label = read_event_label(title)

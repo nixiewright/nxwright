@@ -4,6 +4,7 @@ with the resource's name, a code action writing the number as the name, and
 the request that does so across the folder."""
 from unittest import mock
 
+from nxwright.language.nxlang import compile_page
 from nxwright.language_server.file_texts import uri_of
 from nxwright.source.folder_index import FolderIndex, text_on_disk
 from nxwright.source.resource_numbers import as_name, code_lines, placed_numbers
@@ -75,6 +76,37 @@ class PlacedNumbersTest(PlacedNumbersTestCase):
     def test_an_id_past_the_last_names_nothing(self):
         self.write_code("p0.pic=7")
         self.assertEqual(self.placed(CODE), [(1, "7", "pic", 7, None)])
+
+
+class CodeLinesTest(PlacedNumbersTestCase):
+
+    def test_a_page_with_several_code_files_is_compiled_once(self):
+        switch_to_nxlang(self.source)
+        library = self.source / "pages" / "lib"
+        library.mkdir()
+        (library / "first.nx").write_text("function first():\n  p0.pic = 1\n",
+                                          encoding="utf-8", newline="\n")
+        (library / "second.nx").write_text("function second():\n  p0.pic = 0\n",
+                                           encoding="utf-8", newline="\n")
+        (self.source / CODE).write_text('include "lib/first.nx"\ninclude "lib/second.nx"\n\n'
+                                        "on page0.down:\n  first()\n  second()\n",
+                                        encoding="utf-8", newline="\n")
+        index = FolderIndex(self.source, text_on_disk)
+        folder = read_folder_source(folder_reader(self.source))
+        with mock.patch("nxwright.source.page_source.compile_page",
+                        wraps=compile_page) as compiling:
+            lines = code_lines(folder, index)
+        self.assertEqual(compiling.call_count, 1)
+        # Each of the page's three files still gives its lines.
+        self.assertEqual(lines[("pages/lib/first.nx", 2)], [("page0", "p0.pic=1")])
+        self.assertEqual(lines[("pages/lib/second.nx", 2)], [("page0", "p0.pic=0")])
+        self.assertIn((CODE, 5), lines)
+
+    def test_a_page_without_a_code_file_gives_no_lines(self):
+        (self.source / CODE).unlink()
+        index = FolderIndex(self.source, text_on_disk)
+        folder = read_folder_source(folder_reader(self.source))
+        self.assertEqual({path for path, _ in code_lines(folder, index)}, {"program.nx"})
 
 
 class ServerTest(PlacedNumbersTestCase):

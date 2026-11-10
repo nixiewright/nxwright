@@ -12,6 +12,7 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 - The language server no longer checks renames, added components, or pastes unless a setting turns those checks on.
 - The build now reports an error when the name given to `page` is not a page or a variable.
 - The `nxwright` command now starts about twice as fast.
+- `nxwright remove` and `nxwright replace --name` now look for uses faster in nxlang projects.
 
 ### [0.2.16] - 2026-11-10
 

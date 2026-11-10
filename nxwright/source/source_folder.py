@@ -89,7 +89,7 @@ from nxwright.source.macros_source import (MACROS_PATH, block_of_compiled, calla
                                            macros_from_block, macros_to_source,
                                            read_macros_text)
 from nxwright.source.page_source import (PAGE_FILE_SUFFIX, PageSource, code_text_limits,
-                                         editor_code_of_file, events_of_page_tables,
+                                         editor_code_of_files, events_of_page_tables,
                                          page_components, page_data, page_from_source,
                                          page_nx_path, page_to_source, page_toml_path,
                                          table_limits, table_types)
@@ -1255,19 +1255,32 @@ class FolderSource:
         return self.app.get("encoding", DEFAULT_ENCODING)
 
     def editor_code(self, page_name: str, path: str) -> list:
-        """Returns the Editor code of the events and functions of the .nx file
-        `path`, as page `page_name` compiles them (editor_code_of_file in
-        page_source.py). Raises NxwrightError as the build does."""
+        """Returns the code of the .nx file `path`, built into strict
+        Nextion syntax for page `page_name`: [(title, [(line, code)])],
+        with one entry for each of the file's events and functions. See
+        editor_code_of_files in page_source.py for what a title and a line
+        are. Raises NxwrightError as the build does."""
+        return self.editor_code_of_files(page_name, [path])[path]
+
+    def editor_code_of_files(self, page_name: str, paths: list) -> dict:
+        """Returns {path: what editor_code(page_name, path) returns} for
+        each .nx file in `paths`. An nxlang page is compiled once for the
+        whole call, so asking for all of a page's files together is faster
+        than asking for them one by one. Raises NxwrightError as the build
+        does."""
+        # A page without code may have no .nx file to read.
+        if not paths:
+            return {}
         data = parsed_page_toml(self.read(page_toml_path(page_name)), page_name,
                                 self.app["defines"])
         tables = [data.get("page")] + data.get("component", [])
         # Every page's types, as the build compiles the page with them.
-        return editor_code_of_file(path, page_name, self.read(page_nx_path(page_name)),
-                                   self.names, names_in_page_data(data), self.declared,
-                                   self.app["pages"].index(page_name), self.read,
-                                   {**self.page_objects, page_name: types_in_page_data(data)},
-                                   TextCodec(self.encoding),
-                                   page_events=events_of_page_tables(tables, self.defaults))
+        return editor_code_of_files(paths, page_name, self.read(page_nx_path(page_name)),
+                                    self.names, names_in_page_data(data), self.declared,
+                                    self.app["pages"].index(page_name), self.read,
+                                    {**self.page_objects, page_name: types_in_page_data(data)},
+                                    TextCodec(self.encoding),
+                                    page_events=events_of_page_tables(tables, self.defaults))
 
 
 def read_folder_source(read, skip_broken_pages: bool = False,
