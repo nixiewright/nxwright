@@ -118,13 +118,34 @@ export function runJson(command: string[], args: string[],
   });
 }
 
-// The most lines a dialog shows of the round trip's differences.
+// The most lines of warnings that Decompile shows in its dialog.
 const MOST_SHOWN = 12;
 
-// Returns what decompile wrote of the round trip that did not confirm its
-// folder, for a dialog: its warnings, each difference, and why it could not
-// check, without the advice for the command line, as --continue-unconfirmed,
-// and with no more than 12 lines, saying how many more there are.
+// What Decompile shows once `nxwright decompile` has written the folder.
+// `detail` contains the warnings that `nxwright decompile` wrote, for the
+// detail of a warning dialog, and is left out when there were none.
+export interface DecompiledReport {
+  message: string;
+  detail?: string;
+}
+
+// Returns what Decompile shows once `nxwright decompile` has written
+// `folder` from the TFT file `file`. `errors` is what `nxwright decompile`
+// wrote on its errors' stream, which contains its warnings.
+export function decompiledReport(file: string, folder: string, errors: string): DecompiledReport {
+  const warnings = roundTripDifferences(errors);
+  const done = `nxwright: decompiled ${file} into ${folder}`;
+  return warnings ? { message: `${done}, with warnings.`, detail: warnings }
+    : { message: `${done}.` };
+}
+
+// Returns the warnings in `errors` as text for a dialog, or "" when there
+// are none. The warnings come from the round trip, the check in which
+// `nxwright decompile` compiles the folder again and compares the result
+// with the TFT file. They give each difference, or why the folder could
+// not be compiled again. Advice for the command line, such as passing
+// --continue-unconfirmed, is left out. Only the first MOST_SHOWN lines are
+// kept, and a last line then gives how many were left out.
 export function roundTripDifferences(errors: string): string {
   const lines = errors.split("\n")
     .filter((line) => line.trim() && !line.includes("--continue-unconfirmed"))

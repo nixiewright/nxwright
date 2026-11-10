@@ -11,8 +11,8 @@
 //    the screen picks its port among those the toolchain lists, and the
 //    upload's rate.
 //  - Decompile turns a TFT file back into a new source folder, to recover a
-//    project, and asks before writing a folder the round trip did not
-//    confirm.
+//    project, and warns when the folder does not compile back into the same
+//    file.
 // Each runs its toolchain command with --json where it takes it (tftRun.ts),
 // and writes what the toolchain said in the output panel.
 import * as path from "path";
@@ -22,7 +22,7 @@ import {
   ScreenChoice, chosenScreen, projectFileLinked, projectFileMayBeReplaced,
   rememberProjectFile, saveScreen, setProjectFileLinked, settingsArguments, tftFileKey,
 } from "./tftFiles";
-import { JsonEvent, JsonRun, roundTripDifferences, runJson } from "./tftRun";
+import { decompiledReport, JsonEvent, JsonRun, runJson } from "./tftRun";
 
 // What the commands need of the extension.
 export interface TftMeans {
@@ -54,12 +54,10 @@ export interface UploadAnswers {
 }
 
 // What a caller may give Decompile in place of the user's choices: the TFT
-// file, the folder to write, whether to write a folder the round trip did
-// not confirm, and whether to open the folder once written.
+// file, the folder to write, and whether to open the folder once written.
 export interface DecompileAnswers {
   file?: string;
   folder?: string;
-  writeAnyway?: boolean;
   open?: boolean;
 }
 
@@ -204,6 +202,12 @@ class Compiler {
   }
 
   // Turns a TFT file the user picks into a new source folder the user picks.
+  // Runs `nxwright decompile` with --continue-unconfirmed, which writes the
+  // folder even when it does not compile back into the same TFT file. The
+  // folder still contains what nxwright read from the file, and writing it
+  // loses nothing, because `nxwright decompile` only writes into a new or
+  // empty folder. The user then sees the command's warnings: each difference
+  // from the file, or why the folder could not be compiled again.
   // Returns the exit code, or undefined when the decompile did not run.
   async decompile(answers: DecompileAnswers = {}): Promise<number | undefined> {
     const file = answers.file ?? (await vscode.window.showOpenDialog({
@@ -217,25 +221,10 @@ class Compiler {
     if (!file || !folder) {
       return undefined;
     }
-    let ran = await this.run(`decompiling ${path.basename(file)}`, ["decompile", file, folder]);
+    const ran = await this.run(`decompiling ${path.basename(file)}`,
+                               ["decompile", file, folder, "--continue-unconfirmed"]);
     if (ran?.stopped) {
       return undefined;
-    }
-    // 3: the round trip did not confirm the folder, so nothing was written.
-    if (ran?.code === 3) {
-      const writing = answers.writeAnyway ?? (await vscode.window.showWarningMessage(
-        "The decompiled folder does not compile back into the same file.",
-        { modal: true, detail: `${roundTripDifferences(ran.errors)}\n\nThe folder is ` +
-          "still what nxwright read from the file." },
-        "Write Anyway")) === "Write Anyway";
-      if (!writing) {
-        return ran.code;
-      }
-      ran = await this.run(`decompiling ${path.basename(file)}`,
-                           ["decompile", file, folder, "--continue-unconfirmed"]);
-      if (ran?.stopped) {
-        return undefined;
-      }
     }
     if (ran === undefined || ran.code !== 0) {
       if (ran) {
@@ -243,9 +232,11 @@ class Compiler {
       }
       return ran?.code;
     }
-    const open = answers.open ?? (await vscode.window.showInformationMessage(
-      `nxwright: decompiled ${path.basename(file)} into ${folder}.`, "Open Folder")) ===
-      "Open Folder";
+    const report = decompiledReport(path.basename(file), folder, ran.errors);
+    const open = answers.open ?? (await (report.detail === undefined
+      ? vscode.window.showInformationMessage(report.message, "Open Folder")
+      : vscode.window.showWarningMessage(report.message, { modal: true, detail: report.detail },
+                                         "Open Folder"))) === "Open Folder";
     if (open) {
       await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(folder),
                                            { forceNewWindow: true });

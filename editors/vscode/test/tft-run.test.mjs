@@ -4,7 +4,7 @@
 // scripts in their place.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { JsonLines, roundTripDifferences, runJson } from "../out/tftRun.js";
+import { decompiledReport, JsonLines, roundTripDifferences, runJson } from "../out/tftRun.js";
 
 // A command that runs `script` with Node.
 function node(script) {
@@ -74,6 +74,19 @@ test("what a run printed that is not JSON is kept apart from its errors", async 
                             []);
   assert.equal(ran.errors.trim(), "said");
   assert.deepEqual(ran.printed, ["text3: the text of ID 3"]);
+});
+
+test("a decompile's warnings are shown once the folder is written", () => {
+  const errors = "nxwright decompile: warning: the folder compiles into a file that differs " +
+    "from a.tft:\n  page0: 1 in a.tft, 2 compiled again\n";
+  assert.deepEqual(decompiledReport("a.tft", "out", errors), {
+    message: "nxwright: decompiled a.tft into out, with warnings.",
+    detail: "The folder compiles into a file that differs from a.tft:\n" +
+      "  page0: 1 in a.tft, 2 compiled again",
+  });
+  // A decompile the round trip confirmed gives no warning.
+  assert.deepEqual(decompiledReport("a.tft", "out", ""),
+                   { message: "nxwright: decompiled a.tft into out." });
 });
 
 test("the round trip's differences are the decompile's errors, without its advice", () => {

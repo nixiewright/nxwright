@@ -16,10 +16,11 @@ These subcommands are answered here, as the real ones answer with --json:
     cancelled-at-find.tft as soon as it finds the screen, and of one called
     cancelled-at-upload.tft only when --find is not given, and then exits
     with 1.
-  - decompile: it prints the names no guess matched, as the real one
-    does, on its output. Without --continue-unconfirmed, the round trip
-    does not confirm the folder, and it exits with 3; with it, it writes
-    app.toml in the folder.
+  - decompile: prints, on its output, the list of names that matched no
+    guess, and always warns that the folder compiles into a file that
+    differs from the TFT file. With --continue-unconfirmed, it then writes
+    app.toml in the folder, and exits with 0. Without that option, it
+    writes nothing, and exits with 3.
   - remove: it deletes nothing, says what the real one would have removed,
     and exits with 0.
 Every other subcommand, such as the language server's, runs the real
@@ -88,9 +89,9 @@ def upload(arguments: list) -> int:
 def decompile(arguments: list) -> int:
     print("1 name matched no guess, so the folder gives it a readable one:")
     print("  text3: the text of ID 3, on page0")
+    print("nxwright decompile: warning: the folder compiles into a file that differs from "
+          "%s:\n  page0: 1 in the file, 2 compiled again" % arguments[0], file=sys.stderr)
     if "--continue-unconfirmed" not in arguments:
-        print("nxwright decompile: warning: the folder compiles into a file that differs from "
-              "%s:\n  page0: 1 in the file, 2 compiled again" % arguments[0], file=sys.stderr)
         print("nxwright decompile: there was no terminal to prompt at, so nothing was written. "
               "Pass --continue-unconfirmed to write this folder.", file=sys.stderr)
         return 3

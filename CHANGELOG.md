@@ -119,6 +119,7 @@ Needs nxwright 0.3.0 or later.
 - By default, Rename, Replace, adding a component, and pasting no longer check the project first.
 - New settings `nxwright.checks.rename`, `.replace`, `.addComponent`, and `.paste` turn those checks back on.
 - Fixed Rename in the Components list and preview menu failing when a TOML extension is installed.
+- Decompile now writes the folder even if the round trip check fails, and warns instead of asking.
 
 ### [0.3.11] - 2026-11-10
 

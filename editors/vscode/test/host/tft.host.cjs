@@ -95,18 +95,14 @@ test("Upload a TFT file sends nothing when the toolchain cancels the upload", as
   });
 });
 
-test("Decompile writes a folder the round trip did not confirm only when told to", async () => {
+test("Decompile runs once, and writes a folder the round trip did not confirm", async () => {
   await withStandIn(async (work, runs) => {
     const file = path.join(work, "app.tft");
     fs.writeFileSync(file, "stand-in");
-    const kept = path.join(work, "kept");
-    assert.equal(await vscode.commands.executeCommand(
-      "nxwright.decompile", { file, folder: kept, writeAnyway: false, open: false }), 3);
-    assert.equal(fs.existsSync(path.join(kept, "app.toml")), false);
     const written = path.join(work, "written");
     assert.equal(await vscode.commands.executeCommand(
-      "nxwright.decompile", { file, folder: written, writeAnyway: true, open: false }), 0);
+      "nxwright.decompile", { file, folder: written, open: false }), 0);
     assert.ok(fs.existsSync(path.join(written, "app.toml")));
-    assert.deepEqual(runs("decompile").at(-1), [file, written, "--continue-unconfirmed"]);
+    assert.deepEqual(runs("decompile"), [[file, written, "--continue-unconfirmed"]]);
   });
 });
