@@ -22,6 +22,7 @@ and the tables of commands' arguments, such as COMMAND_PARAMETERS and
 DATA_RECORD_ARGUMENTS, which the test machine reads too.
 """
 from dataclasses import dataclass
+import difflib
 import re
 
 from nxwright import NxwrightError
@@ -517,6 +518,45 @@ def check_without_owner(code: str, number: int):
                             % (code, INVALID_VARIABLES), line=number)
 
 
+# Two names are close when difflib gives them at least this ratio. One of
+# them could then be a slip of the fingers in typing the other, such as
+# `titel` for `title`. `t9` and `t0` are not close.
+_CLOSE_NAME = 0.8
+
+
+def _name_meant_hint(name: str, known) -> tuple:
+    """Returns the hint and the fix for the unknown name `name` when one of
+    the names `known` is close to it, and ("", None) when none is.
+
+    A known name is close when it differs from `name` only by capital
+    letters, such as `backLightPct` for `backlightPct`. Otherwise, the most
+    similar known name is close if the difference could be a slip of the
+    fingers (_CLOSE_NAME), with capital and small letters counted as the
+    same.
+
+    The hint is the text that ends the error, such as ". Did you mean
+    title?". The fix, {"kind": "name-meant", "text": name, "new": the name
+    meant}, writes the name meant in place of `name`. It is a guess, so a
+    code editor offers it and does not apply it without asking
+    (quick_fixes.py)."""
+    # A name that starts with two underscores is one of nxlang's generated
+    # variables. The user's code never contains one, so it is never the
+    # name meant.
+    names = sorted(candidate for candidate in known
+                   if isinstance(candidate, str) and candidate and not candidate.startswith("__"))
+    # When two known names differ only by capital letters, the one that
+    # sorts first is kept.
+    in_small_letters = {candidate.lower(): candidate for candidate in reversed(names)}
+    meant = in_small_letters.get(name.lower())
+    if meant is None:
+        close = difflib.get_close_matches(name.lower(), list(in_small_letters), n=1,
+                                          cutoff=_CLOSE_NAME)
+        meant = in_small_letters[close[0]] if close else None
+    if meant is None:
+        return "", None
+    return ". Did you mean %s?" % meant, {"kind": "name-meant", "text": name, "new": meant}
+
+
 def _check_references(code: str, objects: ObjectNames, number: int):
     """Raises NxwrightError when a line of a page's code uses a component or
     a page that does not exist, another page's component of local scope
@@ -535,8 +575,9 @@ def _check_references(code: str, objects: ObjectNames, number: int):
             first, second, third = match[1], match[2], match[3] or ""
             if first not in objects.pages:
                 if first not in objects.own:
-                    raise NxwrightError("%s is neither a component of this page nor a page"
-                                        % first, line=number)
+                    hint, fix = _name_meant_hint(first, set(objects.own) | set(objects.pages))
+                    raise NxwrightError("%s is neither a component of this page nor a page%s"
+                                        % (first, hint), line=number, fix=fix)
                 continue
             known = objects.pages[first]
             if known is None:
@@ -810,9 +851,13 @@ def _check_components(code: str, objects: ObjectNames, variables: frozenset,
             what = ("%s is neither a component of this page nor a variable" % component
                     if in_event else "program.nx belongs to no page, and %s is not a variable"
                     % component)
+            # The name meant can be a variable of program.nx or, in an event,
+            # one of the page's components.
+            hint, fix = _name_meant_hint(
+                component, (set(objects.own) if in_event else set()) | set(variables))
             raise NxwrightError("%s: %s, so the Nextion Editor refuses it as %s's component "
-                                "(\"%s\")" % (code, what, word, INVALID_COMPONENT_ID),
-                                line=number)
+                                "(\"%s\")%s" % (code, what, word, INVALID_COMPONENT_ID, hint),
+                                line=number, fix=fix)
 
 
 def _check_number_arguments(code: str, number: int):

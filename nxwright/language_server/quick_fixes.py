@@ -1,26 +1,34 @@
-"""The quick fixes the language server offers on the build's refusals: for a
-refusal with one sure fix, the edit that makes it, which a code editor
-offers on the problem and applies in one step.
+"""The quick fixes the language server offers on the build's refusals. A
+refusal gets a quick fix when one edit is sure to correct it. A code editor
+offers that edit on the problem, and the user applies it in one step. One
+fix is not sure: the fix for an unknown name writes the name that was
+probably meant, which is a guess.
 
-The refusal says what its fix changes, as data (`NxwrightError.fix`), which
-the problem carries to the editor and the editor hands back with its code
-action request. Its kinds:
-  - in the problem's line, a text replaced by another, its "text" and its
-    "new": a command in small letters ("small-letters"), a space for the tab
-    after `int` ("tab-after-int"), a hex constant's digits in pairs
-    ("hex-pairs"), and a signed hex constant as its decimal ("hex-sign");
-  - "declare": the program variable "variable", sys0 to sys2, declared in
-    program.nx;
-  - in the problem's page file, of its component "component": its vscope set
-    to 1, global, for the keyboard it is bound to ("global"), or each of its
-    sides under 2 set to 2 ("least-size").
+A refusal carries what its fix changes as data (`NxwrightError.fix`). The
+problem passes that data to the code editor, which hands it back with its
+request for code actions. The data's "kind" is one of:
+  - a replacement of the text "text" by the text "new" in the problem's
+    line:
+      - "small-letters" writes a command in small letters;
+      - "tab-after-int" writes a space in place of the tab after `int`;
+      - "hex-pairs" writes a hex constant's digits in pairs;
+      - "hex-sign" writes a signed hex constant as a decimal number;
+      - "name-meant" writes the name that was probably meant in place of an
+        unknown name, such as `title` for `Title`;
+  - "declare", which declares the program variable "variable", one of sys0
+    to sys2, in program.nx;
+  - a change to the component "component" in the problem's page file:
+      - "global" sets its vscope to 1, global, for the keyboard it is bound
+        to;
+      - "least-size" sets each of its sides under 2 to 2.
 
-Each fix is worked out from the folder's files as the server reads them, an
-open file as the editor holds it, and offered only while what its refusal
-names still holds, so a problem fixed by hand since offers nothing. An edit
-in a line applies only where its text stands once in the line, as a whole
-word, outside quoted texts: a line nxlang rewrote, or one changed since,
-gets no edit where it would go wrong."""
+The server works out each fix from the folder's files, and from the code
+editor's text for a file that is open. It offers a fix only while what the
+refusal reported is still true, so a problem that was corrected by hand
+since then gets no fix. The server replaces a text in a line only if the
+text appears exactly once in the line, as a whole word outside quoted
+texts. That way, a line that nxlang rewrote, or that changed after the
+refusal, never gets an edit in the wrong place."""
 import re
 
 from nxwright import NxwrightError
@@ -32,31 +40,43 @@ from nxwright.project.editor_limits import LEAST_SIDE
 from nxwright.project.page_header import SYSTEM_PAGES
 
 PROGRAM = "program.nx"
-# What each fix in a line is called, as the editor lists it, from its text
-# and the text it puts in its place.
+# The title a code editor shows for each fix in a line, made from the text
+# that the fix replaces and the text that it writes.
 _LINE_FIX_TITLES = {
     "small-letters": lambda text, new: "Write %s in small letters" % new,
     "tab-after-int": lambda text, new: "Put a space after int",
     "hex-pairs": lambda text, new: "Write %s as %s" % (text, new),
     "hex-sign": lambda text, new: "Write %s as %s" % (text, new),
+    "name-meant": lambda text, new: "Change %s to %s" % (text, new),
 }
+# The fixes in a line that are a guess at what was meant. They change what
+# the code means, so an editor offers them and never applies them unasked.
+_GUESSED_FIXES = frozenset({"name-meant"})
 _WORD_CHARACTER = re.compile(r"\w")
 # A line of program.nx that is no code: blank, a comment, or an include.
 _NOT_CODE = re.compile(r"\s*(//.*|include\b.*)?$")
 
 
 def quick_fix(index, read, path: str, line: int, fix: dict):
-    """Returns (its title, {path within the folder: [TextEdit]}, their columns
-    Python's, whether an editor may apply it without asking) of the quick
-    fix `fix` of a problem on line `line`, from 0, of the folder's file
-    `path`; None where it no longer applies, or applies in no one place.
-    `read(path)` gives a file's text as the server holds it. A fix in code
-    keeps its meaning, so it may be applied without asking; a fix of a page
-    file changes how a component looks or works, so the user chooses it."""
+    """Returns the quick fix `fix` for a problem on line `line` of the
+    folder's file `path`, or None if the fix no longer applies or there is
+    not exactly one place to apply it. Lines are counted from 0.
+
+    The fix is returned as (title, {path within the folder: [TextEdit]},
+    whether a code editor may apply it without asking). Each TextEdit gives
+    its range in Python columns. `read(path)` returns the text the server
+    has for a file.
+
+    A code editor may apply a fix without asking when the fix keeps the
+    code's meaning. The user chooses the other fixes: one that guesses the
+    name that was meant, and one that edits a page file, because that edit
+    changes how a component looks or works."""
     kind = fix.get("kind")
     try:
         if kind in _LINE_FIX_TITLES:
             made = _line_fix(read, path, line, kind, fix["text"], fix["new"])
+            if kind in _GUESSED_FIXES:
+                return None if made is None else (*made, False)
         elif kind == "declare":
             made = _declaration(read, fix["variable"])
         elif kind in ("global", "least-size"):

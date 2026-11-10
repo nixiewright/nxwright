@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.11] - 2026-11-10
+
+- A misspelled component or page name now gets a "Did you mean" hint and a quick fix.
+
 ### [0.3.10] - 2026-11-10
 
 - File paths in simulator startup errors are now clickable.
