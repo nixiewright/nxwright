@@ -2,6 +2,7 @@
 // on each page. The page previews, the side bar's sections, and the text
 // editors of the page files share them: a selection made in one shows in
 // the others.
+import * as fs from "fs";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import { ObjectEvent } from "./eventMenu";
@@ -9,11 +10,18 @@ import { ObjectEvent } from "./eventMenu";
 // The custom editor's id of the page preview, as package.json declares it.
 export const PREVIEW_VIEW_TYPE = "nxwright.pagePreview";
 
-// A page's own files: pages/<name>.page.toml and pages/<name>.nx.
+// A page's own files are pages/<name>.page.toml and pages/<name>.nx.
 const PAGE_FILE = /[\\/]pages[\\/][^\\/]+\.(page\.toml|nx)$/;
 
+// Whether `uri` is one of a page's own files. A .nx file in the pages
+// folder belongs to a page only if a .page.toml file with the same name is
+// next to it. Otherwise it is a file that pages include, and does not
+// belong to any one page.
 export function isPageFile(uri: vscode.Uri): boolean {
-  return uri.scheme === "file" && PAGE_FILE.test(uri.fsPath);
+  if (uri.scheme !== "file" || !PAGE_FILE.test(uri.fsPath)) {
+    return false;
+  }
+  return uri.fsPath.endsWith(".page.toml") || fs.existsSync(tomlOf(uri).fsPath);
 }
 
 // The .page.toml file of a page's .page.toml or .nx file.

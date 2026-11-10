@@ -127,6 +127,10 @@ First public release.
 
 ## VS Code extension
 
+### [0.3.15] - 2026-11-10
+
+- Fixed the Components list emptying while a file that pages include has focus.
+
 ### [0.3.14] - 2026-11-10
 
 Needs nxwright 0.3.3 or later.
