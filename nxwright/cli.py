@@ -60,6 +60,7 @@ from nxwright.source.resource_adding import (VIDEO_RATE, add_animation, add_font
                                              add_pictures, add_sound, add_video,
                                              write_card_pictures)
 from nxwright.source.keyboard_adding import add_keyboard
+from nxwright.source.emulator_adding import DEFAULT_EMULATOR, add_emulator
 from nxwright.source.upgrade import upgrade
 from nxwright.tft.commands import command_summary
 
@@ -409,6 +410,11 @@ def _run_device(arguments) -> str:
 def _run_new_page(arguments) -> str:
     page = add_page(arguments.source_folder, arguments.name)
     return "Added the page %s to %s" % (page, arguments.source_folder)
+
+
+def _run_new_emulator(arguments) -> str:
+    file = add_emulator(arguments.source_folder, arguments.file)
+    return "Added the MCU emulator %s to %s" % (file, arguments.source_folder)
 
 
 def _run_extract(arguments) -> str:
@@ -903,6 +909,15 @@ _SUBCOMMANDS = [
      "one the Nextion Editor refuses, is refused, and nothing is written then.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
       ("name", {"nargs": "?", "help": "the page's name (default: the first free pageN)"})]),
+    ("new-emulator", _run_new_emulator, "add an MCU emulator to a source folder",
+     "Writes a first Python program that emulates the MCU, the microcontroller at the other "
+     "end of the screen's serial line, and records its path in app.toml's [mcu] table. The "
+     "command fails, and writes nothing, if app.toml already has an [mcu] table, or if the "
+     "file already exists.",
+     [("source_folder", {"type": Path, "help": "the source folder"}),
+      ("file", {"nargs": "?", "default": DEFAULT_EMULATOR,
+                "help": "the program's file, as a path from the source folder, with forward "
+                        "slashes (default: %(default)s)"})]),
     ("extract", _run_extract, "bring a project file into a source folder",
      "Use it to start from a project made in the Nextion Editor. The source folder must not "
      "exist yet, or be empty. The project file is only read.",

@@ -4,6 +4,13 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.5] - 2026-11-10
+
+- Added MCU emulators: Python programs that emulate the microcontroller for the screen.
+- Added `nxwright new-emulator`, which writes a first MCU emulator for a project.
+- Added the `nxwright.mcu` library, for an MCU emulator to read and write the screen's serial line.
+- `app.toml` can now have an `[mcu]` table, with the path of the project's MCU emulator.
+
 ### [0.3.4] - 2026-11-10
 
 - The simulator's serial line can now connect to a program that listens on a TCP port.

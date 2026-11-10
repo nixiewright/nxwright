@@ -169,6 +169,16 @@ fonts = [
 - The order of `pages`, `pictures`, `fonts`, `animations`, `videos`, and `sounds` is their order in the project, and so it sets their IDs. To reorder, reorder these lists.
   - Do this with care. A name follows the change, but a number keeps pointing at whatever now has that ID. Code that uses a number in place of a name will then reach another page or resource: `page 2`, `p0.pic=3`, or the page array `p[2]`.
 - To remove a picture, font, animation, video, or sound, use [`nxwright remove`](commands.md#remove).
+- An optional `[mcu]` table gives the path of the project's MCU emulator, a Python program that emulates the microcontroller for the screen ([mcu-emulator.md](mcu-emulator.md)).
+
+  ```
+  [mcu]
+  emulator = "../mcu/main.py"
+  ```
+
+  - `emulator` is the program's file, as a path from the source folder, with forward slashes.
+  - `nxwright new-emulator` writes the table ([commands.md](commands.md#new-emulator)). The build does not read it.
+  - An older nxwright cannot read a folder that has this table.
 - An optional `[defines]` table, at the end of the file, declares defines: named values that a build can change without editing the folder.
 
   ```

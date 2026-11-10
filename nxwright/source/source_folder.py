@@ -78,6 +78,7 @@ from nxwright.project.device_settings import (DEFAULT_ENCODING, ENCODINGS, Devic
                                               TextCodec, encoding_code, encoding_name,
                                               is_unknown_encoding)
 from nxwright.source.defines import checked_defines, filled, placeholder_name
+from nxwright.source.mcu_table import checked_mcu
 from nxwright.source.device_keys import (DEVICE_KEYS, app_encoding, device_keys, screen_model,
                                          settings_from_keys)
 from nxwright.source.svg_pictures import SVG_SUFFIX, draw_svg_picture, svg_picture_size
@@ -1029,22 +1030,24 @@ def check_page_count(app: dict, app_toml: str):
 
 
 def app_text(app: dict, *, written: str) -> str:
-    """Returns the text of app.toml for the settings `app`, as parse_app
-    returns them. The keys are in their usual order, with the [defines]
-    table last, and the empty lists that may be left out are dropped.
+    """Returns the text of app.toml for the settings `app`, in the form that
+    parse_app returns. The keys are in their usual order, followed by the
+    [mcu] table, if any, and then the [defines] table. The empty lists that
+    may be left out are dropped.
     `written` is the text of the app.toml these settings replace, or None
     for a new one. A key that has a placeholder there keeps it, unless
     `app` changes its value. An encoding nxwright does not know is written
     as its number, the form that parse_app reads. The language is written
     as its value in _LANGUAGE_VALUES, followed by _STRICT_LANGUAGE_COMMENT
     for a folder in strict Nextion syntax."""
-    # The [defines] table comes last, because in TOML every key after a
-    # table's heading belongs to that table.
+    # The tables come last, because in TOML every key after a table's
+    # heading belongs to that table.
+    tables = ("mcu", "defines")
     order = (("format", "name", "language") + DEVICE_KEYS + ("pages",) + tuple(RESOURCE_FILES)
-             + ("defines",))
+             + tables)
     shown = {key: app[key] for key in order
              if app.get(key) is not None and not (key in _OPTIONAL_LISTS and not app[key])
-             and not (key == "defines" and not app[key])}
+             and not (key in tables and not app[key])}
     if "encoding" in shown:
         shown["encoding"] = app_encoding(shown["encoding"])
     shown.update(_kept_placeholders(written, app))
@@ -1591,6 +1594,9 @@ def parse_app(text: str) -> dict:
         raise NxwrightError("app.toml: %s" % error) from None
     # The other keys' placeholders take the defines' values before any check.
     defines = checked_defines(app.pop("defines", None))
+    # The [mcu] table is checked on its own. Its values are not filled from
+    # the defines.
+    mcu = checked_mcu(app.pop("mcu", None))
     app = filled(app, defines, ("format", "language"), "app.toml")
     found = app.get("format")
     # TOML's true is Python's True, which equals 1: only a real number counts.
@@ -1638,6 +1644,8 @@ def parse_app(text: str) -> dict:
     if extra:
         raise NxwrightError("app.toml: unknown key %s" % sorted(extra)[0])
     app["defines"] = defines
+    if mcu:
+        app["mcu"] = mcu
     if "name" in app and not _is_app_name(app["name"]):
         raise NxwrightError("app.toml: %s" % _APP_NAME_RULE)
     app["language"] = language_of_value(app.get("language"))

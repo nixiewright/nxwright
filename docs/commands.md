@@ -20,6 +20,7 @@ nxwright tft-compare <a.tft> <b.tft>
 nxwright check <source-folder>
 nxwright format <source-folder> [--check]
 nxwright new-page <source-folder> [name]
+nxwright new-emulator <source-folder> [file]
 nxwright picture <source-folder> <pictures...>
 nxwright font <source-folder> <typeface-file> <height>
 nxwright font <source-folder> <font-file.zi>
@@ -362,6 +363,17 @@ nxwright new-page app settings
   - a name longer than 14 characters;
   - a name the Nextion Editor rejects, such as `dim`;
   - a folder that already has 251 pages, the most the Nextion Editor can compile.
+
+## new-emulator
+
+```
+nxwright new-emulator app
+```
+
+`new-emulator` gives the project an MCU emulator: a Python program that emulates the microcontroller at the other end of the screen's serial line while the app runs in the simulator ([mcu-emulator.md](mcu-emulator.md)). The command writes a first program, and records its path in the `[mcu]` table of `app.toml`.
+
+- Without a file, the program is `mcu/main.py`, in a folder beside the source folder. To put it elsewhere, give its path from the source folder, with forward slashes, as in `nxwright new-emulator app emulator/main.py`.
+- The command fails, and writes nothing, if `app.toml` already has an `[mcu]` table, or if the file already exists.
 
 ## picture
 

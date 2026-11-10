@@ -467,6 +467,7 @@ A few more commands you will use:
 - [docs/nxlang-compiled.md](https://github.com/nixiewright/nxwright/blob/main/docs/nxlang-compiled.md): how nxlang becomes strict Nextion syntax.
 - [docs/testing.md](https://github.com/nixiewright/nxwright/blob/main/docs/testing.md): testing your app.
 - [docs/simulator.md](https://github.com/nixiewright/nxwright/blob/main/docs/simulator.md): simulating your app.
+- [docs/mcu-emulator.md](https://github.com/nixiewright/nxwright/blob/main/docs/mcu-emulator.md): writing a program that emulates the microcontroller for the screen.
 - [docs/mcp.md](https://github.com/nixiewright/nxwright/blob/main/docs/mcp.md): letting an AI agent drive your app.
 - [docs/screen-code.md](https://github.com/nixiewright/nxwright/blob/main/docs/screen-code.md): how tests and the simulator run Nextion code.
 - [docs/format.md](https://github.com/nixiewright/nxwright/blob/main/docs/format.md): what is known of the Nextion Editor's project file.
