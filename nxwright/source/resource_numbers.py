@@ -7,9 +7,11 @@ the build does, and gives each line with the file and line it comes from.
 resource_numbers finds the numbers that stand for resources in one such line.
 Removing a resource uses the two to find numbers that the removal would make
 stand for another resource (resource_removal.py). placed_numbers finds where
-each such number appears in one file's own text, so that the language server
-can show the resource's name beside it, and as_name gives the text that writes
-the number as that name.
+each number that stands for a resource appears in one file's own text, so
+that the language server can show the resource's name beside it, and as_name
+gives the text that writes the number as that name. placed_numbers_in_steps
+finds the same numbers, and stops after each page it compiles so that the
+language server can read the editor's messages in between.
 
 Pages have IDs too: a page's ID is its place in app.toml's `pages`.
 page_numbers finds the page IDs that one line gives as numbers: the argument
@@ -92,12 +94,29 @@ class PlacedNumber:
 
 
 def code_lines(folder, index: FolderIndex, only: str = None) -> dict:
-    """Returns {(path, line number from 1): [(the page, or None outside a
-    page's code, a line in strict Nextion syntax)]}: the folder's code as the
-    build reads it, but with its names standing for no resource, so that only
-    the numbers it writes, and those nxlang's constants give, are left. A file
-    several pages include is read for each of them. With `only`, a path, only
-    that file's lines, and only the pages that use it are read."""
+    """Returns the folder's code as the build reads it: {(path, line number
+    from 1): [(page, line in strict Nextion syntax)]}, where the page is None
+    outside a page's code. The code is compiled with the folder's resource
+    names standing for no resource, so that the only numbers left are the ones
+    the code writes and the ones that nxlang's constants give. A file that
+    several pages include is read for each of them. If `only` is a path, only
+    the pages that use that file are read, and only that file's lines are
+    returned."""
+    return _result_of(_code_lines_in_steps(folder, index, only))
+
+
+def _result_of(steps):
+    """Runs the generator `steps` to its end, and returns what it returns."""
+    while True:
+        try:
+            next(steps)
+        except StopIteration as done:
+            return done.value
+
+
+def _code_lines_in_steps(folder, index: FolderIndex, only: str = None):
+    """The generator behind code_lines. It yields after each page is
+    compiled, and returns what code_lines returns."""
     folder = dataclasses.replace(folder, names=_NamesStandingForNone.of_app(folder.app))
     places = {}
     pages = folder.app["pages"] if only is None else index.pages_using(only)
@@ -115,6 +134,7 @@ def code_lines(folder, index: FolderIndex, only: str = None) -> dict:
                 for number, code in lines:
                     read = with_own_attributes(code, owner) if owner else code
                     places.setdefault((path, number), []).append((page, read))
+        yield
     if only is None or only == PROGRAM_FILE:
         program = list(enumerate(folder.program.split("\n"), start=1))
         if folder.declared is not None:
@@ -170,6 +190,28 @@ def placed_numbers(folder, index: FolderIndex, path: str) -> list:
         places = code_lines(folder, index, path)
     except NxwrightError:
         return []
+    return _placed_in_code(folder, index, path, places)
+
+
+def placed_numbers_in_steps(folder, index: FolderIndex, path: str):
+    """A generator that finds what placed_numbers returns, and gives its
+    caller time for other work between two compiles. It yields None after
+    compiling each page that uses the file, and returns the PlacedNumbers
+    when it ends. The language server reads the editor's messages at each
+    yield. For a page file, which needs no compile, the generator returns
+    the PlacedNumbers without yielding."""
+    if path.endswith(PAGE_FILE_SUFFIX):
+        return _placed_in_page_file(index, path)
+    try:
+        places = yield from _code_lines_in_steps(folder, index, path)
+    except NxwrightError:
+        return []
+    return _placed_in_code(folder, index, path, places)
+
+
+def _placed_in_code(folder, index: FolderIndex, path: str, places: dict) -> list:
+    """Returns the PlacedNumbers of the .nx file `path`. `places` is what
+    code_lines returned for that file."""
     lines = index.lines(path) or []
     found = []
     for (file, number), compiled in sorted(places.items()):

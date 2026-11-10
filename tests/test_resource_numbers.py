@@ -2,13 +2,16 @@
 file's own text; and what the language server makes of them: an inlay hint
 with the resource's name, a code action writing the number as the name, and
 the request that does so across the folder."""
+import contextlib
 from unittest import mock
 
 from nxwright.language.nxlang import compile_page
 from nxwright.language_server.file_texts import uri_of
 from nxwright.source.folder_index import FolderIndex, text_on_disk
-from nxwright.source.resource_numbers import as_name, code_lines, placed_numbers
-from nxwright.source.source_folder import folder_reader, read_folder_source, switch_to_nxlang
+from nxwright.source.resource_numbers import (as_name, code_lines, placed_numbers,
+                                              placed_numbers_in_steps)
+from nxwright.source.source_folder import (FolderSource, folder_reader, read_folder_source,
+                                           switch_to_nxlang)
 from tests.language_server_connection import INITIALIZE_PARAMS, ServerConnection
 from tests.test_remove_resource import RemoveResourceTestCase
 
@@ -50,6 +53,25 @@ class PlacedNumbersTest(PlacedNumbersTestCase):
             (4, "1", "pic", 1, None),
             # Written another way than the build writes it.
             (8, "0x01", "pic", 1, None)])
+
+    def test_the_numbers_found_in_steps_are_the_same(self):
+        # The language server finds a file's numbers one page's compile at a
+        # time. Each step yields None, and the generator returns the numbers
+        # when it ends.
+        self.write_code("p0.pic=1", "pic 0,0,1", "if(p0.pic==1)", "{", "}")
+        index = FolderIndex(self.source, text_on_disk)
+        folder = read_folder_source(folder_reader(self.source))
+        for path in (CODE, PAGE):
+            steps, yielded = placed_numbers_in_steps(folder, index, path), []
+            while True:
+                try:
+                    yielded.append(next(steps))
+                except StopIteration as done:
+                    found = done.value
+                    break
+            self.assertEqual(found, placed_numbers(folder, index, path))
+            self.assertEqual(set(yielded), {None} if yielded else set())
+        self.assertTrue(placed_numbers(folder, index, CODE))
 
     def test_code_in_nxlang(self):
         switch_to_nxlang(self.source)
@@ -219,6 +241,142 @@ class ServerTest(PlacedNumbersTestCase):
             "folder": str(self.source), "kind": "page", "ids": [0]})
         edits = result["changes"][uri_of(self.source / CODE)]
         self.assertEqual([edit["newText"] for edit in edits], ["page0"])
+
+
+class WhileAChangeWaitsTest(PlacedNumbersTestCase):
+    """While a change waits to be checked, the language server answers inlay
+    hint and code action requests from the numbers it has, and finds the
+    numbers again once the pages are checked."""
+
+    # page0.nx: its heading, then two lines whose number stands for picture b.
+    CODE_LINES = ("p0.pic=1", "if(p0.pic==1)", "{", "}")
+
+    def setUp(self):
+        super().setUp()
+        self.write_code(*self.CODE_LINES)
+        self.text = (self.source / CODE).read_text(encoding="utf-8")
+        self.start_server({})
+        self.version = 0
+
+    def start_server(self, capabilities: dict):
+        self.connection = ServerConnection()
+        self.server, self.sent = self.connection.server, self.connection.sent
+        self.connection.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                                "params": {"processId": None, "capabilities": capabilities}})
+
+    def ask(self, method: str, params: dict):
+        self.connection.handle({"jsonrpc": "2.0", "id": 7, "method": method, "params": params})
+        reply = self.sent[-1]
+        self.assertNotIn("error", reply)
+        return reply["result"]
+
+    def hints(self) -> list:
+        """Returns (line, label) of each inlay hint of page0.nx."""
+        hints = self.ask("textDocument/inlayHint", {
+            "textDocument": {"uri": uri_of(self.source / CODE)},
+            "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}})
+        return [(hint["position"]["line"], hint["label"]) for hint in hints]
+
+    def change(self, text: str):
+        """Sends the server `text` as the editor's unsaved text of page0.nx,
+        which marks the file as changed."""
+        self.version += 1
+        if self.version == 1:
+            params = {"textDocument": {"uri": uri_of(self.source / CODE), "languageId": "nx",
+                                       "version": 1, "text": text}}
+            method = "textDocument/didOpen"
+        else:
+            params = {"textDocument": {"uri": uri_of(self.source / CODE),
+                                       "version": self.version},
+                      "contentChanges": [{"text": text}]}
+            method = "textDocument/didChange"
+        self.connection.handle({"jsonrpc": "2.0", "method": method, "params": params})
+
+    @contextlib.contextmanager
+    def compiles_counted(self):
+        """Yields a list that receives the name of each page compiled to find
+        numbers, when it is compiled."""
+        compiled = []
+        editor_code_of_files = FolderSource.editor_code_of_files
+
+        def counting(folder, page_name, paths):
+            compiled.append(page_name)
+            return editor_code_of_files(folder, page_name, paths)
+
+        with mock.patch.object(FolderSource, "editor_code_of_files", counting):
+            yield compiled
+
+    def refreshes(self) -> int:
+        return sum(1 for message in self.sent
+                   if message.get("method") == "workspace/inlayHint/refresh")
+
+    def test_a_request_gets_the_kept_hints_of_the_lines_that_did_not_change(self):
+        self.assertEqual(self.hints(), [(1, "b"), (2, "b")])
+        # A line added above them moves both lines down.
+        self.change("// a comment\n" + self.text)
+        with self.compiles_counted() as compiled:
+            self.assertEqual(self.hints(), [(2, "b"), (3, "b")])
+        self.assertEqual(compiled, [])
+
+    def test_a_number_on_a_changed_line_waits_for_the_checks(self):
+        self.assertEqual(self.hints(), [(1, "b"), (2, "b")])
+        self.change(self.text.replace("p0.pic=1\n", "p0.pic=0\n"))
+        with self.compiles_counted() as compiled:
+            self.assertEqual(self.hints(), [(2, "b")])
+        self.assertEqual(compiled, [])
+        self.server.run_checks()
+        self.assertFalse(self.server.checks_waiting())
+        with self.compiles_counted() as compiled:
+            self.assertEqual(self.hints(), [(1, "a"), (2, "b")])
+        self.assertEqual(compiled, [])
+
+    def test_a_file_without_kept_numbers_gets_its_hints_after_the_checks(self):
+        self.change(self.text)
+        with self.compiles_counted() as compiled:
+            self.assertEqual(self.hints(), [])
+        self.assertEqual(compiled, [])
+        self.server.run_checks()
+        self.assertEqual(self.hints(), [(1, "b"), (2, "b")])
+
+    def test_the_editor_is_told_to_ask_for_its_hints_again(self):
+        self.start_server({"workspace": {"inlayHint": {"refreshSupport": True}}})
+        self.change(self.text.replace("p0.pic=1\n", "p0.pic=0\n"))
+        self.hints()
+        self.assertEqual(self.refreshes(), 0)
+        self.server.run_checks()
+        self.assertEqual(self.refreshes(), 1)
+
+    def test_an_editor_without_refresh_support_is_not_told(self):
+        self.change(self.text.replace("p0.pic=1\n", "p0.pic=0\n"))
+        self.hints()
+        self.server.run_checks()
+        self.assertEqual(self.refreshes(), 0)
+        self.assertEqual(self.hints(), [(1, "a"), (2, "b")])
+
+    def test_a_code_action_request_compiles_nothing(self):
+        self.hints()
+        self.change("// a comment\n" + self.text)
+        with self.compiles_counted() as compiled:
+            actions = self.ask("textDocument/codeAction", {
+                "textDocument": {"uri": uri_of(self.source / CODE)},
+                "range": {"start": {"line": 2, "character": 9},
+                          "end": {"line": 2, "character": 9}},
+                "context": {"diagnostics": []}})
+        self.assertEqual(compiled, [])
+        self.assertIn("Write 1 as @pic(b)", [action["title"] for action in actions])
+
+    def test_a_change_while_the_numbers_are_found_again_starts_that_work_again(self):
+        self.hints()
+        self.change(self.text.replace("p0.pic=1\n", "p0.pic=0\n"))
+        self.hints()
+        # The check's one page, then the first step of finding the numbers again.
+        self.assertTrue(self.server.run_check_step())
+        self.assertTrue(self.server.run_check_step())
+        self.change(self.text.replace("if(p0.pic==1)\n", "if(p0.pic==0)\n"))
+        self.hints()
+        self.server.run_checks()
+        self.assertFalse(self.server.checks_waiting())
+        self.assertEqual(self.hints(), [(1, "b"), (2, "a")])
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ from nxwright.language_server.symbols import (CLASS, CONSTANT, EVENT, FUNCTION, 
                                               folder_symbols)
 from tests.test_folder_check import FolderTestCase as CheckFolderTestCase, edited_app
 from nxwright.debug_adapter.framing import read_message, write_message
-from nxwright.language_server.server import serve
+from nxwright.language_server.server import CHECK_PAUSE, NxwrightServer, serve
 from tests.language_server_connection import INITIALIZE_PARAMS, ServerConnection, document_item
 from tests.test_zi_font import gb2312_font, utf8_fixture
 
@@ -1134,6 +1134,71 @@ class LiveCheckTest(LiveCheckTestCase):
                              if step != after_the_pages)
         self.assertNotIn(after_the_pages, steps[:last_page_step])
         self.assertIn(after_the_pages, steps)
+
+    def test_a_running_server_reads_what_waits_behind_a_long_answer_before_it_checks(self):
+        # The editor writes a change, a request whose answer takes long, then
+        # a second change while that answer is being made. The first
+        # change's pause runs out meanwhile. Once the answer is made, the
+        # server must read the second change before it starts a check.
+        self.list_a_picture_without_a_file()
+        happened, answering, answer_now = [], threading.Event(), threading.Event()
+        step, changed = NxwrightServer.run_check_step, NxwrightServer._on_document_change
+
+        def noted_step(server):
+            happened.append("step")
+            return step(server)
+
+        def noted_change(server, params):
+            happened.append("change")
+            changed(server, params)
+
+        def long_hover(*position):
+            answering.set()
+            answer_now.wait(10)
+
+        def change(version: int, text: str) -> dict:
+            return {"jsonrpc": "2.0", "method": "textDocument/didChange",
+                    "params": {"textDocument": {"uri": self.uri("pages/page0.nx"),
+                                                "version": version},
+                               "contentChanges": [{"text": text}]}}
+
+        def checks_ended() -> int:
+            return output.getvalue().count(b"nowhere")
+
+        with mock.patch.object(NxwrightServer, "run_check_step", noted_step), \
+                mock.patch.object(NxwrightServer, "_on_document_change", noted_change), \
+                mock.patch("nxwright.language_server.server.hover", long_hover), \
+                mock.patch("nxwright.language_server.server.STEP_GAP", 0.05), \
+                self.nxwright_lsp() as (write, output):
+            write(self.opening("pages/page0.nx", ""))
+            self.wait_for(output, b"nowhere")
+            ended = checks_ended()
+            del happened[:]
+            write(change(2, "\n"))
+            write({"jsonrpc": "2.0", "id": 5, "method": "textDocument/hover",
+                   "params": {"textDocument": {"uri": self.uri("pages/page0.nx")},
+                              "position": {"line": 0, "character": 0}}})
+            self.assertTrue(answering.wait(10))
+            write(change(3, "\n\n"))
+            # Longer than the pause before a check.
+            time.sleep(CHECK_PAUSE + 0.3)
+            answer_now.set()
+            deadline = time.monotonic() + 10
+            while checks_ended() == ended and time.monotonic() < deadline:
+                time.sleep(0.05)
+        self.assertEqual(happened[:3], ["change", "change", "step"], happened)
+
+    def test_the_measures_are_answered_from_what_the_check_kept(self):
+        self.change("pages/page0.nx", "function show():\n  sys0 = 1\n\non page0.load:\n  show()\n",
+                    "textDocument/didOpen")
+        self.server.run_checks()
+        reading = AssertionError("the folder is read again")
+        with mock.patch("nxwright.language_server.server.FolderIndex", side_effect=reading), \
+                mock.patch("nxwright.language_server.live_checks.FolderIndex", side_effect=reading):
+            self.connection.handle({"jsonrpc": "2.0", "id": 2, "method": "nxwright/limits",
+                                    "params": {"textDocument": {"uri": self.uri("pages/page0.nx")}}})
+        limits = self.sent[-1]["result"]
+        self.assertEqual((limits["page"], limits["chain"]), ("page0", ["page0.load", "show"]))
 
     def include_shared_file(self, second_page_code: str = ""):
         """Makes both pages include pages/shared.nx, the second page with

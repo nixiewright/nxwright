@@ -25,9 +25,11 @@ each check finds them again. Among them, the shared warnings are the lint
 warnings that need the code of several pages, such as a constant that no
 page uses (lint.shared_warnings).
 
-Checking a page also gives its measures, which are its objects, its longest
-chain of calls and clicks, and the program.s globals. Each page's last
-measures are kept for the editor to show.
+Checking a page also gives its measures: its objects, its longest chain of
+calls and clicks, and the program.s globals it needs. Each page's last
+measures are kept for the editor to show. The paths of the page's .nx files
+are kept with them, so that a request for a file's measures finds the file's
+page without reading the folder (LiveChecks.limits).
 
 A check runs in steps, so that the editor gets a page's findings as soon
 as that page is checked. Between two steps, the server may do something
@@ -89,6 +91,9 @@ class _FolderState:
     shared_warnings: list = field(default_factory=list)
     page_findings: dict = field(default_factory=dict)   # {page: [Finding]}, each page's findings
     measures: dict = field(default_factory=dict)
+    # {page: the paths of its .nx files}, as the last check read them. A
+    # request for a file's measures uses it to find the file's page.
+    page_files: dict = field(default_factory=dict)
     memory_findings: list = field(default_factory=list)
     sent: dict = field(default_factory=dict)    # {file: [Finding]}, as last sent
 
@@ -107,6 +112,7 @@ class LiveChecks:
         self._marked = {}       # {root: {changed paths within the folder}}
         self._steps = None      # the steps left of the checks in progress, a generator
         self._checking = None   # (root, paths) of the folder being checked
+        self._on_pages = False  # whether that folder's check still has pages to check
 
     def mark(self, root: Path, path: str):
         """Notes that the folder's file `path` changed. A check in progress
@@ -119,12 +125,19 @@ class LiveChecks:
         if self._checking is not None:
             stopped_root, stopped_paths = self._checking
             self._marked.setdefault(stopped_root, set()).update(stopped_paths)
-            self._checking = None
+            self._checking, self._on_pages = None, False
         self._marked.setdefault(root, set()).add(path)
 
     def waiting(self) -> bool:
         """True when a change waits to be checked, or a check has steps left."""
         return bool(self._marked) or self._steps is not None
+
+    def pages_waiting(self) -> bool:
+        """True when a change waits to be checked, or the check in progress
+        still has pages to check. The server does its other work only once
+        the pages are checked, because checking them is what clears a
+        corrected error."""
+        return bool(self._marked) or self._on_pages
 
     def step(self) -> bool:
         """Runs the next step of checking the folders with changes, and sends
@@ -144,13 +157,15 @@ class LiveChecks:
             pass
 
     def limits(self, root: Path, path: str):
-        """Returns the protocol's form of the measures of the page of the
-        folder's file `path`, or None when it has none yet."""
+        """Returns the answer to nxwright/limits for the folder's file `path`:
+        the measures of the file's page, or None when that page has no
+        measures yet. The file's page and the page's measures both come from
+        what the last check kept, so no file is read."""
         state = self._folders.get(root)
         if state is None:
             return None
-        index = FolderIndex(root, self._read)
-        pages = [page_of(path)] if page_of(path) else index.pages_using(path)
+        pages = [page_of(path)] if page_of(path) else [
+            page for page, files in state.page_files.items() if path in files]
         page = next((page for page in pages if page in state.measures), None)
         if page is None:
             return None
@@ -170,17 +185,19 @@ class LiveChecks:
         while self._marked:
             root = next(iter(self._marked))
             self._checking = (root, self._marked.pop(root))
+            self._on_pages = True
             try:
                 yield from self._check(*self._checking)
             except Exception:
                 traceback.print_exc(file=sys.stderr)
-            self._checking = None
+            self._checking, self._on_pages = None, False
 
     def _check(self, root: Path, paths: set):
         """Checks the folder `root` after a change of `paths`, yielding
         between steps."""
         state = self._folders.setdefault(root, _FolderState())
         index = FolderIndex(root, self._read)
+        state.page_files = index.page_files
         check = FolderCheckSteps(self._texts.folder_reader(root),
                                  lambda path: (root / path).is_file(),
                                  folder_byte_reader(root), folder_lister(root))
@@ -203,6 +220,7 @@ class LiveChecks:
             if waiting:
                 yield
         state.checked = state.checked or every_page
+        self._on_pages = False
         self._server.protocol.notify("nxwright/checked", {"uri": uri_of(root)})
         yield
         state.shared_warnings = check.shared_warnings()

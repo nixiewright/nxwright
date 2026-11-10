@@ -6,10 +6,13 @@ editor's units of a column, which it agrees with the editor; and the
 routing of each request to its answer. The server answers:
   - the notifications textDocument/didOpen, didChange, and didClose, and
     workspace/didChangeWatchedFiles, by which the editor tells of changes on
-    disk: once changes pause, the server checks what they may affect, one
+    disk. Once changes pause, the server checks what they may affect, one
     step at a time, and sends textDocument/publishDiagnostics after each
-    page it has checked. Between two steps it reads the messages that arrived,
-    and a change among them starts the check again (live_checks.py).
+    page it has checked. Between two steps it reads the messages that
+    arrived, and a change among them starts the check again
+    (live_checks.py). A step starts only once the server has handled no
+    message for a moment, so that the messages waiting behind a long
+    answer are read first.
   - the notification workspace/didChangeConfiguration, by which the editor
     tells of its settings. The settings under `nxwright.checks` turn on the
     check of an action: `rename`, `addComponent`, or `paste`. While an
@@ -48,12 +51,19 @@ offers another.
 Each request reads the source folder afresh, with its open files as the
 editor has them and the others from disk (file_texts.py). The server therefore
 always sees a change made outside the editor, such as an extract. It does keep
-the numbers that stand for resources between requests, for inlay hints and
-code actions, but only until a file they came from changes
-(resource_number_cache.py).
+two things between requests:
+  - the numbers that stand for resources, for inlay hints and code actions,
+    until a file they came from changes. Finding them again compiles pages,
+    which would hold up the check after every key typed. While a change
+    waits to be checked, a request is therefore answered from the numbers
+    kept, and the server finds them again in steps once the pages are
+    checked (resource_number_cache.py).
+  - each page's measures and files, as the last check found them, to
+    answer nxwright/limits (live_checks.py).
 """
 import asyncio
 from pathlib import Path
+import time
 
 import attrs
 from lsprotocol import types
@@ -175,6 +185,8 @@ class NxwrightServer(LanguageServer):
         # The timer that runs the checks' next step. It waits CHECK_PAUSE
         # before a check starts, and STEP_GAP between two steps of a check.
         self._next_step = None
+        # When the server last finished handling a message, on time.monotonic's clock.
+        self._last_handled = 0.0
         # The actions that are checked against the build: any of "rename",
         # "addComponent", and "paste". The editor's settings turn each check
         # on (_on_settings_change).
@@ -249,19 +261,38 @@ class NxwrightServer(LanguageServer):
             self._answers(_OWN + method, answer)
 
     def checks_waiting(self) -> bool:
-        """True when a change waits to be checked, or a check has steps left."""
-        return self._checks.waiting()
+        """True when a change waits to be checked, a check has steps left,
+        or the numbers that stand for resources are to be found again."""
+        return self._checks.waiting() or self._resource_numbers.waiting()
 
     def run_checks(self):
-        """Checks the changes that wait without stopping between steps, and
-        sends their findings."""
-        self._checks.run()
+        """Does all the work that waits after a change, without stopping
+        between steps. It checks the changes and sends their findings, and
+        finds again the numbers that stand for resources where they are out
+        of date."""
+        while self.run_check_step():
+            pass
 
     def run_check_step(self) -> bool:
-        """Runs the next step of checking the changes that wait, and sends
-        what that step found (LiveChecks.step). Returns whether more steps
-        wait."""
-        return self._checks.step()
+        """Runs the next step of the work that follows a change, and sends
+        what that step found. Returns whether more steps wait. The steps of
+        the check come first, until its pages are checked (LiveChecks.step).
+        Next come the steps that find again the numbers that stand for
+        resources, because the inlay hints wait for them
+        (ResourceNumberCache.step). The check's other steps come last."""
+        if self._resource_numbers.waiting() and not self._checks.pages_waiting():
+            if self._resource_numbers.step():
+                self._ask_for_the_hints_again()
+        else:
+            self._checks.step()
+        return self.checks_waiting()
+
+    def _ask_for_the_hints_again(self):
+        """Tells the editor to request its inlay hints again, if the editor
+        said at initialize that it supports workspace/inlayHint/refresh."""
+        workspace = self.client_capabilities.workspace
+        if workspace and workspace.inlay_hint and workspace.inlay_hint.refresh_support:
+            self.workspace_inlay_hint_refresh(None)
 
     def _follows(self, method: str, follow):
         """Registers `follow(params)` to run on the message `method`, after
@@ -269,7 +300,10 @@ class NxwrightServer(LanguageServer):
         which pygls answers. pygls takes plain functions, on which it notes
         what it registers."""
         def following(params):
-            follow(params)
+            try:
+                follow(params)
+            finally:
+                self._last_handled = time.monotonic()
         self.feature(method)(following)
 
     def _answers(self, method: str, answer, options=None):
@@ -283,6 +317,8 @@ class NxwrightServer(LanguageServer):
                 return answer(params)
             except NxwrightError as error:
                 raise RequestFailed(str(error)) from None
+            finally:
+                self._last_handled = time.monotonic()
         self.feature(method, options)(answering)
 
     def _on_initialize(self, params):
@@ -316,6 +352,8 @@ class NxwrightServer(LanguageServer):
         root = find_source_folder(path, self._texts.read) if path else None
         if root is not None:
             self._checks.mark(root, path.relative_to(root).as_posix())
+            # The numbers being found again were for the text before this change.
+            self._resource_numbers.stop()
             self._check_after_pause()
 
     def _check_after_pause(self):
@@ -337,11 +375,21 @@ class NxwrightServer(LanguageServer):
     def _step_on_the_loop(self):
         """Runs one step of the checks, then leaves pygls's event loop free
         for STEP_GAP seconds before the next one, so that the server reads
-        the messages that arrived meanwhile."""
+        the messages that arrived meanwhile.
+
+        A step is put off until no message has been handled for STEP_GAP
+        seconds. While the server makes a long answer, the loop is busy, so
+        the step's timer can run out with messages still unread behind that
+        answer. Putting the step off lets the server read those messages
+        first, and a change among them starts the pause again."""
+        loop = asyncio.get_running_loop()
+        quiet = time.monotonic() - self._last_handled
+        if quiet < STEP_GAP:
+            self._next_step = loop.call_later(STEP_GAP - quiet, self._step_on_the_loop)
+            return
         self._next_step = None
         if self.run_check_step():
-            self._next_step = asyncio.get_running_loop().call_later(STEP_GAP,
-                                                                    self._step_on_the_loop)
+            self._next_step = loop.call_later(STEP_GAP, self._step_on_the_loop)
 
     def _units(self, text: str) -> int:
         """Returns the editor's units in `text`, as the part of a line before
@@ -491,18 +539,23 @@ class NxwrightServer(LanguageServer):
                     "edits": file_edits} for file, file_edits in edits.items()]}
 
     def _code_actions(self, params):
-        """Returns the protocol's CodeActions of the request's problems that
-        carry a quick fix (quick_fixes.py), each fixing its problem, worked out
-        from the folder's files as the server holds them."""
-        found = self._folder(params.text_document.uri)
+        """Returns the protocol's CodeActions for the request. Each of the
+        request's problems that carries a quick fix gets an action that fixes
+        it (quick_fixes.py), worked out from the folder's files, with the open
+        ones as the editor has them. The actions of _number_actions come
+        after them."""
+        found = self._root_and_path(params.text_document.uri)
         if found is None:
             return []
-        index, path = found
-        read = self._texts.folder_reader(index.root)
+        root, path = found
+        problems = [problem for problem in params.context.diagnostics
+                    if problem.source == "nxwright" and isinstance(problem.data, dict)]
+        # The editor asks each time the cursor moves, so the folder's names
+        # are read only for a request that has a problem to fix.
+        index = FolderIndex(root, self._texts.read) if problems else None
+        read = self._texts.folder_reader(root)
         actions = []
-        for problem in params.context.diagnostics:
-            if problem.source != "nxwright" or not isinstance(problem.data, dict):
-                continue
+        for problem in problems:
             made = quick_fix(index, read, path, problem.range.start.line, problem.data)
             if made is not None:
                 title, edits, preferred = made
@@ -515,13 +568,24 @@ class NxwrightServer(LanguageServer):
     def _numbers_of(self, uri: str):
         """Returns (FolderIndex, path, the folder's source, the file's
         PlacedNumbers) for a .nx file or a page file, or None for any other
-        file or when the folder cannot be read. The numbers are kept until a
-        file they came from changes (resource_number_cache.py)."""
+        file or when the folder cannot be read.
+
+        The numbers come from the cache (resource_number_cache.py), which
+        finds them again when a file they came from has changed. While a
+        change waits to be checked, the cache does not find any numbers. If a
+        file changed since the numbers were found, the cache then returns only
+        those on lines that did not change, and the first of the four is a
+        CurrentLines, which gives only the files' lines."""
         found = self._root_and_path(uri)
         if found is None or not found[1].endswith((".nx", PAGE_FILE_SUFFIX)):
             return None
         root, path = found
-        kept = self._resource_numbers.numbers_of(root, path)
+        # While a change waits to be checked, finding the numbers again
+        # would hold up the check and the keys typed next.
+        if self.checks_waiting():
+            kept = self._resource_numbers.kept_numbers_of(root, path)
+        else:
+            kept = self._resource_numbers.numbers_of(root, path)
         if kept is None:
             return None
         index, folder, numbers = kept
@@ -1098,9 +1162,10 @@ class NxwrightServer(LanguageServer):
                                               page, name)]
 
     def _limits(self, params: dict):
-        """Returns the measures of the page of the request's file, or None."""
-        found = self._folder_of(params)
-        return self._checks.limits(found[0].root, found[1]) if found else None
+        """Returns the measures of the page of the request's file, as the
+        last check kept them, or None."""
+        found = self._root_and_path(params["textDocument"]["uri"])
+        return self._checks.limits(*found) if found else None
 
     def _workspace_edit(self, index: FolderIndex, edits: dict, created=()) -> dict:
         """Returns the protocol's WorkspaceEdit of `edits`, {path within the

@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.9] - 2026-11-10
+
+- Faster language server updates.
+
 ### [0.3.8] - 2026-11-10
 
 - Added an MCU emulator for the thermostat demo.
