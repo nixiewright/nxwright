@@ -20,7 +20,7 @@ import math
 
 from PIL import Image, ImageDraw
 
-from nxwright.project.pictures import write_png
+from nxwright.project.pictures import drawing_png
 
 # How many sub-pixels across and down each pixel a shape is drawn at.
 SCALE = 16
@@ -100,7 +100,7 @@ class SmoothedPicture:
                 picture.paste(band.reduce(SCALE), (left, row))
         if transpose is not None:
             picture = picture.transpose(transpose)
-        return write_png(picture.width, picture.height, picture.tobytes())
+        return drawing_png(picture.width, picture.height, picture.tobytes())
 
     def _reached(self):
         """Returns the box of whole pixels, (left, top, right, bottom), within

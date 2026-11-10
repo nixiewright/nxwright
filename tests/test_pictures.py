@@ -10,8 +10,9 @@ import zlib
 from PIL import Image
 
 from nxwright import NxwrightError
-from nxwright.project.pictures import (exif_orientation, picture_problem, picture_size,
-                                       read_picture, still_picture_size, write_png)
+from nxwright.project.pictures import (drawing_png, exif_orientation, picture_problem,
+                                       picture_size, read_picture, still_picture_size,
+                                       write_png)
 
 
 def png_bytes(width: int, height: int, colour_type: int, rows: list, extra=(), depth=8,
@@ -221,8 +222,29 @@ class WritePngTest(unittest.TestCase):
     def test_any_other_number_of_pixels_is_refused(self):
         for size in (15, 17):
             with self.subTest(size=size):
-                with self.assertRaises(ValueError):
-                    write_png(2, 2, bytes(size))
+                for write in (write_png, drawing_png):
+                    with self.assertRaises(ValueError):
+                        write(2, 2, bytes(size))
+
+    def test_files_keep_pillows_default_compression(self):
+        # nxwright writes its files with write_png, which saves with Pillow's default settings.
+        rgba = bytes(index * 7 % 256 for index in range(64 * 48 * 4))
+        self.assertEqual(write_png(64, 48, rgba),
+                         saved(Image.frombytes("RGBA", (64, 48), rgba), "PNG"))
+
+    def test_a_drawings_picture_has_the_same_pixels(self):
+        # drawing_png compresses less than write_png, but gives the same pixels.
+        # Two pictures are tried: a smooth, partly transparent gradient, and
+        # noise.
+        gradient = bytes(value for y in range(40) for x in range(90)
+                         for value in (x * 2, y * 6, 128, (x + y) % 256))
+        noise = bytes(index * 7919 % 251 for index in range(90 * 40 * 4))
+        for name, rgba in (("gradient", gradient), ("noise", noise)):
+            with self.subTest(picture=name):
+                fast, file = drawing_png(90, 40, rgba), write_png(90, 40, rgba)
+                self.assertNotEqual(fast, file)
+                self.assertEqual(read_picture(fast).tobytes(), read_picture(file).tobytes())
+                self.assertEqual(read_picture(fast).tobytes(), rgba)
 
 
 if __name__ == "__main__":

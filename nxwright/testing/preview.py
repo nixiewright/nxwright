@@ -1,24 +1,29 @@
 """The page preview's drawings, for the language server's nxwright/pageDrawing
 request, and for the debugger's panel of a simulation and the pictures an
-agent asks for of it (drawing/screen_pictures.py).
+agent takes of it (drawing/screen_pictures.py).
 
-A drawing (drawing/page_drawing.py) is of the page whose .page.toml or .nx file is
-asked about, from its page file as the editor has it, saved or not. The
-page's code plays no part: a page whose code does not build still draws.
-Decoded fonts and the sizes of pictures are kept between drawings until
-their file changes, since a page redraws at each pause in typing.
+A drawing (drawing/page_drawing.py) shows the page whose .page.toml or .nx
+file is asked about, from its page file as the editor has it, saved or not.
+The page's code plays no part, so a page whose code does not build still
+draws.
+
+A page is drawn again at each pause in typing, so decoded fonts, the sizes of
+pictures, and what each component painted are kept between drawings. A font
+or a size is kept until its file changes, and a painting until something it
+depends on changes (drawing/kept_paintings.py).
 """
 import os
 from pathlib import Path
 import re
 
 from nxwright import NxwrightError
+from nxwright.drawing.kept_paintings import KeptPaintings
 from nxwright.drawing.page_drawing import DrawingResources, draw_page
 from nxwright.language.resource_names import ANIMATION, LISTS
 from nxwright.project.media_files import (animation_frames, is_card_picture, read_card_picture,
                                           video_frames)
 from nxwright.project.page_file_names import page_of_file_stem
-from nxwright.project.pictures import data_url, exif_orientation, read_picture, write_png
+from nxwright.project.pictures import data_url, drawing_png, exif_orientation, read_picture
 from nxwright.project.screen_copy import FORMAT_COMPRESSED, OPAQUE
 from nxwright.project.screen_models import model_named
 from nxwright.project.zi_font import decode_font, read_font_header
@@ -36,13 +41,17 @@ _TURNING_ORIENTATIONS = range(2, 9)
 
 
 class Previews:
-    """Draws pages, keeping what it read from pictures and fonts until their
-    file changes."""
+    """Draws pages. Between drawings it keeps what it read from pictures and
+    fonts, until their file changes, and what each component painted in the
+    latest drawing of its page, until something that painting depends on
+    changes."""
 
     def __init__(self):
         # {(full path, the reading's module, its name): ((modification time,
         # size), what was read)}
         self._kept = {}
+        # {source folder: its KeptPaintings}
+        self._paintings = {}
 
     def drawing(self, root: Path, path: str, read):
         """Returns the drawing of the page whose file is `path`, within the
@@ -89,7 +98,8 @@ class Previews:
         `scrolled`, where its scrolling texts have moved their texts."""
         resources = _FolderResources(root, app, self, cards)
         drawing = draw_page(components, resources, painted, spacing, hidden, waves, pressed,
-                            listings, select_moves, scrolled)
+                            listings, select_moves, scrolled,
+                            self._paintings.setdefault(root, KeptPaintings()))
         pictures = {shape["picture"] for shape in drawing["shapes"] if shape["kind"] == "picture"}
         drawing["pictureFiles"] = {name: resources.picture_file(name) for name in pictures}
         return drawing
@@ -114,17 +124,17 @@ class Previews:
                         "entry": inputs.entry})
         return drawing
 
-    def kept(self, path: Path, read):
+    def kept(self, path: Path, read, stamp: tuple = None):
         """Returns read(path), or what it returned before while the file is
         unchanged. An NxwrightError it raises is kept and raised again. A
         file read two ways, such as a card's file that an external picture
-        shows and a video plays, is kept once for each: by `read`'s name, a
-        lambda's being that of the place it is written."""
-        try:
-            status = os.stat(path)
-            stamp = (status.st_mtime_ns, status.st_size)
-        except OSError:
-            raise NxwrightError("%s cannot be read" % path.name) from None
+        shows and a video plays, is kept once for each way. The ways are
+        told apart by the name of `read`, or, for a lambda, by the function
+        it is written in. A caller that already has the file's file_stamp
+        can pass it as `stamp`."""
+        stamp = stamp or file_stamp(path)
+        if stamp is None:
+            raise NxwrightError("%s cannot be read" % path.name)
         key = (path, read.__module__, read.__qualname__)
         kept = self._kept.get(key)
         if kept is None or kept[0] != stamp:
@@ -152,7 +162,10 @@ def page_of_file(path: str):
 class _FolderResources(DrawingResources):
     """The pictures, fonts, animations, and videos of a source folder, as
     page_drawing needs them, and the files of a simulation's SD cards given
-    folders, `cards`."""
+    folders, `cards`. Each instance serves a single drawing, during which it
+    looks up what each number or name stands for, and the state of each file,
+    only once. While recording (DrawingResources.start_recording), it notes
+    what a painting reads in a _Reads."""
 
     def __init__(self, root: Path, app: dict, previews: Previews, cards=None):
         self.root, self.app, self.previews, self.cards = root, app, previews, cards
@@ -164,29 +177,81 @@ class _FolderResources(DrawingResources):
         except NxwrightError:
             pass    # a screen nxwright does not know, which the build refuses
         # The cards' files the drawing shows, by the name its shapes give
-        # them: their full path, which no picture of the folder is named.
+        # them. That name is the file's full path, so it cannot be the name
+        # of a picture of the folder.
         self._card_files = {}
+        # {(finding function, its arguments): what it found}, and {file: its
+        # file_stamp}, for this drawing.
+        self._found, self._stamps = {}, {}
+        self._reads = None      # the _Reads being recorded, if any
+
+    def start_recording(self) -> bool:
+        self._reads = _Reads()
+        return True
+
+    def stop_recording(self):
+        reads, self._reads = self._reads, None
+        return reads
+
+    def unchanged(self, reads) -> bool:
+        return (all(self._resolved(find, *arguments) == found
+                    for (find, arguments), found in reads.resolved.items())
+                and all(self._stamp(file) == stamp for file, stamp in reads.files.items()))
+
+    def record_again(self, reads):
+        self._card_files.update(reads.card_files)
+
+    def _resolved(self, find, *arguments):
+        """Returns find(self, *arguments), which is what a number or a name
+        stands for. The answer is looked up once per drawing, and is also
+        added to the _Reads while recording. `find` must be one of the
+        class's own functions, so that the resources of a later drawing can
+        call it again."""
+        key = (find, arguments)
+        if key not in self._found:
+            self._found[key] = find(self, *arguments)
+        if self._reads is not None:
+            self._reads.resolved[key] = self._found[key]
+        return self._found[key]
+
+    def _stamp(self, file: Path):
+        """Returns the file_stamp of `file`, taken once per drawing."""
+        if file not in self._stamps:
+            self._stamps[file] = file_stamp(file)
+        return self._stamps[file]
+
+    def _kept(self, file: Path, read):
+        """Returns Previews.kept(file, read). While recording, it also
+        records the file's stamp, even when the file is missing and
+        Previews.kept raises."""
+        stamp = self._stamp(file)
+        if self._reads is not None:
+            self._reads.files[file] = stamp
+        return self.previews.kept(file, read, stamp)
 
     def card_picture(self, path: str):
-        """The file `path` names on a card given a folder, found through the
-        cards' own checks, or None for none such, and for a picture file of
-        PictureBox's (.xi) that cannot be read: nothing is drawn, as for a
-        missing file."""
-        local = self._card_file(path)
+        """Returns the name under which picture shapes show the file that
+        `path` names on a card given a folder, and remembers the file for
+        picture_file. The file is found through the cards' own checks.
+        Returns None, so that nothing is drawn, when there is no such file,
+        or when it is a PictureBox picture file (.xi) that cannot be read."""
+        local = self._resolved(_FolderResources._card_file, path)
         if local is None:
             return None
         try:
-            self.previews.kept(local, _card_picture_parts)
+            self._kept(local, _card_picture_parts)
         except NxwrightError:
             return None
         self._card_files[str(local)] = local
+        if self._reads is not None:
+            self._reads.card_files[str(local)] = local
         return str(local)
 
     def card_frames(self, path: str):
         """The frames of the video file `path` names on a card given a
         folder, or None for none such."""
-        local = self._card_file(path)
-        return None if local is None else self.previews.kept(
+        local = self._resolved(_FolderResources._card_file, path)
+        return None if local is None else self._kept(
             local, lambda file: video_frames(file.read_bytes()))
 
     def _card_file(self, path: str):
@@ -201,14 +266,25 @@ class _FolderResources(DrawingResources):
             return None
 
     def frames(self, kind: str, media_id: int):
+        file = self._resolved(_FolderResources._media_file, kind, media_id)
+        if file is None:
+            return None
+        read = animation_frames if kind == ANIMATION else video_frames
+        return self._kept(file, lambda file: read(file.read_bytes()))
+
+    def _media_file(self, kind: str, media_id: int):
+        """The file of the folder's animation or video `media_id`, or None
+        when the folder has none such."""
         names = self.app[LISTS[kind]]
         if not isinstance(media_id, int) or not 0 <= media_id < len(names):
             return None
-        read = animation_frames if kind == ANIMATION else video_frames
-        return self.previews.kept(self.root / played_file(kind, names[media_id]),
-                                  lambda file: read(file.read_bytes()))
+        return self.root / played_file(kind, names[media_id])
 
     def picture(self, picture_id: int):
+        return self._resolved(_FolderResources._picture_name, picture_id)
+
+    def _picture_name(self, picture_id: int):
+        """The name of the folder's picture `picture_id`, or None."""
         pictures = self.app["pictures"]
         return pictures[picture_id] if picture_id < len(pictures) else None
 
@@ -261,6 +337,11 @@ class _FolderResources(DrawingResources):
     def picture_path(self, name: str) -> Path:
         if name in self._card_files:
             return self._card_files[name]
+        return self._resolved(_FolderResources._picture_file_path, name)
+
+    def _picture_file_path(self, name: str) -> Path:
+        """The file of the folder's picture `name`, with the first picture
+        suffix whose file exists (source_folder.picture_file)."""
         return self.root / picture_file(name, lambda path: (self.root / path).is_file())
 
     def picture_size(self, picture_id: int):
@@ -268,27 +349,53 @@ class _FolderResources(DrawingResources):
         if name is None:
             return None
         try:
-            return self.previews.kept(self.picture_path(name), picture_file_size)
+            return self._kept(self.picture_path(name), picture_file_size)
         except NxwrightError:
             return None
 
     def font(self, font_id: int):
-        return self.previews.kept(self._font_path(font_id),
-                                  lambda file: decode_font(file.read_bytes()))
+        return self._kept(self._font_path(font_id), lambda file: decode_font(file.read_bytes()))
 
     def font_height(self, font_id: int):
         try:
-            return self.previews.kept(self._font_path(font_id), read_font_header).height
+            return self._kept(self._font_path(font_id), read_font_header).height
         except NxwrightError:
             return None
 
     def _font_path(self, font_id: int) -> Path:
         """The file of the folder's font `font_id`. Raises NxwrightError when
         the folder has none such."""
-        fonts = self.app["fonts"]
-        if font_id >= len(fonts):
+        file = self._resolved(_FolderResources._font_file, font_id)
+        if file is None:
             raise NxwrightError("the folder has no font %d" % font_id)
-        return self.root / "fonts" / (fonts[font_id] + ".zi")
+        return file
+
+    def _font_file(self, font_id: int):
+        """The file of the folder's font `font_id`, or None when the folder
+        has none such."""
+        fonts = self.app["fonts"]
+        return self.root / "fonts" / (fonts[font_id] + ".zi") if font_id < len(fonts) else None
+
+
+class _Reads:
+    """What a painting read through _FolderResources:
+      - resolved: {(finding function, its arguments): what it found};
+      - files: {file: its file_stamp, or None when missing};
+      - card_files: {name: file}, the card files its picture shapes show,
+        by the name the shapes give them."""
+
+    def __init__(self):
+        self.resolved, self.files, self.card_files = {}, {}, {}
+
+
+def file_stamp(file: Path):
+    """Returns (modification time, size) of `file`, or None when it cannot
+    be read. Two stamps that differ show that the file changed."""
+    try:
+        status = os.stat(file)
+    except OSError:
+        return None
+    return status.st_mtime_ns, status.st_size
 
 
 def _card_picture_parts(file: Path):
@@ -305,7 +412,7 @@ def _card_picture_parts(file: Path):
     mask = None
     if picture.alphas is not None:
         # The file keeps 7 bits of alpha: 127 is opaque.
-        mask = data_url(write_png(*picture.stored_size, bytes(
+        mask = data_url(drawing_png(*picture.stored_size, bytes(
             value for alpha in picture.alphas
             for value in (255, 255, 255, (alpha * 255 + OPAQUE // 2) // OPAQUE))))
     return data_url(picture.jpeg, "image/jpeg"), mask
@@ -320,7 +427,7 @@ def _unturned_picture(file: Path):
     if exif_orientation(file) not in _TURNING_ORIENTATIONS:
         return None
     picture = read_picture(file.read_bytes())
-    return data_url(write_png(picture.width, picture.height, picture.tobytes())), None
+    return data_url(drawing_png(picture.width, picture.height, picture.tobytes())), None
 
 
 def _modified(path: Path) -> str:

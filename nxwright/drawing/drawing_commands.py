@@ -6,7 +6,7 @@ drawing again between them a component that code changed.
 from nxwright import NxwrightError
 from nxwright.drawing.drawing_shared import MOST_PICTURE_PIXELS, box_of
 from nxwright.drawing.text_pictures import lacking_note, text_picture
-from nxwright.project.pictures import data_url, write_png
+from nxwright.project.pictures import data_url, drawing_png
 from nxwright.project.screen_colours import rgb565_to_hex, rgb565_to_rgb
 
 
@@ -81,7 +81,7 @@ class CommandPainter:
             return
         if lacking:
             self.painter.note("xstr %r: %s" % (text, lacking))
-        self.painter.add("text", box, image=data_url(write_png(w, h, pixels)))
+        self.painter.add("text", box, image=data_url(drawing_png(w, h, pixels)))
 
 
 # The screen's coordinates are 16-bit: a line's ends, and a circle's radius,

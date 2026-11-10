@@ -359,6 +359,7 @@ from nxwright.drawing.drawing_shared import (MOST_PICTURE_PIXELS, NO_RESOURCE, P
 from nxwright.drawing.dual_state_button_drawing import paint_dual_state_button
 from nxwright.drawing.file_browser_drawing import paint_file_browser
 from nxwright.drawing.gauge_drawing import paint_gauge
+from nxwright.drawing.kept_paintings import KeptPaintings, PaintingsOfADrawing
 from nxwright.drawing.media_drawing import paint_animation, paint_video
 from nxwright.drawing.number_drawing import paint_number, paint_xfloat
 from nxwright.drawing.progress_bar_drawing import paint_progress_bar
@@ -371,7 +372,7 @@ from nxwright.drawing.sliding_text_drawing import paint_sliding_text
 from nxwright.drawing.switch_drawing import paint_switch
 from nxwright.drawing.text_pictures import MissingCharacter, lacking_note, text_picture
 from nxwright.drawing.waveform_drawing import paint_waveform
-from nxwright.project.pictures import data_url, write_png
+from nxwright.project.pictures import data_url, drawing_png
 from nxwright.project.screen_colours import rgb565_to_hex, rgb565_to_rgb
 from nxwright.source.component_groups import group_of
 from nxwright.source.page_source import Component
@@ -405,12 +406,39 @@ class DrawingResources:
       - encoding: the project's character encoding;
       - rotation: the screen's rotation, in degrees;
       - opaque_pictures: whether the screen stores the folder's pictures
-        without alpha, their transparent share white, as the Editor's
-        simulator showed on an Enhanced screen, where an Intelligent one
-        keeps it (screen_copy.py, stored_pixels)."""
+        without alpha, so that their transparent parts show white. The
+        Nextion Editor's simulator showed this on an Enhanced screen, while
+        an Intelligent screen keeps the alpha (screen_copy.py,
+        stored_pixels).
+    To let a drawing reuse paintings (kept_paintings.py), a subclass records
+    what each painting reads through it, by overriding start_recording,
+    stop_recording, unchanged, and record_again. By default nothing is
+    recorded, so nothing is reused."""
     encoding = "iso-8859-1"
     rotation = 0
     opaque_pictures = False
+
+    def start_recording(self) -> bool:
+        """Starts recording what a painting reads through the resources, so
+        that the painting can be reused while none of it changes. Returns
+        whether the resources record at all. By default they do not."""
+        return False
+
+    def stop_recording(self):
+        """Stops recording, and returns what was recorded since
+        start_recording."""
+        raise NotImplementedError
+
+    def unchanged(self, reads) -> bool:
+        """Whether everything `reads` recorded is still the same: each number
+        stands for the same name and file as before, and each file is
+        unchanged, or still missing."""
+        return False
+
+    def record_again(self, reads):
+        """Stores again in the resources what a painting stored there while
+        `reads` was being recorded, such as which card file a picture shape
+        shows (card_picture)."""
 
     def card_picture(self, path: str):
         return None
@@ -440,7 +468,7 @@ class DrawingResources:
 def draw_page(components: list, resources: DrawingResources, painted=(),
               spacing: tuple = (0, 0), hidden=(), waves: dict = None,
               pressed: str = None, listings: dict = None, select_moves: dict = None,
-              scrolled: dict = None) -> dict:
+              scrolled: dict = None, kept: KeptPaintings = None) -> dict:
     """Returns the drawing of a page's Components, the page first, then of
     what drawing commands `painted`, as the module's docstring says.
     `spacing` is the system variables spax and spay, which `xstr` uses. The
@@ -459,19 +487,24 @@ def draw_page(components: list, resources: DrawingResources, painted=(),
     box: the number of its first item shown}, one left out showing its
     chosen item; and where a touch put each slider's knob, {slider: the
     knob's start along its track, from its start, or its bottom when
-    upright}, one left out placed by its `val`."""
+    upright}, one left out placed by its `val`. If `kept` is given, it
+    contains what each component painted in the page's last drawing. A
+    painting is reused when nothing it depends on has changed. At the end,
+    this drawing's paintings replace those in `kept` (kept_paintings.py)."""
     waves, listings, select_moves = waves or {}, listings or {}, select_moves or {}
     scrolled = scrolled or {}
+    paintings = PaintingsOfADrawing(kept, components[0].name)
 
     def paint(component):
-        held = component.name == pressed
-        painter = ComponentPainter(drawing, component, resources, waves.get(component.name, {}),
-                                   held, listings.get(component.name),
-                                   select_moves.get(component.name, 0),
-                                   scrolled.get(component.name))
-        if held and component.type == "button":
-            painter = painter.second_look()
-        painter.paint()
+        name = component.name
+        given = (waves.get(name, {}), name == pressed, listings.get(name),
+                 select_moves.get(name, 0), scrolled.get(name))
+        inputs = (component.type, component.values, *given, drawing["width"],
+                  drawing["height"], resources.encoding, resources.rotation,
+                  resources.opaque_pictures)
+        painting = paintings.painting(component, inputs, resources,
+                                      lambda: _painted(component, given, drawing, resources))
+        painting.add_to(drawing)
 
     page = components[0].values
     drawing = {"width": page["w"], "height": page["h"],
@@ -495,7 +528,22 @@ def draw_page(components: list, resources: DrawingResources, painted=(),
         drawing["components"].append(dict(entry, **{key: values[key] for key in PLACE}))
         paint(component)
     _paint_commands(drawing, components, placed, resources, painted, spacing, paint)
+    paintings.finish()
     return drawing
+
+
+def _painted(component, given: tuple, drawing: dict, resources) -> tuple:
+    """Paints `component` on an empty drawing the size of `drawing`, and
+    returns the (shapes, notes) its painter added. `given` is
+    what draw_page passes the painter: its waves, whether it is pressed, its
+    listing, how far a press moved it, and where it scrolled."""
+    own = {"width": drawing["width"], "height": drawing["height"], "shapes": [], "notes": []}
+    waves, held, listing, moved, scrolled = given
+    painter = ComponentPainter(own, component, resources, waves, held, listing, moved, scrolled)
+    if held and component.type == "button":
+        painter = painter.second_look()
+    painter.paint()
+    return own["shapes"], own["notes"]
 
 
 def _page_without_background(values: dict, resources: DrawingResources) -> bool:
@@ -925,7 +973,7 @@ class ComponentPainter:
                 keep = fading(row)
                 part[3::4] = bytes(round(alpha * keep) for alpha in part[3::4])
             rgba += part
-        self.add("text", shown, image=data_url(write_png(shown["w"], shown["h"], bytes(rgba))))
+        self.add("text", shown, image=data_url(drawing_png(shown["w"], shown["h"], bytes(rgba))))
 
     def text_component(self, text: str = None, at: tuple = (None, None)):
         """Paints a component as a text component is drawn: the background
@@ -982,7 +1030,7 @@ class ComponentPainter:
             # it shows other characters; the drawing does too.
             self.note("font %s is in %s, the project in %s" % (font.name, font.encoding,
                                                                 self.resources.encoding))
-        self.add("text", box, image=data_url(write_png(width, height, pixels)))
+        self.add("text", box, image=data_url(drawing_png(width, height, pixels)))
 
     def pixels(self, points: list, colour: int):
         """Paints single pixels, as one picture over the box holding them."""
@@ -999,7 +1047,7 @@ class ComponentPainter:
             index = ((y - top) * width + x - left) * 4
             rgba[index:index + 4] = bytes((red, green, blue, 255))
         self.add("text", box_of(left, top, width, height),
-                 image=data_url(write_png(width, height, bytes(rgba))))
+                 image=data_url(drawing_png(width, height, bytes(rgba))))
 
     def _font_height(self) -> int:
         """The height of the component's font when its header can be read,
@@ -1012,4 +1060,4 @@ def _thumb_picture() -> str:
     """Returns a scroll bar's thumb, as a data: URL of its PNG: its grey, as
     opaque as _THUMB_OPACITY, over what is under it."""
     pixel = bytes(_THUMB_GREY + (_THUMB_OPACITY,))
-    return data_url(write_png(THUMB_WIDTH, THUMB_HEIGHT, pixel * (THUMB_WIDTH * THUMB_HEIGHT)))
+    return data_url(drawing_png(THUMB_WIDTH, THUMB_HEIGHT, pixel * (THUMB_WIDTH * THUMB_HEIGHT)))

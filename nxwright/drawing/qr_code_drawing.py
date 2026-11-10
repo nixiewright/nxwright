@@ -6,7 +6,7 @@ import functools
 from nxwright import NxwrightError
 from nxwright.drawing.drawing_shared import NO_RESOURCE, box_of
 from nxwright.project.device_settings import TextCodec
-from nxwright.project.pictures import data_url, write_png
+from nxwright.project.pictures import data_url, drawing_png
 from nxwright.project.qr_code import qr_modules
 from nxwright.project.screen_colours import rgb565_to_hex, rgb565_to_rgb
 
@@ -44,7 +44,7 @@ def _qr_picture(data: bytes, side: int, colour: tuple):
         for pixel_row in range(-(-top * side // count), side):
             end = (pixel_row + 1) * side * 4
             rgba[end - 4:end] = clear
-    return write_png(side, side, bytes(rgba))
+    return drawing_png(side, side, bytes(rgba))
 
 
 def paint_qr_code(painter):

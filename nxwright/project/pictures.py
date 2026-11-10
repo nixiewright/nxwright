@@ -172,14 +172,38 @@ def still_picture_size(path: Path):
 
 
 def write_png(width: int, height: int, rgba: bytes) -> bytes:
-    """Returns the PNG file of a picture `width` by `height`, whose pixels
-    `rgba` holds as 4 bytes each, red, green, blue, and alpha, row by row
-    from the top-left corner. Raises ValueError when `rgba` holds another
-    number of bytes."""
+    """Returns the PNG file of a picture `width` by `height`, from `rgba`,
+    which gives each pixel as 4 bytes, red, green, blue, and alpha, row by
+    row from the top-left corner. Raises ValueError when `rgba` has another
+    number of bytes. nxwright writes its PNG files with this function, at
+    Pillow's default compression, and the pictures of its drawings with
+    drawing_png, which compresses less."""
+    return _png(width, height, rgba, {})
+
+
+# How hard drawing_png compresses, from 0 to 9. On the thermostat demo's
+# pictures, level 2 encoded 12 to 20 percent faster than Pillow's default
+# level, 6, for files about a tenth larger. Level 1 was barely faster than
+# level 2, and its files were twice the size of level 6's.
+_DRAWING_COMPRESSION = 2
+
+
+def drawing_png(width: int, height: int, rgba: bytes) -> bytes:
+    """Returns the PNG file of a picture, from the same arguments as
+    write_png and with the same pixels, but compressed less so that it
+    encodes faster. It is for the
+    pictures of a page's drawing (drawing/page_drawing.py), which are made
+    over and over and sent to a webview."""
+    return _png(width, height, rgba, {"compress_level": _DRAWING_COMPRESSION})
+
+
+def _png(width: int, height: int, rgba: bytes, options: dict) -> bytes:
+    """Returns the PNG file of a picture (write_png), saved by Pillow with
+    `options`."""
     if len(rgba) != width * height * 4:
         raise ValueError("%d bytes do not make a picture %d by %d" % (len(rgba), width, height))
     out = io.BytesIO()
-    Image.frombytes("RGBA", (width, height), rgba).save(out, "PNG")
+    Image.frombytes("RGBA", (width, height), rgba).save(out, "PNG", **options)
     return out.getvalue()
 
 

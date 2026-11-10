@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.11] - 2026-11-09
+
+- Improved performance of page preview and simulator drawing.
+
 ### [0.2.10] - 2026-11-09
 
 - Limit values in `defaults.toml` to their valid ranges.
