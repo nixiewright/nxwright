@@ -18,12 +18,13 @@ from nxwright.language_server import completion
 from nxwright.language_server.completion import Signature, completions, signature
 from nxwright.source.definitions import definitions
 from nxwright.language_server.file_texts import FileTexts, uri_of
+from nxwright.source.folder_check import FolderCheckSteps
 from nxwright.source.folder_index import FolderIndex, Place, file_start
 from nxwright.language_server.hovers import hover
 from nxwright.source.references import references
 from nxwright.language_server.symbols import (CLASS, CONSTANT, EVENT, FUNCTION, file_symbols,
                                               folder_symbols)
-from tests.test_folder_check import FolderTestCase as CheckFolderTestCase
+from tests.test_folder_check import FolderTestCase as CheckFolderTestCase, edited_app
 from nxwright.debug_adapter.framing import read_message, write_message
 from nxwright.language_server.server import serve
 from tests.language_server_connection import INITIALIZE_PARAMS, ServerConnection, document_item
@@ -971,8 +972,9 @@ class ServerAnswerTest(ServerTestCase):
         self.assertEqual(result["activeParameter"], 0)
 
 
-class LiveCheckTest(CheckFolderTestCase):
-    """Checks as files change, through the server."""
+class LiveCheckTestCase(CheckFolderTestCase):
+    """A source folder, and a server the editor has initialized, which
+    checks the folder's files as they change."""
 
     def setUp(self):
         super().setUp()
@@ -995,16 +997,27 @@ class LiveCheckTest(CheckFolderTestCase):
                       "contentChanges": [{"text": text}]}
         self.connection.handle({"jsonrpc": "2.0", "method": method, "params": params})
 
-    def published(self) -> dict:
-        """Runs the checks that wait; returns {file: [(line, severity, message)]} sent."""
-        self.sent.clear()
-        self.assertTrue(self.server.checks_waiting())
-        self.server.run_checks()
-        self.assertFalse(self.server.checks_waiting())
+    def findings_sent(self) -> dict:
+        """Returns {file: [(line, severity, message)]} of the findings in
+        `sent`. If a file's findings were sent more than once, only the last
+        ones are returned."""
         return {message["params"]["uri"]: [(diagnostic["range"]["start"]["line"],
                                             diagnostic["severity"], diagnostic["message"])
                                            for diagnostic in message["params"]["diagnostics"]]
                 for message in self.sent if message["method"] == "textDocument/publishDiagnostics"}
+
+    def published(self) -> dict:
+        """Runs the waiting checks to their end, and returns the findings
+        sent (findings_sent)."""
+        self.sent.clear()
+        self.assertTrue(self.server.checks_waiting())
+        self.server.run_checks()
+        self.assertFalse(self.server.checks_waiting())
+        return self.findings_sent()
+
+
+class LiveCheckTest(LiveCheckTestCase):
+    """Checks as files change, through the server."""
 
     def test_unsaved_text_is_checked(self):
         self.change("pages/page0.nx", "on page0.load:\n  bogus.txt = 1\n", "textDocument/didOpen")
@@ -1013,10 +1026,12 @@ class LiveCheckTest(CheckFolderTestCase):
         self.change("pages/page0.nx", "on page0.load:\n  title.txt = \"a\"\n")
         self.assertEqual(self.published(), {self.uri("pages/page0.nx"): []})
 
-    def test_a_running_server_checks_once_changes_pause(self):
-        # Through `nxwright lsp`'s own loop: the checks run on pygls's event
-        # loop, CHECK_PAUSE after the last change, with nothing more from the
-        # editor.
+    @contextlib.contextmanager
+    def nxwright_lsp(self):
+        """Runs `nxwright lsp`'s own loop on a thread, with the server
+        initialized. Yields (write, output): `write(message)` sends the
+        server a message in the form an editor writes, and `output` keeps the
+        bytes the server writes. Leaving the block shuts the server down."""
         read_end, write_end = os.pipe()
         output, served = _KeptBytes(), []
         with open(read_end, "rb") as stdin:
@@ -1025,19 +1040,253 @@ class LiveCheckTest(CheckFolderTestCase):
             thread.start()
             write_message(editor, {"jsonrpc": "2.0", "id": 1, "method": "initialize",
                                    "params": INITIALIZE_PARAMS})
-            write_message(editor, {"jsonrpc": "2.0", "method": "textDocument/didOpen",
-                                   "params": {"textDocument": document_item(
-                                       self.uri("pages/page0.nx"),
-                                       "on page0.load:\n  bogus.txt = 1\n")}})
-            deadline = time.monotonic() + 10
-            while b"publishDiagnostics" not in output.getvalue() and time.monotonic() < deadline:
-                time.sleep(0.05)
-            write_message(editor, {"jsonrpc": "2.0", "id": 2, "method": "shutdown"})
-            write_message(editor, {"jsonrpc": "2.0", "method": "exit"})
-            editor.close()
-            thread.join(10)
-        self.assertIn(b"bogus is neither a component of this page nor a page", output.getvalue())
+            try:
+                yield lambda message: write_message(editor, message), output
+            finally:
+                write_message(editor, {"jsonrpc": "2.0", "id": 2, "method": "shutdown"})
+                write_message(editor, {"jsonrpc": "2.0", "method": "exit"})
+                editor.close()
+                thread.join(10)
         self.assertEqual(served, [0])
+
+    def wait_for(self, output, written: bytes):
+        """Waits until the server has written `written`, for 10 seconds at most."""
+        deadline = time.monotonic() + 10
+        while written not in output.getvalue() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertIn(written, output.getvalue())
+
+    def opening(self, path: str, text: str) -> dict:
+        """Returns the notification that the editor opened the file `path` with `text`."""
+        return {"jsonrpc": "2.0", "method": "textDocument/didOpen",
+                "params": {"textDocument": document_item(self.uri(path), text)}}
+
+    def test_a_running_server_checks_once_changes_pause(self):
+        # This test uses `nxwright lsp`'s own loop. The checks run on pygls's
+        # event loop, CHECK_PAUSE after the last change, without another
+        # message from the editor.
+        with self.nxwright_lsp() as (write, output):
+            write(self.opening("pages/page0.nx", "on page0.load:\n  bogus.txt = 1\n"))
+            self.wait_for(output, b"bogus is neither a component of this page nor a page")
+
+    def list_a_picture_without_a_file(self):
+        """Adds the picture "nowhere" to app.toml's list. It has no file, so
+        app.toml gets an error, which only the last steps of a check find."""
+        self.write("app.toml", edited_app(
+            self.text("app.toml"), lambda app: app.setdefault("pictures", []).append("nowhere")))
+
+    def test_a_running_server_runs_every_step_of_a_check(self):
+        self.list_a_picture_without_a_file()
+        with self.nxwright_lsp() as (write, output):
+            write(self.opening("pages/page0.nx", ""))
+            self.wait_for(output, b"nowhere")
+
+    def test_a_running_server_reads_a_change_during_a_check(self):
+        # The second page's step waits until the change is written, so the
+        # change arrives while the first check is still on its pages. The
+        # server must read it before that check runs any step that comes
+        # after the pages. The test makes the gap between two steps longer
+        # than the server's own, so that a busy machine still reads the
+        # change within the gap.
+        self.list_a_picture_without_a_file()
+        steps, change_written = [], threading.Event()
+        check_page, folder_steps = FolderCheckSteps.check_page, FolderCheckSteps.folder_steps
+        shared_warnings = FolderCheckSteps.shared_warnings
+        after_the_pages = "after the pages"
+
+        def held_page(check, page):
+            if page == "second":
+                change_written.wait(10)
+            steps.append(page)
+            check_page(check, page)
+
+        def recorded_shared_warnings(check):
+            steps.append(after_the_pages)
+            return shared_warnings(check)
+
+        def recorded(step):
+            def run():
+                steps.append(after_the_pages)
+                step()
+            return run
+
+        def recorded_folder_steps(check, *arguments, **options):
+            return [recorded(step) for step in folder_steps(check, *arguments, **options)]
+
+        with mock.patch.object(FolderCheckSteps, "check_page", held_page), \
+                mock.patch.object(FolderCheckSteps, "shared_warnings", recorded_shared_warnings), \
+                mock.patch.object(FolderCheckSteps, "folder_steps", recorded_folder_steps), \
+                mock.patch("nxwright.language_server.server.STEP_GAP", 0.05), \
+                self.nxwright_lsp() as (write, output):
+            write(self.opening("pages/page0.nx", "on page0.load:\n  bogus.txt = 1\n"))
+            self.wait_for(output, b"bogus is neither a component of this page nor a page")
+            write({"jsonrpc": "2.0", "method": "textDocument/didChange",
+                   "params": {"textDocument": {"uri": self.uri("pages/page0.nx"), "version": 2},
+                              "contentChanges": [{"text": ""}]}})
+            change_written.set()
+            # app.toml's error is sent at the end of a check, which is the
+            # second check if the change stopped the first one.
+            self.wait_for(output, b"nowhere")
+        # The change started a second check, and no step after the pages ran
+        # before that check's pages.
+        self.assertEqual(steps.count("page0"), 2, steps)
+        last_page_step = max(number for number, step in enumerate(steps)
+                             if step != after_the_pages)
+        self.assertNotIn(after_the_pages, steps[:last_page_step])
+        self.assertIn(after_the_pages, steps)
+
+    def include_shared_file(self, second_page_code: str = ""):
+        """Makes both pages include pages/shared.nx, the second page with
+        `second_page_code` after its include line."""
+        self.write("pages/page0.nx", 'include "shared.nx"\n')
+        self.write("pages/second.nx", 'include "shared.nx"\n' + second_page_code)
+
+    def test_a_corrected_line_is_cleared_once_one_page_is_checked(self):
+        # Both pages include the file, so both report its line that does not parse.
+        self.include_shared_file()
+        self.change("pages/shared.nx", "function show():\n  sys0 = = 1\n", "textDocument/didOpen")
+        [(line, severity, _)] = self.published()[self.uri("pages/shared.nx")]
+        self.assertEqual((line, severity), (1, 1))
+        self.change("pages/shared.nx", "function show():\n  sys0 = 1\n")
+        self.sent.clear()
+        # The second page still waits, with its finding found in the old text.
+        self.assertTrue(self.server.run_check_step())
+        self.assertEqual(self.findings_sent(), {self.uri("pages/shared.nx"): []})
+
+    def test_a_page_with_a_finding_is_checked_first(self):
+        # The second page calls a function whose name the included file
+        # misspells, so the error shows in the second page's own file.
+        self.include_shared_file("\non second.load:\n  show()\n")
+        self.change("pages/shared.nx", "function shwo():\n  sys0 = 1\n", "textDocument/didOpen")
+        [(_, severity, _)] = self.published()[self.uri("pages/second.nx")]
+        self.assertEqual(severity, 1)
+        self.change("pages/shared.nx", "function show():\n  sys0 = 1\n")
+        self.sent.clear()
+        # page0 comes first in app.toml, and its step would send nothing.
+        self.assertTrue(self.server.run_check_step())
+        self.assertEqual(self.findings_sent(), {self.uri("pages/second.nx"): []})
+
+    def test_a_finding_stays_until_its_page_is_checked(self):
+        for page in ("page0", "second"):
+            self.write("pages/%s.nx" % page, "on %s.load:\n  bogus.txt = 1\n" % page)
+        self.change("pages/page0.nx", self.text("pages/page0.nx"), "textDocument/didOpen")
+        self.assertEqual(sorted(self.published()),
+                         sorted([self.uri("pages/page0.nx"), self.uri("pages/second.nx")]))
+        # After a change to app.toml, every page is checked. Once page0 is
+        # checked, the second page must still show its finding.
+        self.change("app.toml", self.text("app.toml"), "textDocument/didOpen")
+        self.sent.clear()
+        self.assertTrue(self.server.run_check_step())
+        self.assertEqual(self.findings_sent(), {})
+
+    def test_a_page_taken_out_of_app_toml_loses_its_findings(self):
+        self.write("pages/second.nx", "on second.load:\n  bogus.txt = 1\n")
+        self.change("pages/page0.nx", "", "textDocument/didOpen")
+        self.assertEqual(list(self.published()), [self.uri("pages/second.nx")])
+        self.change("app.toml", edited_app(self.text("app.toml"),
+                                           lambda app: app["pages"].remove("second")),
+                    "textDocument/didOpen")
+        self.assertEqual(self.published().get(self.uri("pages/second.nx")), [])
+
+    def test_checked_is_sent_before_the_folders_own_findings(self):
+        # The editor shows a page's measures on nxwright/checked, and they do
+        # not depend on the folder's own findings, such as this warning.
+        self.change("pages/page0.nx", "const UNUSED = 1\n", "textDocument/didOpen")
+        self.sent.clear()
+        while not any(message["method"] == "nxwright/checked" for message in self.sent):
+            self.assertTrue(self.server.run_check_step())
+        self.assertEqual(self.findings_sent(), {})
+        self.server.run_checks()
+        self.assertEqual(list(self.findings_sent()), [self.uri("pages/page0.nx")])
+
+    def test_a_change_during_a_check_starts_it_again(self):
+        # Only the second page calls the function, so only that page reports
+        # the unknown name in the function.
+        self.include_shared_file("\non second.load:\n  show()\n")
+        self.change("pages/shared.nx", "function show():\n  sys0 = 1\n", "textDocument/didOpen")
+        self.assertEqual(self.published(), {})
+        self.change("pages/shared.nx", "function show():\n  bogus.txt = 1\n")
+        # page0 is checked, then a change that concerns page0 alone stops the
+        # check. The second page is checked only if shared.nx is marked again.
+        self.assertTrue(self.server.run_check_step())
+        self.change("pages/page0.page.toml", self.text("pages/page0.page.toml"),
+                    "textDocument/didOpen")
+        [(line, severity, _)] = self.published()[self.uri("pages/shared.nx")]
+        self.assertEqual((line, severity), (1, 1))
+
+    def test_a_first_check_that_is_stopped_takes_every_page_again(self):
+        self.write("pages/second.nx", "on second.load:\n  bogus.txt = 1\n")
+        self.change("pages/page0.nx", "", "textDocument/didOpen")
+        # page0 is checked, and the second page still waits. The next change
+        # concerns page0 alone, but no check has covered every page yet, so
+        # the next check takes every page.
+        self.assertTrue(self.server.run_check_step())
+        self.change("pages/page0.nx", "\n")
+        self.assertEqual(list(self.published()), [self.uri("pages/second.nx")])
+
+    UNUSED_FUNCTION = "function unused():\n  sys0 = 1\n"
+    UNUSED_WARNING = (0, 2, "function unused is never called on page %s")
+
+    def test_a_pages_own_warning_is_sent_after_its_step(self):
+        self.change("pages/page0.nx", self.UNUSED_FUNCTION, "textDocument/didOpen")
+        self.sent.clear()
+        self.assertTrue(self.server.run_check_step())
+        line, severity, message = self.UNUSED_WARNING
+        self.assertEqual(self.findings_sent(),
+                         {self.uri("pages/page0.nx"): [(line, severity, message % "page0")]})
+
+    def test_a_page_that_does_not_build_keeps_its_own_warnings(self):
+        self.change("pages/page0.nx", self.UNUSED_FUNCTION + "\non page0.load:\n  bogus.txt = 1\n",
+                    "textDocument/didOpen")
+        self.sent.clear()
+        self.assertTrue(self.server.run_check_step())
+        found = self.findings_sent()[self.uri("pages/page0.nx")]
+        self.assertEqual(sorted((line, severity) for line, severity, _ in found), [(0, 2), (4, 1)])
+
+    def test_a_page_with_only_a_warning_is_not_checked_first(self):
+        # The second page has a warning in its own file, which does not
+        # change. page0, which comes first in app.toml, calls the shared
+        # function, so it reports the unknown name typed into that function.
+        self.include_shared_file("\n" + self.UNUSED_FUNCTION)
+        self.write("pages/page0.nx", 'include "shared.nx"\n\non page0.load:\n  show()\n')
+        self.change("pages/shared.nx", "function show():\n  sys0 = 1\n", "textDocument/didOpen")
+        self.assertEqual(list(self.published()), [self.uri("pages/second.nx")])
+        self.change("pages/shared.nx", "function show():\n  bogus.txt = 1\n")
+        self.sent.clear()
+        self.assertTrue(self.server.run_check_step())
+        [(line, severity, _)] = self.findings_sent()[self.uri("pages/shared.nx")]
+        self.assertEqual((line, severity), (1, 1))
+
+    def test_the_shared_warnings_are_sent_before_the_rest_of_the_folders_own_findings(self):
+        # app.toml's error is among the rest of the folder's own findings.
+        self.list_a_picture_without_a_file()
+        self.change("pages/page0.nx", "", "textDocument/didOpen")
+        self.assertEqual(list(self.published()), [self.uri("app.toml")])
+        self.change("pages/page0.nx", "const UNUSED = 1\n")
+        self.sent.clear()
+        while self.uri("pages/page0.nx") not in self.findings_sent():
+            self.assertTrue(self.server.run_check_step())
+        # The steps that find app.toml's error again still wait, and its
+        # error was not sent again.
+        self.assertTrue(self.server.checks_waiting())
+        self.assertEqual(list(self.findings_sent()), [self.uri("pages/page0.nx")])
+
+    def test_a_folder_that_cannot_be_read_clears_the_shared_warnings(self):
+        self.change("pages/page0.nx", "const UNUSED = 1\n", "textDocument/didOpen")
+        self.assertEqual(list(self.published()), [self.uri("pages/page0.nx")])
+        self.write("app.toml", "format = 9\n")
+        self.change("pages/page0.nx", "const UNUSED = 2\n")
+        self.assertEqual(self.published()[self.uri("pages/page0.nx")], [])
+
+    def test_a_check_of_one_page_keeps_the_warnings_of_the_others(self):
+        self.write("pages/page0.nx", self.UNUSED_FUNCTION)
+        self.change("pages/second.nx", "", "textDocument/didOpen")
+        line, severity, message = self.UNUSED_WARNING
+        warning = [(line, severity, message % "page0")]
+        self.assertEqual(self.published(), {self.uri("pages/page0.nx"): warning})
+        # Only the second page is checked again.
+        self.change("pages/second.nx", "\n")
+        self.assertEqual(self.published(), {self.uri("pages/page0.nx"): warning})
 
     def test_a_page_past_the_screens_memory(self):
         # On a basic screen, four texts of txt_maxl 1,000 beside page0's title
@@ -1093,7 +1342,7 @@ class LiveCheckTest(CheckFolderTestCase):
 
     def test_a_failing_check_does_not_end_the_server(self):
         self.change("pages/page0.nx", "", "textDocument/didOpen")
-        with mock.patch("nxwright.language_server.live_checks.check_folder",
+        with mock.patch("nxwright.language_server.live_checks.FolderCheckSteps",
                         side_effect=RuntimeError("broken")), \
                 contextlib.redirect_stderr(io.StringIO()):
             self.server.run_checks()
@@ -1216,6 +1465,25 @@ class LiveCheckTest(CheckFolderTestCase):
         self.assertEqual((limits["page"], limits["objects"], limits["mostObjects"],
                           limits["chain"], limits["mostChain"]),
                          ("page0", 3, 251, ["page0.load", "show"], 7))
+
+
+class EditorLanguageLiveCheckTest(LiveCheckTestCase):
+    """Checks as files change, in a folder in strict Nextion syntax."""
+    language = "nextion"
+
+    def test_left_to_right_warnings(self):
+        self.write("program.nx", self.text("program.nx") + "sys0=sys1-2*3\n")
+        self.change("pages/page0.nx", "on page0.load:\n  sys0=sys1+sys2*2\n",
+                    "textDocument/didOpen")
+        self.sent.clear()
+        # The page's warning is sent after the page's step. The warning in
+        # program.nx is sent with the shared warnings, before the rest of the
+        # folder's own findings.
+        self.assertTrue(self.server.run_check_step())
+        self.assertEqual(list(self.findings_sent()), [self.uri("pages/page0.nx")])
+        while self.uri("program.nx") not in self.findings_sent():
+            self.assertTrue(self.server.run_check_step())
+        self.assertTrue(self.server.checks_waiting())
 
 
 if __name__ == "__main__":

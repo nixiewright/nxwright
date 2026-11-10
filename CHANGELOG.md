@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.6] - 2026-11-10
+
+- Faster language server updates.
+
 ### [0.3.5] - 2026-11-10
 
 - Added MCU emulators: Python programs that emulate the microcontroller for the screen.

@@ -1389,6 +1389,15 @@ def _in_file(file: str, work):
         raise
 
 
+def page_code_files(page: str, read) -> list:
+    """Returns the paths of the .nx files of the page `page`: its own and
+    those it includes, directly or not. Each file comes after the files it
+    includes. `read(path)` returns a file of the folder. Raises
+    NxwrightError when one of the page's files cannot be read."""
+    path = page_nx_path(page)
+    return [nx_file.path for nx_file in read_page_files(path, read(path), read).files]
+
+
 def code_files(app: dict, read) -> dict:
     """Returns {page: [paths of its .nx files]}: its own and those it
     includes, directly or not; and under None, program.nx and the files it
@@ -1397,10 +1406,9 @@ def code_files(app: dict, read) -> dict:
     files = {}
     for page in app["pages"]:
         try:
-            page_files = read_page_files(page_nx_path(page), read(page_nx_path(page)), read)
+            files[page] = page_code_files(page, read)
         except NxwrightError:
             continue
-        files[page] = [nx_file.path for nx_file in page_files.files]
     program = ["program.nx"]
 
     def visit(path: str):

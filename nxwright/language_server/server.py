@@ -6,8 +6,10 @@ editor's units of a column, which it agrees with the editor; and the
 routing of each request to its answer. The server answers:
   - the notifications textDocument/didOpen, didChange, and didClose, and
     workspace/didChangeWatchedFiles, by which the editor tells of changes on
-    disk: once changes pause, the server checks what they may affect, and
-    sends textDocument/publishDiagnostics (live_checks.py).
+    disk: once changes pause, the server checks what they may affect, one
+    step at a time, and sends textDocument/publishDiagnostics after each
+    page it has checked. Between two steps it reads the messages that arrived,
+    and a change among them starts the check again (live_checks.py).
   - the notification workspace/didChangeConfiguration, by which the editor
     tells of its settings. The settings under `nxwright.checks` turn on the
     check of an action: `rename`, `addComponent`, or `paste`. While an
@@ -109,6 +111,12 @@ from nxwright.source.upgrade import folder_format
 
 # How long changes must pause, in seconds, before the server checks them.
 CHECK_PAUSE = 0.5
+# How long the server waits, in seconds, between two steps of a check, so
+# that pygls reads a message that arrived during the previous step. pygls's
+# event loop does one piece of work at a time, and reading one message
+# takes three of them. If the next step ran as the loop's very next piece
+# of work, only one of those three would be done before it.
+STEP_GAP = 0.01
 # The error for a request that would change a locked page. %s is the page's name.
 LOCKED_PAGE = "%s is locked. Unlock it from the page preview or the Pages section."
 # The error when an event without code is opened on a locked component, or
@@ -162,7 +170,9 @@ class NxwrightServer(LanguageServer):
         self._resource_numbers = ResourceNumberCache(self._texts)
         self._initialized = False
         self.shut_down = False
-        self._pause = None          # the checks to run once changes pause
+        # The timer that runs the checks' next step. It waits CHECK_PAUSE
+        # before a check starts, and STEP_GAP between two steps of a check.
+        self._next_step = None
         # The actions that are checked against the build: any of "rename",
         # "addComponent", and "paste". The editor's settings turn each check
         # on (_on_settings_change).
@@ -236,13 +246,19 @@ class NxwrightServer(LanguageServer):
             self._answers(_OWN + method, answer)
 
     def checks_waiting(self) -> bool:
-        """True when a change waits to be checked."""
+        """True when a change waits to be checked, or a check has steps left."""
         return self._checks.waiting()
 
     def run_checks(self):
-        """Checks the changes that wait, and sends their findings."""
-        self._pause = None
+        """Checks the changes that wait without stopping between steps, and
+        sends their findings."""
         self._checks.run()
+
+    def run_check_step(self) -> bool:
+        """Runs the next step of checking the changes that wait, and sends
+        what that step found (LiveChecks.step). Returns whether more steps
+        wait."""
+        return self._checks.step()
 
     def _follows(self, method: str, follow):
         """Registers `follow(params)` to run on the message `method`, after
@@ -300,17 +316,29 @@ class NxwrightServer(LanguageServer):
             self._check_after_pause()
 
     def _check_after_pause(self):
-        """Runs the checks once changes pause for CHECK_PAUSE seconds, each
-        change starting the wait again, on pygls's event loop, between
-        messages. Driven message by message without one, as by a test, the
-        server leaves them waiting for run_checks."""
+        """Starts the checks once changes have paused for CHECK_PAUSE
+        seconds. Each change starts that wait again. A change that arrives
+        during a check also cancels the timer of that check's next step,
+        because LiveChecks.mark has stopped the check. The checks run on
+        pygls's event loop, between messages. Without a running event loop,
+        such as in a test that gives the server one message at a time, the
+        checks stay waiting until run_checks or run_check_step is called."""
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return
-        if self._pause is not None:
-            self._pause.cancel()
-        self._pause = loop.call_later(CHECK_PAUSE, self.run_checks)
+        if self._next_step is not None:
+            self._next_step.cancel()
+        self._next_step = loop.call_later(CHECK_PAUSE, self._step_on_the_loop)
+
+    def _step_on_the_loop(self):
+        """Runs one step of the checks, then leaves pygls's event loop free
+        for STEP_GAP seconds before the next one, so that the server reads
+        the messages that arrived meanwhile."""
+        self._next_step = None
+        if self.run_check_step():
+            self._next_step = asyncio.get_running_loop().call_later(STEP_GAP,
+                                                                    self._step_on_the_loop)
 
     def _units(self, text: str) -> int:
         """Returns the editor's units in `text`, as the part of a line before

@@ -47,6 +47,16 @@ but that are likely mistakes. Each has a rule's name:
     gives the page the screen's instead, as the Nextion Editor compiles it.
 A file the build would refuse gets no warnings: its errors come first.
 
+`warnings` gives the warnings of the whole folder. A code editor, which
+checks one page at a time, finds them in two parts instead:
+  - page_warnings, the warnings that can be found by reading one page alone:
+    left-to-right, unused-function, number-past-32-bits, event-never-runs,
+    and page-place, for that page's code and its page file;
+  - shared_warnings, the others. Three rules need the code of several
+    pages: unused-constant, event-left-out, and event-unused. The code of
+    program.nx and of the files it includes belongs to no page, so its
+    left-to-right and number-past-32-bits warnings are found here too.
+
 Three rules find an error the build refuses too, which the checks show
 without building, each on the line of app.toml that lists the file's
 resource:
@@ -77,9 +87,10 @@ from nxwright.source.nx_files import (FUNCTION_HEADING, PageFiles, event_blocks,
 from nxwright.source.device_keys import settings_from_keys
 from nxwright.source.page_source import page_data, page_nx_path, page_toml_path
 from nxwright.source.source_folder import (check_picture_file, check_picture_source, code_files,
-                                           is_svg_picture, line_naming, picture_file,
-                                           picture_source_file, reads_picture, stored_picture,
-                                           types_in_page_data, video_rotation_problem)
+                                           is_svg_picture, line_naming, page_code_files,
+                                           picture_file, picture_source_file, reads_picture,
+                                           stored_picture, types_in_page_data,
+                                           video_rotation_problem)
 from nxwright.source.svg_pictures import prepared_svg_picture
 
 ERROR, WARNING = "error", "warning"
@@ -114,10 +125,61 @@ def warnings(app: dict, read) -> list:
     """Returns the warning Findings of the folder whose settings are `app`
     and whose files `read(path)` returns."""
     if app["language"] == "nxlang":
-        return (_unused_constants(app, read) + _unused_functions(app, read)
-                + _numbers_past_32_bits(app, read) + _events_never_run(app, read)
+        files = code_files(app, read)
+        return (_unused_constants(files, read) + _unused_functions(files, read)
+                + _numbers_past_32_bits(files, read) + _events_never_run(app, read)
                 + _left_out_events(app, read) + _page_places(app, read))
     return _left_to_right(app, read) + _events_never_run(app, read) + _page_places(app, read)
+
+
+def page_warnings(app: dict, read, page: str) -> list:
+    """Returns the warning Findings that can be found by reading the page
+    `page` alone, in the folder whose settings are `app` and whose files
+    `read(path)` returns: those of its code, and of its page file. A warning
+    in a file that several pages include is among the warnings of each of
+    those pages.
+
+    A code editor calls page_warnings when it checks one page. Together, and
+    with such repeats removed, the warnings of every page of the folder and
+    those of shared_warnings are the warnings that `warnings` returns, in
+    another order."""
+    if app["language"] == "nxlang":
+        try:
+            paths = page_code_files(page, read)
+        except NxwrightError:
+            paths = []      # the build reports a page whose code cannot be read
+        found = _unused_functions_of_page(page, paths, read) if paths else []
+        for path in paths:
+            found += _numbers_past_32_bits_in_file(path, read)
+    else:
+        found = _left_to_right_in_file(page_nx_path(page), read)
+    return (found + _events_never_run_on_page(app, read, page, nxwright_defaults())
+            + _page_place_warnings(app, read, page, _screen_size(app)))
+
+
+def shared_warnings(app: dict, read) -> list:
+    """Returns the warning Findings that page_warnings leaves out, in the
+    folder whose settings are `app` and whose files `read(path)` returns:
+    those that need the code of several pages, and those of program.nx and
+    the files it includes, which belong to no page."""
+    if app["language"] == "nxlang":
+        files = code_files(app, read)
+        found = _unused_constants(files, read)
+        for path in files[None]:
+            found += _numbers_past_32_bits_in_file(path, read)
+        return found + _left_out_events(app, read)
+    return _left_to_right_in_file("program.nx", read)
+
+
+def _screen_size(app: dict):
+    """Returns the (width, height) of the folder's pages on its screen.
+    Returns None if the folder has no screen settings, or if the check
+    rejects them."""
+    try:
+        settings = settings_from_keys(app)
+    except NxwrightError:
+        return None
+    return settings.page_size if settings is not None else None
 
 
 def _page_places(app: dict, read) -> list:
@@ -126,32 +188,35 @@ def _page_places(app: dict, read) -> list:
     The build gives the page those instead, as the Nextion Editor compiles
     it (page_source.page_table_at_screen). Without the screen's settings,
     nothing is warned about, as the build then keeps the file's values."""
-    try:
-        settings = settings_from_keys(app)
-    except NxwrightError:
-        return []   # the check refuses app.toml
-    if settings is None:
+    size = _screen_size(app)
+    return [finding for page in app["pages"]
+            for finding in _page_place_warnings(app, read, page, size)]
+
+
+def _page_place_warnings(app: dict, read, page: str, size) -> list:
+    """Returns the page-place warning Findings of the page `page`. `size` is
+    the screen's (width, height), or None (_screen_size)."""
+    if size is None:
         return []
-    width, height = settings.page_size
+    width, height = size
+    path = page_toml_path(page)
+    try:
+        text = read(path)
+        table = page_data(text, page, app["defines"]).get("page")
+    except (OSError, NxwrightError, tomllib.TOMLDecodeError):
+        return []   # the check reports the file
+    if not isinstance(table, dict):
+        return []
     found = []
-    for page in app["pages"]:
-        path = page_toml_path(page)
-        try:
-            text = read(path)
-            table = page_data(text, page, app["defines"]).get("page")
-        except (OSError, NxwrightError, tomllib.TOMLDecodeError):
-            continue    # the check reports the file
-        if not isinstance(table, dict):
-            continue
-        for key, built in (("x", 0), ("y", 0), ("w", width), ("h", height)):
-            # Any value but the screen's, even one that is no number, as the
-            # build uses the screen's in its place.
-            if key in table and table[key] != built:
-                found.append(Finding(
-                    path, _page_table_line(text, key), WARNING,
-                    "%s's %s is %s, but the Nextion Editor makes every page fill its screen, "
-                    "%d by %d at 0, 0, so the build uses %d"
-                    % (page, key, table[key], width, height, built), "page-place"))
+    for key, built in (("x", 0), ("y", 0), ("w", width), ("h", height)):
+        # Any value but the screen's, even one that is no number, as the
+        # build uses the screen's in its place.
+        if key in table and table[key] != built:
+            found.append(Finding(
+                path, _page_table_line(text, key), WARNING,
+                "%s's %s is %s, but the Nextion Editor makes every page fill its screen, "
+                "%d by %d at 0, 0, so the build uses %d"
+                % (page, key, table[key], width, height, built), "page-place"))
     return found
 
 
@@ -305,26 +370,33 @@ def svg_picture_warnings(app: dict, read, read_bytes, exists, listed=None) -> li
 
 def _left_to_right(app: dict, read) -> list:
     found = []
-    files = [page_nx_path(page) for page in app["pages"]]
-    for path in files + ["program.nx"]:
-        try:
-            text = read(path)
-            if path == "program.nx":
-                groups = [list(enumerate(text.split("\n"), start=1))]
-            else:
-                groups = [block.code_lines() for block in event_blocks(text, path).values()]
-            for lines in groups:
-                # A hex number written 0X computes the same once written 0x.
-                lines = hex_written_0x(lines)
-                for (number, written), (_, rewritten) in zip(lines, keep_editor_meaning(lines)):
-                    if rewritten != written:
-                        # The code alone, without the line's comment.
-                        code = split_line(rewritten, number)[1]
-                        found.append(Finding(path, number, WARNING,
-                                             "the Nextion Editor computes this from left to "
-                                             "right, as %s" % code, "left-to-right"))
-        except NxwrightError:
-            continue    # the build reports what it cannot read
+    for path in [page_nx_path(page) for page in app["pages"]] + ["program.nx"]:
+        found += _left_to_right_in_file(path, read)
+    return found
+
+
+def _left_to_right_in_file(path: str, read) -> list:
+    """Returns the left-to-right warning Findings of a page's .nx file, or of
+    program.nx, in a folder in strict Nextion syntax."""
+    found = []
+    try:
+        text = read(path)
+        if path == "program.nx":
+            groups = [list(enumerate(text.split("\n"), start=1))]
+        else:
+            groups = [block.code_lines() for block in event_blocks(text, path).values()]
+        for lines in groups:
+            # A hex number written 0X computes the same once written 0x.
+            lines = hex_written_0x(lines)
+            for (number, written), (_, rewritten) in zip(lines, keep_editor_meaning(lines)):
+                if rewritten != written:
+                    # The code alone, without the line's comment.
+                    code = split_line(rewritten, number)[1]
+                    found.append(Finding(path, number, WARNING,
+                                         "the Nextion Editor computes this from left to "
+                                         "right, as %s" % code, "left-to-right"))
+    except NxwrightError:
+        pass    # the build reports what it cannot read
     return found
 
 
@@ -337,39 +409,47 @@ def _events_never_run(app: dict, read) -> list:
     found = []
     defaults = nxwright_defaults()
     for page in app["pages"]:
-        path = page_nx_path(page)
-        try:
-            text = read(page_toml_path(page))
-            types = types_in_page_data(tomllib.loads(text))
-            if app["language"] == "nxlang":
-                homes = read_page_files(path, read(path), read).homes
-                blocks = [(key, home.path, home.blocks[key]) for key, home in homes.items()
-                          if home.path == path or key[0] in types]
-            else:
-                blocks = [(key, path, block)
-                          for key, block in event_blocks(read(path), path).items()]
-        except (NxwrightError, tomllib.TOMLDecodeError):
-            continue    # the build reports what it cannot read
-        for (name, event), file, block in blocks:
-            if name is None:
-                continue    # an nxlang function, not an event
-            object_type = types.get(name)
-            if isinstance(object_type, str):
-                object_type = TYPES_BY_NAME.get(object_type)
-            # A type that is not a plain number or name is the build's to report.
-            if not isinstance(object_type, int) or object_type not in defaults or \
-                    event in defaults[object_type].events:
-                continue
-            events = defaults[object_type].events
-            message = "%s, of type %s, has no %s event, so the screen never runs this code; %s" % (
-                name, TYPE_NAMES[object_type], event,
-                "its events are %s" % listed_in_words(events) if events else "it has no events")
-            pane_name, meant = _EVENT_PANE_NAMES.get(event, (None, None))
-            if meant in events:
-                message += ". The Nextion Editor's %s is %s" % (pane_name, meant)
-            finding = Finding(file, block.number, WARNING, message, "event-never-runs")
+        for finding in _events_never_run_on_page(app, read, page, defaults):
             if finding not in found:
                 found.append(finding)
+    return found
+
+
+def _events_never_run_on_page(app: dict, read, page: str, defaults: dict) -> list:
+    """Returns the event-never-runs warning Findings of the page `page`
+    (_events_never_run). `defaults` are nxwright's own component defaults."""
+    path = page_nx_path(page)
+    try:
+        text = read(page_toml_path(page))
+        types = types_in_page_data(tomllib.loads(text))
+        if app["language"] == "nxlang":
+            homes = read_page_files(path, read(path), read).homes
+            blocks = [(key, home.path, home.blocks[key]) for key, home in homes.items()
+                      if home.path == path or key[0] in types]
+        else:
+            blocks = [(key, path, block)
+                      for key, block in event_blocks(read(path), path).items()]
+    except (NxwrightError, tomllib.TOMLDecodeError):
+        return []   # the build reports what it cannot read
+    found = []
+    for (name, event), file, block in blocks:
+        if name is None:
+            continue    # an nxlang function, not an event
+        object_type = types.get(name)
+        if isinstance(object_type, str):
+            object_type = TYPES_BY_NAME.get(object_type)
+        # A type that is not a plain number or name is the build's to report.
+        if not isinstance(object_type, int) or object_type not in defaults or \
+                event in defaults[object_type].events:
+            continue
+        events = defaults[object_type].events
+        message = "%s, of type %s, has no %s event, so the screen never runs this code; %s" % (
+            name, TYPE_NAMES[object_type], event,
+            "its events are %s" % listed_in_words(events) if events else "it has no events")
+        pane_name, meant = _EVENT_PANE_NAMES.get(event, (None, None))
+        if meant in events:
+            message += ". The Nextion Editor's %s is %s" % (pane_name, meant)
+        found.append(Finding(file, block.number, WARNING, message, "event-never-runs"))
     return found
 
 
@@ -503,8 +583,9 @@ def _own_definitions(path: str, text: str, constants: bool) -> list:
     return found
 
 
-def _unused_constants(app: dict, read) -> list:
-    files = code_files(app, read)
+def _unused_constants(files: dict, read) -> list:
+    """Returns the unused-constant warning Findings of the folder whose code
+    files are `files` (source_folder.code_files)."""
     every_file = list(dict.fromkeys(path for paths in files.values() for path in paths))
     used = set()
     for path in every_file:
@@ -521,28 +602,36 @@ def _unused_constants(app: dict, read) -> list:
     return found
 
 
-def _numbers_past_32_bits(app: dict, read) -> list:
-    files = code_files(app, read)
+def _numbers_past_32_bits(files: dict, read) -> list:
+    """Returns the number-past-32-bits warning Findings of the folder whose
+    code files are `files` (source_folder.code_files), each file read once."""
     found = []
     for path in dict.fromkeys(path for paths in files.values() for path in paths):
+        found += _numbers_past_32_bits_in_file(path, read)
+    return found
+
+
+def _numbers_past_32_bits_in_file(path: str, read) -> list:
+    """Returns the number-past-32-bits warning Findings of the .nx file `path`."""
+    try:
+        lines = read(path).split("\n")
+    except NxwrightError:
+        return []
+    found = []
+    for number, line in enumerate(lines, start=1):
         try:
-            lines = read(path).split("\n")
+            code = split_line(line, number)[1]
         except NxwrightError:
-            continue
-        for number, line in enumerate(lines, start=1):
-            try:
-                code = split_line(line, number)[1]
-            except NxwrightError:
-                continue    # the build reports a line it cannot read
-            if command_word(code) in BYTE_COMMANDS:
-                continue    # its digits are bytes, not numbers
-            spans = token_spans(code)
-            found += [Finding(path, number, WARNING,
-                              "%s does not fit in 32 bits: its low 32 bits are kept, %s"
-                              % (written, editor_number(written)), "number-past-32-bits")
-                      for written in (_number_past_32_bits(spans, place, code)
-                                      for place in range(len(spans)))
-                      if written is not None]
+            continue    # the build reports a line it cannot read
+        if command_word(code) in BYTE_COMMANDS:
+            continue    # its digits are bytes, not numbers
+        spans = token_spans(code)
+        found += [Finding(path, number, WARNING,
+                          "%s does not fit in 32 bits: its low 32 bits are kept, %s"
+                          % (written, editor_number(written)), "number-past-32-bits")
+                  for written in (_number_past_32_bits(spans, place, code)
+                                  for place in range(len(spans)))
+                  if written is not None]
     return found
 
 
@@ -563,21 +652,27 @@ def _number_past_32_bits(spans: list, place: int, code: str):
     return written if int(written) != int32(int(written)) else None
 
 
-def _unused_functions(app: dict, read) -> list:
-    files = code_files(app, read)
+def _unused_functions(files: dict, read) -> list:
+    """Returns the unused-function warning Findings of the folder whose code
+    files are `files` (source_folder.code_files)."""
     found = []
     for page, paths in files.items():
-        if page is None:
-            continue
-        called = {name for path in paths for _, name, calls in _names_used(path, read(path))
-                  if calls}
-        path = page_nx_path(page)
-        try:
-            defined = _own_definitions(path, read(path), constants=False)
-        except NxwrightError:
-            continue
-        found += [Finding(path, number, WARNING,
-                          "function %s is never called on page %s" % (name, page),
-                          "unused-function")
-                  for number, name in defined if name not in called]
+        if page is not None:
+            found += _unused_functions_of_page(page, paths, read)
     return found
+
+
+def _unused_functions_of_page(page: str, paths: list, read) -> list:
+    """Returns the unused-function warning Findings of the page `page`, whose
+    .nx files are `paths` (source_folder.page_code_files)."""
+    called = {name for path in paths for _, name, calls in _names_used(path, read(path))
+              if calls}
+    path = page_nx_path(page)
+    try:
+        defined = _own_definitions(path, read(path), constants=False)
+    except NxwrightError:
+        return []
+    return [Finding(path, number, WARNING,
+                    "function %s is never called on page %s" % (name, page),
+                    "unused-function")
+            for number, name in defined if name not in called]

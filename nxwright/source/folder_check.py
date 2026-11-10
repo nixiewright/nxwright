@@ -19,11 +19,20 @@ its objects, generated variables included, its longest chain of calls and
 clicks, the program.s globals it needs, and its memory, as the Editor's
 compile counts it (page_memory.py).
 
-A code editor may check only the pages a change can affect. The folder's
-own findings are then found again, but not the limit on the program.s
-globals of all pages, nor the pages' memory, which need every page: the
-editor keeps each page's measures, and finds the memory's findings from
-them (memory_findings).
+A code editor may check only the pages a change can affect. A check of
+only some pages still finds the folder's own findings, which are those that
+do not come from building one page. It leaves out the two that need every
+page: the limit on the program.s globals of all pages, and the pages'
+memory. The code editor keeps each page's measures, and works out the
+findings about the pages' memory from them (memory_findings).
+
+A code editor also runs the check one step at a time (FolderCheckSteps), so
+that it can show each page's findings before the next page is checked.
+check_folder runs the same steps one after another, and finds every lint
+warning in a single step. A code editor instead finds each page's lint
+warnings when it checks that page (lint.page_warnings), so that they show
+with the page's errors. The warnings that need several pages come
+afterwards, in a step of their own (lint.shared_warnings).
 """
 from dataclasses import dataclass, field
 import re
@@ -31,9 +40,9 @@ import re
 from nxwright import NxwrightError
 from nxwright.project.page_memory import measure_page, project_memory
 from nxwright.project.screen_models import ScreenModel
-from nxwright.source.lint import (ERROR, WARNING, Finding, picture_errors, sound_errors,
-                                 sound_warnings, svg_picture_warnings, video_rotation_errors,
-                                 warnings)
+from nxwright.source.lint import (ERROR, WARNING, Finding, page_warnings, picture_errors,
+                                 shared_warnings, sound_errors, sound_warnings,
+                                 svg_picture_warnings, video_rotation_errors, warnings)
 from nxwright.source.page_source import page_toml_path
 from nxwright.source.source_folder import (RESOURCE_FILES, check_globals_count,
                                            check_page_count, line_naming, memory_refusal,
@@ -100,59 +109,144 @@ def check_folder(read, exists, pages: list = None, read_bytes=None,
     files in a folder within the source folder (source_folder.folder_lister).
     If `listed` is given, the checks also find a picture whose file is of a
     type nxwright does not decode (source_folder.kept_picture_paths)."""
-    result = FolderCheck()
-    try:
-        folder = read_folder_source(read, skip_broken_pages=True)
-    except NxwrightError as error:
-        result.folder_findings.append(_finding(error, read))
-        result.read_failed = True
-        return result
-    try:
-        check_page_count(folder.app, read("app.toml"))
-    except NxwrightError as error:
-        result.folder_findings.append(_finding(error, read))
-    globals_used = []
-    for page_id, page in enumerate(folder.app["pages"]):
-        if pages is not None and page not in pages:
-            continue
+    check = FolderCheckSteps(read, exists, read_bytes, listed)
+    if check.read_folder():
+        for page in check.result.pages:
+            if pages is None or page in pages:
+                check.check_page(page)
+        for step in check.folder_steps(every_page=pages is None):
+            step()
+    return check.result
+
+
+class FolderCheckSteps:
+    """A check of a source folder that runs one step at a time, for a caller
+    that does something between the steps, such as sending a code editor
+    what each step found. check_folder runs all the steps at once.
+
+    The caller calls read_folder once, then check_page for each page to
+    check, then each function that folder_steps returns. `result` is the
+    FolderCheck of the steps run so far.
+
+    To get each page's lint warnings together with that page, a caller calls
+    page_warnings for each page and shared_warnings once. Both return the
+    warnings without adding them to `result`. The caller then passes
+    `with_warnings=False` to folder_steps, which leaves out the step that
+    finds the lint warnings of the whole folder."""
+
+    def __init__(self, read, exists, read_bytes=None, listed=None):
+        """`read`, `exists`, `read_bytes`, and `listed` read the folder, and
+        are the same as check_folder's arguments of those names."""
+        self.result = FolderCheck()
+        self._read, self._exists = read, exists
+        self._read_bytes, self._listed = read_bytes, listed
+        self._folder = None         # the FolderSource, once read_folder has read it
+        self._globals_used = []     # the program.s globals of the pages checked
+
+    def read_folder(self) -> bool:
+        """Reads what every page depends on: the folder's settings, its
+        component defaults, what program.nx declares, and the names of every
+        page's objects. Returns False when an error in any of them stops the
+        check. The error is then the result's only finding, and no other
+        step can be run."""
+        try:
+            self._folder = read_folder_source(self._read, skip_broken_pages=True)
+        except NxwrightError as error:
+            self.result.folder_findings.append(_finding(error, self._read))
+            self.result.read_failed = True
+            return False
+        try:
+            check_page_count(self._folder.app, self._read("app.toml"))
+        except NxwrightError as error:
+            self.result.folder_findings.append(_finding(error, self._read))
+        self.result.pages, self.result.screen = list(self._folder.app["pages"]), self._folder.screen
+        return True
+
+    def check_page(self, page: str):
+        """Builds the page `page`, one of the result's `pages`, and adds its
+        findings to the result. If the page builds, its measures are added
+        too."""
         chain, page_globals, cut_texts = [], [], []
         try:
-            block = folder.build_page(page_id, page_globals, chain, cut_texts)
+            block = self._folder.build_page(self.result.pages.index(page), page_globals, chain,
+                                            cut_texts)
         except NxwrightError as error:
-            result.page_findings[page] = [_finding(error, read)]
-            continue
-        result.page_findings[page] = [Finding(file, line, WARNING, message, "text-cut")
-                                      for file, line, message in cut_texts]
-        memory = measure_page(folder.screen, block) if folder.screen is not None else None
-        result.measures[page] = PageMeasures(len(block.objects), chain, len(page_globals), memory)
-        globals_used += page_globals
-    for kind in RESOURCE_FILES:
-        for name in folder.app[kind]:
-            for problem in resource_problems(kind, name, exists, listed):
-                line = line_naming(read("app.toml"), name)
-                result.folder_findings.append(Finding("app.toml", line, ERROR, problem))
-    result.pages, result.screen = list(folder.app["pages"]), folder.screen
-    try:
-        if pages is None:
-            check_globals_count(globals_used)
-        result.program_ints = program_ints(folder.build_program(), folder.encoding)
-    except NxwrightError as error:
-        result.folder_findings.append(_finding(error, read))
-    if pages is None:
-        result.memory_findings = memory_findings(result, result.measures)
-    try:
-        folder.build_macros()
-    except NxwrightError as error:
-        result.folder_findings.append(_finding(error, read))
-    result.folder_findings += warnings(folder.app, read)
-    if read_bytes is not None:
-        result.folder_findings += (picture_errors(folder.app, read, read_bytes, exists, listed)
-                                   + svg_picture_warnings(folder.app, read, read_bytes, exists,
-                                                          listed)
-                                   + video_rotation_errors(folder.app, read, read_bytes)
-                                   + sound_errors(folder.app, read, read_bytes)
-                                   + sound_warnings(folder.app, read, read_bytes))
-    return result
+            self.result.page_findings[page] = [_finding(error, self._read)]
+            return
+        self.result.page_findings[page] = [Finding(file, line, WARNING, message, "text-cut")
+                                           for file, line, message in cut_texts]
+        screen = self._folder.screen
+        memory = measure_page(screen, block) if screen is not None else None
+        self.result.measures[page] = PageMeasures(len(block.objects), chain, len(page_globals),
+                                                  memory)
+        self._globals_used += page_globals
+
+    def page_warnings(self, page: str) -> list:
+        """Returns the lint warnings that can be found by reading the page
+        `page` alone (lint.page_warnings), whether or not the page builds."""
+        return page_warnings(self._folder.app, self._read, page)
+
+    def shared_warnings(self) -> list:
+        """Returns the lint warnings that cannot be found by reading one
+        page alone, such as a constant that no page uses
+        (lint.shared_warnings)."""
+        return shared_warnings(self._folder.app, self._read)
+
+    def folder_steps(self, every_page: bool, with_warnings: bool = True) -> list:
+        """Returns the steps that add the folder's own findings to the
+        result: functions without arguments, to call in order once the pages
+        are checked. `every_page` is True if check_page checked every page.
+        The limit on the pages' program.s globals and the pages' memory are
+        checked only in that case, because both need every page. If
+        `with_warnings` is False, no step finds the lint warnings. A caller
+        passes False when it finds them itself with page_warnings and
+        shared_warnings."""
+        steps = [self._check_resource_files, lambda: self._check_program(every_page),
+                 self._check_macros]
+        if with_warnings:
+            steps.append(self._find_warnings)
+        if self._read_bytes is not None:
+            steps += [self._check_pictures, self._check_media]
+        return steps
+
+    def _check_resource_files(self):
+        for kind in RESOURCE_FILES:
+            for name in self._folder.app[kind]:
+                for problem in resource_problems(kind, name, self._exists, self._listed):
+                    line = line_naming(self._read("app.toml"), name)
+                    self.result.folder_findings.append(Finding("app.toml", line, ERROR, problem))
+
+    def _check_program(self, every_page: bool):
+        try:
+            if every_page:
+                check_globals_count(self._globals_used)
+            self.result.program_ints = program_ints(self._folder.build_program(),
+                                                    self._folder.encoding)
+        except NxwrightError as error:
+            self.result.folder_findings.append(_finding(error, self._read))
+        if every_page:
+            self.result.memory_findings = memory_findings(self.result, self.result.measures)
+
+    def _check_macros(self):
+        try:
+            self._folder.build_macros()
+        except NxwrightError as error:
+            self.result.folder_findings.append(_finding(error, self._read))
+
+    def _find_warnings(self):
+        self.result.folder_findings += warnings(self._folder.app, self._read)
+
+    def _check_pictures(self):
+        self.result.folder_findings += picture_errors(self._folder.app, self._read,
+                                                      self._read_bytes, self._exists, self._listed)
+
+    def _check_media(self):
+        app, read, read_bytes = self._folder.app, self._read, self._read_bytes
+        self.result.folder_findings += (
+            svg_picture_warnings(app, read, read_bytes, self._exists, self._listed)
+            + video_rotation_errors(app, read, read_bytes)
+            + sound_errors(app, read, read_bytes)
+            + sound_warnings(app, read, read_bytes))
 
 
 def memory_findings(check: FolderCheck, measures: dict) -> list:

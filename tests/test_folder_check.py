@@ -16,13 +16,14 @@ from nxwright.cli import main
 from nxwright.project.device_settings import DeviceSettings
 from nxwright.project.screen_models import model_named
 from nxwright.source.folder_check import check_folder
-from nxwright.source.lint import ERROR, WARNING, Finding
+from nxwright.source.lint import (ERROR, WARNING, Finding, page_warnings, shared_warnings,
+                                  warnings)
 from nxwright.project.component_defaults import defaults_from_toml
 from nxwright.source.page_source import page_file_text, page_table_at_screen
 from nxwright.source.project_files import build
 from nxwright.source.device_keys import DEVICE_KEYS
 from nxwright.source.source_folder import (export_dump, folder_reader, new_source_folder,
-                                           page_toml_components, read_folder_source,
+                                           page_toml_components, parse_app, read_folder_source,
                                            read_page_components, read_page_toml)
 from nxwright.testing import SourceFolderRunner
 from tests.test_build_checks import add_component
@@ -760,6 +761,49 @@ class PageAtScreenSizeTest(FolderTestCase):
 
 class EditorLanguagePageAtScreenSizeTest(PageAtScreenSizeTest):
     language = "nextion"
+
+
+def assert_warnings_by_page_match(test: FolderTestCase, rules: set):
+    """Checks that the warnings of each page and the shared warnings of
+    `test`'s folder, with repeats removed, are those of lint.warnings, in any
+    order, and that their rules are `rules`."""
+    read = folder_reader(test.root)
+    app = parse_app(read("app.toml"))
+    whole = warnings(app, read)
+    test.assertEqual({finding.rule for finding in whole}, rules)
+    by_page = [finding for page in app["pages"] for finding in page_warnings(app, read, page)]
+    test.assertCountEqual(list(dict.fromkeys(by_page + shared_warnings(app, read))), whole)
+
+
+class WarningsByPageTest(FolderTestCase):
+    """A code editor finds a page's own warnings with that page, and the
+    shared warnings once for the folder."""
+
+    def test_they_are_the_warnings_of_the_whole_folder(self):
+        # Warnings in a page's own file, in a file two pages include, in
+        # program.nx, and in a page file.
+        self.write("pages/lib/shared.nx", "function shared():\n  sys0 = 0x0100000005\n")
+        self.write("pages/page0.nx", 'include "lib/shared.nx"\n\nconst UNUSED = 1\n\n'
+                                     "function unused():\n  sys0 = 2\n")
+        self.write("pages/second.nx", 'include "lib/shared.nx"\n')
+        self.write("program.nx", "int big=0x1FFFFFFFF\nconst SPEED = 3\n" + self.text("program.nx"))
+        self.write("pages/page0.page.toml",
+                   self.text("pages/page0.page.toml").replace("w = 800\n", "w = 700\n", 1))
+        assert_warnings_by_page_match(self, {"unused-constant", "unused-function",
+                                             "number-past-32-bits", "page-place"})
+
+
+class EditorLanguageWarningsByPageTest(FolderTestCase):
+    """A page's own warnings and the shared warnings, in a folder in strict
+    Nextion syntax."""
+    language = "nextion"
+
+    def test_they_are_the_warnings_of_the_whole_folder(self):
+        self.write("pages/page0.nx", "on page0.load:\n  sys0=sys1+sys2*2\n")
+        self.write("program.nx", self.text("program.nx") + "sys0=sys1-2*3\n")
+        self.write("pages/page0.page.toml",
+                   self.text("pages/page0.page.toml").replace("w = 800\n", "w = 700\n", 1))
+        assert_warnings_by_page_match(self, {"left-to-right", "page-place"})
 
 
 class TextCutTest(FolderTestCase):
