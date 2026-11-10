@@ -3,6 +3,8 @@ include "pages/lib/constants.nx"
 
 // Temperatures are in hundredths of a degree Celsius: 2150 is 21.5 degrees.
 int room=2050, target=2100
+// The outdoor temperature. An MCU sets it with an instruction such as `outdoor=1250`.
+int outdoor=OUTDOOR_UNKNOWN
 // The mode the user chose, and what the system is doing about it.
 int mode=1, running=0
 // 1 while the target follows the schedule, 0 while it is held by hand.

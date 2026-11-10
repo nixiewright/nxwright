@@ -40,6 +40,9 @@ fonts = [
     "Sans100",
 ]
 
+[mcu]
+emulator = "../mcu/main.py"
+
 [defines]
 BACKGROUND = "#0d1116"
 TEXT = "#eff3f7"

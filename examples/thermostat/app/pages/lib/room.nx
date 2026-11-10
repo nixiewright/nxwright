@@ -30,14 +30,18 @@ function nextRunning(current: number, goal: number, chosenMode: number, previous
   return next
 
 // The room after `minutes`: heat leaks towards the outdoors, and the system
-// adds or removes its share. Cooling is chosen on a hot day, so its outdoors
-// is hot; the other modes have a cold one.
+// adds or removes its share. The outdoor temperature is the one an MCU last
+// sent. Until an MCU sends one, it depends on the mode: a hot day while
+// cooling, and a cold day otherwise.
 function roomAfter(current: number, chosenMode: number, state: number, minutes: number) -> number:
-  var outdoor = OUTDOOR_COLD
-  if (chosenMode == MODE_COOL) {
-    outdoor = OUTDOOR_HOT
+  var outside = outdoor
+  if (outside == OUTDOOR_UNKNOWN) {
+    outside = OUTDOOR_COLD
+    if (chosenMode == MODE_COOL) {
+      outside = OUTDOOR_HOT
+    }
   }
-  var next = current + (outdoor - current) * minutes / LEAK_MINUTES
+  var next = current + (outside - current) * minutes / LEAK_MINUTES
   if (state == RUN_HEATING) {
     next += HEAT_RATE * minutes
   } else if (state == RUN_COOLING) {

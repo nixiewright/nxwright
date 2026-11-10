@@ -1,6 +1,6 @@
 # Writing an MCU emulator
 
-On real hardware, a microcontroller (MCU) sits at the other end of your screen's serial line. An MCU emulator is a Python program that takes its place while your app runs in the simulator, so you can try the app without the hardware.
+On real hardware, a microcontroller (MCU) sits at the other end of your screen's serial line. An MCU emulator is a Python program that takes its place while your app runs in the simulator, so you can try the app without the hardware. The thermostat demo has one ([examples/thermostat](https://github.com/nixiewright/nxwright/tree/main/examples/thermostat)).
 
 ## Adding an emulator to a project
 

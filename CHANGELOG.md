@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.8] - 2026-11-10
+
+- Added an MCU emulator for the thermostat demo.
+
 ### [0.3.7] - 2026-11-10
 
 - The simulator can now listen for a connection from a project's MCU emulator.

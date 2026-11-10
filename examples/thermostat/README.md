@@ -10,7 +10,7 @@ The demo has five pages:
 - **Settings:** Celsius or Fahrenheit, the screen's brightness, and the clock.
 - **About:** what the demo is made with, opened from the About card of the settings page.
 
-The demo simulates the room sixty times faster than real time, but the clock and the schedule run at normal speed. The weather depends on the mode: a 30 degree day while cooling, and an 8 degree day otherwise.
+The demo simulates the room sixty times faster than real time, but the clock and the schedule run at normal speed. The weather depends on the mode: a 30 degree day while cooling, and an 8 degree day otherwise. The demo's MCU emulator can send the outdoor temperature instead ([The MCU emulator](#the-mcu-emulator)).
 
 ## What to look at
 
@@ -24,7 +24,8 @@ The demo simulates the room sixty times faster than real time, but the clock and
 | `app/pages/home.page.toml` | The page's components, as text. |
 | `app/pictures/` | The pictures, as SVG files that share a style sheet and shapes, and nxwright's logo as a PNG file ([Pictures](#pictures)). |
 | `app/app.toml`, `[defines]` | The theme's colours and the app's name, which the pictures and the components share. |
-| `tests/` | Tests of the shared functions and of every page, run on a PC. |
+| `mcu/main.py` | An MCU emulator, in Python ([The MCU emulator](#the-mcu-emulator)). |
+| `tests/` | Tests of the shared functions, of every page, and of the emulator, run on a PC. |
 
 ## Building
 
@@ -51,6 +52,14 @@ python run.py test examples/thermostat/tests
 ```
 
 See [Testing your app](../../docs/testing.md) for how the tests run the pages' code on your PC.
+
+## The MCU emulator
+
+`mcu/main.py` emulates a microcontroller with an outdoor sensor. Every five seconds, it sends the app the outdoor temperature, as an instruction such as `outdoor=1250` for 12.5 degrees. That temperature follows the time of day, from 5 degrees before dawn to 15 degrees in the afternoon, and the simulated room cools or warms towards it.
+
+The demo also runs without the emulator, for example in the Nextion Editor's simulator. Until the app receives an outdoor temperature, the weather depends on the mode.
+
+To run the emulator with nxwright's simulator, see [Running the emulator](../../docs/mcu-emulator.md#running-the-emulator).
 
 ## Pictures
 

@@ -12,12 +12,16 @@ const TARGET_STEP = 50
 const START_STEP = 15
 const DAY_MINUTES = 1440
 
-// The simulated room. Each minute, a share of the difference with the
-// outdoors leaks out: 1/240 of it. Heating or cooling adds or removes a
-// fixed amount. A minute passes each second.
-// The outdoors suits the mode: a hot day while cooling, a cold day otherwise.
+// The simulated room, where a minute passes each second. Each minute, the
+// room moves 1/240 of the way towards the outdoor temperature, and heating
+// or cooling adds or removes a fixed amount.
+// Until an MCU sends the outdoor temperature, it depends on the mode: a hot
+// day while cooling, a cold day otherwise.
 const OUTDOOR_COLD = 800
 const OUTDOOR_HOT = 3000
+// `outdoor` has this value until an MCU sends one. It is too high to be a
+// real reading.
+const OUTDOOR_UNKNOWN = 100000
 const LEAK_MINUTES = 240
 const HEAT_RATE = 15
 const COOL_RATE = 15
