@@ -7,7 +7,7 @@ A toolchain for Nextion Editor projects (`.HMI` files): it turns a project into 
 - Python 3.11 or later. Use well-known, maintained libraries for standard formats and protocols, never a hand-written implementation. Ask the user before adding a dependency.
 - Never put the vendor's files in the repository: the screen's firmware, the files of the Nextion Editor's installation, or TFT files, which contain the firmware (`INDEPENDENCE.md`, For contributors).
 - Run the command from this folder: `python run.py <subcommand>`.
-- After every change: `python -m unittest discover -s tests -t .`. After changing the package or the demo, also `python run.py test examples/thermostat/tests`.
+- After every change: `python -m pytest`. After changing the package or the demo, also `python run.py test examples/thermostat/tests`.
 - After changing the extension's client: `npm run compile` in `editors/vscode`. `npm install` comes first, once, with the user's go.
 - The tests compare written project files byte for byte. A change to what nxwright writes is a change of behavior: say so in the commit message, and never adjust a test to hide it.
 - For versions and the changelog, follow CONTRIBUTING.md, Versions, and do what it says the maintainers do. Every commit that changes how the toolchain or the extension behaves raises a version, including a commit that adopts a pull request. Never raise a part to 1.0 on your own.
