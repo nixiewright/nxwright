@@ -27,9 +27,11 @@ from nxwright.source.folder_index import FolderIndex, picture_of
 from nxwright.source.resource_adding import Slot, add_pictures
 from nxwright.source.resource_renaming import rename_resource
 from nxwright.source.source_folder import (folder_byte_reader, folder_lister, folder_reader,
-                                           parse_app, picture_file_size, read_text)
+                                           parse_app, picture_file_size,
+                                           read_page_components, read_text)
 from nxwright.source.svg_pictures import (draw_svg_picture, prepared_svg_picture,
                                           svg_picture_size)
+from nxwright.testing import preview
 from nxwright.testing.folder_resources import FolderResources
 from nxwright.testing.preview import Previews
 from nxwright.testing.simulation import Simulation
@@ -309,6 +311,48 @@ class ToolsTest(SvgTestCase):
         drawing = Previews().drawing(self.source, "pages/page0.page.toml",
                                      folder_reader(self.source))
         self.assertEqual(drawing["pictureFiles"]["photo"], {"version": "0"})
+
+    def shown_by(self, previews: Previews, defines: dict = None) -> dict:
+        """Returns what `previews` lists for the picture "photo" in a drawing
+        of page0, drawn with `defines`, or with app.toml's defines when
+        `defines` is None."""
+        app, components = read_page_components(folder_reader(self.source), "page0")
+        if defines is not None:
+            app = dict(app, defines=defines)
+        return previews.drawing_of(self.source, app, components)["pictureFiles"]["photo"]
+
+    def test_the_preview_keeps_the_picture_while_its_files_are_unchanged(self):
+        self.write("art/parts.svg", svg('<rect id="a" width="40" height="20" fill="#00ff00"/>'))
+        self.photo(svg('<use href="../art/parts.svg#a"/>'))
+        previews = Previews()
+        first = self.shown_by(previews)
+        with mock.patch.object(preview, "prepared_svg_picture",
+                               side_effect=AssertionError("prepared again")):
+            self.assertEqual(self.shown_by(previews), first)
+        # A new Previews has nothing kept, so it gives the right result. After a
+        # change to the file the picture links to, to its own file, or to a
+        # define it uses, `previews` must give the same.
+        self.write("art/parts.svg", svg('<rect id="a" width="40" height="20" fill="#0000ff"/>'))
+        second = self.shown_by(previews)
+        self.assertNotEqual(second, first)
+        self.assertEqual(second, self.shown_by(Previews()))
+        self.photo(svg('<rect width="40" height="20" fill="var(--ACCENT)"/>'))
+        for defines in ({"ACCENT": "#ff0000"}, {"ACCENT": "#00ffff"}):
+            third = self.shown_by(previews, defines)
+            self.assertNotEqual(third, second)
+            self.assertEqual(third, self.shown_by(Previews(), defines))
+            second = third
+
+    def test_the_preview_draws_a_picture_once_its_missing_file_appears(self):
+        self.photo(svg('<use href="../art/parts.svg#a"/>'))
+        previews = Previews()
+        self.assertEqual(self.shown_by(previews), {"version": "0"})
+        with mock.patch.object(preview, "prepared_svg_picture",
+                               side_effect=AssertionError("prepared again")):
+            self.assertEqual(self.shown_by(previews), {"version": "0"})
+        self.write("art/parts.svg", svg('<rect id="a" width="40" height="20" fill="#00ff00"/>'))
+        self.assertEqual(self.shown_by(previews), self.shown_by(Previews()))
+        self.assertIn("data", self.shown_by(previews))
 
     def test_a_simulation_shows_the_png_drawn(self):
         # The simulator's panel, and the test runner's pictures of the

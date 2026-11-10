@@ -195,13 +195,6 @@ def draw_svg_picture(path: str, read_text, read_bytes, defines: dict, cache=None
     return drawn_svg_picture(prepared_svg_picture(path, read_text, read_bytes, defines), cache)
 
 
-def svg_picture_data_url(path: str, read_text, read_bytes, defines: dict) -> tuple:
-    """Returns (the PNG data URL of the SVG picture whose file is `path`, the
-    key of its drawing), for a webview that shows it."""
-    drawing = prepared_svg_picture(path, read_text, read_bytes, defines)
-    return data_url(drawn_svg_picture(drawing)), drawing.key
-
-
 def _keep(key: str, png: bytes):
     """Keeps `png` in memory, as the last used, and forgets those used
     longest ago past _KEPT_BYTES."""

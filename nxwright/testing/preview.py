@@ -17,7 +17,7 @@ from pathlib import Path
 import re
 
 from nxwright import NxwrightError
-from nxwright.drawing.kept_paintings import KeptPaintings
+from nxwright.drawing.kept_paintings import KeptPaintings, alike
 from nxwright.drawing.page_drawing import DrawingResources, draw_page
 from nxwright.language.resource_names import ANIMATION, LISTS
 from nxwright.project.media_files import (animation_frames, is_card_picture, read_card_picture,
@@ -31,7 +31,7 @@ from nxwright.source.page_source import page_header_of_text, page_toml_path
 from nxwright.source.source_folder import (folder_byte_reader, folder_reader, is_svg_picture,
                                            picture_file, picture_file_size, played_file,
                                            read_page_components)
-from nxwright.source.svg_pictures import svg_picture_data_url
+from nxwright.source.svg_pictures import drawn_svg_picture, prepared_svg_picture
 from nxwright.testing.sd_cards import CardRefusal
 
 # A page's own files: pages/<name>.page.toml and pages/<name>.nx.
@@ -44,7 +44,8 @@ class Previews:
     """Draws pages. Between drawings it keeps what it read from pictures and
     fonts, until their file changes, and what each component painted in the
     latest drawing of its page, until something that painting depends on
-    changes."""
+    changes. It also keeps what a webview loads each SVG picture from, until
+    a file the picture reads or a define changes."""
 
     def __init__(self):
         # {(full path, the reading's module, its name): ((modification time,
@@ -52,6 +53,9 @@ class Previews:
         self._kept = {}
         # {source folder: its KeptPaintings}
         self._paintings = {}
+        # {an SVG picture's file: (the defines it was drawn with, {each file
+        # it read or looked for: its file_stamp}, what svg_picture returned)}
+        self._svg_pictures = {}
 
     def drawing(self, root: Path, path: str, read):
         """Returns the drawing of the page whose file is `path`, within the
@@ -148,6 +152,47 @@ class Previews:
         if isinstance(kept[1], NxwrightError):
             raise kept[1]
         return kept[1]
+
+    def svg_picture(self, root: Path, path: Path, defines: dict) -> dict:
+        """Returns what a webview needs to show the SVG picture at `path`, a
+        file in the source folder `root`. The picture is drawn with
+        `defines`, the values of app.toml's defines.
+
+        The result has "data", the PNG picture drawn from the SVG file, and
+        "version", the key of the drawing, which changes with any file the
+        picture reads, not only its own. The result never has a path,
+        because the webview's browser would then draw the SVG file itself.
+        If the picture cannot be drawn, the result has only "version", so
+        the webview shows nothing there, the same as for a damaged picture
+        file.
+
+        Returns the same result again while `defines` and the files the
+        picture read are unchanged, and while each file it did not find is
+        still missing."""
+        kept = self._svg_pictures.get(path)
+        if kept is not None and alike(kept[0], defines) and all(
+                file_stamp(file) == stamp for file, stamp in kept[1].items()):
+            return kept[2]
+        stamps = {}
+
+        def stamped(read):
+            # Each file is stamped before it is read. If it changes after
+            # the stamp, the next drawing finds a different stamp and draws
+            # the picture again.
+            def read_stamped(file: str, *arguments):
+                stamps.setdefault(root / file, file_stamp(root / file))
+                return read(file, *arguments)
+            return read_stamped
+
+        try:
+            drawing = prepared_svg_picture(path.relative_to(root).as_posix(),
+                                           stamped(folder_reader(root)),
+                                           stamped(folder_byte_reader(root)), defines)
+            shown = {"data": data_url(drawn_svg_picture(drawing)), "version": drawing.key}
+        except NxwrightError:
+            shown = {"version": "0"}
+        self._svg_pictures[path] = (dict(defines), stamps, shown)
+        return shown
 
 
 def page_of_file(path: str):
@@ -295,12 +340,12 @@ class _FolderResources(DrawingResources):
         when it has some (_card_picture_parts); or, for a project's picture
         whose file asks to be turned, "data", its pixels as they are stored
         (_unturned_picture); or, for an SVG picture, "data", the PNG picture
-        drawn from it (_svg_picture). And "version", the file's
+        drawn from it (Previews.svg_picture). And "version", the file's
         modification time: the webview keeps pictures by their address, and
         the version gives a changed file a new one."""
         path = self.picture_path(name)
         if name not in self._card_files and is_svg_picture(path.name):
-            return self._svg_picture(path)
+            return self.previews.svg_picture(self.root, path, self.app["defines"])
         found = {"version": _modified(path)}
         parts = None
         try:
@@ -317,22 +362,6 @@ class _FolderResources(DrawingResources):
             if parts[1] is not None:
                 found["mask"] = parts[1]
         return found
-
-    def _svg_picture(self, path: Path) -> dict:
-        """What the webview loads the SVG picture whose file is `path` from:
-        "data", the PNG picture drawn from it, and "version", the key of its
-        drawing, which changes with any file it reads, not only its own. For
-        a picture that cannot be drawn, it gives neither data nor a path, so
-        nothing is drawn, the same as for a damaged file. It never gives a
-        path, because the webview's browser would then draw the SVG file
-        itself."""
-        relative = path.relative_to(self.root).as_posix()
-        try:
-            data, key = svg_picture_data_url(relative, folder_reader(self.root),
-                                             folder_byte_reader(self.root), self.app["defines"])
-        except NxwrightError:
-            return {"version": "0"}
-        return {"data": data, "version": key}
 
     def picture_path(self, name: str) -> Path:
         if name in self._card_files:
