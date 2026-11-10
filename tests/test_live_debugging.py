@@ -8,7 +8,7 @@ import time
 import unittest
 from unittest import mock
 
-from nxwright.debug_adapter.adapter import DebugAdapter
+from nxwright.debug_adapter.adapter import DebugAdapter, _with_full_path
 from nxwright.debug_adapter.live import LIVE_DRAWING, WAVES_PACE, LiveSimulation, WallClock
 from nxwright.drawing.screen_pictures import ScreenPictures
 from nxwright.source.source_folder import read_app
@@ -171,6 +171,32 @@ class LiveDebuggingTest(LiveTestCase):
                                   "Compiling program.nx\n    %s\n"
                          % (root / "pages" / "page0.nx", root / "pages" / "second.nx",
                             root / "program.nx"))
+
+    def test_a_start_that_failed_names_the_line_at_fault(self):
+        # VS Code shows the file and line beside the message, as a link that
+        # opens the file at that line. The message also starts with them as
+        # path:line, and VS Code turns that into a second link, opened with
+        # Ctrl+click.
+        self.write("pages/page0.nx", "on go.down:\n  nowhere.val = 1\n")
+        self.launch()
+        self.wait_for("terminated")
+        failed = [body for body in self.events("output") if body["category"] == "stderr"]
+        self.assertEqual(len(failed), 1)
+        self.assertIn("NxwrightError: %s:2: nowhere" % (self.root / "pages" / "page0.nx"),
+                      failed[0]["output"])
+        self.assertEqual((Path(failed[0]["source"]["path"]).resolve(), failed[0]["line"]),
+                         ((self.root / "pages" / "page0.nx").resolve(), 2))
+
+    def test_an_errors_file_is_written_as_its_full_path(self):
+        path = Path("E:/app/pages/home.nx")
+        for message, line, written in (
+                ("pages/home.nx line 3 (go.down): no value", 3, "%s:3 (go.down): no value"),
+                ("pages/home.nx: not found", None, "%s: not found"),
+                ("pages/home.nxx line 3: no value", 3, "pages/home.nxx line 3: no value"),
+                ("Home page line 3: no value", 3, "Home page line 3: no value")):
+            with self.subTest(message):
+                self.assertEqual(_with_full_path(message, "pages/home.nx", line, path),
+                                 written.replace("%s", str(path)))
 
     def test_a_breakpoint_in_a_press_then_stepping(self):
         self.launch({"pages/page0.nx": [3]})

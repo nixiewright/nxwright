@@ -100,10 +100,10 @@ class LiveSimulation:
     it; "waves", with the simulation, when its waveforms' points alone
     changed; "log", with the log's new lines; "gpio", with the GPIO pins
     (Simulation.pins), at the start and whenever they change; and "failed",
-    with why the app could not start. `start` starts the thread. The other
-    methods are the debugger's, called from the adapter's thread. `sending`,
-    `cards`, `eeprom_file`, `pinyin_table`, and `inputs` are the
-    simulation's (simulation.py). `defines` gives app.toml's defines new
+    with the exception that kept the app from starting. `start` starts the
+    thread. The other methods are the debugger's, called from the adapter's
+    thread. `sending`, `cards`, `eeprom_file`, `pinyin_table`, and `inputs`
+    are the simulation's (simulation.py). `defines` gives app.toml's defines new
     values, {name: value as text}, for all the simulation reads. `generators`
     gives the settings (signal_generators.py) of each signal generator that
     starts with the simulation; if the app refuses one, such as for a
@@ -277,7 +277,7 @@ class LiveSimulation:
             # a request that comes after `terminated` is refused at once.
             # Left for this thread, it would never be answered.
             self.end()
-            self._notify("failed", "%s: %s" % (type(error).__name__, error))
+            self._notify("failed", error)
             return
         finally:
             with self._condition:

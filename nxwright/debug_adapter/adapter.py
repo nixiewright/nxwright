@@ -194,6 +194,7 @@ class DebugAdapter:
         self._launched = self._configured = self._started = False
         self._stop_on_entry = True
         self._live = None            # the LiveSimulation of a simulation's session
+        self._source_folder = None   # the Path of the simulated app's source folder
         self._link = None            # its serial line's SerialLink, to the MCU
         self._screen_link = None     # the SerialLink of a real screen beside it
         self._screen_replies = None  # the LoggedPieces of what that screen sends
@@ -381,6 +382,7 @@ class DebugAdapter:
         self._screen_link = SerialLink(self._screen_bytes, self._screen_news, "screen port")
         self._log_formats = log_formats
         self._defines = defines
+        self._source_folder = source_folder
         self._live = LiveSimulation(source_folder, arguments.get("page"),
                                     arguments.get("values"), eeprom, self._live_news,
                                     self._simulation_sends, cards, log_formats,
@@ -450,10 +452,29 @@ class DebugAdapter:
         elif kind == "gpio":
             self._event("nxwright/gpio", {"pins": body})
         elif kind == "failed":
-            self._event("output", {"category": "stderr",
-                                   "output": "The simulation could not start: %s\n" % body})
+            self._event("output", self._start_failure(body))
             self._event("terminated")
             self._end_replies_waiting()
+
+    def _start_failure(self, error: Exception) -> dict:
+        """Returns the Debug Console's output for an `error` that kept the app
+        from starting. If the error comes from a file of the source folder,
+        VS Code shows two links that open the file, at the line at fault if
+        the error has one. One sits beside the message, and comes from the
+        output's source and line. The other is the file's full path and line
+        number at the start of the message, as in
+        "E:\\app\\pages\\home.nx:12: ...", opened with Ctrl+click."""
+        message = str(error)
+        output = {"category": "stderr"}
+        if isinstance(error, NxwrightError) and error.file is not None:
+            path = self._source_folder / error.file
+            output["source"] = {"name": path.name, "path": str(path)}
+            if error.line is not None:
+                output["line"] = error.line
+            message = _with_full_path(message, error.file, error.line, path)
+        output["output"] = "The simulation could not start: %s: %s\n" % (type(error).__name__,
+                                                                         message)
+        return output
 
     def _starting(self, progress):
         """Tells how far a start of the app has come, a StartProgress
@@ -1442,6 +1463,27 @@ def _shown(value) -> str:
 def _log_line(time: int, text: str) -> str:
     """A line of the simulator's log, with the simulation's time in seconds."""
     return "%9.3f s  %s\n" % (time / 1000, text)
+
+
+def _with_full_path(message: str, file: str, line, path: Path) -> str:
+    """Returns an error's `message` with the file and line at its start
+    rewritten in the form the Debug Console turns into a link. For example,
+    "pages/home.nx line 12: unknown name speed" becomes
+    "E:\\app\\pages\\home.nx:12: unknown name speed", where `path` is the
+    file's full path. If the message gives no line after the file, only the
+    file is rewritten. If `message` does not start with `file`, it is
+    returned unchanged."""
+    if not message.startswith(file):
+        return message
+    rest = message[len(file):]
+    if rest[:1] not in ("", " ", ":"):
+        return message      # another file whose name starts with `file`, such as home.nxx
+    located = str(path)
+    said_line = " line %d" % line if line is not None else None
+    if said_line is not None and rest.startswith(said_line):
+        located += ":%d" % line
+        rest = rest[len(said_line):]
+    return located + rest
 
 
 def _joined_to(screen: str, simulator) -> str:
