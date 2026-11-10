@@ -45,6 +45,21 @@ the serial port's settings: "nxwright/serialPorts" answers with the
 computer's ports, the rates, and the port's state, and "nxwright/serialPort"
 connects the port `name` at `baud`, or disconnects it when `name` is empty.
 
+A real screen can be connected beside the simulation, on a port of its own
+called the screen port. These requests act on it:
+  - "nxwright/screenPort" connects the port `name` as the screen port, at
+    `baud`, or disconnects the screen port when `name` is empty;
+  - "nxwright/findScreen" finds the rate of the screen on the port `name`,
+    then connects that port as the screen port at that rate;
+  - "nxwright/serialPorts" also answers with the screen port's state, in
+    `screen`;
+  - "nxwright/serial" sends its instruction to each place that `to` lists,
+    such as ["simulator", "screen"], or to the simulation alone when `to`
+    is not given.
+The log shows what the screen receives and sends in "SCR RECV:" and
+"SCR SEND:" lines, beside the simulation's "SIM RECV:" and "SIM SEND:"
+lines.
+
 An agent drives a simulation through the extension, with the same requests
 for what happens to the screen and three more arguments. Given `handled`,
 one is answered once the simulation's thread has handled it, rather than
@@ -55,8 +70,10 @@ an agent's, which `handled` must come with: while a serial port is
 connected, it is refused unless also `allowed`, which the extension gives
 once the user agreed, since what the app sends then reaches a device. An
 agent's press or move is refused too when the screen cannot take it, as
-a second press while one is held (looks.touch_refusal). An
-agent also looks at what the simulation holds (testing/looks.py):
+a second press while one is held (looks.touch_refusal). An agent never
+reaches the real screen. A "nxwright/serial" from an agent is refused if
+its `to` includes the screen, and the log an agent reads leaves out the
+screen's lines. An agent also looks at what the simulation holds (testing/looks.py):
 "nxwright/screen", its text layout and, unless `picture` is false, a PNG
 picture of it in base64, "nxwright/components", "nxwright/values", those
 of `names` or all, and
@@ -69,8 +86,9 @@ each start of the app compiles its pages, with the number of the page
 compiling, the page count, and the page's name, or no page once all are
 compiled; "nxwright/drawing", with the page shown, its drawing, the files
 of its pictures, and which start of the screen and which entry of the page
-it belongs to; "nxwright/serialState", with the port's state when it
-changes; and "nxwright/gpio", with each GPIO pin's mode, bound component,
+it belongs to; "nxwright/serialState", with the MCU port's state when it
+changes, and "nxwright/screenState", with the screen port's; and
+"nxwright/gpio", with each GPIO pin's mode, bound component,
 and level, or none for a screen without GPIO, at the start and whenever one
 changes. The log goes to the Debug Console, as output events, each line
 with the simulation's time. So do, as each start compiles, the pages and
@@ -90,8 +108,10 @@ from nxwright.debug_adapter.framing import read_message, write_message
 from nxwright.debug_adapter.live import LiveSimulation
 from nxwright.debug_adapter.python_steps import PythonTracer
 from nxwright.debug_adapter.replay import Timeline, path_key
-from nxwright.debug_adapter.serial_port import RATES, SerialLink, port_names
+from nxwright.debug_adapter.serial_port import (RATES, LoggedReplies, SerialLink, port_names,
+                                                screen_rate)
 from nxwright.drawing.screen_pictures import ScreenPictures
+from nxwright.project.device_settings import TextCodec
 from nxwright.source.defines import LAUNCH_CONFIGURATION, launch_defines, overriding_defines
 from nxwright.source.source_folder import read_app
 from nxwright.testing import looks
@@ -100,7 +120,7 @@ from nxwright.testing.looks import value_group
 from nxwright.testing.pinyin_table import installed_pinyin_table, read_pinyin_table
 from nxwright.testing.sd_cards import card_folder
 from nxwright.testing.simulation import read_eeprom_file
-from nxwright.testing.simulation_log import log_format
+from nxwright.testing.simulation_log import END, log_format, shown, shown_instruction
 from nxwright.testing.preview import Previews
 from nxwright.testing.recording import PythonPlace, Recorder, recording
 
@@ -134,7 +154,12 @@ class DebugAdapter:
         self._launched = self._configured = self._started = False
         self._stop_on_entry = True
         self._live = None            # the LiveSimulation of a simulation's session
-        self._link = None            # its serial line's SerialLink
+        self._link = None            # its serial line's SerialLink, to the MCU
+        self._screen_link = None     # the SerialLink of a real screen beside it
+        self._screen_replies = None  # the LoggedReplies of what that screen sends
+        self._log_formats = None     # its log's forms, {"received": ..., "sent": ...}
+        self._finding = False        # whether a screen's rate is being found
+        self._finding_lock = threading.Lock()
         self._defines = {}           # its new values of app.toml's defines, {name: text}
         self._after = []             # what to do once the reply being made is sent
         self._emitting = threading.Lock()
@@ -167,6 +192,8 @@ class DebugAdapter:
                           "nxwright/gpioInputs": self._gpio_inputs,
                           "nxwright/serialPorts": self._serial_ports,
                           "nxwright/serialPort": self._serial_port,
+                          "nxwright/screenPort": self._screen_port,
+                          "nxwright/findScreen": self._find_screen,
                           "nxwright/components": self._components,
                           "nxwright/values": self._values, "nxwright/log": self._log,
                           "nxwright/screen": self._screen}
@@ -294,7 +321,10 @@ class DebugAdapter:
                                        "output": "The EEPROM's file %s was made, holding an "
                                                  "empty EEPROM.\n" % eeprom_file})
         self._stop_on_entry = arguments.get("stopOnEntry", False)
-        self._link = SerialLink(lambda work: self._live.act(work), self._serial_news)
+        self._link = SerialLink(self._mcu_bytes, self._serial_news, "MCU port")
+        self._screen_replies = LoggedReplies(self._screen_sent)
+        self._screen_link = SerialLink(self._screen_replies.add, self._screen_news, "screen port")
+        self._log_formats = log_formats
         self._defines = defines
         self._live = LiveSimulation(source_folder, arguments.get("page"),
                                     arguments.get("values"), eeprom, self._live_news,
@@ -603,8 +633,47 @@ class DebugAdapter:
         return self._action(arguments, lambda simulation: simulation.release())
 
     def _serial(self, arguments: dict):
+        """Sends the instruction `text` to the simulator, to the screen on
+        the screen port, or to both, depending on `to`, such as
+        ["simulator", "screen"]. Without `to`, the instruction goes to the
+        simulator alone. The screen gets it first, because sending to the
+        screen does not wait for the simulation's thread."""
         text = str(arguments["text"])
+        to = _destinations(arguments.get("to"))
+        self._simulation_only()
+        if "simulator" in to:
+            self._running_simulation()
+        if "screen" in to:
+            self._send_to_screen(text, arguments.get("agent") is True)
+        if "simulator" not in to:
+            return {}
         return self._action(arguments, lambda simulation: simulation.serial_input(text))
+
+    def _send_to_screen(self, text: str, agent: bool):
+        """Writes the instruction `text` to the screen on the screen port, in
+        the project's encoding, followed by FF FF FF, and logs it. An agent
+        never reaches the screen: only the user sends it instructions."""
+        if agent:
+            raise NxwrightError("an agent cannot send instructions to the real screen on the "
+                                "screen port. Only the user can, from the Simulator section")
+        if not self._screen_link.state()["connected"]:
+            raise NxwrightError("no screen is connected on the screen port")
+        encoding = self._encoding()
+        if encoding is None:
+            raise NxwrightError("the app has not started yet, so the project's encoding is not "
+                                "known: try again once it has")
+        try:
+            data = TextCodec(encoding).encode_keeping_bytes(text, "the instruction") + END
+        except NxwrightError:
+            self._log_output("SCR RECV: <nothing: instruction %r incompatible with project "
+                             "encoding %s>" % (text, encoding))
+            return
+        # Logged first, as the screen may answer before the write returns.
+        self._log_output("SCR RECV: %s" % shown_instruction(text, self._log_formats["received"],
+                                                           encoding))
+        problem = self._screen_link.send(data)
+        if problem:
+            self._log_output(problem, "console")
 
     def _start_again(self, arguments: dict):
         return self._action(arguments, lambda simulation: simulation.start_again())
@@ -725,9 +794,10 @@ class DebugAdapter:
 
     def _serial_ports(self, arguments: dict) -> dict:
         """What the side bar offers: the computer's ports, the rates, and the
-        port's state."""
+        state of the MCU port (`state`) and of the screen port (`screen`)."""
         self._simulation_only()
-        return {"ports": port_names(), "rates": RATES, "state": self._link.state()}
+        return {"ports": port_names(), "rates": RATES, "state": self._link.state(),
+                "screen": self._screen_link.state()}
 
     def _serial_port(self, arguments: dict) -> dict:
         """Connects the port `name` at `baud`, or disconnects when `name` is
@@ -739,14 +809,87 @@ class DebugAdapter:
             self._link.disconnect()
         return {"state": self._link.state()}
 
+    def _screen_port(self, arguments: dict) -> dict:
+        """Connects the screen port `name` at `baud`, or disconnects when
+        `name` is empty. Connecting sends the screen nothing. Answers with
+        the port's state."""
+        self._simulation_only()
+        if arguments.get("name"):
+            self._screen_link.connect(*_port_settings(arguments))
+        else:
+            self._screen_link.disconnect()
+            self._screen_replies.stop()
+        return {"state": self._screen_link.state()}
+
+    def _find_screen(self, arguments: dict):
+        """Finds the rate of the screen on the port `name`, by sending it
+        `connect` at each rate (serial_port.screen_rate), then connects the
+        screen port at that rate. It takes seconds, so it runs on its own
+        thread, and answers with the port's state once done."""
+        self._simulation_only()
+        name = arguments.get("name")
+        if not isinstance(name, str) or not name:
+            raise NxwrightError("Find needs the name of the port the screen is on")
+        with self._finding_lock:
+            if self._finding:
+                raise NxwrightError("Find is already looking for a screen")
+            self._finding = True
+        reply = _Reply(self, self._request)
+
+        def find():
+            try:
+                self._screen_link.find_and_connect(name, screen_rate)
+                # The session ended while Find was looking for the screen.
+                if self.finished:
+                    self._screen_link.disconnect(quietly=True)
+            finally:
+                with self._finding_lock:
+                    self._finding = False
+                reply.send({"state": self._screen_link.state()})
+        threading.Thread(target=find, name="finding the screen", daemon=True).start()
+        return _LATER
+
+    def _mcu_bytes(self, data: bytes):
+        """Hands what arrives on the MCU port to the simulation, in its queue."""
+        self._live.act(lambda simulation: simulation.serial_received(data))
+
+    def _screen_sent(self, reply: bytes):
+        """Logs a reply from the screen on the screen port (LoggedReplies),
+        in the form `logSent` sets. Before the app has started, the reply
+        shows in hexadecimal, because the project's encoding is not known
+        yet."""
+        encoding = self._encoding()
+        form = self._log_formats["sent"] if encoding is not None else "hex"
+        self._log_output("SCR SEND: %s" % shown(reply, form, encoding))
+
+    def _encoding(self):
+        """Returns the project's encoding, or None before the app has started."""
+        simulation = self._live.simulation if self._live is not None else None
+        return simulation.encoding if simulation is not None else None
+
     def _serial_news(self, kind: str, body):
-        """What the serial line tells (SerialLink's `notify`), from any thread."""
+        """Handles a notice from the MCU port (SerialLink's `notify`), on any thread."""
         if kind == "state":
             self._event("nxwright/serialState", body)
         elif kind == "log":
-            simulation = self._live.simulation if self._live is not None else None
-            time = simulation.clock if simulation is not None else 0
-            self._event("output", {"category": "console", "output": _log_line(time, body)})
+            self._log_output(body, "console")
+
+    def _screen_news(self, kind: str, body):
+        """Handles a notice from the screen port (SerialLink's `notify`), on any
+        thread."""
+        if kind == "state":
+            self._event("nxwright/screenState", body)
+        elif kind == "log":
+            self._log_output(body, "console")
+
+    def _log_output(self, line: str, category: str = "stdout"):
+        """Writes `line` to the Debug Console, after the simulation's time, in
+        the output category `category`. The log uses "stdout" for data that
+        crosses a serial line, and "console" for what happens to a port, such
+        as connecting or being lost."""
+        simulation = self._live.simulation if self._live is not None else None
+        time = simulation.clock if simulation is not None else 0
+        self._event("output", {"category": category, "output": _log_line(time, line)})
 
     def _simulation_only(self) -> LiveSimulation:
         if self._live is None:
@@ -765,6 +908,8 @@ class DebugAdapter:
         if self._live is not None:
             self._live.end()
             self._link.disconnect(quietly=True)
+            self._screen_link.disconnect(quietly=True)
+            self._screen_replies.stop()
         self._end_replies_waiting()
         self.finished = True
         return {}
@@ -1008,6 +1153,17 @@ def _shown(value) -> str:
 def _log_line(time: int, text: str) -> str:
     """A line of the simulator's log, with the simulation's time in seconds."""
     return "%9.3f s  %s\n" % (time / 1000, text)
+
+
+def _destinations(to) -> set:
+    """Returns where a typed instruction goes, from a request's `to`: a
+    list of "simulator" and "screen", ["simulator"] when not given."""
+    if to is None:
+        return {"simulator"}
+    if not isinstance(to, list) or not to or not set(to) <= {"simulator", "screen"}:
+        raise NxwrightError('`to` must be ["simulator"], ["screen"], or ["simulator", '
+                            '"screen"], not %r' % (to,))
+    return set(to)
 
 
 def _port_settings(settings) -> tuple:

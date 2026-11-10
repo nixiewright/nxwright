@@ -87,4 +87,5 @@ A simulation in VS Code can be connected to a real serial port, and what the app
 - Before an agent's first action on a simulation whose port is connected, VS Code asks you whether the agent may drive it. Your answer stands until the simulation ends.
 - If you connect a port from the Simulator section while an agent drives the simulation, VS Code treats that as your permission, and will not ask you.
 - Reading what the screen shows, values, and the log never needs your permission.
+- An agent never reaches a real screen connected beside the simulation ([A real screen](simulator.md#a-real-screen)), even with your permission.
 - To let agents act without asking you, turn off `nxwright.agents.askBeforeSerialActions`.

@@ -2,7 +2,8 @@
 // simulation runs: the line saying that an agent drives it, while one does
 // (simulator-agent-model.mjs), its buttons, the field whose text goes to the
 // screen as an instruction from the serial line, the serial port the line is
-// connected to, and the GPIO pins, whose inputs a click sets. While none
+// connected to, the port of a real screen beside the simulation, which the
+// field can reach too, and the GPIO pins, whose inputs a click sets. While none
 // runs: buttons that simulate the current project with the Simulator
 // settings, from program.nx or from the page shown, run each launch
 // configuration that simulates it, or create one.
@@ -73,30 +74,89 @@ for (const button of running.querySelectorAll("button[data-command]")) {
 }
 
 const field = document.getElementById("instruction");
+const destinations = document.getElementById("destinations");
+const toSimulator = document.getElementById("to-simulator");
+const toScreen = document.getElementById("to-screen");
 document.getElementById("serial").addEventListener("submit", (event) => {
   event.preventDefault();
-  if (field.value) {
-    vscode.postMessage({ type: "serial", text: field.value });
+  // While no screen is connected, the instruction goes to the simulator.
+  const to = destinations.hidden ? ["simulator"]
+    : [...(toSimulator.checked ? ["simulator"] : []), ...(toScreen.checked ? ["screen"] : [])];
+  if (field.value && to.length > 0) {
+    vscode.postMessage({ type: "serial", text: field.value, to });
     field.select();
   }
 });
 
-const portList = document.getElementById("port");
-const rateList = document.getElementById("rate");
-const connectButton = document.getElementById("connect");
-const stateLine = document.getElementById("port-state");
-let connected = false;
+// The MCU port, which the simulation's serial line is connected to.
+const mcuPort = portControls({
+  portList: document.getElementById("port"),
+  rateList: document.getElementById("rate"),
+  connectButton: document.getElementById("connect"),
+  stateLine: document.getElementById("port-state"),
+  connectType: "connect", disconnectType: "disconnect",
+});
+
+// The screen port, which a real screen beside the simulation is on. While
+// it is connected, the field's instruction can go to the screen too, and the
+// screen can be started again.
+const screenStarts = document.getElementById("screen-starts");
+const findButton = document.getElementById("screen-find");
+findButton.title = "Finds the screen's rate and connects at it. Tries each rate by sending the "
+  + "bytes that end protocol reparse mode, then the instruction \"connect\".";
+const screenConnect = document.getElementById("screen-connect");
+// Whether Find is still looking for the screen. It stops when the next screen
+// state arrives.
+let finding = false;
+const screenPort = portControls({
+  portList: document.getElementById("screen-port"),
+  rateList: document.getElementById("screen-rate"),
+  connectButton: screenConnect,
+  stateLine: document.getElementById("screen-state"),
+  connectType: "connectScreen", disconnectType: "disconnectScreen",
+  shown: (connected) => {
+    // Both boxes are ticked again each time a screen connects.
+    if (connected && destinations.hidden) {
+      toSimulator.checked = toScreen.checked = true;
+    }
+    destinations.hidden = !connected;
+    screenStarts.hidden = !connected;
+  },
+});
+
+findButton.addEventListener("click", () => {
+  const name = screenPort.chosenPort();
+  if (name && !finding) {
+    setFinding(true);
+    screenPort.note(`Looking for a screen on ${name}…`);
+    vscode.postMessage({ type: "findScreen", name });
+  }
+});
+
+function setFinding(value) {
+  finding = value;
+  findButton.disabled = value;
+  screenConnect.disabled = value;
+}
+document.getElementById("start-screen").addEventListener("click", () =>
+  vscode.postMessage({ type: "serial", text: "rest", to: ["screen"] }));
+document.getElementById("start-both").addEventListener("click", () =>
+  vscode.postMessage({ type: "serial", text: "rest", to: ["simulator", "screen"] }));
 
 window.addEventListener("message", (event) => {
   const message = event.data;
   if (message.type === "ports") {
-    // While not connected, what the user picked stays picked.
-    const kept = !message.state.connected;
-    fill(portList, message.ports, (kept && portList.value) || message.state.name);
-    fill(rateList, message.rates, (kept && rateList.value) || message.state.baud);
-    showState(message.state);
+    mcuPort.offer(message.ports, message.rates, message.state);
+    // While Find is looking, leave its "Looking for a screen" note in place
+    // until Find answers.
+    if (message.screen && !finding) {
+      screenPort.offer(message.ports, message.rates, message.screen);
+    }
   } else if (message.type === "portState") {
-    showState(message.state);
+    mcuPort.show(message.state);
+  } else if (message.type === "screenState") {
+    setFinding(false);
+    screenPort.show(message.state);
   } else if (message.type === "idle") {
     showIdle(message);
   } else if (message.type === "pins") {
@@ -127,27 +187,73 @@ agentConnect.addEventListener("click", () => {
   }
 });
 
-connectButton.addEventListener("click", () => {
-  if (connected) {
-    vscode.postMessage({ type: "disconnect" });
-  } else {
-    connect();
-  }
-});
+// The controls of a serial port: its list of ports, its list of rates, its
+// Connect button, and the line saying its state. The button posts
+// `connectType` with the port and rate chosen, or `disconnectType` while
+// connected. Each time it shows a state, it calls `shown(connected)`.
+function portControls({ portList, rateList, connectButton, stateLine, connectType,
+                        disconnectType, shown = () => {} }) {
+  let connected = false;
 
-// A change while connected applies at once.
-for (const list of [portList, rateList]) {
-  list.addEventListener("change", () => {
+  function connect() {
+    if (portList.value) {
+      vscode.postMessage({ type: connectType, name: portList.value,
+                           baud: Number(rateList.value) });
+    }
+  }
+
+  connectButton.addEventListener("click", () => {
     if (connected) {
+      vscode.postMessage({ type: disconnectType });
+    } else {
       connect();
     }
   });
-}
 
-function connect() {
-  if (portList.value) {
-    vscode.postMessage({ type: "connect", name: portList.value, baud: Number(rateList.value) });
+  // A change while connected applies at once.
+  for (const list of [portList, rateList]) {
+    list.addEventListener("change", () => {
+      if (connected) {
+        connect();
+      }
+    });
   }
+
+  function show(state) {
+    connected = state.connected;
+    connectButton.textContent = connected ? "Disconnect" : "Connect";
+    if (connected) {
+      fill(portList, [...portList.options].map((option) => option.value), state.name);
+      fill(rateList, [...rateList.options].map((option) => option.value), state.baud);
+    }
+    stateLine.classList.toggle("problem", Boolean(state.problem));
+    if (connected) {
+      stateLine.textContent = `Connected to ${state.name} at ${state.baud} bits per second.`;
+    } else if (state.problem) {
+      stateLine.textContent = `${state.name}: ${state.problem}`;
+    } else {
+      stateLine.textContent = "Not connected.";
+    }
+    shown(connected);
+  }
+
+  return {
+    show,
+    // Lists the computer's ports and the rates. While not connected, what
+    // the user picked stays picked.
+    offer(ports, rates, state) {
+      const kept = !state.connected;
+      fill(portList, ports, (kept && portList.value) || state.name);
+      fill(rateList, rates, (kept && rateList.value) || state.baud);
+      show(state);
+    },
+    chosenPort: () => portList.value,
+    // Shows `text` in place of the state, until the next state.
+    note(text) {
+      stateLine.classList.remove("problem");
+      stateLine.textContent = text;
+    },
+  };
 }
 
 // Fills `list` with `values`, `chosen` selected: kept even when it is not
@@ -160,23 +266,6 @@ function fill(list, values, chosen) {
   list.replaceChildren(...all.map((value) => new Option(value, value)));
   if (chosen !== undefined && chosen !== null && chosen !== "") {
     list.value = String(chosen);
-  }
-}
-
-function showState(state) {
-  connected = state.connected;
-  connectButton.textContent = connected ? "Disconnect" : "Connect";
-  if (connected) {
-    fill(portList, [...portList.options].map((option) => option.value), state.name);
-    fill(rateList, [...rateList.options].map((option) => option.value), state.baud);
-  }
-  stateLine.classList.toggle("problem", Boolean(state.problem));
-  if (connected) {
-    stateLine.textContent = `Connected to ${state.name} at ${state.baud} bits per second.`;
-  } else if (state.problem) {
-    stateLine.textContent = `${state.name}: ${state.problem}`;
-  } else {
-    stateLine.textContent = "Not connected.";
   }
 }
 

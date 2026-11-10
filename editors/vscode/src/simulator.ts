@@ -5,10 +5,12 @@
 //    drawn, it says how far the app's start has come, as its pages compile;
 //  - the Simulator section of nxwright's side bar (media/simulator-controls.mjs).
 //    While a simulation runs: pause, resume, start again, the log, a field
-//    for what the serial line brings the screen, and the serial port the
-//    line is connected to. While none runs: simulating the current project
-//    with the Simulator settings, from program.nx or from the page shown,
-//    running each launch configuration that simulates it, and creating one;
+//    for what the serial line brings the screen, the serial port the line
+//    is connected to, and a real screen on a port of its own, which the
+//    field can reach too, and which can be started again. While none
+//    runs: simulating the current project with the Simulator settings,
+//    from program.nx or from the page shown, running each launch
+//    configuration that simulates it, and creating one;
 //  - the button "Simulate this page" above a page file's text and its
 //    preview, which simulates the app from that page while none runs;
 //  - for the agent channel (agentChannelServer.ts), starting a simulation
@@ -16,9 +18,9 @@
 //    of the agent acting with it, and the section's line saying that an
 //    agent drives the simulation, with a button connecting the Simulator
 //    settings' port while none is (media/simulator-agent-model.mjs).
-// The adapter sends the start's progress, each drawing, and the port's
-// state as custom events, and takes presses, typed instructions, starting
-// again, and the port's settings as custom requests
+// The adapter sends the start's progress, each drawing, and the ports'
+// states as custom events, and takes presses, typed instructions, starting
+// again, and the ports' settings as custom requests
 // (nxwright/debug_adapter/adapter.py). Its log goes to the Debug Console, as
 // a debugging session's output does.
 import * as crypto from "crypto";
@@ -369,6 +371,8 @@ export class Simulator implements vscode.WebviewViewProvider {
       // once the simulation can answer; and the ports may have changed.
       void this.controls?.webview.postMessage({ type: "portState", state: event.body });
       void this.offerPorts();
+    } else if (event.event === "nxwright/screenState") {
+      void this.controls?.webview.postMessage({ type: "screenState", state: event.body });
     } else if (event.event === "nxwright/gpio") {
       this.lastPins = (event.body as { pins: GpioPin[] | null }).pins;
       this.showPins();
@@ -426,7 +430,7 @@ export class Simulator implements vscode.WebviewViewProvider {
   }
 
   // Gives the side bar's section the computer's ports, the rates, and the
-  // port's state.
+  // states of the MCU port and of the screen port.
   private async offerPorts(): Promise<void> {
     const session = this.session;
     if (!this.controls || !session) {
@@ -454,6 +458,27 @@ export class Simulator implements vscode.WebviewViewProvider {
       }
     } catch {
       // The session ended meanwhile.
+    }
+  }
+
+  // Sends the request `command` to connect, find, or disconnect the screen
+  // port, then shows the port's state. If the request fails, such as a
+  // second Find while one runs, it shows the state from
+  // "nxwright/serialPorts" instead.
+  private async chooseScreenPort(command: string, args: object): Promise<void> {
+    const session = this.session;
+    let state: unknown;
+    try {
+      state = (await session?.customRequest(command, args))?.state;
+    } catch {
+      try {
+        state = (await session?.customRequest("nxwright/serialPorts"))?.screen;
+      } catch {
+        // The session ended meanwhile.
+      }
+    }
+    if (state) {
+      void this.controls?.webview.postMessage({ type: "screenState", state });
     }
   }
 
@@ -566,15 +591,33 @@ export class Simulator implements vscode.WebviewViewProvider {
   <label for="instruction">Serial input</label>
   <input id="instruction" placeholder='t0.txt="hello"' autocomplete="off">
   <button type="submit">Send</button>
+  <div id="destinations" class="row" hidden>
+    <label class="check"><input type="checkbox" id="to-simulator" checked>To the simulator</label>
+    <label class="check"><input type="checkbox" id="to-screen" checked>To the screen</label>
+  </div>
 </form>
-<div id="port-group">
+<div id="port-group" class="port-group">
   <label for="port">Serial port</label>
   <div class="row">
     <select id="port" title="The computer's serial port"></select>
     <select id="rate" title="Its rate, in bits per second"></select>
     <button id="connect">Connect</button>
   </div>
-  <div id="port-state"></div>
+  <div id="port-state" class="port-state"></div>
+</div>
+<div id="screen-group" class="port-group">
+  <label for="screen-port">Screen port</label>
+  <div class="row">
+    <select id="screen-port" title="The serial port a real screen is on"></select>
+    <select id="screen-rate" title="Its rate, in bits per second"></select>
+    <button id="screen-connect">Connect</button>
+    <button id="screen-find">Find</button>
+  </div>
+  <div id="screen-state" class="port-state"></div>
+  <div id="screen-starts" class="buttons" hidden>
+    <button id="start-screen">Start the screen again</button>
+    <button id="start-both">Start both again</button>
+  </div>
 </div>
 <div id="pins-group" hidden>
   <label>GPIO pins</label>
@@ -607,11 +650,21 @@ export class Simulator implements vscode.WebviewViewProvider {
       } else if (message.type === "log") {
         void vscode.commands.executeCommand("workbench.debug.action.focusRepl");
       } else if (message.type === "serial" && message.text) {
-        void this.session?.customRequest("nxwright/serial", { text: message.text });
+        // `to` sets where the instruction goes: the simulator, the screen, or both.
+        void this.session?.customRequest("nxwright/serial", {
+          text: message.text, ...(Array.isArray(message.to) ? { to: message.to } : {}),
+        });
       } else if (message.type === "connect" && message.name) {
         void this.choosePort(message.name, message.baud);
       } else if (message.type === "disconnect") {
         void this.choosePort("");
+      } else if (message.type === "connectScreen" && message.name) {
+        void this.chooseScreenPort("nxwright/screenPort", { name: message.name,
+                                                          baud: message.baud });
+      } else if (message.type === "disconnectScreen") {
+        void this.chooseScreenPort("nxwright/screenPort", { name: "" });
+      } else if (message.type === "findScreen" && message.name) {
+        void this.chooseScreenPort("nxwright/findScreen", { name: message.name });
       } else if (message.type === "pin" && Number.isInteger(message.pin)
                  && (message.level === 0 || message.level === 1)) {
         void this.session?.customRequest("nxwright/gpioInput",
@@ -643,9 +696,14 @@ const STYLES = `
     background: var(--vscode-input-background);
     border: 1px solid var(--vscode-input-border, transparent);
   }
-  #port-group { margin-top: 10px; }
-  #port-state { margin-top: 4px; color: var(--vscode-descriptionForeground); }
-  #port-state.problem { color: var(--vscode-errorForeground); }
+  .port-group { margin-top: 10px; }
+  .port-state { margin-top: 4px; color: var(--vscode-descriptionForeground); }
+  .port-state.problem { color: var(--vscode-errorForeground); }
+  #destinations { width: 100%; gap: 12px; }
+  #destinations[hidden], #screen-starts[hidden] { display: none; }
+  label.check { width: auto; display: flex; gap: 4px; align-items: center; }
+  label.check input { flex: none; }
+  #screen-starts { margin: 6px 0 0; }
   #pins-group { margin-top: 10px; }
   #pins-group[hidden] { display: none; }
   #pins { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: center; }

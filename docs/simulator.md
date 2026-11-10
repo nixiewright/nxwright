@@ -500,6 +500,18 @@ A name the screen does not know, 0x1A, includes:
 
 When a line of an event's code fails, the screen answers at once, and the event goes on. An ignored SD card command answers its own code ([The SD cards](#the-sd-cards)), and a `covx` to hexadecimal of an odd length answers 0x1B ([The text commands](screen-code.md#the-text-commands)).
 
+### A real screen
+
+A real screen can run beside the simulation, so that you can compare the two, like the "Simulator and Nextion Device" mode of the Nextion Editor's simulator. You connect it on a serial port of its own, from the Screen port area of the Simulator section. Connecting does not send the screen anything.
+
+- The Find button looks for the screen's rate, which takes a few seconds, then connects at that rate. At each rate it tries, it sends the bytes that end protocol reparse mode ([Protocol reparse mode](#protocol-reparse-mode)), then `connect`.
+- The screen port keeps the rate it was connected at. After an instruction changes the screen's rate, such as `baud=115200`, connect again at the new rate, or press Find.
+- While the screen is connected, you can send a typed instruction to the simulator, to the screen, or to both, with the two boxes under the Serial input field.
+- The log shows what the screen receives and sends in `SCR RECV:` and `SCR SEND:` lines, beside the simulator's, in the forms that `logReceived` and `logSent` set.
+- You compare the two yourself, from the log, because nxwright does not match up the screen's replies with the simulator's. They can also drift apart, because a touch on the panel reaches only the simulation, and a touch on the real screen reaches only the screen.
+- The Start the screen again button sends `rest` to the screen, and Start both again sends it to the screen and the simulation at once.
+- An agent can't reach the real screen. Its instructions go to the simulator only, and the log it reads leaves out the screen's lines.
+
 ### Holding instructions
 
 `com_stop` holds the instructions that arrive on the serial line. It works the same whether it arrives on the serial line or is run by code.

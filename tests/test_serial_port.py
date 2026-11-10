@@ -1,9 +1,11 @@
-"""A simulation's serial line on a serial port (debug_adapter/serial_port.py):
-the link with a stand-in port, through the debug adapter's requests; the
-port on pyserial's loop://, which sends back what is written to it; and on a
-real pair of ports when the environment names one."""
+"""A simulation's serial line on a serial port, and a real screen on another
+(debug_adapter/serial_port.py): the link with a stand-in port, through the
+debug adapter's requests; the screen's replies cut for the log; the port on
+pyserial's loop://, which sends back what is written to it; and on a real
+pair of ports when the environment names one."""
 import os
 import queue
+import threading
 import time
 import unittest
 from unittest import mock
@@ -11,7 +13,10 @@ from unittest import mock
 import serial
 
 from nxwright.debug_adapter import adapter as adapter_module
-from nxwright.debug_adapter.serial_port import SerialLink, SerialPort, port_names
+from nxwright.debug_adapter import serial_port as serial_port_module
+from nxwright.debug_adapter.serial_port import (LoggedReplies, SerialLink, SerialPort,
+                                                port_names, screen_rate)
+from nxwright.tft.upload import RATES_TRIED
 from tests.test_live_debugging import _PATIENCE, LiveTestCase
 
 # Names a pair of ports joined to each other, such as com0com's
@@ -70,32 +75,26 @@ def wait_until(condition):
         time.sleep(0.01)
 
 
-class PiecesTaken:
-    """Stands in for the simulation the link's work runs on."""
-
-    def __init__(self):
-        self.taken = []
-
-    def serial_received(self, data: bytes):
-        self.taken.append(data)
-
-
 class SerialLinkTest(unittest.TestCase):
 
     def setUp(self):
-        self.works = []
+        self.received = []
         self.news = []
         self.ports = StandInPorts()
-        self.link = SerialLink(self.works.append, lambda kind, body: self.news.append((kind, body)),
-                               self.ports)
-        self.addCleanup(self.link.disconnect)
+        self.link = self.link_labelled("MCU port")
+
+    def link_labelled(self, label: str) -> SerialLink:
+        link = SerialLink(self.received.append,
+                          lambda kind, body: self.news.append((kind, body)), label, self.ports)
+        self.addCleanup(link.disconnect)
+        return link
 
     def pieces(self, count: int) -> list:
-        wait_until(lambda: len(self.works) >= count)
-        simulation = PiecesTaken()
-        for work in self.works:
-            work(simulation)
-        return simulation.taken
+        wait_until(lambda: len(self.received) >= count)
+        return self.received
+
+    def logged(self) -> list:
+        return [body for kind, body in self.news if kind == "log"]
 
     def test_bytes_go_to_the_simulation_as_they_arrive(self):
         self.link.connect("COM4", 115200)
@@ -128,7 +127,7 @@ class SerialLinkTest(unittest.TestCase):
         self.link.disconnect()
         self.assertTrue(second.closed)
         self.assertFalse(self.link.state()["connected"])
-        self.assertEqual([body for kind, body in self.news if kind == "log"], [
+        self.assertEqual(self.logged(), [
             "MCU port COM4 connected at 115200 bits per second",
             "MCU port COM5 connected at 9600 bits per second", "MCU port COM5 disconnected"])
 
@@ -150,6 +149,102 @@ class SerialLinkTest(unittest.TestCase):
         self.assertEqual(state["problem"], "lost: The device does not recognize the command.")
         self.assertIsNone(self.link.send(b"ok"))
 
+    def test_the_label_names_the_port_in_the_log(self):
+        screen = self.link_labelled("screen port")
+        screen.connect("COM7")
+        screen.disconnect()
+        self.assertEqual(self.logged(), ["screen port COM7 connected at 9600 bits per second",
+                                         "screen port COM7 disconnected"])
+
+    def test_finding_the_rate_closes_the_port_first_then_connects_at_it(self):
+        self.link.connect("COM7")
+        asked = []
+
+        def find_rate(name):
+            asked.append((name, self.ports.opened[0].closed))
+            return 115200
+        self.link.find_and_connect("COM7", find_rate)
+        self.assertEqual(asked, [("COM7", True)])
+        self.assertEqual(self.link.state(), {"name": "COM7", "baud": 115200, "connected": True,
+                                             "problem": None})
+        self.assertEqual(self.ports.opened[1].rate, 115200)
+
+    def test_no_rate_found_leaves_the_port_closed(self):
+        self.link.find_and_connect("COM7", lambda name: None)
+        self.assertEqual(self.link.state(), {"name": "COM7", "baud": 9600, "connected": False,
+                                             "problem": "no screen answered at any rate"})
+        self.assertEqual(self.logged(),
+                         ["MCU port COM7 found no screen at any rate"])
+        self.assertEqual(self.ports.opened, [])
+
+    def test_a_port_the_finding_cannot_open(self):
+        def find_rate(name):
+            raise OSError(13, "Access is denied.")
+        self.link.find_and_connect("COM7", find_rate)
+        self.assertEqual(self.link.state()["problem"], "Access is denied.")
+        self.assertEqual(self.logged(), ["MCU port COM7 could not open: Access is denied."])
+
+
+class LoggedRepliesTest(unittest.TestCase):
+    """What a real screen sends, cut into the replies the log shows."""
+
+    def setUp(self):
+        self.shown = []
+        self.replies = LoggedReplies(self.shown.append, quiet=0.05)
+        self.addCleanup(self.replies.stop)
+
+    def test_replies_end_at_their_ff_ff_ff_across_pieces(self):
+        self.replies.add(b"\x00\x00\x00\xff\xff\xff\x88\xff")
+        self.replies.add(b"\xff\xff\x1a\xff\xff\xff")
+        self.assertEqual(self.shown, [b"\x00\x00\x00\xff\xff\xff", b"\x88\xff\xff\xff",
+                                      b"\x1a\xff\xff\xff"])
+
+    def test_a_reply_of_a_fixed_length_stays_whole_whatever_its_bytes(self):
+        # `get` of -1 answers 71 FF FF FF FF, then FF FF FF.
+        self.replies.add(b"\x71\xff\xff\xff\xff\xff\xff")
+        self.assertEqual(self.shown, [])
+        self.replies.add(b"\xff\x01\xff\xff\xff")
+        self.assertEqual(self.shown, [b"\x71" + b"\xff" * 7, b"\x01\xff\xff\xff"])
+
+    def test_bytes_no_ff_ff_ff_ends_show_once_no_more_come(self):
+        self.replies.add(b"ab")
+        self.replies.add(b"c")
+        self.assertEqual(self.shown, [])
+        wait_until(lambda: self.shown)
+        self.assertEqual(self.shown, [b"abc"])
+
+    def test_stopping_drops_the_bytes_waiting(self):
+        self.replies.add(b"ab")
+        self.replies.stop()
+        time.sleep(0.1)
+        self.assertEqual(self.shown, [])
+
+
+class ScreenRateTest(unittest.TestCase):
+    """Finding a screen's rate, with stand-ins for pyserial's port and for
+    upload's search (tft/upload.py's find_screen, tested on its own)."""
+
+    def find(self, found):
+        port = mock.Mock()
+        with mock.patch.object(serial, "serial_for_url", return_value=port), \
+                mock.patch.object(serial_port_module, "find_screen", return_value=found) as search:
+            rate = screen_rate("COM7")
+        search.assert_called_once_with(port, RATES_TRIED)
+        port.close.assert_called_once_with()
+        return rate
+
+    def test_the_rate_the_screen_answers_at(self):
+        self.assertEqual(self.find(mock.Mock(rate=115200)), 115200)
+
+    def test_no_screen_answers(self):
+        self.assertIsNone(self.find(None))
+
+    def test_a_port_that_cannot_open(self):
+        refusal = serial.SerialException("could not open port 'COM7': Access is denied.")
+        with mock.patch.object(serial, "serial_for_url", side_effect=refusal):
+            with self.assertRaises(OSError):
+                screen_rate("COM7")
+
 
 class SerialPortSessionTest(LiveTestCase):
     """The serial port through the debug adapter, with stand-in ports."""
@@ -157,8 +252,9 @@ class SerialPortSessionTest(LiveTestCase):
     def setUp(self):
         super().setUp()
         self.ports = StandInPorts()
-        patcher = mock.patch.object(adapter_module, "SerialLink",
-                                    lambda act, notify: SerialLink(act, notify, self.ports))
+        patcher = mock.patch.object(
+            adapter_module, "SerialLink",
+            lambda received, notify, label: SerialLink(received, notify, label, self.ports))
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -196,7 +292,8 @@ class SerialPortSessionTest(LiveTestCase):
         self.assertFalse(self.wait_for("nxwright/serialState")["connected"])
         self.wait_for("nxwright/drawing")
         offered = self.request("nxwright/serialPorts")["body"]
-        self.assertEqual(set(offered), {"ports", "rates", "state"})
+        self.assertEqual(set(offered), {"ports", "rates", "state", "screen"})
+        self.assertFalse(offered["screen"]["connected"])
         self.assertIn(115200, offered["rates"])
         self.assertEqual(offered["ports"], port_names())
         self.assertFalse(offered["state"]["connected"])
@@ -252,6 +349,139 @@ class SerialPortSessionTest(LiveTestCase):
         self.wait_for("nxwright/drawing")
         self.request("disconnect")
         self.assertTrue(self.ports.opened[0].closed)
+
+
+class ScreenPortSessionTest(LiveTestCase):
+    """A real screen beside the simulation, on the screen port, through the
+    debug adapter, with stand-in ports."""
+
+    def setUp(self):
+        super().setUp()
+        self.ports = StandInPorts()
+        patcher = mock.patch.object(
+            adapter_module, "SerialLink",
+            lambda received, notify, label: SerialLink(received, notify, label, self.ports))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.launch()
+        self.wait_for("nxwright/drawing")
+
+    def connect_screen(self) -> StandInPort:
+        answer = self.request("nxwright/screenPort", name="COM7", baud=9600)["body"]
+        self.assertTrue(answer["state"]["connected"])
+        return self.ports.opened[-1]
+
+    def log_lines(self, category: str = "stdout") -> list:
+        """The log's lines so far, without their times. Lines that have no
+        time, such as those listing the pages being compiled, are left out."""
+        return [line.split(" s  ", 1)[1] for body in self.events("output")
+                if body["category"] == category for line in body["output"].splitlines()
+                if " s  " in line]
+
+    def count(self) -> int:
+        return self.adapter._live.simulation.globals["count"]
+
+    def reply_later(self, command: str, **arguments) -> dict:
+        """Sends a request whose reply may come later, and waits for it."""
+        self.sequence += 1
+        sequence = self.sequence
+        self.adapter.handle({"type": "request", "seq": sequence, "command": command,
+                             "arguments": arguments})
+        wait_until(lambda: any(message.get("request_seq") == sequence for message in self.sent))
+        return next(message for message in self.sent if message.get("request_seq") == sequence)
+
+    def test_typed_input_goes_where_it_is_sent(self):
+        screen = self.connect_screen()
+        self.request("nxwright/serial", text="count=5", to=["screen"])
+        self.assertEqual(screen.written, [b"count=5\xff\xff\xff"])
+        self.request("nxwright/serial", text="count=3", to=["simulator", "screen"])
+        wait_until(lambda: self.count() == 3)
+        self.assertEqual(screen.written[-1], b"count=3\xff\xff\xff")
+        # Without `to`, the instruction goes to the simulator alone.
+        self.request("nxwright/serial", text="count=4")
+        wait_until(lambda: self.count() == 4)
+        self.assertEqual(len(screen.written), 2)
+        lines = self.log_lines()
+        self.assertIn("SCR RECV: count=5", lines)
+        self.assertIn("SCR RECV: count=3", lines)
+        self.assertNotIn("SIM RECV: count=5", lines)
+
+    def test_the_screens_replies_go_to_the_log(self):
+        screen = self.connect_screen()
+        screen.arriving.put(b"\x71\x05\x00\x00\x00\xff\xff\xff\x1a")
+        wait_until(lambda: "SCR SEND: 71 05 00 00 00 ff ff ff" in self.log_lines())
+        wait_until(lambda: "SCR SEND: 1a" in self.log_lines())
+        self.assertIn("screen port COM7 connected at 9600 bits per second",
+                      self.log_lines("console"))
+
+    def test_a_text_the_encoding_cannot_write_is_not_sent(self):
+        screen = self.connect_screen()
+        encoding = self.adapter._live.simulation.encoding
+        self.request("nxwright/serial", text='count="Ж"', to=["screen"])
+        self.assertEqual(screen.written, [])
+        self.assertIn("SCR RECV: <nothing: instruction 'count=\"Ж\"' incompatible with "
+                      "project encoding %s>" % encoding, self.log_lines())
+
+    def test_instructions_the_screen_port_refuses(self):
+        refused = self.request("nxwright/serial", text="count=5", to=["screen"])
+        self.assertFalse(refused["success"])
+        self.assertIn("no screen is connected", refused["message"])
+        screen = self.connect_screen()
+        for to in ([], ["nowhere"], "screen"):
+            with self.subTest(to=to):
+                self.assertFalse(self.request("nxwright/serial", text="count=5", to=to)["success"])
+        # An agent never reaches the real screen, allowed or not.
+        agents = self.reply_later("nxwright/serial", text="count=5", to=["screen"],
+                                  handled=True, agent=True, allowed=True)
+        self.assertFalse(agents["success"])
+        self.assertIn("agent", agents["message"])
+        self.assertEqual(screen.written, [])
+
+    def test_starting_the_screen_and_the_simulation_again_together(self):
+        screen = self.connect_screen()
+        self.request("nxwright/serial", text="count=7")
+        wait_until(lambda: self.count() == 7)
+        self.request("nxwright/serial", text="rest", to=["simulator", "screen"])
+        self.assertEqual(screen.written, [b"rest\xff\xff\xff"])
+        wait_until(lambda: self.count() == 0)
+
+    def test_finding_the_screen_connects_at_the_rate_it_answers_at(self):
+        with mock.patch.object(adapter_module, "screen_rate", return_value=115200):
+            reply = self.reply_later("nxwright/findScreen", name="COM7")
+        self.assertEqual(reply["body"]["state"], {"name": "COM7", "baud": 115200,
+                                                  "connected": True, "problem": None})
+        self.assertEqual(self.ports.opened[-1].rate, 115200)
+
+    def test_finding_no_screen(self):
+        with mock.patch.object(adapter_module, "screen_rate", return_value=None):
+            reply = self.reply_later("nxwright/findScreen", name="COM7")
+        self.assertFalse(reply["body"]["state"]["connected"])
+        self.assertIn("screen port COM7 found no screen at any rate",
+                      self.log_lines("console"))
+
+    def test_one_search_at_a_time(self):
+        searching = threading.Event()
+        go_on = threading.Event()
+
+        def slow_rate(name):
+            searching.set()
+            go_on.wait(_PATIENCE)
+            return None
+        with mock.patch.object(adapter_module, "screen_rate", slow_rate):
+            self.sequence += 1
+            first = self.sequence
+            self.adapter.handle({"type": "request", "seq": first,
+                                 "command": "nxwright/findScreen", "arguments": {"name": "COM7"}})
+            searching.wait(_PATIENCE)
+            second = self.request("nxwright/findScreen", name="COM7")
+            go_on.set()
+            wait_until(lambda: any(message.get("request_seq") == first for message in self.sent))
+        self.assertFalse(second["success"])
+
+    def test_disconnecting_the_session_closes_the_screen_port(self):
+        screen = self.connect_screen()
+        self.request("disconnect")
+        self.assertTrue(screen.closed)
 
 
 class RefusingPort:

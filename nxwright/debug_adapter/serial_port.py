@@ -1,18 +1,26 @@
-"""A simulation's serial line on a serial port of the computer.
+"""A simulation's serial line on a serial port of the computer, and a real
+screen on another.
 
-The Editor's simulator connects the screen's serial line to a serial port
-in its "User MCU input" mode, so that a program at the other end talks to
-the app; with a virtual pair of ports, such as com0com makes, that program
-runs on the same computer. A SerialLink does the same for a running
-simulation (live.py):
-  - the bytes that arrive go to the simulation as they arrive, in its
-    queue, and it cuts them into instructions as the screen does
-    (Simulation.serial_received);
+In its "User MCU input" mode, the Nextion Editor's simulator connects the
+screen's serial line to a serial port, so that a program at the other end,
+called the MCU, talks to the app. With a virtual pair of ports, such as one
+com0com creates, that program can run on the same computer. A SerialLink
+does the same for a running simulation (live.py):
+  - the bytes that arrive go into the simulation's queue as they arrive,
+    and the simulation cuts them into instructions the same way a screen
+    does (Simulation.serial_received);
   - the bytes the screen sends go to the port, in order (Simulation's
     `sending`).
 
-The port is pyserial's, on any system pyserial supports: 8 data bits, no
-parity, 1 stop bit, as the screen's line always is, and no flow control.
+A second SerialLink connects a real screen beside the simulation, on a port
+of its own called the screen port. Instructions typed in the Simulator section can go to the
+screen, and LoggedReplies cuts what the screen sends into replies for the
+log. screen_rate finds the screen's rate by sending it `connect` at each
+rate.
+
+Ports open through pyserial, on any system it supports. They use the
+settings of a screen's serial line, which are always 8 data bits, no parity,
+and 1 stop bit, with no flow control.
 """
 import re
 import threading
@@ -20,7 +28,8 @@ import threading
 import serial
 from serial.tools import list_ports
 
-from nxwright.testing.simulation_log import hex_bytes
+from nxwright.testing.simulation_log import END, hex_bytes
+from nxwright.tft.upload import RATES_TRIED, find_screen
 
 # The rates the screen's `baud` takes, as the vendor lists them.
 RATES = [2400, 4800, 9600, 19200, 31250, 38400, 57600, 115200, 230400, 250000, 256000,
@@ -37,6 +46,17 @@ _WRITE_WAIT = 20
 # The bytes of each piece of a write. pyserial's time limit is one figure,
 # whatever a write's length, so a write goes in pieces of the same length.
 _PIECE = 64
+# How long, in seconds, the log waits for more bytes from the screen before it
+# shows bytes that no FF FF FF has ended. Data in protocol reparse mode, and a
+# transfer's data, have no FF FF FF.
+_QUIET = 0.1
+# The replies of a fixed length, by their first byte, with how many bytes
+# follow that byte before the FF FF FF, as the vendor's instruction set
+# documents them. They are a touch (0x65), the page's ID (0x66), a touch's
+# place (0x67, and 0x68 while asleep), and a number (0x71). Their bytes may be
+# FF, as in the reply to `get` of -1, so such a reply cannot be cut at the
+# first FF FF FF.
+_REPLY_LENGTHS = {0x65: 3, 0x66: 1, 0x67: 5, 0x68: 5, 0x71: 4}
 
 
 def port_names() -> list:
@@ -113,18 +133,20 @@ def _opening_words(error: Exception) -> str:
 
 
 class SerialLink:
-    """Joins a serial port to a running simulation, through:
-      - `act(work)`, which has the simulation's thread do `work(simulation)`
-        in its queue (LiveSimulation.act);
+    """Joins a serial port to what takes its bytes, through:
+      - `received(data)`, called on the port's reading thread with each
+        piece of bytes as it arrives;
       - `notify(kind, body)`, called from any thread: "state", with the
         port's state as `state` returns it, when it changes; and "log", with
         a line saying what became of the port.
-    `send` is the simulation's `sending`. `open_port(name, rate)` opens a
-    port, a SerialPort unless given."""
+    `label` names the port in those lines, such as "MCU port". `send` writes
+    to the port. `open_port(name, rate)` opens a port, a SerialPort unless
+    given."""
 
-    def __init__(self, act, notify, open_port=SerialPort):
-        self._act = act
+    def __init__(self, received, notify, label: str, open_port=SerialPort):
+        self._received = received
         self._notify = notify
+        self._label = label
         self._open_port = open_port
         self._lock = threading.Lock()
         self._connection = None      # the port connected, if any
@@ -145,9 +167,7 @@ class SerialLink:
         try:
             port = self._open_port(name, rate)
         except OSError as error:
-            with self._lock:
-                self._name, self._rate, self._problem = name, rate, _words(error)
-            self._tell("MCU port %s could not open: %s" % (name, _words(error)))
+            self._failed(name, rate, _words(error), "could not open: %s" % _words(error))
             return
         connection = _Connection(port)
         with self._lock:
@@ -156,7 +176,33 @@ class SerialLink:
         connection.thread = threading.Thread(target=self._read, args=(connection,),
                                              name="serial port", daemon=True)
         connection.thread.start()
-        self._tell("MCU port %s connected at %d bits per second" % (name, rate))
+        self._tell("%s %s connected at %d bits per second" % (self._label, name, rate))
+
+    def find_and_connect(self, name: str, find_rate):
+        """Connects the port `name` at the rate that `find_rate(name)`
+        returns. Any port already connected is closed first, because
+        `find_rate`, such as screen_rate, opens the port itself. Finding the
+        rate may take seconds. If the port cannot open, or `find_rate`
+        returns None because it found no rate, no port is connected, and the
+        log shows why."""
+        self.disconnect(quietly=True)
+        try:
+            rate = find_rate(name)
+        except OSError as error:
+            self._failed(name, DEFAULT_RATE, _words(error), "could not open: %s" % _words(error))
+            return
+        if rate is None:
+            self._failed(name, DEFAULT_RATE, "no screen answered at any rate",
+                         "found no screen at any rate")
+            return
+        self.connect(name, rate)
+
+    def _failed(self, name: str, rate: int, problem: str, words: str):
+        """Records that the port `name` is not connected because of
+        `problem`, and logs `words` after the port's label and name."""
+        with self._lock:
+            self._name, self._rate, self._problem = name, rate, problem
+        self._tell("%s %s %s" % (self._label, name, words))
 
     def disconnect(self, quietly: bool = False):
         """Disconnects the port connected, if any, once its last read ends."""
@@ -168,10 +214,10 @@ class SerialLink:
         if connection.thread is not threading.current_thread():
             connection.thread.join()
         if not quietly:
-            self._tell("MCU port %s disconnected" % self._name)
+            self._tell("%s %s disconnected" % (self._label, self._name))
 
     def send(self, data: bytes):
-        """Writes what the screen sends to the port connected, if any.
+        """Writes `data` to the port connected, if any.
         Returns a line for the log when not all of it was sent, or None."""
         with self._lock:
             connection = self._connection
@@ -183,16 +229,16 @@ class SerialLink:
             try:
                 written = connection.port.write(data)
             except OSError as error:
-                return "MCU port %s did not send %s: %s" % (self._name, hex_bytes(data),
-                                                            _words(error))
+                return "%s %s did not send %s: %s" % (self._label, self._name,
+                                                      hex_bytes(data), _words(error))
         if written < len(data):
-            return "MCU port %s did not send %s: the port did not take it in time" % (
-                self._name, hex_bytes(data[written:]))
+            return "%s %s did not send %s: the port did not take it in time" % (
+                self._label, self._name, hex_bytes(data[written:]))
         return None
 
     def _read(self, connection):
-        """The reading thread: hands what arrives to the simulation, until
-        the port is disconnected or lost. It closes the port, once no write
+        """The reading thread: hands what arrives to `received`, until the
+        port is disconnected or lost. It closes the port, once no write
         uses it."""
         try:
             while not connection.closing.is_set():
@@ -202,7 +248,7 @@ class SerialLink:
                     self._lost(connection, error)
                     return
                 if data:
-                    self._act(lambda simulation, data=data: simulation.serial_received(data))
+                    self._received(data)
         finally:
             with connection.writing:
                 connection.closing.set()
@@ -214,7 +260,7 @@ class SerialLink:
                 return          # disconnected meanwhile
             self._connection = None
             self._problem = "lost: %s" % _words(error)
-        self._tell("MCU port %s lost: %s" % (self._name, _words(error)))
+        self._tell("%s %s lost: %s" % (self._label, self._name, _words(error)))
 
     def _tell(self, line: str):
         self._notify("log", line)
@@ -236,3 +282,91 @@ class _Connection:
 def _words(error: OSError) -> str:
     """An OSError in its system's words, without its number."""
     return (error.strerror or str(error)).strip()
+
+
+class LoggedReplies:
+    """Cuts the bytes a real screen sends into replies for the log, and hands
+    each reply, with its FF FF FF, to `show(reply)` in order. It hands on:
+      - a reply of a fixed length (_REPLY_LENGTHS) once all its bytes have
+        arrived, even if some of them are FF;
+      - any other reply once an FF FF FF ends it;
+      - bytes that no FF FF FF ends, as they are, once `quiet` seconds pass
+        without more bytes.
+    `add` takes each piece of bytes as it arrives, on the port's reading
+    thread. The bytes still waiting are shown from a timer's thread."""
+
+    def __init__(self, show, quiet: float = _QUIET):
+        self._show = show
+        self._quiet = quiet
+        self._lock = threading.Lock()
+        self._waiting = b""
+        self._timer = None           # the timer that shows the bytes waiting, if any
+
+    def add(self, data: bytes):
+        with self._lock:
+            self._stop_timer()
+            self._waiting += data
+            while True:
+                end = _reply_end(self._waiting)
+                if end is None:
+                    break
+                reply, self._waiting = self._waiting[:end], self._waiting[end:]
+                self._show(reply)
+            if self._waiting:
+                self._timer = threading.Timer(self._quiet, self._show_waiting)
+                self._timer.daemon = True
+                self._timer.start()
+
+    def stop(self):
+        """Drops the bytes still waiting, without showing them."""
+        with self._lock:
+            self._stop_timer()
+            self._waiting = b""
+
+    def _show_waiting(self):
+        with self._lock:
+            # If a piece arrived just as this timer fired, `add` has already
+            # handled the waiting bytes, and has cleared or replaced this
+            # timer.
+            if self._timer is not threading.current_thread():
+                return
+            self._timer = None
+            waiting, self._waiting = self._waiting, b""
+            if waiting:
+                self._show(waiting)
+
+    def _stop_timer(self):
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
+
+
+def _reply_end(data: bytes):
+    """Returns where the first reply in `data` ends, after its FF FF FF, or
+    None while it has not ended (LoggedReplies)."""
+    length = _REPLY_LENGTHS.get(data[0]) if data else None
+    if length is not None:
+        end = 1 + length + len(END)
+        return end if len(data) >= end else None
+    end = data.find(END)
+    return None if end < 0 else end + len(END)
+
+
+def screen_rate(name: str):
+    """Returns the rate at which a screen on the port `name` answers
+    `connect`, or None if it answers at none of the rates tried. It tries
+    the same rates as `nxwright upload`, with find_screen from
+    tft/upload.py, and at each rate it sends the bytes that end protocol
+    reparse mode, then `connect`. Finding the rate takes a few seconds.
+    Raises OSError if the port cannot open or fails."""
+    try:
+        port = serial.serial_for_url(name, baudrate=DEFAULT_RATE, bytesize=serial.EIGHTBITS,
+                                     parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
+                                     timeout=0)
+    except (serial.SerialException, ValueError) as error:
+        raise OSError(_opening_words(error)) from None
+    try:
+        screen = find_screen(port, RATES_TRIED)
+    finally:
+        port.close()
+    return None if screen is None else screen.rate

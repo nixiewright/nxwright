@@ -40,6 +40,22 @@ def shown(data: bytes, form: str, encoding: str) -> str:
     return text if form == "text" else "%s (%s)" % (text, hex_bytes(data))
 
 
+def shown_instruction(text: str, form: str, encoding: str) -> str:
+    """Returns how the log shows an instruction sent to a screen, in the
+    form `form`. As "text", the log shows the instruction as typed. In the
+    other forms, it shows the instruction's bytes in `encoding`, followed by
+    FF FF FF. If `encoding` cannot write one of the instruction's
+    characters, no screen could receive the instruction, so the log shows it
+    as text whatever the form."""
+    if form == "text":
+        return text
+    try:
+        data = TextCodec(encoding).encode_keeping_bytes(text, "the instruction")
+    except NxwrightError:
+        return text
+    return shown(data + END, form, encoding)
+
+
 def _shown_character(character: str) -> str:
     """A character of a text the log shows: a byte the encoding cannot read,
     which decoding kept as a lone surrogate, or a control character, as

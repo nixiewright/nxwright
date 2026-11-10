@@ -205,7 +205,7 @@ from nxwright.testing.sd_cards import INVALID_FILE_OPERATION, CardRefusal, Folde
 from nxwright.testing.serial_line import (ADDRESSES, BUFFER, DROPPED, INSTRUCTION, NOT_ADDRESSED,
                                           REPARSE_END, SERIAL_BUFFER_SIZE, SerialLine,
                                           Transfer)
-from nxwright.testing.simulation_log import END, LOGGED, SENT, hex_bytes, shown
+from nxwright.testing.simulation_log import END, LOGGED, SENT, hex_bytes, shown, shown_instruction
 from nxwright.source.page_source import table_limits
 from nxwright.testing.source_runner import (FolderPageTables, SourceFolderRunner,
                                             component_start_values)
@@ -869,18 +869,8 @@ class Simulation:
             self._show_wake_page()
 
     def _received(self, text: str) -> str:
-        """An instruction as the log shows it: as text, the instruction as it
-        is; else its bytes, with the FF FF FF that ended them. One typed with a
-        character the project's encoding cannot write, which the screen
-        could not have received, shows as text whatever the form."""
-        form = self.log_formats["received"]
-        if form == "text":
-            return text
-        try:
-            data = TextCodec(self.encoding).encode_keeping_bytes(text, "the instruction")
-        except NxwrightError:
-            return text
-        return shown(data + END, form, self.encoding)
+        """An instruction as the log shows it (shown_instruction)."""
+        return shown_instruction(text, self.log_formats["received"], self.encoding)
 
     def serial_received(self, data: bytes):
         """Takes `data`, a piece of the serial line: bytes that arrived at
