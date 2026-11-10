@@ -12,8 +12,12 @@ const { testLast, waitFor } = require("./runner.cjs");
 // nxwright's command before the tests set the stand-in. It is undefined
 // until they do.
 let commandBefore;
-// The log the stand-in writes to when a run is not given another log's name.
-const DEFAULT_LOG = path.join(os.tmpdir(), "stand_in_nxwright.log");
+// The log the stand-in writes to when a run is given no log of its own.
+// It is in this checkout's .vscode-test folder, where the tests' VS Code
+// keeps its files. If it were in a folder that two checkouts share, such as
+// the system's temporary folder, the tests of one checkout would read the
+// runs of the other.
+const DEFAULT_LOG = path.join(__dirname, "..", "..", ".vscode-test", "stand_in_nxwright.log");
 
 // Reads the stand-in's log `log`: the arguments of each run of the
 // subcommand `name`, such as "compile", in order.

@@ -27,22 +27,23 @@ Every other subcommand, such as the language server's, runs the real
 nxwright of this checkout, so that the rest of the extension goes on
 working.
 
-Each run adds its subcommand and arguments to the log file that the
-environment variable NXWRIGHT_STAND_IN_LOG names, as one JSON list per line,
-when it is set, else to stand_in_nxwright.log in the system's temporary
-folder. The tests read in it when the language server started through the
-stand-in, `lsp`.
+Each run adds its subcommand and arguments to a log file, as one JSON list
+per line, so that a test can check what the extension ran. If the
+environment variable NXWRIGHT_STAND_IN_LOG is set, its value is the log's
+path. Otherwise the log is stand_in_nxwright.log in this checkout's
+.vscode-test folder, where the tests' VS Code keeps its files. The tests
+also know that the language server started through the stand-in once the
+log contains a run of `lsp`.
 """
 import json
 import os
 from pathlib import Path
 import runpy
 import sys
-import tempfile
 
 NXWRIGHT = Path(__file__).resolve().parents[4]
 LOG = Path(os.environ.get("NXWRIGHT_STAND_IN_LOG")
-           or Path(tempfile.gettempdir()) / "stand_in_nxwright.log")
+           or Path(__file__).resolve().parents[2] / ".vscode-test" / "stand_in_nxwright.log")
 
 
 def emit(event: dict):

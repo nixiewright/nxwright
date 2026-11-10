@@ -6,6 +6,8 @@
 // so that nothing prompts. Delete runs `remove` as a task, so the tests read
 // its runs from the stand-in's default log.
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const vscode = require("vscode");
 const { test, waitFor } = require("./runner.cjs");
 const { withStandIn } = require("./stand_in.cjs");
@@ -35,5 +37,10 @@ test("Delete runs remove once, and looks for uses only when its setting is on", 
     }
     assert.deepEqual(taskRuns("remove").at(-1),
                      [folder, "page", "browsers", "--keep-ids", "--checked"]);
+    // The stand-in must log the runs of `remove` inside this checkout, so
+    // that they do not mix with the runs of another checkout's tests.
+    const ownLog = path.join(__dirname, "..", "..", ".vscode-test", "stand_in_nxwright.log");
+    assert.ok(fs.existsSync(ownLog), `${ownLog} is missing`);
+    assert.match(fs.readFileSync(ownLog, "utf8"), /"--keep-ids", "--checked"/);
   });
 });
