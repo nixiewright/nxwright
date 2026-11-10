@@ -451,6 +451,19 @@ A screen has no event for a value that changes, so a device often sends a `click
 - Every instruction is sent whichever page shows, so one for a component of another page gets the return code 0x1A.
 - If an instruction such as `rest` starts the app again, the instructions after it are not sent for that point of the wave.
 
+A value generator can also have conditions, for example to stand in for a sensor's alarm line. A condition is a switch that the wave's value turns on and off. Each time the switch changes, the condition sends instructions of its own, such as `click alarm,1`, and these can use `{value}` too. A generator with conditions does not need instructions of its own.
+
+| Setting | What it is |
+| --- | --- |
+| Turns on above, or below | The level the value must go past for the switch to turn on. |
+| And off below, or above | The level the value must come back past for the switch to turn off. Leave it empty for a switch that turns off as soon as the value is no longer past the first level. |
+| Each time after | How long the value must stay past a level before the switch changes, in milliseconds. |
+
+- If the value wavers around the first level, set the second level a little apart from it, so that the switch does not turn on and off again and again.
+- A switch starts off, and goes back to off when the app starts again. If the value is already past the level, the switch turns on, and the condition sends its instructions for turning on, even if it sent them before the app started again.
+- At each point, the generator's own instructions are sent first, then each condition's, so the event that `click alarm,1` runs can read the value the generator just set.
+- A condition is checked at every point, including one that **Only when the value changes** skips.
+
 ### Opening effects
 
 When a page opens, its components whose `effect` is 1 to 8 slide in from wholly off the screen.

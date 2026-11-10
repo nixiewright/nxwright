@@ -29,10 +29,23 @@
 //    simulation refused of it.
 //
 // A value generator's settings are {kind: "value", send: [instruction],
-// onlyWhenChanged, and a wave's settings}. The panel keeps one as {kind,
-// send, onlyWhenChanged, wave, number, waiting, notice}, where `send` is the
-// text of its instructions, one on each line, and `wave` is its wave, with
-// every setting given.
+// onlyWhenChanged, a wave's settings, and conditions: [condition]}. The
+// panel keeps one as {kind, send, onlyWhenChanged, wave, conditions, number,
+// waiting, notice}, where `send` is the text of its instructions, one on
+// each line, and `wave` is its wave, with every setting given.
+//
+// A condition is a switch that the wave's value turns on and off. Its
+// settings are {turnsOnAbove or turnsOnBelow, turnsOffBelow or
+// turnsOffAbove, afterMs, whenOn: [instruction], whenOff: [instruction]}.
+// The panel keeps one as {above, level, back, after, whenOn, whenOff}:
+//  - `above`: whether the switch turns on above its level, or below it;
+//  - `level`: the level that turns it on;
+//  - `back`: the level that turns it off, or null when the switch turns off
+//    as soon as the value is no longer past `level`;
+//  - `after`: the milliseconds the value must stay past a level before the
+//    switch changes;
+//  - `whenOn` and `whenOff`: the text of the instructions sent at each
+//    change, one on each line.
 
 // The kind of a generator that sends points to waveforms, and the kind of
 // one that sends instructions carrying its wave's value.
@@ -105,8 +118,22 @@ export function newValueGenerator() {
     send: "",
     onlyWhenChanged: false,
     wave: wholeWave({ interval: 1000, period: 20 }),
+    conditions: [],
     ...NOT_RUNNING,
   };
+}
+
+// Returns a new condition for the panel: a switch that turns on above 0,
+// with no instruction yet.
+export function newCondition() {
+  return { above: true, level: 0, back: null, after: 0, whenOn: "", whenOff: "" };
+}
+
+// Returns the lowest and highest level a condition can have, the same as
+// for a value generator's values.
+export function levelBounds() {
+  const [low, high] = BOUNDS[VALUE];
+  return { low, high };
 }
 
 // Returns whether the simulation is running `generator`.
@@ -185,18 +212,27 @@ export function setSame(generator, same) {
 // first. `offered` lists the app's waveforms. If a waveform generator sends
 // the same wave on every channel, the settings give that wave once, and
 // list each channel by its number alone. Otherwise each channel gets its
-// whole wave. A value generator's settings list one instruction for each
-// line typed that is not empty.
+// whole wave. A value generator's settings list its conditions, and one
+// instruction for each line typed that is not empty.
 export function settingsOf(generator, offered) {
   if (generator.kind === VALUE) {
-    const send = generator.send.split("\n").map((line) => line.trim())
-      .filter((line) => line !== "");
-    if (send.length === 0) {
-      return { error: "Type an instruction to send, such as temp.val={value}." };
+    const send = instructionsOf(generator.send);
+    if (send.length === 0 && generator.conditions.length === 0) {
+      return { error: "Type an instruction to send, such as temp.val={value}, or add a " +
+                      "condition." };
+    }
+    const conditions = [];
+    for (const [index, condition] of generator.conditions.entries()) {
+      const made = conditionSettings(condition);
+      if (made.error !== undefined) {
+        return { error: `Condition ${index + 1}: ${made.error}` };
+      }
+      conditions.push(made.settings);
     }
     return { settings: {
-      kind: VALUE, send, ...(generator.onlyWhenChanged ? { onlyWhenChanged: true } : {}),
-      ...sentWave(generator.wave),
+      kind: VALUE, ...(send.length > 0 ? { send } : {}),
+      ...(generator.onlyWhenChanged ? { onlyWhenChanged: true } : {}),
+      ...sentWave(generator.wave), ...(conditions.length > 0 ? { conditions } : {}),
     } };
   }
   if (generator.waveforms.length === 0) {
@@ -230,6 +266,7 @@ export function generatorOfSettings(settings) {
       send: (settings.send ?? []).join("\n"),
       onlyWhenChanged: settings.onlyWhenChanged === true,
       wave: wholeWave(waveSettings(settings)),
+      conditions: (settings.conditions ?? []).map(conditionOfSettings),
       ...NOT_RUNNING,
     };
   }
@@ -386,6 +423,50 @@ export function settingsOfFileText(text) {
     }
   }
   return { settings: data.generators };
+}
+
+// Returns the instructions typed in `text`, one for each line that is not
+// empty.
+function instructionsOf(text) {
+  return text.split("\n").map((line) => line.trim()).filter((line) => line !== "");
+}
+
+// Returns {settings}, the condition in the form a settings file uses, or
+// {error}, which says what the user must set first. Settings left at their
+// default are left out, the same way signal_generators.py writes a
+// condition.
+function conditionSettings(condition) {
+  const whenOn = instructionsOf(condition.whenOn);
+  const whenOff = instructionsOf(condition.whenOff);
+  if (whenOn.length === 0 && whenOff.length === 0) {
+    return { error: "Type an instruction to send when it turns on or off." };
+  }
+  const { above, level, back } = condition;
+  if (back !== null && (above ? back > level : back < level)) {
+    return { error: `The level that turns it off cannot be ${above ? "above" : "below"} ` +
+                    "the level that turns it on." };
+  }
+  return { settings: {
+    [above ? "turnsOnAbove" : "turnsOnBelow"]: level,
+    ...(back === null ? {} : { [above ? "turnsOffBelow" : "turnsOffAbove"]: back }),
+    ...(condition.after > 0 ? { afterMs: condition.after } : {}),
+    ...(whenOn.length > 0 ? { whenOn } : {}),
+    ...(whenOff.length > 0 ? { whenOff } : {}),
+  } };
+}
+
+// Returns the panel's condition for `settings`, a condition in the form a
+// settings file uses.
+function conditionOfSettings(settings) {
+  const above = "turnsOnAbove" in settings;
+  return {
+    above,
+    level: above ? settings.turnsOnAbove : settings.turnsOnBelow,
+    back: (above ? settings.turnsOffBelow : settings.turnsOffAbove) ?? null,
+    after: settings.afterMs ?? 0,
+    whenOn: (settings.whenOn ?? []).join("\n"),
+    whenOff: (settings.whenOff ?? []).join("\n"),
+  };
 }
 
 function channelRows(row) {

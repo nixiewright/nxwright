@@ -200,9 +200,9 @@ const BODY = `
 // them, each generator has a block. A waveform generator's block has its
 // Start or Stop button, its waveforms, its channels, and a table of its
 // waves' settings. The table has one row for the wave every channel sends,
-// or one row for each channel. A value generator's block has the field for
-// its instructions in place of the waveforms and the channels, and one row
-// for its wave.
+// or one row for each channel. A value generator's block has the same
+// Start or Stop button, then the field for its instructions, one row for
+// its wave, and a part for each of its conditions.
 const STYLES = `
   body { padding: 8px 16px 16px; font-size: 12px; }
   .toolbar, .head, .waveforms, .channels {
@@ -258,6 +258,14 @@ const STYLES = `
     font-family: var(--vscode-editor-font-family, monospace);
   }
   textarea::placeholder { color: var(--vscode-input-placeholderForeground); }
+  .condition {
+    border-left: 2px solid var(--vscode-widget-border, var(--vscode-descriptionForeground));
+    margin: 8px 0; padding-left: 10px;
+  }
+  .levels { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+  .levels input[type="number"] { width: 7em; }
+  .levels button { margin-left: auto; }
+  .condition .send { margin: 6px 0; }
   input[type="number"] { width: 5em; }
   input[type="text"] { width: 28em; max-width: 60vw; }
   input:invalid { border-color: var(--vscode-inputValidation-errorBorder, red); }

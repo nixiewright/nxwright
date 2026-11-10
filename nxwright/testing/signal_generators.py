@@ -13,7 +13,11 @@ JSON, such as:
                     {"kind": "value",
                      "send": ["temp.val={value}", "click refresh,1"],
                      "onlyWhenChanged": true,
-                     "minimum": 180, "maximum": 240, "interval": 1000}]}
+                     "minimum": 180, "maximum": 240, "interval": 1000,
+                     "conditions": [{"turnsOnAbove": 220, "turnsOffBelow": 210,
+                                     "afterMs": 500,
+                                     "whenOn": ["click alarm,1"],
+                                     "whenOff": ["click alarm,0"]}]}]}
 
 A waveform generator, whose kind is "waveform", sends points to one or more
 waveforms, each named by its page and its name. It sends one point per
@@ -25,6 +29,20 @@ value the app's code reads. At each point of its one wave, it sends the
 instructions of its `send` list, with `{value}` replaced by the point's
 value. With `onlyWhenChanged`, it sends them only at a point whose value
 differs from the value last sent.
+
+A value generator can also list `conditions`, and then needs no `send`. A
+condition is a switch that the wave's value turns on and off. Each time the
+switch changes, the condition sends instructions: those of its `whenOn`
+list when the switch turns on, and those of its `whenOff` list when it turns
+off. The switch starts off, and turns on when the value goes above
+`turnsOnAbove`, or below `turnsOnBelow`. It turns off when the value
+comes back below `turnsOffBelow`, or above `turnsOffAbove`. Without that
+second level, it turns off as soon as the value is no longer past the first.
+Setting the second level apart from the first keeps a value that wavers
+around the first from turning the switch on and off again and again. With
+`afterMs`, a change waits until the value has been past its level at every
+point for that many milliseconds. Conditions are checked at every point,
+even one that `onlyWhenChanged` skips.
 
 The shapes, at a position in their cycle from 0 up to 1:
   - "sine": from the minimum up to the maximum and back;
@@ -96,6 +114,10 @@ _SEED = 0
 # can use, which stands for the value of the wave's point.
 _BRACED_NAME = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _VALUE_NAME = "value"
+# The keys of a condition's two levels, (turns on, turns off). True gives
+# the keys of a condition that turns on above its level, and False those
+# of one that turns on below it.
+_LEVEL_KEYS = {True: ("turnsOnAbove", "turnsOffBelow"), False: ("turnsOnBelow", "turnsOffAbove")}
 
 
 @dataclass(frozen=True)
@@ -163,14 +185,56 @@ class WaveformGeneratorSettings:
 
 
 @dataclass(frozen=True)
+class Condition:
+    """A condition of a value generator: a switch that the wave's value
+    turns on and off. It turns on when the value goes past `on_level`:
+    above it when `above`, and below it otherwise. It turns off when the
+    value comes back past `off_level`. If `off_level` is None, it turns off
+    as soon as the value is no longer past `on_level`. A change waits until the value has
+    stayed past the level for `after` milliseconds. `when_on` and `when_off`
+    are the instructions sent when the switch turns on and off."""
+    above: bool
+    on_level: int
+    off_level: int = None
+    after: int = 0
+    when_on: tuple = ()
+    when_off: tuple = ()
+
+    def calls_for_change(self, on: bool, value: int) -> bool:
+        """Returns whether `value` calls for the switch to change, that is,
+        to turn on if `on` is false, and to turn off if `on` is true."""
+        past = value > self.on_level if self.above else value < self.on_level
+        if not on:
+            return past
+        if self.off_level is None:
+            return not past
+        return value < self.off_level if self.above else value > self.off_level
+
+    def json_form(self) -> dict:
+        """Returns the condition in the form a settings file uses."""
+        on_key, off_key = _LEVEL_KEYS[self.above]
+        given = {on_key: self.on_level}
+        if self.off_level is not None:
+            given[off_key] = self.off_level
+        if self.after:
+            given["afterMs"] = self.after
+        if self.when_on:
+            given["whenOn"] = list(self.when_on)
+        if self.when_off:
+            given["whenOff"] = list(self.when_off)
+        return given
+
+
+@dataclass(frozen=True)
 class ValueGeneratorSettings:
     """A value generator's settings: the instructions it sends at each
     point (`send`), whether it sends them only at a point whose value
-    differs from the value last sent, and the wave settings it gives itself
-    (`own`)."""
+    differs from the value last sent, the wave settings it gives itself
+    (`own`), and its conditions."""
     send: tuple
     only_when_changed: bool = False
     own: dict = field(default_factory=dict)
+    conditions: tuple = ()
     kind = VALUE
 
     def wave(self) -> Wave:
@@ -185,14 +249,24 @@ class ValueGeneratorSettings:
     def sends(self) -> str:
         """Returns what the generator sends, in the words of the log's line
         about its start."""
-        return "sending %s" % "; ".join(self.send)
+        told = []
+        if self.send:
+            told.append("sending %s" % "; ".join(self.send))
+        if self.conditions:
+            told.append("with %d condition%s" % (len(self.conditions),
+                                                 "s" if len(self.conditions) > 1 else ""))
+        return ", ".join(told)
 
     def json_form(self) -> dict:
         """Returns the settings in the form a settings file uses."""
-        given = {_KIND_KEY: self.kind, "send": list(self.send)}
+        given = {_KIND_KEY: self.kind}
+        if self.send:
+            given["send"] = list(self.send)
         if self.only_when_changed:
             given["onlyWhenChanged"] = True
         given.update(_json_settings(self.own))
+        if self.conditions:
+            given["conditions"] = [condition.json_form() for condition in self.conditions]
         return given
 
 
@@ -325,20 +399,52 @@ class WaveformGeneratorRun:
             channels.append(run)
         self.settings, self.channels = settings, channels
 
-    def shift(self, by: int):
-        """Moves the time of each channel's next point by `by`
-        milliseconds, as the simulation's clock starts again from 0."""
+    def app_started(self, shift: int):
+        """Moves each channel's next point by `shift` milliseconds, the
+        amount the simulation's clock moved when the app started again, so
+        that the generator keeps its pace."""
         for channel in self.channels:
-            channel.due += by
+            channel.due += shift
 
-    def app_started(self):
-        """The app started again. A waveform generator keeps nothing of what
-        it sent the screen, so nothing changes."""
+
+class ConditionRun:
+    """A condition of a running value generator: whether its switch is on,
+    and since when the wave's value has called for a change."""
+
+    def __init__(self, condition: Condition):
+        self.condition = condition
+        self.on = False
+        # The simulation's time of the first point in the current run of
+        # points that call for a change, or None if the last point did not
+        # call for one.
+        self.calling_since = None
+
+    def point(self, value: int, now: int) -> list:
+        """Takes the wave's point `value`, due at the simulation's time
+        `now`. Returns the instructions to send if the switch changes at
+        this point, with the value in place of `{value}`, or an empty list
+        if it does not change."""
+        condition = self.condition
+        if not condition.calls_for_change(self.on, value):
+            self.calling_since = None
+            return []
+        if self.calling_since is None:
+            self.calling_since = now
+        if now - self.calling_since < condition.after:
+            return []
+        self.on, self.calling_since = not self.on, None
+        return [instruction_with(text, value)
+                for text in (condition.when_on if self.on else condition.when_off)]
+
+    def turn_off(self):
+        """Puts the switch back to off, as it was when the generator
+        started, without sending the `when_off` instructions."""
+        self.on, self.calling_since = False, None
 
 
 class ValueGeneratorRun:
     """A running value generator: its settings, its random numbers, its
-    wave, and the value it last sent."""
+    wave, the value it last sent, and its conditions."""
 
     def __init__(self, settings: ValueGeneratorSettings, now: int):
         self.settings = settings
@@ -348,6 +454,7 @@ class ValueGeneratorRun:
         # The value the instructions of `send` last carried, or None when
         # none was sent since the generator, or the app, started.
         self._sent = None
+        self._conditions = [ConditionRun(condition) for condition in settings.conditions]
 
     def due(self) -> int:
         """Returns the simulation's time of the generator's next point."""
@@ -355,34 +462,50 @@ class ValueGeneratorRun:
 
     def tick(self) -> list:
         """Moves the wave past the point due now, and returns the
-        instructions to send for that point, in order, with the point's
-        value in place of `{value}`. Because the run moves on before the
-        caller sends any of them, an instruction that affects the generator,
-        such as one that starts the app again, finds it already past this
-        point."""
+        instructions to send for that point, with the point's value in place
+        of `{value}`. The instructions of `send` come first, then those of
+        each condition that changes at this point, in the conditions' order.
+        The wave moves on before the caller sends any of them. So if one of
+        them affects the generator, for example by starting the app again,
+        the generator is already past this point."""
+        now = self._wave.due
         value = self._wave.next_value(self.random)
-        self._wave.due += self._wave.wave.interval
-        if self.settings.only_when_changed and value == self._sent:
-            return []
-        self._sent = value
-        return [instruction_with(text, value) for text in self.settings.send]
+        self._wave.due = now + self._wave.wave.interval
+        instructions = []
+        if not (self.settings.only_when_changed and value == self._sent):
+            self._sent = value
+            instructions += [instruction_with(text, value) for text in self.settings.send]
+        # A condition is checked at every point, even one that
+        # `onlyWhenChanged` skips.
+        for condition in self._conditions:
+            instructions += condition.point(value, now)
+        return instructions
 
     def change(self, settings: ValueGeneratorSettings, now: int):
         """Takes new settings while running. The wave keeps its place in its
-        cycle (WaveRun.change), and the random numbers go on."""
+        cycle (WaveRun.change), and the random numbers go on. A condition
+        still at the same place in the list keeps its switch as it is, and
+        a new one starts off."""
         self._wave.change(settings.wave(), now)
+        kept = self._conditions[:len(settings.conditions)]
+        for run, condition in zip(kept, settings.conditions):
+            run.condition = condition
+        self._conditions = kept + [ConditionRun(condition)
+                                   for condition in settings.conditions[len(kept):]]
         self.settings = settings
 
-    def shift(self, by: int):
-        """Moves the time of the next point by `by` milliseconds, as the
-        simulation's clock starts again from 0."""
-        self._wave.due += by
-
-    def app_started(self):
-        """The app started again, so the screen has lost what it was sent.
-        The generator forgets the value it last sent, and so sends its next
-        point whatever its value."""
+    def app_started(self, shift: int):
+        """Moves the next point by `shift` milliseconds, the amount the
+        simulation's clock moved when the app started again, so that the
+        generator keeps its pace. The screen has lost what it was sent, so
+        the generator also forgets the value it last sent and turns every
+        condition's switch back to off. The next point is then sent whatever
+        its value, and each switch turns on again if the value is still past
+        its level."""
+        self._wave.due += shift
         self._sent = None
+        for condition in self._conditions:
+            condition.turn_off()
 
 
 def generators_from_json(text: str, source: str) -> tuple:
@@ -481,15 +604,18 @@ def _waveform_generator_settings(given: dict, where: str) -> WaveformGeneratorSe
 
 
 def _value_generator_settings(given: dict, where: str) -> ValueGeneratorSettings:
-    _refuse_unknown(given, set(WAVE_DEFAULTS) | {_KIND_KEY, "send", "onlyWhenChanged"}, where)
+    _refuse_unknown(given, set(WAVE_DEFAULTS) | {_KIND_KEY, "send", "onlyWhenChanged",
+                                                 "conditions"}, where)
     send = _instructions(given.get("send"), "%s.send" % where)
-    if not send:
-        raise NxwrightError("%s: send must list one instruction or more" % where)
+    conditions = _conditions(given.get("conditions"), "%s.conditions" % where)
+    if not send and not conditions:
+        raise NxwrightError("%s: a value generator needs an instruction in send, or a "
+                            "condition" % where)
     only_when_changed = given.get("onlyWhenChanged", False)
     if not isinstance(only_when_changed, bool):
         raise NxwrightError("%s: onlyWhenChanged must be true or false" % where)
     settings = ValueGeneratorSettings(send, only_when_changed,
-                                      _wave_settings(given, where, VALUE))
+                                      _wave_settings(given, where, VALUE), conditions)
     _check_wave(settings.wave(), where)
     return settings
 
@@ -518,6 +644,61 @@ def _instructions(given, where: str) -> tuple:
                 raise NxwrightError("%s: {%s} is not a name an instruction can use. It can "
                                     "use {%s}" % (place, name, _VALUE_NAME))
     return tuple(given)
+
+
+def _conditions(given, where: str) -> tuple:
+    """Returns the conditions that `given` lists, or none if `given` is
+    None. Raises NxwrightError for anything but a list of conditions. The
+    error's message starts with `where` and the condition's place in the
+    list."""
+    if given is None:
+        return ()
+    if not isinstance(given, list):
+        raise NxwrightError("%s must be a list of conditions" % where)
+    return tuple(_condition(one, "%s[%d]" % (where, number))
+                 for number, one in enumerate(given))
+
+
+def _condition(given, where: str) -> Condition:
+    if not isinstance(given, dict):
+        raise NxwrightError("%s: a condition must be a JSON object" % where)
+    on_keys = [keys[0] for keys in _LEVEL_KEYS.values()]
+    off_keys = [keys[1] for keys in _LEVEL_KEYS.values()]
+    _refuse_unknown(given, {*on_keys, *off_keys, "afterMs", "whenOn", "whenOff"}, where)
+    if sum(key in given for key in on_keys) != 1:
+        raise NxwrightError("%s: a condition needs %s or %s, and not both"
+                            % (where, *on_keys))
+    above = on_keys[0] in given
+    on_key, off_key = _LEVEL_KEYS[above]
+    other_on, other_off = _LEVEL_KEYS[not above]
+    if other_off in given:
+        raise NxwrightError("%s: %s goes with %s. With %s, give %s"
+                            % (where, other_off, other_on, on_key, off_key))
+    on_level = _level(given, on_key, where)
+    off_level = _level(given, off_key, where) if off_key in given else None
+    if off_level is not None and (off_level > on_level if above else off_level < on_level):
+        raise NxwrightError("%s: %s %d is %s %s %d" % (
+            where, off_key, off_level, "above" if above else "below", on_key, on_level))
+    after = given.get("afterMs", 0)
+    if not _is_whole(after) or after < 0:
+        raise NxwrightError("%s: afterMs must be a whole number of 0 or more" % where)
+    when_on = _instructions(given.get("whenOn"), "%s.whenOn" % where)
+    when_off = _instructions(given.get("whenOff"), "%s.whenOff" % where)
+    if not when_on and not when_off:
+        raise NxwrightError("%s: a condition needs an instruction in whenOn or whenOff"
+                            % where)
+    return Condition(above, on_level, off_level, after, when_on, when_off)
+
+
+def _level(given: dict, key: str, where: str) -> int:
+    """Returns the level `given` has under `key`. Raises NxwrightError for
+    anything but a whole number a value can be."""
+    lowest, highest = _BOUNDS[VALUE]
+    level = given[key]
+    if not _is_whole(level) or not lowest <= level <= highest:
+        raise NxwrightError("%s: %s must be a whole number from %d to %d"
+                            % (where, key, lowest, highest))
+    return level
 
 
 def _waveform_name(given, where: str) -> WaveformName:

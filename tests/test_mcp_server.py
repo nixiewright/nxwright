@@ -432,6 +432,27 @@ class GeneratorToolsTest(SimulationTestCase):
                       self.agent.refusal("start_generator", simulation=self.simulation,
                                          settings=dict(feeding, send=["sys0={state}"])))
 
+    def test_a_value_generators_condition_sends_its_instructions(self):
+        feeding = {"kind": "value", "shape": "custom", "values": [41, 43], "interval": 20,
+                   "conditions": [{"turnsOnAbove": 42, "afterMs": 20,
+                                   "whenOn": ["sys0={value}"], "whenOff": ["sys0=0"]}]}
+        self.assertEqual(self.start(settings=feeding), [1])
+        self.assertEqual(self.running(), [{"number": 1, "settings": feeding}])
+        # The value 43 comes at 40 and 80 ms, but never stays above the level
+        # for 20 ms.
+        self.agent.text("wait", simulation=self.simulation, milliseconds=80)
+        self.assertEqual([line for line in self.log_lines() if "RECV" in line], [])
+        other = dict(feeding, values=[43])
+        self.assertEqual(self.start(settings=other), [2])
+        self.agent.text("wait", simulation=self.simulation, milliseconds=40)
+        self.assertEqual([line for line in self.log_lines() if "RECV" in line],
+                         ["SIM RECV: sys0=43"])
+        self.assertIn("conditions[0]: turnsOffBelow 50 is above turnsOnAbove 42",
+                      self.agent.refusal("start_generator", simulation=self.simulation,
+                                         settings=dict(feeding, conditions=[
+                                             {"turnsOnAbove": 42, "turnsOffBelow": 50,
+                                              "whenOn": ["sys0=1"]}])))
+
     def test_a_file_starts_all_of_its_generators(self):
         other = dict(self.feeding, channels=[{"channel": 1, "shape": "square"}])
         self.assertEqual(self.start(file=str(self.write_file(self.feeding, other))), [1, 2])

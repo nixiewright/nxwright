@@ -293,7 +293,20 @@ def mcp_server(pictures_folder: Path) -> McpServer:
         "interval": 1000, "onlyWhenChanged": true}. With onlyWhenChanged, the instructions
         are sent only when the value differs from the last one sent. Each instruction
         arrives the same way as one given to the send tool: it shows in the log, and it is
-        sent whichever page shows."""
+        sent whichever page shows.
+
+        A value generator can also list conditions, and then needs no "send". A condition
+        is a switch that the wave's value turns on and off. It sends the instructions of
+        its whenOn list when it turns on, and those of its whenOff list when it turns off.
+        For example: {"turnsOnAbove": 220, "turnsOffBelow": 210, "afterMs": 500,
+        "whenOn": ["click alarm,1"], "whenOff": ["click alarm,0"]}. The switch turns on
+        when the value goes above turnsOnAbove, and off when it comes back below
+        turnsOffBelow. Without turnsOffBelow, it turns off as soon as the value is no
+        longer above turnsOnAbove. For a switch that turns on below a level, give
+        turnsOnBelow in place of turnsOnAbove, and turnsOffAbove in place of
+        turnsOffBelow. With afterMs, a change waits until the value has stayed past its
+        level for that many milliseconds. A switch starts off, and goes back to off when
+        the app starts again."""
         if (settings is None) == (file is None):
             raise NxwrightError("give the generator's settings, or its file: one of the two")
         generators = [settings] if file is None else [

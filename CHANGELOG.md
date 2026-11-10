@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.3] - 2026-11-10
+
+- Added conditions to the simulator's value generators, which send instructions when the value crosses a level.
+
 ### [0.3.2] - 2026-11-10
 
 - Fixed setting the initial value of an `int` from a constant.
@@ -122,6 +126,12 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.14] - 2026-11-10
+
+Needs nxwright 0.3.3 or later.
+
+- The Signal generator panel can add conditions to a value generator, which send instructions when the value crosses a level.
 
 ### [0.3.13] - 2026-11-10
 

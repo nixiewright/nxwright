@@ -13,7 +13,9 @@
 //
 // A value generator sends instructions that carry its wave's value. In its
 // block, the user types the instructions, one on each line, and sets its
-// wave.
+// wave. Under the wave, the block lists the generator's conditions. For
+// each one, the user sets the level that turns its switch on, the level
+// that turns it off, and the instructions to send at each change.
 //
 // A setting changed while its generator runs is sent to the simulation,
 // and takes effect at the generator's next point. Save writes every
@@ -24,8 +26,9 @@
 // settings that the page sends.
 import { element } from "./elements.mjs";
 import {
-  channelCount, fileText, generatorOfSettings, generatorsOfRunning, isRunning, markStopped,
-  newGenerator, newValueGenerator, numberSettings, sameWaveform, setSame, settingsOf,
+  channelCount, fileText, generatorOfSettings, generatorsOfRunning, isRunning, levelBounds,
+  markStopped, newCondition, newGenerator, newValueGenerator, numberSettings, sameWaveform,
+  setSame, settingsOf,
   settingsOfAll, settingsOfFileText, SHAPES, sketchLength, sketchSpan, sketchValues, VALUE,
   valuesOfCsv, valuesOfText,
 } from "./signal-generators-model.mjs";
@@ -321,21 +324,15 @@ function block(generator) {
 }
 
 // Returns a value generator's parts: the instructions it sends, whether it
-// sends them only when its value changes, and its wave.
+// sends them only when its value changes, its wave, and its conditions.
 function valueParts(generator) {
-  const send = element("textarea");
-  send.dataset.field = `${generator.key} send`;
-  send.rows = Math.max(generator.send.split("\n").length, 2);
-  send.value = generator.send;
-  send.placeholder = "temp.val={value}";
-  send.title = "The instructions sent at each point, one on each line, in strict " +
-    "Nextion syntax. {value} stands for the wave's value.";
-  send.addEventListener("input", () => {
-    generator.send = send.value;
-    changed(generator);
-  });
-  const sends = element("label", "send", "Sends");
-  sends.append(send);
+  const sends = instructionsField(
+    generator, "send", "Sends", generator.send, "temp.val={value}",
+    "The instructions sent at each point, one on each line, in strict Nextion syntax. " +
+    "{value} stands for the wave's value.",
+    (text) => {
+      generator.send = text;
+    });
   const only = tickBox(" Only when the value changes", generator.onlyWhenChanged, (ticked) => {
     generator.onlyWhenChanged = ticked;
     changed(generator);
@@ -344,7 +341,103 @@ function valueParts(generator) {
   only.className = "same";
   const table = element("table");
   table.append(headings(VALUE), waveRows(generator, WAVE, element("td", "name")));
-  return [sends, only, table];
+  const add = element("button", "secondary", "Add condition");
+  add.addEventListener("click", () => {
+    generator.conditions.push(newCondition());
+    changed(generator);
+    show();
+  });
+  return [sends, only, table,
+          ...generator.conditions.map((condition, index) => conditionPart(generator, index)),
+          add];
+}
+
+// Returns a field for instructions, one on each line, labelled `label`. It
+// is named `name` among the fields of `generator`, starts with `text`, and
+// shows `example` while empty. `take(text)` is called as the user types.
+function instructionsField(generator, name, label, text, example, title, take) {
+  const field = element("textarea");
+  field.dataset.field = `${generator.key} ${name}`;
+  field.rows = Math.max(text.split("\n").length, 2);
+  field.value = text;
+  field.placeholder = example;
+  field.title = title;
+  field.addEventListener("input", () => {
+    take(field.value);
+    changed(generator);
+  });
+  const labelled = element("label", "send", label);
+  labelled.append(field);
+  return labelled;
+}
+
+// Returns the part of a value generator's condition `index`: the levels
+// that turn its switch on and off, how long the value must stay past a
+// level, the instructions sent at each change, and Remove.
+function conditionPart(generator, index) {
+  const condition = generator.conditions[index];
+  const named = `${generator.key} condition ${index}`;
+  const direction = element("select");
+  direction.dataset.field = `${named} direction`;
+  for (const side of ["above", "below"]) {
+    const option = element("option", "", side);
+    option.value = side;
+    direction.append(option);
+  }
+  direction.value = condition.above ? "above" : "below";
+  direction.addEventListener("change", () => {
+    condition.above = direction.value === "above";
+    changed(generator);
+    show();
+  });
+  const bounds = levelBounds();
+  const level = numberField(`${named} level`, condition.level, {
+    ...bounds, title: "The level the value must go past for the switch to turn on",
+  }, (value) => {
+    condition.level = value;
+    changed(generator);
+  });
+  const back = numberField(`${named} back`, condition.back, {
+    ...bounds, optional: true,
+    title: "The level the value must come back past for the switch to turn off. If you " +
+      "leave it empty, the switch turns off as soon as the value is no longer past the " +
+      "first level.",
+  }, (value) => {
+    condition.back = value;
+    changed(generator);
+  });
+  const after = numberField(`${named} after`, condition.after, {
+    low: 0, title: "How long the value must stay past a level before the switch changes",
+  }, (value) => {
+    condition.after = value;
+    changed(generator);
+  });
+  const removal = element("button", "secondary", "Remove");
+  removal.addEventListener("click", () => {
+    generator.conditions.splice(index, 1);
+    changed(generator);
+    show();
+  });
+  const levels = element("div", "levels");
+  levels.append(element("span", "title", `Condition ${index + 1}`), "turns on", direction,
+                level, condition.above ? "and off below" : "and off above", back,
+                "each time after", after, "ms", removal);
+  const made = element("div", "condition");
+  made.append(
+    levels,
+    instructionsField(generator, `condition ${index} whenOn`, "When on, sends",
+                      condition.whenOn, "click alarm,1",
+                      "The instructions sent when the switch turns on, one on each line",
+                      (text) => {
+                        condition.whenOn = text;
+                      }),
+    instructionsField(generator, `condition ${index} whenOff`, "When off, sends",
+                      condition.whenOff, "click alarm,0",
+                      "The instructions sent when the switch turns off, one on each line",
+                      (text) => {
+                        condition.whenOff = text;
+                      }));
+  return made;
 }
 
 // Returns a waveform generator's parts: the waveforms it feeds, whether
@@ -525,23 +618,28 @@ function valuesRow(generator, scope, wave, on) {
   return row;
 }
 
-// Returns a field for a whole number, `value`, named `name`, of a setting
-// that takes the values from `low` to `high`. `take(number)` is called as
-// it changes to such a number. The field keeps its number until another is
-// typed: an empty one, or one out of range, is marked and not taken.
-function numberField(name, value, { low, high, title }, take) {
+// Returns a field named `name` for a whole-number setting that takes the
+// values from `low` to `high`, and starts at `value`. Each time the user
+// types a number in that range, the field calls `take(number)`. If the user
+// empties the field, or types a number out of range, the field is marked
+// and `take` is not called, so the setting keeps its last number. If
+// `optional` is true, the field may be empty: `value` can then be null,
+// and emptying the field calls `take(null)`.
+function numberField(name, value, { low, high, title, optional = false }, take) {
   const field = element("input");
   field.type = "number";
   field.dataset.field = name;
   field.title = title;
-  field.required = true;
+  field.required = !optional;
   field.min = String(low);
   if (high !== undefined) {
     field.max = String(high);
   }
-  field.value = String(value);
+  field.value = value === null ? "" : String(value);
   field.addEventListener("input", () => {
-    if (field.validity.valid && Number.isInteger(field.valueAsNumber)) {
+    if (optional && field.value === "" && field.validity.valid) {
+      take(null);
+    } else if (field.validity.valid && Number.isInteger(field.valueAsNumber)) {
       take(field.valueAsNumber);
     }
   });

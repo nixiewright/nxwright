@@ -68,9 +68,10 @@ shows when each one starts and stops. A waveform generator sends `add`
 instructions to waveforms. Its points take the serial line's path, so
 `com_stop` holds them, and they count as serial data for `ussp` and `usup`,
 but the log has no line for each point. A value generator sends instructions
-carrying a value, such as `temp.val=215`. Each of them arrives the same way
-as a typed one (serial_input), so the log shows it, and it is sent whichever
-page shows.
+carrying a value, such as `temp.val=215`, and its conditions send
+instructions of their own when the value goes past their levels. Each of
+these arrives the same way as a typed one (serial_input), so the log shows
+it, and it is sent whichever page shows.
 
 Touch coordinates. A press at a pixel of the page, as the simulator's panel
 makes one, puts its place in `tch0` and `tch1`, and in `tch2` and `tch3`,
@@ -591,8 +592,7 @@ class Simulation:
             # The clock starts again from 0, and the generators keep
             # sending at their pace. The screen has lost what they sent it.
             for run in self._generators.values():
-                run.shift(-self.clock)
-                run.app_started()
+                run.app_started(-self.clock)
         self.clock = 0
         self.page = None
         self.starts += 1

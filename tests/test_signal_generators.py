@@ -265,7 +265,8 @@ class ValueGeneratorSettingsTest(unittest.TestCase):
                 ({"send": [3]},
                  r"test\.send\[0\]: an instruction is one line of text, and not empty"),
                 ({"send": "temp.val={value}"}, r"test\.send must be a list of instructions"),
-                ({"send": []}, r"test: send must list one instruction or more"),
+                ({"send": []},
+                 r"test: a value generator needs an instruction in send, or a condition"),
                 ({"onlyWhenChanged": 1}, r"test: onlyWhenChanged must be true or false"),
                 # A waveform generator's settings are not a value generator's.
                 ({"waveforms": [{"page": "page0", "waveform": "chart"}]},
@@ -277,8 +278,8 @@ class ValueGeneratorSettingsTest(unittest.TestCase):
             with self.subTest(change=change):
                 with self.assertRaisesRegex(NxwrightError, "^" + refusal):
                     value_settings(**change)
-        with self.assertRaisesRegex(NxwrightError,
-                                    "^test: send must list one instruction or more$"):
+        with self.assertRaisesRegex(NxwrightError, "^test: a value generator needs an "
+                                                   "instruction in send, or a condition$"):
             generator_settings({"kind": "value"}, "test")
 
     def test_a_value_is_a_whole_number_of_32_bits(self):
@@ -330,7 +331,7 @@ class ValueGeneratorSettingsTest(unittest.TestCase):
                          [["temp.val=1"], [], ["temp.val=0"], [], ["temp.val=1"], []])
         # Once the app started again, the screen has lost the value: the next
         # point is sent whatever its value.
-        run.app_started()
+        run.app_started(0)
         self.assertEqual([run.tick() for _ in range(2)], [["temp.val=0"], []])
         # Without onlyWhenChanged, every point is sent.
         run = ValueGeneratorRun(value_settings(shape="square", maximum=1, period=4), 0)
@@ -343,6 +344,156 @@ class ValueGeneratorSettingsTest(unittest.TestCase):
         run.change(value_settings(send=["n0.val={value}"], shape="sawtooth", maximum=1000,
                                   period=4), 100)
         self.assertEqual(run.tick(), ["n0.val=500"])
+
+
+class ConditionTest(unittest.TestCase):
+    """A value generator's conditions, on waves that play a list of values,
+    one every 10 ms."""
+
+    ALARM = {"turnsOnAbove": 20, "whenOn": ["on={value}"], "whenOff": ["off={value}"]}
+
+    def run_of(self, values: list, *conditions, **given) -> ValueGeneratorRun:
+        """A running value generator that plays `values`, with `conditions`
+        and the settings `given`, and no `send` unless given."""
+        return ValueGeneratorRun(generator_settings(dict(
+            {"kind": "value", "shape": "custom", "values": values, "interval": 10,
+             "conditions": list(conditions)}, **given), "test"), 0)
+
+    def sent(self, values: list, *conditions, **given) -> list:
+        """What the generator sends at each point of `values`."""
+        run = self.run_of(values, *conditions, **given)
+        return [run.tick() for _ in values]
+
+    def test_a_switch_turns_on_above_its_level_and_off_once_no_longer_above(self):
+        self.assertEqual(self.sent([10, 30, 30, 10, 30], self.ALARM),
+                         [[], ["on=30"], [], ["off=10"], ["on=30"]])
+        # Above means greater than the level: a value at the level is not.
+        self.assertEqual(self.sent([20, 21, 20], self.ALARM), [[], ["on=21"], ["off=20"]])
+
+    def test_a_switch_turns_on_below_its_level(self):
+        low = {"turnsOnBelow": 5, "whenOn": ["on={value}"], "whenOff": ["off={value}"]}
+        self.assertEqual(self.sent([9, 5, 3, 3, 5, -2], low),
+                         [[], [], ["on=3"], [], ["off=5"], ["on=-2"]])
+
+    def test_a_first_value_past_the_level_turns_the_switch_on_at_once(self):
+        self.assertEqual(self.sent([30], self.ALARM), [["on=30"]])
+
+    def test_a_second_level_keeps_a_wavering_value_from_switching_again_and_again(self):
+        wavering = [215, 221, 219, 222, 218, 211, 209, 215, 221]
+        alarm = {"turnsOnAbove": 220, "whenOn": ["on"], "whenOff": ["off"]}
+        self.assertEqual(self.sent(wavering, alarm),
+                         [[], ["on"], ["off"], ["on"], ["off"], [], [], [], ["on"]])
+        # With turnsOffBelow at 210, the switch turns off only at 209.
+        self.assertEqual(self.sent(wavering, dict(alarm, turnsOffBelow=210)),
+                         [[], ["on"], [], [], [], [], ["off"], [], ["on"]])
+        # The same the other way up.
+        low = {"turnsOnBelow": 10, "turnsOffAbove": 20, "whenOn": ["on"], "whenOff": ["off"]}
+        self.assertEqual(self.sent([15, 9, 12, 20, 21, 12, 9], low),
+                         [[], ["on"], [], [], ["off"], [], ["on"]])
+
+    def test_a_change_waits_until_the_value_has_stayed_past_the_level(self):
+        patient = dict(self.ALARM, afterMs=20)
+        # The points are 10 ms apart. The switch turns on at the third point
+        # above the level, 20 ms after the first. A point back above the
+        # level makes turning off wait from the start again.
+        self.assertEqual(self.sent([30, 30, 30, 30, 10, 30, 10, 10, 10], patient),
+                         [[], [], ["on=30"], [], [], [], [], [], ["off=10"]])
+        # A first value past the level waits too.
+        self.assertEqual(self.sent([30, 10, 30, 30, 30], patient),
+                         [[], [], [], [], ["on=30"]])
+
+    def test_a_point_sends_its_own_instructions_then_its_conditions_in_order(self):
+        first = {"turnsOnAbove": 20, "whenOn": ["click a,1", "click a,0"]}
+        second = {"turnsOnAbove": 25, "whenOn": ["click b,1"]}
+        self.assertEqual(self.sent([30], first, second, send=["temp.val={value}"]),
+                         [["temp.val=30", "click a,1", "click a,0", "click b,1"]])
+
+    def test_a_condition_is_checked_at_a_point_whose_value_is_not_sent(self):
+        patient = dict(self.ALARM, afterMs=10)
+        self.assertEqual(self.sent([30, 30, 30], patient, send=["temp.val={value}"],
+                                   onlyWhenChanged=True),
+                         [["temp.val=30"], ["on=30"], []])
+
+    def test_a_start_of_the_app_puts_every_switch_back_to_off(self):
+        run = self.run_of([30, 30, 30, 30], self.ALARM, send=["temp.val={value}"],
+                          onlyWhenChanged=True)
+        self.assertEqual([run.tick(), run.tick()], [["temp.val=30", "on=30"], []])
+        # The screen has lost the value and the alarm: both are sent again.
+        run.app_started(-20)
+        self.assertEqual([run.tick(), run.tick()], [["temp.val=30", "on=30"], []])
+
+    def test_new_settings_keep_the_switch_of_a_condition_at_the_same_place(self):
+        run = self.run_of([30, 30, 30], self.ALARM)
+        self.assertEqual(run.tick(), ["on=30"])
+        added = {"turnsOnAbove": 25, "whenOn": ["second"]}
+        run.change(generator_settings(
+            {"kind": "value", "shape": "custom", "values": [30, 30, 30], "interval": 10,
+             "conditions": [dict(self.ALARM, whenOn=["again"]), added]}, "test"), 10)
+        # The first condition's switch is still on. The new one starts off.
+        self.assertEqual(run.tick(), ["second"])
+        # A condition taken away takes its switch with it.
+        run.change(generator_settings(
+            {"kind": "value", "shape": "custom", "values": [30, 30, 30], "interval": 10,
+             "conditions": [added]}, "test"), 20)
+        self.assertEqual(run.tick(), [])
+
+    def test_conditions_are_written_back_as_they_were_read(self):
+        conditions = [
+            {"turnsOnAbove": 220, "turnsOffBelow": 210, "afterMs": 500,
+             "whenOn": ["click alarm,1"], "whenOff": ["click alarm,0"]},
+            {"turnsOnBelow": -5, "whenOff": ["frost.val=0"]}]
+        read = generator_settings({"kind": "value", "conditions": conditions}, "test")
+        # A value generator with conditions needs no `send`.
+        self.assertEqual(read.json_form(), {"kind": "value", "conditions": conditions})
+        self.assertEqual(generators_from_json(generators_to_json([read]), "test"), (read,))
+        self.assertEqual(read.sends(), "with 2 conditions")
+        both = generator_settings({"kind": "value", "send": ["temp.val={value}"],
+                                   "conditions": conditions[:1]}, "test")
+        self.assertEqual(both.sends(), "sending temp.val={value}, with 1 condition")
+
+    def test_conditions_are_refused_with_their_place(self):
+        alarm = {"turnsOnAbove": 20, "whenOn": ["click alarm,1"]}
+        for conditions, refusal in (
+                ({"turnsOnAbove": 20}, r"test\.conditions must be a list of conditions"),
+                ([3], r"test\.conditions\[0\]: a condition must be a JSON object"),
+                ([alarm, dict(alarm, turnsOnBelow=5)],
+                 r"test\.conditions\[1\]: a condition needs turnsOnAbove or turnsOnBelow, and "
+                 r"not both"),
+                ([{"whenOn": ["click alarm,1"]}],
+                 r"test\.conditions\[0\]: a condition needs turnsOnAbove or turnsOnBelow"),
+                ([dict(alarm, turnsOffBelow=21)],
+                 r"test\.conditions\[0\]: turnsOffBelow 21 is above turnsOnAbove 20"),
+                ([{"turnsOnBelow": 5, "turnsOffAbove": 4, "whenOn": ["x=1"]}],
+                 r"test\.conditions\[0\]: turnsOffAbove 4 is below turnsOnBelow 5"),
+                ([dict(alarm, turnsOffAbove=30)],
+                 r"test\.conditions\[0\]: turnsOffAbove goes with turnsOnBelow\. With "
+                 r"turnsOnAbove, give turnsOffBelow"),
+                ([{"turnsOnAbove": 20}],
+                 r"test\.conditions\[0\]: a condition needs an instruction in whenOn or "
+                 r"whenOff"),
+                ([dict(alarm, whenOn=[])],
+                 r"test\.conditions\[0\]: a condition needs an instruction"),
+                ([dict(alarm, afterMs=-1)],
+                 r"test\.conditions\[0\]: afterMs must be a whole number of 0 or more"),
+                ([dict(alarm, turnsOnAbove=2147483648)],
+                 r"test\.conditions\[0\]: turnsOnAbove must be a whole number from "
+                 r"-2147483648 to 2147483647"),
+                ([dict(alarm, turnsOffBelow=1.5)],
+                 r"test\.conditions\[0\]: turnsOffBelow must be a whole number"),
+                ([dict(alarm, whenOff=["t0.txt={state}"])],
+                 r"test\.conditions\[0\]\.whenOff\[0\]: \{state\} is not a name an instruction "
+                 r"can use"),
+                ([dict(alarm, whenOn="click alarm,1")],
+                 r"test\.conditions\[0\]\.whenOn must be a list of instructions"),
+                ([dict(alarm, sustain=3)], r"test\.conditions\[0\]: sustain is not a setting")):
+            with self.subTest(conditions=conditions):
+                with self.assertRaisesRegex(NxwrightError, "^" + refusal):
+                    generator_settings({"kind": "value", "conditions": conditions}, "test")
+        # Two levels that are the same are accepted, even though they leave
+        # no room for a wavering value.
+        same = generator_settings({"kind": "value", "conditions": [
+            dict(alarm, turnsOffBelow=20)]}, "test")
+        self.assertEqual(same.conditions[0].off_level, 20)
 
 
 class GeneratorInSimulationTest(SimulationTestCase):
@@ -810,6 +961,30 @@ on refresh.down:
         simulation.start_generator(self.feeding(send=["add chart.id,0,{value}"], values=[3]))
         simulation.advance(40)
         self.assertEqual(simulation.waves(), {"chart": {0: [1, 2, 3, 1, 2, 3]}})
+
+    def test_a_conditions_click_runs_an_event_that_reads_the_points_value(self):
+        simulation = Simulation(self.root)
+        simulation.start_generator(self.feeding(conditions=[
+            {"turnsOnAbove": 6, "whenOn": ["click refresh,1"]}]))
+        simulation.advance(40)
+        # At the second point, the value is set, then the condition clicks.
+        self.assertEqual(self.received(simulation),
+                         ["temp.val=5", "temp.val=7", "click refresh,1"])
+        self.assertEqual(self.value(simulation, "seen"), 7)
+        self.assertIn("value generator 1 starts, sending temp.val={value}, with 1 condition",
+                      [line for _, line in simulation.log])
+
+    def test_a_start_of_the_app_has_a_condition_send_its_instructions_again(self):
+        simulation = Simulation(self.root)
+        simulation.start_generator(generator_settings(
+            {"kind": "value", "shape": "custom", "values": [7], "interval": 20,
+             "conditions": [{"turnsOnAbove": 6, "whenOn": ["seen.val={value}"]}]}, "test"))
+        simulation.advance(60)
+        self.assertEqual(self.received(simulation), ["seen.val=7"])
+        simulation.start_again()
+        self.assertEqual(self.value(simulation, "seen"), 0)
+        simulation.advance(20)
+        self.assertEqual(self.value(simulation, "seen"), 7)
 
     def test_a_generator_stopped_inside_a_point_sends_the_rest_of_that_point_alone(self):
         # The debugger can hold the simulation inside the code an instruction

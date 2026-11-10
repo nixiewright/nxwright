@@ -3,8 +3,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  channelCount, fileText, generatorOfSettings, generatorsOfRunning, isRunning, markStopped,
-  newGenerator, newValueGenerator, numberSettings, setSame, settingsOf, settingsOfAll,
+  channelCount, fileText, generatorOfSettings, generatorsOfRunning, isRunning, levelBounds,
+  markStopped, newCondition, newGenerator, newValueGenerator, numberSettings, setSame,
+  settingsOf, settingsOfAll,
   settingsOfFileText, sketchLength, sketchSpan, sketchValues, valuesOfCsv, valuesOfText,
   WAVE_DEFAULTS,
 } from "../media/signal-generators-model.mjs";
@@ -58,8 +59,9 @@ test("a new value generator needs an instruction, and sends one for each line ty
   assert.equal(isRunning(generator), false);
   for (const typed of ["", "  \n \n"]) {
     generator.send = typed;
-    assert.deepEqual(settingsOf(generator, OFFERED),
-                     { error: "Type an instruction to send, such as temp.val={value}." });
+    assert.deepEqual(settingsOf(generator, OFFERED), {
+      error: "Type an instruction to send, such as temp.val={value}, or add a condition.",
+    });
   }
   generator.send = "temp.val={value}\n\n  click refresh,1  \n";
   // Its wave sends a value each second.
@@ -73,6 +75,62 @@ test("a new value generator needs an instruction, and sends one for each line ty
     kind: "value", send: ["temp.val={value}", "click refresh,1"], onlyWhenChanged: true,
     ...SENT_DEFAULTS, minimum: -40, interval: 1000, period: 20,
   });
+});
+
+test("a condition gives its levels, its time, and its instructions", () => {
+  const generator = newValueGenerator();
+  generator.send = "temp.val={value}";
+  generator.conditions.push(newCondition());
+  // A new condition has no instruction yet.
+  assert.deepEqual(settingsOf(generator, []), {
+    error: "Condition 1: Type an instruction to send when it turns on or off.",
+  });
+  const [alarm] = generator.conditions;
+  Object.assign(alarm, { level: 220, whenOn: "click alarm,1\n\n" });
+  // Settings left at their default are left out.
+  assert.deepEqual(settingsOf(generator, []).settings.conditions,
+                   [{ turnsOnAbove: 220, whenOn: ["click alarm,1"] }]);
+  Object.assign(alarm, { back: 210, after: 500, whenOff: " click alarm,0 " });
+  generator.conditions.push({ ...newCondition(), above: false, level: -5, back: 0,
+                              whenOff: "frost.val=0" });
+  const conditions = [
+    { turnsOnAbove: 220, turnsOffBelow: 210, afterMs: 500, whenOn: ["click alarm,1"],
+      whenOff: ["click alarm,0"] },
+    { turnsOnBelow: -5, turnsOffAbove: 0, whenOff: ["frost.val=0"] },
+  ];
+  const { settings } = settingsOf(generator, []);
+  assert.deepEqual(settings.conditions, conditions);
+  // A file's conditions come back as they were written.
+  assert.deepEqual(settingsOf(generatorOfSettings(settings), []).settings, settings);
+  assert.deepEqual(generatorOfSettings(settings).conditions[1],
+                   { above: false, level: -5, back: 0, after: 0, whenOn: "",
+                     whenOff: "frost.val=0" });
+  // With a condition, a value generator needs no instruction of its own.
+  generator.send = "";
+  assert.deepEqual(Object.keys(settingsOf(generator, []).settings).includes("send"), false);
+  assert.deepEqual(settingsOf(generator, []).settings.conditions, conditions);
+  // A level has the same bounds as a value.
+  assert.deepEqual(levelBounds(), { low: -2147483648, high: 2147483647 });
+});
+
+test("a condition's second level cannot be past its first", () => {
+  const generator = newValueGenerator();
+  const above = { ...newCondition(), level: 20, back: 21, whenOn: "x=1" };
+  const below = { ...newCondition(), above: false, level: 5, back: 4, whenOn: "x=1" };
+  generator.conditions = [above];
+  assert.deepEqual(settingsOf(generator, []), {
+    error: "Condition 1: The level that turns it off cannot be above the level that turns " +
+           "it on.",
+  });
+  generator.conditions = [{ ...above, back: 20 }, below];
+  assert.deepEqual(settingsOf(generator, []), {
+    error: "Condition 2: The level that turns it off cannot be below the level that turns " +
+           "it on.",
+  });
+  generator.conditions = [{ ...above, back: 20 }, { ...below, back: 5 }];
+  assert.deepEqual(settingsOf(generator, []).settings.conditions,
+                   [{ turnsOnAbove: 20, turnsOffBelow: 20, whenOn: ["x=1"] },
+                    { turnsOnBelow: 5, turnsOffAbove: 5, whenOn: ["x=1"] }]);
 });
 
 test("a value generator of a file comes back as it was written", () => {
