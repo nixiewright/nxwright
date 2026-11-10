@@ -631,11 +631,13 @@ class ReferenceTest(SourceFolderTestCase):
 
     def test_an_unknown_component(self):
         self.write_code('t0.txt=""', 't9.txt=""')
-        self.assert_export_refused(r"first\.nx line 3: t9 is neither on this page nor a page")
+        self.assert_export_refused(r"first\.nx line 3: t9 is neither a component of this page "
+                                   r"nor a page")
 
     def test_an_unknown_page(self):
         self.write_code("t0.txt=third.t1.txt")
-        self.assert_export_refused(r"first\.nx line 2: third is neither on this page nor a page")
+        self.assert_export_refused(r"first\.nx line 2: third is neither a component of this "
+                                   r"page nor a page")
 
     def test_an_unknown_component_of_another_page(self):
         self.write_code("t0.txt=second.t9.txt")
@@ -643,7 +645,8 @@ class ReferenceTest(SourceFolderTestCase):
 
     def test_another_pages_component_without_its_page(self):
         self.write_code('t1.txt=""')
-        self.assert_export_refused(r"first\.nx line 2: t1 is neither on this page nor a page")
+        self.assert_export_refused(r"first\.nx line 2: t1 is neither a component of this page "
+                                   r"nor a page")
 
     def test_an_unknown_component_in_a_command(self):
         self.write_code("vis t9,1")
@@ -651,7 +654,7 @@ class ReferenceTest(SourceFolderTestCase):
                                    r"this page nor a variable, so the Nextion Editor refuses it")
 
     def test_the_runner_refuses_what_the_build_refuses(self):
-        for line, said in (('t9.txt=""', r"t9 is neither on this page nor a page"),
+        for line, said in (('t9.txt=""', r"t9 is neither a component of this page nor a page"),
                            ("second.t1.txt=t0.txt", r"second\.t1: t1 is of local scope"),
                            ("sys0=second.bco", r"second\.bco: only page second's own code")):
             with self.subTest(line=line):
@@ -2701,7 +2704,8 @@ class SharedFileReferenceTest(SourceFolderTestCase):
 
     def test_an_unknown_component_is_reported_in_the_shared_file(self):
         self.write_library("t9")
-        self.assert_export_refused(r"pages/lib/both\.nx line 2: t9 is neither on this page nor a page")
+        self.assert_export_refused(r"pages/lib/both\.nx line 2: t9 is neither a component of "
+                                   r"this page nor a page")
 
 
 def _text_line(size: int, character: str = "a", width: int = 1) -> str:

@@ -110,13 +110,15 @@ class ErrorPlaceTest(FolderTestCase):
     def test_a_page_file(self):
         self.write("pages/page0.nx", "on page0.load:\n  sys0 = 1\n  bogus.txt = 1\n")
         self.assertEqual(self.findings(), [Finding("pages/page0.nx", 3, ERROR,
-                                                   "bogus is neither on this page nor a page")])
+                                                   "bogus is neither a component of this page "
+                                                   "nor a page")])
 
     def test_an_included_file(self):
         self.write("pages/lib/show.nx", "function show():\n  bogus.txt = 1\n")
         self.write("pages/page0.nx", 'include "lib/show.nx"\non page0.load:\n  show()\n')
         self.assertEqual(self.findings(), [Finding("pages/lib/show.nx", 2, ERROR,
-                                                   "bogus is neither on this page nor a page")])
+                                                   "bogus is neither a component of this page "
+                                                   "nor a page")])
 
     def test_program_nx(self):
         self.write("program.nx", "int counter=0\nint __bad=0\n")
@@ -261,7 +263,7 @@ class CheckTest(FolderTestCase):
         self.assertEqual([finding.file for finding in findings],
                          ["pages/page0.page.toml", "pages/second.nx"])
         self.assertEqual((findings[1].line, findings[1].message),
-                         (4, "nothing is neither on this page nor a page"))
+                         (4, "nothing is neither a component of this page nor a page"))
 
     def test_an_error_every_page_depends_on_comes_alone(self):
         self.write("pages/page0.nx", "on page0.load:\n  one.txt = 1\n")
@@ -308,9 +310,9 @@ class CommandTest(FolderTestCase):
         self.write("pages/page0.nx", "const UNUSED = 1\n\non page0.load:\n  bogus.txt = 1\n")
         code, output, errors = self.run_check()
         self.assertEqual(code, 1)
-        self.assertEqual(output, "pages/page0.nx line 4: error: bogus is neither on this page "
-                                 "nor a page\npages/page0.nx line 1: warning: constant UNUSED "
-                                 "is not used\n")
+        self.assertEqual(output, "pages/page0.nx line 4: error: bogus is neither a component "
+                                 "of this page nor a page\npages/page0.nx line 1: warning: "
+                                 "constant UNUSED is not used\n")
         self.assertEqual(errors, "nxwright check: 1 errors, 1 warnings\n")
 
 

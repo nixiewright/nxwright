@@ -1009,7 +1009,7 @@ class LiveCheckTest(CheckFolderTestCase):
     def test_unsaved_text_is_checked(self):
         self.change("pages/page0.nx", "on page0.load:\n  bogus.txt = 1\n", "textDocument/didOpen")
         self.assertEqual(self.published(), {self.uri("pages/page0.nx"): [
-            (1, 1, "bogus is neither on this page nor a page")]})
+            (1, 1, "bogus is neither a component of this page nor a page")]})
         self.change("pages/page0.nx", "on page0.load:\n  title.txt = \"a\"\n")
         self.assertEqual(self.published(), {self.uri("pages/page0.nx"): []})
 
@@ -1036,7 +1036,7 @@ class LiveCheckTest(CheckFolderTestCase):
             write_message(editor, {"jsonrpc": "2.0", "method": "exit"})
             editor.close()
             thread.join(10)
-        self.assertIn(b"bogus is neither on this page nor a page", output.getvalue())
+        self.assertIn(b"bogus is neither a component of this page nor a page", output.getvalue())
         self.assertEqual(served, [0])
 
     def test_a_page_past_the_screens_memory(self):

@@ -535,7 +535,7 @@ def _check_references(code: str, objects: ObjectNames, number: int):
             first, second, third = match[1], match[2], match[3] or ""
             if first not in objects.pages:
                 if first not in objects.own:
-                    raise NxwrightError("%s is neither on this page nor a page"
+                    raise NxwrightError("%s is neither a component of this page nor a page"
                                         % first, line=number)
                 continue
             known = objects.pages[first]
