@@ -184,6 +184,7 @@ export class SignalGeneratorPanel {
 const BODY = `
 <div class="toolbar">
   <button id="add-waveform" disabled>Add waveform generator</button>
+  <button id="add-value" disabled>Add value generator</button>
   <span id="add-hint" class="hint"></span>
   <span class="gap"></span>
   <button id="start-all" class="secondary" disabled>Start all</button>
@@ -196,9 +197,12 @@ const BODY = `
 
 // The styles of the panel. At the top are the buttons that add a
 // generator, start or stop them all, and open or save their file. Below
-// them, each generator has a block: its Start or Stop button, its waveforms,
-// its channels, and a table of its waves' settings. The table has one row
-// for the wave every channel sends, or one row for each channel.
+// them, each generator has a block. A waveform generator's block has its
+// Start or Stop button, its waveforms, its channels, and a table of its
+// waves' settings. The table has one row for the wave every channel sends,
+// or one row for each channel. A value generator's block has the field for
+// its instructions in place of the waveforms and the channels, and one row
+// for its wave.
 const STYLES = `
   body { padding: 8px 16px 16px; font-size: 12px; }
   .toolbar, .head, .waveforms, .channels {
@@ -240,11 +244,20 @@ const STYLES = `
   td { padding: 2px 4px 2px 0; white-space: nowrap; }
   tr.off td:not(.name) { opacity: 0.45; }
   td.name { padding-right: 10px; }
-  input, select {
+  input, select, textarea {
     color: var(--vscode-input-foreground); background: var(--vscode-input-background);
     border: 1px solid var(--vscode-input-border, transparent); padding: 2px 4px;
     font: inherit;
   }
+  .send {
+    display: flex; gap: 8px; align-items: flex-start; margin: 8px 0;
+    color: var(--vscode-descriptionForeground);
+  }
+  textarea {
+    width: 32em; max-width: 70vw; resize: vertical;
+    font-family: var(--vscode-editor-font-family, monospace);
+  }
+  textarea::placeholder { color: var(--vscode-input-placeholderForeground); }
   input[type="number"] { width: 5em; }
   input[type="text"] { width: 28em; max-width: 60vw; }
   input:invalid { border-color: var(--vscode-inputValidation-errorBorder, red); }

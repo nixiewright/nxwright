@@ -416,6 +416,22 @@ class GeneratorToolsTest(SimulationTestCase):
         self.agent.text("stop_generator", simulation=self.simulation, number=1)
         self.assertEqual(self.running(), [{"number": 2, "settings": other}])
 
+    def test_a_value_generator_feeds_a_value(self):
+        feeding = {"kind": "value", "send": ["sys0={value}"], "shape": "custom",
+                   "values": [42, 43], "interval": 20}
+        self.assertEqual(self.start(settings=feeding), [1])
+        self.assertEqual(self.running(), [{"number": 1, "settings": feeding}])
+        self.agent.text("wait", simulation=self.simulation, milliseconds=40)
+        self.assertEqual(self.agent.data("values", simulation=self.simulation, names=["sys0"]),
+                         {"sys0": 43})
+        # Each instruction shows in the log, the same way as one sent with
+        # `send`.
+        self.assertEqual([line for line in self.log_lines() if "RECV" in line],
+                         ["SIM RECV: sys0=42", "SIM RECV: sys0=43"])
+        self.assertIn("{state} is not a name an instruction can use",
+                      self.agent.refusal("start_generator", simulation=self.simulation,
+                                         settings=dict(feeding, send=["sys0={state}"])))
+
     def test_a_file_starts_all_of_its_generators(self):
         other = dict(self.feeding, channels=[{"channel": 1, "shape": "square"}])
         self.assertEqual(self.start(file=str(self.write_file(self.feeding, other))), [1, 2])

@@ -4,7 +4,7 @@
 // Raise it when the extension starts relying on something only a newer
 // toolchain has, such as a new request to the language server, to the
 // version that carries it (CONTRIBUTING.md, Versions).
-export const OLDEST_TOOLCHAIN = "0.3.0";
+export const OLDEST_TOOLCHAIN = "0.3.1";
 
 // Returns whether the version `version`, such as "0.1.0", is older than
 // `oldest`, comparing their dotted numbers one by one, a missing one as 0.

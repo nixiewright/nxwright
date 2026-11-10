@@ -637,13 +637,24 @@ class GeneratorRequestsTest(LiveTestCase):
                                            for given in generators), encoding="utf-8")
         return file
 
-    def wait_for_points(self, count: int):
+    def wait_until(self, condition, awaited: str):
+        """Waits until `condition()` is true, or fails saying that `awaited`
+        did not come."""
         deadline = time.monotonic() + _PATIENCE
         while time.monotonic() < deadline:
-            if len(self.points()) >= count:
+            if condition():
                 return
             time.sleep(0.01)
-        self.fail("%d points did not come" % count)
+        self.fail("%s did not come" % awaited)
+
+    def wait_for_points(self, count: int):
+        self.wait_until(lambda: len(self.points()) >= count, "%d points" % count)
+
+    def wait_for_value(self, name: str, value: int):
+        """Waits until the program's value `name` is `value`."""
+        simulation = self.adapter._live.simulation
+        self.wait_until(lambda: simulation.globals.get(name) == value,
+                        "%s at %d" % (name, value))
 
     def test_the_waveforms_a_generator_can_feed(self):
         self.launch(page="second")
@@ -679,6 +690,52 @@ class GeneratorRequestsTest(LiveTestCase):
                                           {"number": 2, "settings": other}])
         self.assertTrue(self.later("nxwright/stopGenerator", number=1)["success"])
         self.assertEqual(self.running(), [{"number": 2, "settings": other}])
+
+    def test_a_value_generator_starts_changes_and_stops(self):
+        self.launch(page="second")
+        feeding = {"kind": "value", "send": ["sys0={value}"], "onlyWhenChanged": True,
+                   "shape": "custom", "values": [42], "interval": 10}
+        self.assertEqual(self.later("nxwright/startGenerator", settings=feeding)["body"],
+                         {"number": 1})
+        self.assertEqual(self.running(), [{"number": 1, "settings": feeding}])
+        self.wait_for_value("sys0", 42)
+        changed = dict(feeding, values=[77])
+        self.assertTrue(self.later("nxwright/changeGenerator", number=1,
+                                   settings=changed)["success"])
+        self.wait_for_value("sys0", 77)
+        # A generator keeps its kind.
+        reply = self.later("nxwright/changeGenerator", number=1, settings=self.feeding)
+        self.assertEqual((reply["success"], reply["message"]),
+                         (False, "generator 1 is a value generator, so it cannot take the "
+                                 "settings of a waveform generator"))
+        refused = self.later("nxwright/startGenerator",
+                             settings=dict(feeding, send=["sys0={other}"]))
+        self.assertEqual((refused["success"], refused["message"]),
+                         (False, "settings.send[0]: {other} is not a name an instruction can "
+                                 "use. It can use {value}"))
+        self.assertTrue(self.later("nxwright/stopGenerator", number=1)["success"])
+        self.assertEqual(self.running(), [])
+
+    def test_a_breakpoint_stops_in_the_event_a_generators_click_runs(self):
+        # The third line of page0.nx is the second statement of go.down.
+        self.launch({"pages/page0.nx": [3]})
+        self.wait_for("nxwright/drawing")
+        feeding = {"kind": "value", "send": ["click go,1", "ticks={value}"],
+                   "shape": "custom", "values": [5], "interval": 10}
+        self.assertTrue(self.later("nxwright/startGenerator", settings=feeding)["success"])
+        stop = self.wait_for("stopped")
+        self.assertEqual(stop["reason"], "breakpoint")
+        self.assertEqual(self.frames()[0], ("go.down", 3))
+        self.assertEqual(self.program_value("count"), "1")
+        # The generator is stopped while the debugger holds the simulation
+        # inside its point. The rest of that point is still sent, and
+        # nothing after it.
+        self.assertTrue(self.later("nxwright/stopGenerator", number=1)["success"])
+        self.request("continue", threadId=1)
+        self.wait_for_value("ticks", 5)
+        time.sleep(0.1)
+        self.assertEqual(self.adapter._live.simulation.globals["count"], 11)
+        self.assertEqual(len(self.events("stopped")), 1)
 
     def test_a_generators_points_come_on_their_own_between_drawings(self):
         self.launch(page="second")

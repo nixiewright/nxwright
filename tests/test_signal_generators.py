@@ -1,6 +1,6 @@
 """Signal generators (testing/signal_generators.py): a wave's shapes, the
-generators' settings and their file, and a waveform generator's points in a
-simulation (testing/simulation.py)."""
+generators' settings and their file, and what a waveform generator and a
+value generator send a simulation (testing/simulation.py)."""
 from fractions import Fraction
 import json
 from pathlib import Path
@@ -10,10 +10,10 @@ from unittest import mock
 
 from nxwright import NxwrightError
 from nxwright.testing.simulation import Simulation
-from nxwright.testing.signal_generators import (WaveformGeneratorRun, generator_dict,
+from nxwright.testing.signal_generators import (ValueGeneratorRun, WaveformGeneratorRun,
                                                 generator_settings, generators_from_json,
-                                                generators_to_json, read_generators_file,
-                                                wave_value)
+                                                generators_to_json, instruction_with,
+                                                read_generators_file, wave_value)
 from tests.test_simulation import SimulationTestCase, placed, table
 
 
@@ -25,6 +25,13 @@ def settings(**given):
     return generator_settings(dict({"kind": "waveform",
                                     "waveforms": [{"page": "page0", "waveform": "chart"}],
                                     "channels": channels}, **given), "test")
+
+
+def value_settings(**given):
+    """The settings of a value generator that sends `temp.val={value}`, with
+    the settings `given`."""
+    return generator_settings(dict({"kind": "value", "send": ["temp.val={value}"]}, **given),
+                              "test")
 
 
 def points(generator: WaveformGeneratorRun, count: int) -> list:
@@ -167,15 +174,22 @@ class SettingsFileTest(unittest.TestCase):
         generator = {"waveforms": [{"page": "page0", "waveform": "chart"}],
                      "channels": [{"channel": 0}]}
         with self.assertRaisesRegex(NxwrightError, "^test: a generator must give its kind, as "
-                                                   '"kind": "waveform"$'):
+                                                   '"kind": "waveform" or "kind": "value"$'):
             generator_settings(generator, "test")
         # A kind from a later version of nxwright is refused, and the error
         # gives its name.
         with self.assertRaisesRegex(NxwrightError, "^test: kind 'sequence' is not a kind of "
                                                    "generator this version of nxwright knows. "
-                                                   "It knows waveform$"):
+                                                   "It knows waveform and value$"):
             generator_settings(dict(generator, kind="sequence"), "test")
-        self.assertEqual(generator_dict(settings())["kind"], "waveform")
+        # So is a kind that is no text at all.
+        for kind in ([], {"value": 1}, 3, None):
+            with self.subTest(kind=kind):
+                with self.assertRaisesRegex(NxwrightError, "^test: kind .* is not a kind of "
+                                                           "generator this version of nxwright "
+                                                           "knows"):
+                    generator_settings(dict(generator, kind=kind), "test")
+        self.assertEqual(settings().json_form()["kind"], "waveform")
 
     def test_a_custom_wave_ignores_the_minimum_and_the_maximum(self):
         # Its values are played as given, so a minimum above the maximum,
@@ -201,6 +215,134 @@ class SettingsFileTest(unittest.TestCase):
             with self.subTest(text=text):
                 with self.assertRaisesRegex(NxwrightError, refusal):
                     generators_from_json(text, "signals.json")
+
+
+class ValueGeneratorSettingsTest(unittest.TestCase):
+
+    def test_a_file_reads_back_generators_of_both_kinds(self):
+        given = (settings(shape="square"),
+                 value_settings(send=["temp.val={value}", "click refresh,1"], minimum=180,
+                                maximum=240, interval=1000, onlyWhenChanged=True),
+                 value_settings())
+        text = generators_to_json(given)
+        self.assertEqual(generators_from_json(text, "test"), given)
+        written = json.loads(text)["generators"]
+        self.assertEqual(written[1], {"kind": "value",
+                                      "send": ["temp.val={value}", "click refresh,1"],
+                                      "onlyWhenChanged": True, "minimum": 180, "maximum": 240,
+                                      "interval": 1000})
+        # A setting left at its default is not written.
+        self.assertEqual(written[2], {"kind": "value", "send": ["temp.val={value}"]})
+
+    def test_the_value_takes_the_place_of_its_name_in_an_instruction(self):
+        for text, sent in (("temp.val={value}", "temp.val=215"),
+                           # In a quoted text too, and wherever it stands.
+                           ('t0.txt="{value} C"', 't0.txt="215 C"'),
+                           ("add 1,0,{value}", "add 1,0,215"),
+                           ("n0.val={value}+{value}", "n0.val=215+215"),
+                           # Braces that hold no name are sent as they are.
+                           ('t0.txt="{} { 3 } {1a} {"', 't0.txt="{} { 3 } {1a} {"'),
+                           ("click refresh,1", "click refresh,1")):
+            with self.subTest(text=text):
+                self.assertEqual(instruction_with(text, 215), sent)
+                self.assertEqual(value_settings(send=[text]).send, (text,))
+        self.assertEqual(instruction_with("temp.val={value}", -40), "temp.val=-40")
+
+    def test_a_value_generators_settings_are_refused_with_their_place(self):
+        for change, refusal in (
+                # Any other name between braces is refused, so that it can be
+                # given a meaning later.
+                ({"send": ["temp.val={value}", "t0.txt={state}"]},
+                 r"test\.send\[1\]: \{state\} is not a name an instruction can use\. It can "
+                 r"use \{value\}"),
+                ({"send": ["temp.val={Value}"]},
+                 r"test\.send\[0\]: \{Value\} is not a name an instruction can use"),
+                ({"send": ["temp.val={_x1}"]}, r"test\.send\[0\]: \{_x1\} is not a name"),
+                ({"send": ["temp.val=1", " "]},
+                 r"test\.send\[1\]: an instruction is one line of text, and not empty"),
+                ({"send": ["temp.val=1\nclick b0,1"]},
+                 r"test\.send\[0\]: an instruction is one line of text, and not empty"),
+                ({"send": [3]},
+                 r"test\.send\[0\]: an instruction is one line of text, and not empty"),
+                ({"send": "temp.val={value}"}, r"test\.send must be a list of instructions"),
+                ({"send": []}, r"test: send must list one instruction or more"),
+                ({"onlyWhenChanged": 1}, r"test: onlyWhenChanged must be true or false"),
+                # A waveform generator's settings are not a value generator's.
+                ({"waveforms": [{"page": "page0", "waveform": "chart"}]},
+                 r"test: waveforms is not a setting"),
+                ({"channels": [{"channel": 0}]}, r"test: channels is not a setting"),
+                ({"shape": "saw"}, r"test: shape 'saw' is not a shape"),
+                ({"minimum": 90, "maximum": 10}, r"test: minimum 90 is above maximum 10"),
+                ({"shape": "custom"}, r"test: a custom wave needs values")):
+            with self.subTest(change=change):
+                with self.assertRaisesRegex(NxwrightError, "^" + refusal):
+                    value_settings(**change)
+        with self.assertRaisesRegex(NxwrightError,
+                                    "^test: send must list one instruction or more$"):
+            generator_settings({"kind": "value"}, "test")
+
+    def test_a_value_is_a_whole_number_of_32_bits(self):
+        lowest, highest = -2147483648, 2147483647
+        wide = value_settings(minimum=lowest, maximum=highest, noise=highest,
+                              shape="custom", values=[lowest, highest])
+        self.assertEqual((wide.wave().minimum, wide.wave().maximum, wide.wave().values),
+                         (lowest, highest, (lowest, highest)))
+        bounds = "from -2147483648 to 2147483647"
+        for change, refusal in (({"minimum": lowest - 1},
+                                 "minimum must be a whole number " + bounds),
+                                ({"maximum": highest + 1},
+                                 "maximum must be a whole number " + bounds),
+                                ({"noise": -1},
+                                 "noise must be a whole number from 0 to 2147483647"),
+                                ({"values": [highest + 1]},
+                                 "values must be a list of whole numbers " + bounds),
+                                ({"maximum": 1.5}, "maximum must be a whole number " + bounds)):
+            with self.subTest(change=change):
+                with self.assertRaisesRegex(NxwrightError, refusal):
+                    value_settings(**change)
+        # A waveform's point stays one of the values a device sends as a byte.
+        with self.assertRaisesRegex(NxwrightError, "maximum must be a whole number from 0 to 255"):
+            settings(maximum=256)
+        with self.assertRaisesRegex(NxwrightError, "whole numbers from 0 to 255"):
+            settings(shape="custom", values=[-1])
+
+    def test_noise_keeps_a_value_within_32_bits(self):
+        for value, extreme in ((2147483640, 2147483647), (-2147483640, -2147483648)):
+            run = ValueGeneratorRun(value_settings(shape="custom", values=[value], noise=40), 0)
+            sent = [int(run.tick()[0].split("=")[1]) for _ in range(100)]
+            self.assertIn(extreme, sent)
+            self.assertTrue(all(-2147483648 <= one <= 2147483647 for one in sent))
+
+    def test_a_value_generator_sends_its_instructions_at_each_point(self):
+        run = ValueGeneratorRun(value_settings(
+            send=["temp.val={value}", "click refresh,1"], shape="custom", values=[5, -7],
+            interval=30), 100)
+        self.assertEqual(run.due(), 130)
+        self.assertEqual(run.tick(), ["temp.val=5", "click refresh,1"])
+        self.assertEqual(run.due(), 160)
+        self.assertEqual(run.tick(), ["temp.val=-7", "click refresh,1"])
+
+    def test_only_when_changed_sends_a_value_once_until_it_changes(self):
+        run = ValueGeneratorRun(value_settings(shape="square", maximum=1, period=4,
+                                               onlyWhenChanged=True), 0)
+        # The first point is sent, then each point whose value changed.
+        self.assertEqual([run.tick() for _ in range(6)],
+                         [["temp.val=1"], [], ["temp.val=0"], [], ["temp.val=1"], []])
+        # Once the app started again, the screen has lost the value: the next
+        # point is sent whatever its value.
+        run.app_started()
+        self.assertEqual([run.tick() for _ in range(2)], [["temp.val=0"], []])
+        # Without onlyWhenChanged, every point is sent.
+        run = ValueGeneratorRun(value_settings(shape="square", maximum=1, period=4), 0)
+        self.assertEqual([run.tick() for _ in range(3)],
+                         [["temp.val=1"], ["temp.val=1"], ["temp.val=0"]])
+
+    def test_a_value_generators_change_keeps_the_waves_place(self):
+        run = ValueGeneratorRun(value_settings(shape="sawtooth", maximum=100, period=4), 0)
+        self.assertEqual([run.tick() for _ in range(2)], [["temp.val=0"], ["temp.val=25"]])
+        run.change(value_settings(send=["n0.val={value}"], shape="sawtooth", maximum=1000,
+                                  period=4), 100)
+        self.assertEqual(run.tick(), ["n0.val=500"])
 
 
 class GeneratorInSimulationTest(SimulationTestCase):
@@ -521,6 +663,176 @@ on tick.timer:
         simulation.advance(40)
         # Half way through its cycle, with a lower maximum.
         self.assertEqual(simulation.waves(), {"chart": {0: [0, 50, 50, 25]}})
+
+
+class ValueGeneratorInSimulationTest(SimulationTestCase):
+    """page0 has a number, "temp", and a hotspot, "refresh", whose press
+    copies temp's value into the number "seen"; the page "second" has a
+    number, "other"."""
+
+    def setUp(self):
+        super().setUp()
+        self.program("page page0\n")
+        self.page("page0", [placed("temp", "number", 0, 0), placed("seen", "number", 0, 100),
+                            placed("refresh", "hotspot", 300, 0),
+                            table("chart", "waveform", x=0, y=200, w=10, h=50, ch=1)], """\
+on refresh.down:
+  seen.val = temp.val
+""")
+        self.page("second", [placed("other", "number", 0, 0)])
+
+    def value(self, simulation: Simulation, name: str):
+        return simulation.fields[simulation.page][name + ".val"]
+
+    def received(self, simulation: Simulation) -> list:
+        """The instructions the log shows the screen received."""
+        return [line[len("SIM RECV: "):] for _, line in simulation.log
+                if line.startswith("SIM RECV: ")]
+
+    def feeding(self, **given):
+        return value_settings(**dict({"shape": "custom", "values": [5, 7], "interval": 20},
+                                     **given))
+
+    def test_the_instructions_arrive_on_time_in_order_and_show_in_the_log(self):
+        simulation = Simulation(self.root)
+        number = simulation.start_generator(self.feeding(
+            send=["temp.val={value}", "click refresh,1"]))
+        simulation.advance(19)
+        self.assertEqual(self.received(simulation), [])
+        simulation.advance(1)
+        # The click's event read the value its point had just set.
+        self.assertEqual((self.value(simulation, "temp"), self.value(simulation, "seen")),
+                         (5, 5))
+        simulation.advance(20)
+        self.assertEqual((self.value(simulation, "temp"), self.value(simulation, "seen")),
+                         (7, 7))
+        self.assertEqual(self.received(simulation),
+                         ["temp.val=5", "click refresh,1", "temp.val=7", "click refresh,1"])
+        simulation.stop_generator(number)
+        simulation.advance(100)
+        self.assertEqual(len(self.received(simulation)), 4)
+        self.assertEqual([line for _, line in simulation.log if "generator" in line],
+                         ["value generator 1 starts, sending temp.val={value}; click refresh,1",
+                          "value generator 1 stops"])
+
+    def test_each_instruction_is_answered_as_bkcmd_asks(self):
+        simulation = Simulation(self.root)
+        simulation.serial_input("bkcmd=3")
+        # A component of a page not shown is a name the screen does not know.
+        simulation.start_generator(self.feeding(send=["temp.val={value}", "other.val={value}"]))
+        before = len(simulation.log)
+        simulation.advance(20)
+        self.assertEqual([line for _, line in simulation.log[before:]],
+                         ["SIM RECV: temp.val=5", "SIM SEND: 01 ff ff ff",
+                          "SIM RECV: other.val=5", "SIM SEND: 1a ff ff ff"])
+
+    def test_a_value_generator_sends_whichever_page_shows(self):
+        simulation = Simulation(self.root)
+        simulation.start_generator(self.feeding(send=["other.val={value}"]))
+        simulation.serial_input("page second")
+        simulation.advance(20)
+        self.assertEqual(self.value(simulation, "other"), 5)
+
+    def test_com_stop_holds_the_instructions(self):
+        simulation = Simulation(self.root)
+        simulation.start_generator(self.feeding())
+        simulation.serial_input("com_stop")
+        simulation.advance(40)
+        self.assertEqual(self.value(simulation, "temp"), 0)
+        self.assertEqual([line for _, line in simulation.log if "held" in line],
+                         ["held: the serial line is stopped"] * 2)
+        simulation.serial_input("com_star")
+        self.assertEqual(self.value(simulation, "temp"), 7)
+
+    def test_the_instructions_run_while_the_screen_sleeps_and_keep_it_awake(self):
+        simulation = Simulation(self.root)
+        simulation.serial_input("ussp=1")
+        simulation.start_generator(self.feeding())
+        simulation.advance(3000)
+        self.assertFalse(simulation.asleep)
+        simulation.serial_input("sleep=1")
+        simulation.advance(20)
+        self.assertTrue(simulation.asleep)       # usup is 0: the instruction runs asleep
+        self.assertEqual(len(self.received(simulation)), 3000 // 20 + 3)
+
+    def test_a_start_of_the_app_has_the_next_point_sent_again(self):
+        simulation = Simulation(self.root)
+        simulation.start_generator(self.feeding(values=[5], onlyWhenChanged=True))
+        simulation.advance(60)
+        self.assertEqual(self.received(simulation), ["temp.val=5"])
+        simulation.start_again()
+        self.assertEqual(self.value(simulation, "temp"), 0)
+        # The generator kept its pace, and the screen is sent the value it lost.
+        simulation.advance(20)
+        self.assertEqual(self.value(simulation, "temp"), 5)
+        simulation.advance(40)
+        self.assertEqual(self.received(simulation), ["temp.val=5", "temp.val=5"])
+
+    def test_an_instruction_that_starts_the_app_again_drops_those_after_it(self):
+        simulation = Simulation(self.root)
+        simulation.start_generator(self.feeding(
+            values=[5], onlyWhenChanged=True, send=["temp.val={value}", "rest", "temp.val=99"]))
+        simulation.advance(20)
+        self.assertEqual(self.received(simulation), ["temp.val=5", "rest"])
+        self.assertEqual(self.value(simulation, "temp"), 0)
+        # The next point is sent again, though its value is the same.
+        simulation.advance(20)
+        self.assertEqual(self.received(simulation),
+                         ["temp.val=5", "rest", "temp.val=5", "rest"])
+
+    def test_a_change_takes_new_settings_of_the_same_kind(self):
+        simulation = Simulation(self.root)
+        number = simulation.start_generator(self.feeding(values=[1, 2, 3, 4]))
+        simulation.advance(20)
+        simulation.change_generator(number, self.feeding(values=[10, 20, 30, 40],
+                                                         send=["seen.val={value}"]))
+        simulation.advance(20)
+        # The wave went on from its place, with its new values and instruction.
+        self.assertEqual(self.received(simulation), ["temp.val=1", "seen.val=20"])
+        chart = settings(waveforms=[{"page": "page0", "waveform": "chart"}])
+        with self.assertRaisesRegex(NxwrightError, "^generator 1 is a value generator, so it "
+                                                   "cannot take the settings of a waveform "
+                                                   "generator$"):
+            simulation.change_generator(number, chart)
+        other = simulation.start_generator(chart)
+        with self.assertRaisesRegex(NxwrightError, "^generator 2 is a waveform generator, so it "
+                                                   "cannot take the settings of a value "
+                                                   "generator$"):
+            simulation.change_generator(other, self.feeding())
+        self.assertEqual(simulation.generators(), {1: self.feeding(
+            values=[10, 20, 30, 40], send=["seen.val={value}"]), 2: chart})
+
+    def test_generators_of_both_kinds_send_in_the_order_of_their_numbers(self):
+        simulation = Simulation(self.root)
+        simulation.start_generator(self.feeding(send=["add chart.id,0,{value}"], values=[1]))
+        simulation.start_generator(settings(waveforms=[{"page": "page0", "waveform": "chart"}],
+                                            shape="custom", values=[2], interval=20))
+        simulation.start_generator(self.feeding(send=["add chart.id,0,{value}"], values=[3]))
+        simulation.advance(40)
+        self.assertEqual(simulation.waves(), {"chart": {0: [1, 2, 3, 1, 2, 3]}})
+
+    def test_a_generator_stopped_inside_a_point_sends_the_rest_of_that_point_alone(self):
+        # The debugger can hold the simulation inside the code an instruction
+        # runs, and the panel can stop the generator meanwhile. The point
+        # under way was settled before it was sent, so its instructions
+        # still go, and nothing follows them.
+        simulation = Simulation(self.root)
+        number = simulation.start_generator(self.feeding(
+            send=["temp.val={value}", "seen.val={value}"]))
+        arrived = Simulation._serial_arrived
+        stopped = []
+
+        def stop_at_the_first(simulation):
+            arrived(simulation)
+            if not stopped:
+                stopped.append(True)
+                simulation.stop_generator(number)
+
+        with mock.patch.object(Simulation, "_serial_arrived", autospec=True,
+                               side_effect=stop_at_the_first):
+            simulation.advance(100)
+        self.assertEqual(self.received(simulation), ["temp.val=5", "seen.val=5"])
+        self.assertEqual(simulation.generators(), {})
 
 
 if __name__ == "__main__":

@@ -27,9 +27,20 @@
 //    been answered yet;
 //  - `notice`: what the generator needs before it can start, or what the
 //    simulation refused of it.
+//
+// A value generator's settings are {kind: "value", send: [instruction],
+// onlyWhenChanged, and a wave's settings}. The panel keeps one as {kind,
+// send, onlyWhenChanged, wave, number, waiting, notice}, where `send` is the
+// text of its instructions, one on each line, and `wave` is its wave, with
+// every setting given.
 
-// The kind of a generator that sends points to waveforms.
+// The kind of a generator that sends points to waveforms, and the kind of
+// one that sends instructions carrying its wave's value.
 export const WAVEFORM = "waveform";
+export const VALUE = "value";
+// The lowest and the highest value a generator of each kind sends. They
+// match _BOUNDS in signal_generators.py.
+const BOUNDS = { [WAVEFORM]: [0, 255], [VALUE]: [-2147483648, 2147483647] };
 
 // The wave shapes, each with the name the panel shows.
 export const SHAPES = [
@@ -45,23 +56,29 @@ export const WAVE_DEFAULTS = {
   values: [],
 };
 
-// The settings that are whole numbers, in the order the panel shows them:
-// the name the panel gives each, the values it takes, and what it is.
-export const NUMBER_SETTINGS = [
-  { key: "minimum", label: "Min", low: 0, high: 255, title: "The wave's lowest value" },
-  { key: "maximum", label: "Max", low: 0, high: 255, title: "The wave's highest value" },
-  { key: "interval", label: "Interval (ms)", low: 1, title: "Milliseconds between two points" },
-  { key: "period", label: "Period (points)", low: 1,
-    title: "Points in one cycle of the wave" },
-  { key: "duty", label: "Duty (%)", low: 0, high: 100,
-    title: "For a pulse: the percentage of the cycle at the highest value" },
-  { key: "noise", label: "Noise", low: 0, high: 255,
-    title: "The most that is added to or taken from each point, at random" },
-];
+// Returns the settings of a wave that are whole numbers, for a generator of
+// `kind`, in the order the panel shows them. Each has its label, the range
+// of values it takes, and the tooltip that describes it.
+export function numberSettings(kind) {
+  const [lowest, highest] = BOUNDS[kind];
+  return [
+    { key: "minimum", label: "Min", low: lowest, high: highest,
+      title: "The wave's lowest value" },
+    { key: "maximum", label: "Max", low: lowest, high: highest,
+      title: "The wave's highest value" },
+    { key: "interval", label: "Interval (ms)", low: 1,
+      title: "Milliseconds between two points" },
+    { key: "period", label: "Period (points)", low: 1,
+      title: "Points in one cycle of the wave" },
+    { key: "duty", label: "Duty (%)", low: 0, high: 100,
+      title: "For a pulse: the percentage of the cycle at the highest value" },
+    { key: "noise", label: "Noise", low: 0, high: highest,
+      title: "The most that is added to or taken from each point, at random" },
+  ];
+}
 
 // The most channels a waveform has.
 export const MOST_CHANNELS = 4;
-const LARGEST_VALUE = 255;
 const WAVE_KEYS = Object.keys(WAVE_DEFAULTS);
 // The run fields of a generator that the simulation is not running.
 const NOT_RUNNING = { number: null, waiting: false, notice: "" };
@@ -75,6 +92,19 @@ export function newGenerator(offered) {
     same: true,
     common: wholeWave({}),
     channels: channelRows((channel) => ({ channel, on: channel === 0, wave: wholeWave({}) })),
+    ...NOT_RUNNING,
+  };
+}
+
+// Returns a new value generator for the panel, with no instruction yet. Its
+// wave sends a value only once a second, because the log shows every
+// instruction sent.
+export function newValueGenerator() {
+  return {
+    kind: VALUE,
+    send: "",
+    onlyWhenChanged: false,
+    wave: wholeWave({ interval: 1000, period: 20 }),
     ...NOT_RUNNING,
   };
 }
@@ -151,11 +181,24 @@ export function setSame(generator, same) {
 }
 
 // Returns {settings}, the generator's settings as the simulation and a
-// settings file take them, or {error}, what the panel must have first.
-// `offered` lists the app's waveforms. A generator that sends the same
-// wave on every channel gives that wave once, and each channel alone;
-// another gives each channel its whole wave.
+// settings file take them, or {error}, which says what the user must set
+// first. `offered` lists the app's waveforms. If a waveform generator sends
+// the same wave on every channel, the settings give that wave once, and
+// list each channel by its number alone. Otherwise each channel gets its
+// whole wave. A value generator's settings list one instruction for each
+// line typed that is not empty.
 export function settingsOf(generator, offered) {
+  if (generator.kind === VALUE) {
+    const send = generator.send.split("\n").map((line) => line.trim())
+      .filter((line) => line !== "");
+    if (send.length === 0) {
+      return { error: "Type an instruction to send, such as temp.val={value}." };
+    }
+    return { settings: {
+      kind: VALUE, send, ...(generator.onlyWhenChanged ? { onlyWhenChanged: true } : {}),
+      ...sentWave(generator.wave),
+    } };
+  }
   if (generator.waveforms.length === 0) {
     return { error: "Choose a waveform to send the points to." };
   }
@@ -176,10 +219,20 @@ export function settingsOf(generator, offered) {
 }
 
 // Returns the panel's generator for `settings`, a generator as a settings
-// file gives it. It sends the same wave on every channel unless one of its
-// channels changes a setting. Each channel's own wave is what it sends, so
-// that turning the same wave off changes nothing.
+// file gives it. A waveform generator sends the same wave on every channel
+// unless one of its channels changes a setting. Each channel's own wave
+// starts as the wave the channel sends, so that turning off "Same wave on
+// every channel" changes nothing.
 export function generatorOfSettings(settings) {
+  if (settings.kind === VALUE) {
+    return {
+      kind: VALUE,
+      send: (settings.send ?? []).join("\n"),
+      onlyWhenChanged: settings.onlyWhenChanged === true,
+      wave: wholeWave(waveSettings(settings)),
+      ...NOT_RUNNING,
+    };
+  }
   const listed = new Map((settings.channels ?? []).map((given) => [given.channel, given]));
   const common = wholeWave(waveSettings(settings));
   return {
@@ -211,13 +264,15 @@ export function settingsOfAll(generators, offered) {
   return { settings };
 }
 
-// Returns `count` points of `wave` for its sketch, as channel `channel`
-// sends it. Each channel starts a quarter of the cycle, or of a custom
-// wave's list, further on than the channel before it, as in
-// signal_generators.py. The shapes follow signal_generators.py. A random wave and noise are
-// drawn from numbers of the sketch's own, so the sketch shows how the wave
-// looks, not the very points the simulation sends.
-export function sketchValues(wave, count, channel = 0) {
+// Returns `count` points of `wave` for its sketch, as channel `channel` of a
+// generator of `kind` sends it. Each channel starts a quarter of the cycle,
+// or of a custom wave's list, further on than the channel before it. The
+// shapes, and the bounds each kind keeps its values within, follow
+// signal_generators.py. A random wave and noise use the sketch's own random
+// numbers, so the sketch shows the wave's shape but not the exact points
+// the simulation sends.
+export function sketchValues(wave, count, channel = 0, kind = WAVEFORM) {
+  const [lowest, highest] = BOUNDS[kind];
   const start = Math.floor(wave.values.length * channel / 4);
   const random = sketchRandom();
   const values = [];
@@ -236,9 +291,24 @@ export function sketchValues(wave, count, channel = 0) {
     if (wave.noise > 0) {
       value += Math.floor(random() * (2 * wave.noise + 1)) - wave.noise;
     }
-    values.push(Math.min(Math.max(value, 0), LARGEST_VALUE));
+    values.push(Math.min(Math.max(value, lowest), highest));
   }
   return values;
+}
+
+// Returns [lowest, highest], the values drawn at the bottom and the top of
+// a sketch of `values`, the points of a generator of `kind`. A waveform
+// generator's sketch always spans 0 to 255, every value a point can take. A
+// value generator's sketch spans only its points, because the range of a
+// value is too wide to draw.
+export function sketchSpan(kind, values) {
+  if (kind === WAVEFORM) {
+    return BOUNDS[WAVEFORM];
+  }
+  const lowest = Math.min(...values);
+  const highest = Math.max(...values);
+  // A flat wave is drawn half way up.
+  return lowest === highest ? [lowest - 1, highest + 1] : [lowest, highest];
 }
 
 // Returns how many points a wave's sketch shows: two of its cycles, within
@@ -250,17 +320,19 @@ export function sketchLength(wave) {
 }
 
 // Returns {values}, the whole numbers typed in `text`, separated by commas
-// or spaces, or {error}. No numbers at all give no values.
-export function valuesOfText(text) {
+// or spaces. Returns {error} if one is not a whole number within the bounds
+// of a generator of `kind`. Text without any number gives no values.
+export function valuesOfText(text, kind = WAVEFORM) {
   const words = text.split(/[\s,;]+/).filter((word) => word !== "");
-  return checkedValues(words.map(Number), "The values");
+  return checkedValues(words.map(Number), "The values", kind);
 }
 
-// Returns {values}, the numbers of the first column of numbers of `text`,
-// the text of a CSV file, each rounded to a whole number, or {error}. The
-// column is the first cell that is a number in the first row that has one.
-// A row without a number in that column, such as a heading, is skipped.
-export function valuesOfCsv(text) {
+// Returns {values}, the numbers in the first column of numbers of `text`, a
+// CSV file's text, each rounded to a whole number. That column is where the
+// first row with a number has its first number. A row without a number in
+// that column, such as a heading, is skipped. Returns {error} if no row has
+// a number, or if a value is outside the bounds of a generator of `kind`.
+export function valuesOfCsv(text, kind = WAVEFORM) {
   const rows = text.split(/\r?\n/).map((row) => row.split(/[,;\t]/).map((cell) => cell.trim()));
   let column;
   for (const row of rows) {
@@ -274,7 +346,7 @@ export function valuesOfCsv(text) {
   }
   const numbers = rows.filter((row) => isNumber(row[column] ?? ""))
     .map((row) => Math.round(Number(row[column])));
-  return checkedValues(numbers, "The file's values");
+  return checkedValues(numbers, "The file's values", kind);
 }
 
 // Returns the text of a settings file that contains `settings`, the
@@ -307,7 +379,7 @@ export function settingsOfFileText(text) {
     if (settings === null || typeof settings !== "object" || !("kind" in settings)) {
       return { error: `Generator ${index + 1} in the file has no "kind".` };
     }
-    if (settings.kind !== WAVEFORM) {
+    if (typeof settings.kind !== "string" || !Object.hasOwn(BOUNDS, settings.kind)) {
       // A later version of the extension may know more kinds.
       return { error: `Generator ${index + 1} of the file is of a kind this extension does ` +
                       `not know: ${JSON.stringify(settings.kind)}.` };
@@ -373,10 +445,11 @@ function isNumber(cell) {
   return cell !== "" && Number.isFinite(Number(cell));
 }
 
-function checkedValues(numbers, what) {
-  if (!numbers.every((number) => Number.isInteger(number) && number >= 0 &&
-                                 number <= LARGEST_VALUE)) {
-    return { error: `${what} must be whole numbers from 0 to ${LARGEST_VALUE}.` };
+function checkedValues(numbers, what, kind) {
+  const [lowest, highest] = BOUNDS[kind];
+  if (!numbers.every((number) => Number.isInteger(number) && number >= lowest &&
+                                 number <= highest)) {
+    return { error: `${what} must be whole numbers from ${lowest} to ${highest}.` };
   }
   return { values: numbers };
 }

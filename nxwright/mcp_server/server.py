@@ -22,7 +22,7 @@ from nxwright.mcp_server.headless import HeadlessSimulation
 from nxwright.mcp_server.simulations import DrivenSimulation
 from nxwright.mcp_server.vscode import VsCodeSimulation, VsCodeWindows, channel_folder
 from nxwright.testing.gpio_pins import levels_by_name
-from nxwright.testing.signal_generators import generator_dict, read_generators_file
+from nxwright.testing.signal_generators import read_generators_file
 
 # What an agent reads of the server as it connects.
 _INSTRUCTIONS = (
@@ -264,27 +264,40 @@ def mcp_server(pictures_folder: Path) -> McpServer:
         starts from the beginning. A file starts all of its generators, or none of them
         if the app refuses one.
 
+        Each generator follows a wave. In its settings, interval is the number of
+        milliseconds between two points, period is the number of points in one cycle, and
+        noise is the most that is added to or taken from each point, at random. The shapes
+        are sine, square, triangle, sawtooth, inverted-sawtooth, pulse (with duty, a
+        percentage), random, and custom, which plays its values in a loop.
+
         A waveform generator, the kind "waveform", sends points to the app's waveforms
         with add instructions. Its settings give the waveforms to feed, each by its page
         and name, and the channels to send to. A channel uses the generator's settings,
         except the ones it sets itself. For example: {"kind": "waveform",
         "waveforms": [{"page": "day", "waveform": "chart"}], "interval": 20,
         "shape": "sine", "minimum": 0, "maximum": 200, "period": 100,
-        "channels": [{"channel": 0}, {"channel": 1, "shape": "square"}]}. In the settings,
-        interval is the number of milliseconds between two points, period is the number of
-        points in one cycle, and noise is the most that is added to or taken from each
-        point, at random. The shapes are sine, square, triangle, sawtooth,
-        inverted-sawtooth, pulse (with duty, a percentage), random, and custom, which plays
-        its values in a loop.
+        "channels": [{"channel": 0}, {"channel": 1, "shape": "square"}]}.
 
         Each channel starts a quarter of its cycle after the channel before it, so that the
         same wave on several channels does not overlap. A channel goes only to the
         waveforms that have it, and a waveform gets points only while its page is shown.
-        The points arrive as time passes, so wait before you look at the screen."""
+        The points arrive as time passes, so wait before you look at the screen.
+
+        A value generator, the kind "value", stands in for a device that sets a value the
+        app's code reads. At each point of its one wave, it sends the instructions in its
+        "send" list, in order, with {value} replaced by the point's value, a whole number
+        of 32 bits. Write the instructions in strict Nextion syntax. It cannot join a
+        number to a text with +, so put {value} inside the quotes instead, as in
+        t0.txt="x={value}". For example: {"kind": "value",
+        "send": ["temp.val={value}", "click refresh,1"], "minimum": 180, "maximum": 240,
+        "interval": 1000, "onlyWhenChanged": true}. With onlyWhenChanged, the instructions
+        are sent only when the value differs from the last one sent. Each instruction
+        arrives the same way as one given to the send tool: it shows in the log, and it is
+        sent whichever page shows."""
         if (settings is None) == (file is None):
             raise NxwrightError("give the generator's settings, or its file: one of the two")
         generators = [settings] if file is None else [
-            generator_dict(read) for read in read_generators_file(Path(file))]
+            read.json_form() for read in read_generators_file(Path(file))]
         return {"numbers": _start_generators(simulations.get(simulation), generators)}
 
     @server.tool

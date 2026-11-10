@@ -9,12 +9,22 @@ JSON, such as:
                      "waveforms": [{"page": "day", "waveform": "chart"}],
                      "interval": 20, "shape": "sine", "maximum": 200,
                      "channels": [{"channel": 0},
-                                  {"channel": 1, "shape": "square"}]}]}
+                                  {"channel": 1, "shape": "square"}]},
+                    {"kind": "value",
+                     "send": ["temp.val={value}", "click refresh,1"],
+                     "onlyWhenChanged": true,
+                     "minimum": 180, "maximum": 240, "interval": 1000}]}
 
 A waveform generator, whose kind is "waveform", sends points to one or more
 waveforms, each named by its page and its name. It sends one point per
 interval on each of its channels, in the shape of the channel's wave. A
 channel uses the generator's settings, except the ones it sets itself.
+
+A value generator, whose kind is "value", stands for a device that sets a
+value the app's code reads. At each point of its one wave, it sends the
+instructions of its `send` list, with `{value}` replaced by the point's
+value. With `onlyWhenChanged`, it sends them only at a point whose value
+differs from the value last sent.
 
 The shapes, at a position in their cycle from 0 up to 1:
   - "sine": from the minimum up to the maximum and back;
@@ -38,10 +48,11 @@ other. A custom wave starts a quarter of its list further on in the same
 way.
 
 Noise adds to each point a random amount, from -noise to +noise, then keeps
-the point between 0 and 255. Random values and noise come from the
-generator's own random number generator, which is seeded the same way each
-time the generator starts, so the same settings always send the same
-points.
+the point within the bounds of its generator's kind: 0 to 255 for a
+waveform's point, and a whole number of 32 bits for a value. Random values
+and noise come from the generator's own random number generator, which is
+seeded the same way each time the generator starts, so the same settings
+always send the same points.
 """
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -49,6 +60,7 @@ import json
 import math
 from pathlib import Path
 import random
+import re
 
 from nxwright import NxwrightError
 
@@ -58,17 +70,21 @@ FORMAT_VERSION = 1
 # key that holds the generators.
 _FORMAT_KEY = "nxwrightSignals"
 _GENERATORS_KEY = "generators"
-# The key that holds a generator's kind, and the kind that sends points to
-# waveforms.
+# The key that holds a generator's kind, the kind that sends points to
+# waveforms, and the kind that sends instructions carrying a value.
 _KIND_KEY = "kind"
 WAVEFORM = "waveform"
+VALUE = "value"
 
 SHAPES = ("sine", "square", "triangle", "sawtooth", "inverted-sawtooth", "pulse", "random",
           "custom")
-# The highest channel a waveform has, and the highest value a point takes:
-# the values a device sends as one byte each with `addt`.
+# The highest channel a waveform has.
 _LAST_CHANNEL = 3
-_LARGEST_VALUE = 255
+# The lowest and the highest value a generator of each kind sends. A
+# waveform's point fits in one byte, the size of each value a device sends
+# with `addt`. A value is a whole number of 32 bits, the size of a
+# component's `val`.
+_BOUNDS = {WAVEFORM: (0, 255), VALUE: (-2 ** 31, 2 ** 31 - 1)}
 # A wave's settings when neither the generator nor its channel gives them.
 # The minimum and the maximum are the same as in the Nextion Editor's
 # generator.
@@ -76,11 +92,15 @@ WAVE_DEFAULTS = {"shape": "sine", "minimum": 0, "maximum": 100, "interval": 50, 
                  "duty": 50, "noise": 0, "values": ()}
 # Where a generator's random numbers start, each time it starts.
 _SEED = 0
+# A name between braces in an instruction, and the one name an instruction
+# can use, which stands for the value of the wave's point.
+_BRACED_NAME = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_VALUE_NAME = "value"
 
 
 @dataclass(frozen=True)
 class Wave:
-    """A channel's wave, every setting known."""
+    """A wave, every setting known."""
     shape: str
     minimum: int
     maximum: int
@@ -117,9 +137,63 @@ class WaveformGeneratorSettings:
     def wave(self, channel: ChannelSettings) -> Wave:
         """Returns the wave of `channel`, one of the generator's: its own
         settings over the generator's, over WAVE_DEFAULTS."""
-        settings = {**WAVE_DEFAULTS, **self.shared, **channel.own}
-        settings["values"] = tuple(settings["values"])
-        return Wave(**settings)
+        return _whole_wave(self.shared, channel.own)
+
+    def started(self, now: int) -> "WaveformGeneratorRun":
+        """Returns the generator running from the simulation's time `now`."""
+        return WaveformGeneratorRun(self, now)
+
+    def sends(self) -> str:
+        """Returns what the generator sends, in the words of the log's line
+        about its start."""
+        return "sending to channel%s %s of %s" % (
+            "s" if len(self.channels) > 1 else "",
+            ", ".join(str(channel.channel) for channel in self.channels),
+            ", ".join("%s.%s" % (name.page, name.waveform) for name in self.waveforms))
+
+    def json_form(self) -> dict:
+        """Returns the settings in the form a settings file uses."""
+        given = {_KIND_KEY: self.kind,
+                 "waveforms": [{"page": name.page, "waveform": name.waveform}
+                               for name in self.waveforms]}
+        given.update(_json_settings(self.shared))
+        given["channels"] = [dict({"channel": channel.channel}, **_json_settings(channel.own))
+                             for channel in self.channels]
+        return given
+
+
+@dataclass(frozen=True)
+class ValueGeneratorSettings:
+    """A value generator's settings: the instructions it sends at each
+    point (`send`), whether it sends them only at a point whose value
+    differs from the value last sent, and the wave settings it gives itself
+    (`own`)."""
+    send: tuple
+    only_when_changed: bool = False
+    own: dict = field(default_factory=dict)
+    kind = VALUE
+
+    def wave(self) -> Wave:
+        """Returns the generator's wave: its own settings, and WAVE_DEFAULTS
+        for the others."""
+        return _whole_wave(self.own)
+
+    def started(self, now: int) -> "ValueGeneratorRun":
+        """Returns the generator running from the simulation's time `now`."""
+        return ValueGeneratorRun(self, now)
+
+    def sends(self) -> str:
+        """Returns what the generator sends, in the words of the log's line
+        about its start."""
+        return "sending %s" % "; ".join(self.send)
+
+    def json_form(self) -> dict:
+        """Returns the settings in the form a settings file uses."""
+        given = {_KIND_KEY: self.kind, "send": list(self.send)}
+        if self.only_when_changed:
+            given["onlyWhenChanged"] = True
+        given.update(_json_settings(self.own))
+        return given
 
 
 def wave_value(wave: Wave, position: Fraction) -> int:
@@ -149,20 +223,28 @@ def wave_value(wave: Wave, position: Fraction) -> int:
     return low + math.floor(span * level + Fraction(1, 2))
 
 
-class ChannelRun:
-    """A channel of a running generator: where its wave is, and when its
-    next point is due."""
+def instruction_with(text: str, value: int) -> str:
+    """Returns the instruction `text` with each `{value}` replaced by
+    `value`, in decimal. Other braces stay as they are."""
+    return text.replace("{%s}" % _VALUE_NAME, str(value))
 
-    def __init__(self, settings: ChannelSettings, wave: Wave, due: int):
-        self.settings, self.wave = settings, wave
+
+class WaveRun:
+    """A running wave: where it is in its cycle, and when its next point is
+    due. It starts `quarters` quarters of its cycle in. Its points are kept
+    within `bounds`, the lowest and the highest value its generator sends."""
+
+    def __init__(self, wave: Wave, quarters: int, due: int, bounds: tuple):
+        self.wave = wave
         # Where it is in its cycle, from 0 up to 1, and a custom wave's place
-        # in its list: each channel a quarter further on than the one before.
-        self.position = Fraction(settings.channel, 4) % 1
-        self.index = len(wave.values) * settings.channel // 4
+        # in its list.
+        self.position = Fraction(quarters, 4) % 1
+        self.index = len(wave.values) * quarters // 4
         self.due = due          # the simulation's time of its next point
+        self._bounds = bounds
 
     def next_value(self, rng: random.Random) -> int:
-        """Returns the channel's next point, and moves its wave on."""
+        """Returns the wave's next point, and moves the wave on."""
         wave = self.wave
         if wave.shape == "random":
             value = rng.randint(wave.minimum, wave.maximum)
@@ -174,15 +256,31 @@ class ChannelRun:
             self.position = (self.position + Fraction(1, wave.period)) % 1
         if wave.noise:
             value += rng.randint(-wave.noise, wave.noise)
-        return min(max(value, 0), _LARGEST_VALUE)
+        lowest, highest = self._bounds
+        return min(max(value, lowest), highest)
 
-    def change(self, settings: ChannelSettings, wave: Wave, now: int):
-        """Takes new settings. The wave goes on from its place in its cycle:
-        a new period changes how fast it moves from there. A new interval
-        counts from `now`."""
+    def change(self, wave: Wave, now: int):
+        """Takes a new wave. It goes on from its place in its cycle: a new
+        period changes how fast it moves from there. A new interval counts
+        from `now`."""
         if wave.interval != self.wave.interval:
             self.due = now + wave.interval
-        self.settings, self.wave = settings, wave
+        self.wave = wave
+
+
+class ChannelRun(WaveRun):
+    """A channel of a running waveform generator: its settings and its
+    wave. Each channel starts a quarter of its cycle further on than the
+    one before."""
+
+    def __init__(self, settings: ChannelSettings, wave: Wave, due: int):
+        super().__init__(wave, settings.channel, due, _BOUNDS[WAVEFORM])
+        self.settings = settings
+
+    def change(self, settings: ChannelSettings, wave: Wave, now: int):
+        """Takes new settings, and their wave (WaveRun.change)."""
+        super().change(wave, now)
+        self.settings = settings
 
 
 class WaveformGeneratorRun:
@@ -195,8 +293,6 @@ class WaveformGeneratorRun:
         self.channels = [ChannelRun(channel, settings.wave(channel),
                                     now + settings.wave(channel).interval)
                          for channel in settings.channels]
-        # Whether the log said that its points are held (simulation.py).
-        self.held_noted = False
 
     def due(self) -> int:
         """Returns the simulation's time of the generator's next points."""
@@ -234,6 +330,59 @@ class WaveformGeneratorRun:
         milliseconds, as the simulation's clock starts again from 0."""
         for channel in self.channels:
             channel.due += by
+
+    def app_started(self):
+        """The app started again. A waveform generator keeps nothing of what
+        it sent the screen, so nothing changes."""
+
+
+class ValueGeneratorRun:
+    """A running value generator: its settings, its random numbers, its
+    wave, and the value it last sent."""
+
+    def __init__(self, settings: ValueGeneratorSettings, now: int):
+        self.settings = settings
+        self.random = random.Random(_SEED)
+        wave = settings.wave()
+        self._wave = WaveRun(wave, 0, now + wave.interval, _BOUNDS[VALUE])
+        # The value the instructions of `send` last carried, or None when
+        # none was sent since the generator, or the app, started.
+        self._sent = None
+
+    def due(self) -> int:
+        """Returns the simulation's time of the generator's next point."""
+        return self._wave.due
+
+    def tick(self) -> list:
+        """Moves the wave past the point due now, and returns the
+        instructions to send for that point, in order, with the point's
+        value in place of `{value}`. Because the run moves on before the
+        caller sends any of them, an instruction that affects the generator,
+        such as one that starts the app again, finds it already past this
+        point."""
+        value = self._wave.next_value(self.random)
+        self._wave.due += self._wave.wave.interval
+        if self.settings.only_when_changed and value == self._sent:
+            return []
+        self._sent = value
+        return [instruction_with(text, value) for text in self.settings.send]
+
+    def change(self, settings: ValueGeneratorSettings, now: int):
+        """Takes new settings while running. The wave keeps its place in its
+        cycle (WaveRun.change), and the random numbers go on."""
+        self._wave.change(settings.wave(), now)
+        self.settings = settings
+
+    def shift(self, by: int):
+        """Moves the time of the next point by `by` milliseconds, as the
+        simulation's clock starts again from 0."""
+        self._wave.due += by
+
+    def app_started(self):
+        """The app started again, so the screen has lost what it was sent.
+        The generator forgets the value it last sent, and so sends its next
+        point whatever its value."""
+        self._sent = None
 
 
 def generators_from_json(text: str, source: str) -> tuple:
@@ -273,43 +422,38 @@ def generators_to_json(generators) -> str:
     settings of each generator. generators_from_json reads the text back to
     the same settings."""
     return json.dumps({_FORMAT_KEY: FORMAT_VERSION,
-                       _GENERATORS_KEY: [generator_dict(settings) for settings in generators]},
+                       _GENERATORS_KEY: [settings.json_form() for settings in generators]},
                       indent=2) + "\n"
 
 
-def generator_dict(settings: WaveformGeneratorSettings) -> dict:
-    """Returns a generator's settings in the form a settings file uses."""
-    given = {_KIND_KEY: settings.kind,
-             "waveforms": [{"page": name.page, "waveform": name.waveform}
-                           for name in settings.waveforms]}
-    given.update(_json_settings(settings.shared))
-    given["channels"] = [dict({"channel": channel.channel}, **_json_settings(channel.own))
-                         for channel in settings.channels]
-    return given
-
-
-def generator_settings(given, where: str) -> WaveformGeneratorSettings:
-    """Returns the settings of `given`, a generator's JSON form. Raises
-    NxwrightError for a kind this version of nxwright does not know, or for
-    a setting that cannot be used. The error starts with `where`, followed
-    by the setting's place in `given`."""
+def generator_settings(given, where: str):
+    """Returns the settings of `given`, a generator's JSON form: a
+    WaveformGeneratorSettings or a ValueGeneratorSettings, by its kind.
+    Raises NxwrightError for a kind this version of nxwright does not know,
+    or for a setting that cannot be used. The error starts with `where`,
+    followed by the setting's place in `given`."""
     if not isinstance(given, dict):
         raise NxwrightError("%s: a generator must be a JSON object" % where)
-    if given.get(_KIND_KEY) != WAVEFORM:
+    kind = given.get(_KIND_KEY)
+    # Only a text can be a kind. A list or an object cannot be looked up in
+    # _READERS.
+    read = _READERS.get(kind) if isinstance(kind, str) else None
+    if read is None:
         raise NxwrightError("%s: %s" % (where, _kind_refusal(given)))
-    return _waveform_generator_settings(given, where)
+    return read(given, where)
 
 
 def _kind_refusal(given: dict) -> str:
     """Returns why the kind of `given`, a generator's JSON form, cannot be
     used: it is missing, or this version of nxwright does not know it."""
     if _KIND_KEY not in given:
-        return 'a generator must give its kind, as "%s": "%s"' % (_KIND_KEY, WAVEFORM)
+        return "a generator must give its kind, as %s" % " or ".join(
+            '"%s": "%s"' % (_KIND_KEY, kind) for kind in _READERS)
     # A later version of nxwright may know more kinds. The refusal gives
     # the kind, so that the user can tell a file from a later version apart
     # from a damaged one.
     return "%s %r is not a kind of generator this version of nxwright knows. It knows %s" % (
-        _KIND_KEY, given[_KIND_KEY], WAVEFORM)
+        _KIND_KEY, given[_KIND_KEY], " and ".join(_READERS))
 
 
 def _waveform_generator_settings(given: dict, where: str) -> WaveformGeneratorSettings:
@@ -321,7 +465,7 @@ def _waveform_generator_settings(given: dict, where: str) -> WaveformGeneratorSe
                   for number, name in enumerate(waveforms))
     if len(set(names)) != len(names):
         raise NxwrightError("%s: waveforms lists a waveform twice" % where)
-    shared = _wave_settings(given, where)
+    shared = _wave_settings(given, where, WAVEFORM)
     channels = given.get("channels")
     if not isinstance(channels, list) or not channels:
         raise NxwrightError("%s: channels must list one channel or more" % where)
@@ -334,6 +478,46 @@ def _waveform_generator_settings(given: dict, where: str) -> WaveformGeneratorSe
     for number, channel in enumerate(settings.channels):
         _check_wave(settings.wave(channel), "%s.channels[%d]" % (where, number))
     return settings
+
+
+def _value_generator_settings(given: dict, where: str) -> ValueGeneratorSettings:
+    _refuse_unknown(given, set(WAVE_DEFAULTS) | {_KIND_KEY, "send", "onlyWhenChanged"}, where)
+    send = _instructions(given.get("send"), "%s.send" % where)
+    if not send:
+        raise NxwrightError("%s: send must list one instruction or more" % where)
+    only_when_changed = given.get("onlyWhenChanged", False)
+    if not isinstance(only_when_changed, bool):
+        raise NxwrightError("%s: onlyWhenChanged must be true or false" % where)
+    settings = ValueGeneratorSettings(send, only_when_changed,
+                                      _wave_settings(given, where, VALUE))
+    _check_wave(settings.wave(), where)
+    return settings
+
+
+# What reads a generator's JSON form, by its kind.
+_READERS = {WAVEFORM: _waveform_generator_settings, VALUE: _value_generator_settings}
+
+
+def _instructions(given, where: str) -> tuple:
+    """Returns the instructions that `given` lists, none when `given` is
+    None. Raises NxwrightError, starting with `where` and the instruction's
+    place, for anything but a list of instructions. An instruction is one
+    line of text, not empty, and the only name it can have between braces is
+    `{value}`. Any other name is refused, so that a later version can give
+    more names a meaning."""
+    if given is None:
+        return ()
+    if not isinstance(given, list):
+        raise NxwrightError("%s must be a list of instructions" % where)
+    for number, text in enumerate(given):
+        place = "%s[%d]" % (where, number)
+        if not isinstance(text, str) or not text.strip() or "\n" in text or "\r" in text:
+            raise NxwrightError("%s: an instruction is one line of text, and not empty" % place)
+        for name in _BRACED_NAME.findall(text):
+            if name != _VALUE_NAME:
+                raise NxwrightError("%s: {%s} is not a name an instruction can use. It can "
+                                    "use {%s}" % (place, name, _VALUE_NAME))
+    return tuple(given)
 
 
 def _waveform_name(given, where: str) -> WaveformName:
@@ -351,15 +535,17 @@ def _channel_settings(given, where: str) -> ChannelSettings:
     channel = given.get("channel")
     if not _is_whole(channel) or not 0 <= channel <= _LAST_CHANNEL:
         raise NxwrightError("%s: channel must be from 0 to %d" % (where, _LAST_CHANNEL))
-    return ChannelSettings(channel, _wave_settings(given, where))
+    return ChannelSettings(channel, _wave_settings(given, where, WAVEFORM))
 
 
-def _wave_settings(given: dict, where: str) -> dict:
-    """Returns the wave's settings `given` gives, each checked alone."""
+def _wave_settings(given: dict, where: str, kind: str) -> dict:
+    """Returns the wave's settings that `given` gives, each checked alone.
+    The wave's values must be within the bounds of a generator of `kind`."""
+    lowest, highest = _BOUNDS[kind]
     settings = {}
-    for key, low, high in (("minimum", 0, _LARGEST_VALUE), ("maximum", 0, _LARGEST_VALUE),
+    for key, low, high in (("minimum", lowest, highest), ("maximum", lowest, highest),
                            ("interval", 1, None), ("period", 1, None), ("duty", 0, 100),
-                           ("noise", 0, _LARGEST_VALUE)):
+                           ("noise", 0, highest)):
         if key in given:
             value = given[key]
             if not _is_whole(value) or value < low or (high is not None and value > high):
@@ -375,11 +561,21 @@ def _wave_settings(given: dict, where: str) -> dict:
     if "values" in given:
         values = given["values"]
         if not isinstance(values, list) or not all(
-                _is_whole(value) and 0 <= value <= _LARGEST_VALUE for value in values):
-            raise NxwrightError("%s: values must be a list of whole numbers from 0 to %d"
-                                % (where, _LARGEST_VALUE))
+                _is_whole(value) and lowest <= value <= highest for value in values):
+            raise NxwrightError("%s: values must be a list of whole numbers from %d to %d"
+                                % (where, lowest, highest))
         settings["values"] = tuple(values)
     return settings
+
+
+def _whole_wave(*given) -> Wave:
+    """Returns the wave that the settings `given` make, starting from
+    WAVE_DEFAULTS. Each dict of settings overrides those before it."""
+    settings = dict(WAVE_DEFAULTS)
+    for own in given:
+        settings.update(own)
+    settings["values"] = tuple(settings["values"])
+    return Wave(**settings)
 
 
 def _check_wave(wave: Wave, where: str):

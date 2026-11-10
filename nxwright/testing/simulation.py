@@ -61,13 +61,16 @@ simulator.
 
 Signal generators. A simulation can run any number of signal generators,
 each known by the number it gets when it starts (start_generator,
-signal_generators.py). A waveform generator stands for a device on the
-serial line that sends `add` instructions to waveforms at regular times.
-Unlike the screen's timers, it keeps sending while the screen sleeps and
-after the app starts again. Its points take the serial line's path, so
-`com_stop` holds them, and they count as serial data for `ussp` and `usup`.
-The log shows when a generator starts and stops, but has no line for each
-point.
+signal_generators.py). A generator stands for a device on the serial line
+that sends at regular times. Unlike the screen's timers, generators keep
+sending while the screen sleeps and after the app starts again, and the log
+shows when each one starts and stops. A waveform generator sends `add`
+instructions to waveforms. Its points take the serial line's path, so
+`com_stop` holds them, and they count as serial data for `ussp` and `usup`,
+but the log has no line for each point. A value generator sends instructions
+carrying a value, such as `temp.val=215`. Each of them arrives the same way
+as a typed one (serial_input), so the log shows it, and it is sent whichever
+page shows.
 
 Touch coordinates. A press at a pixel of the page, as the simulator's panel
 makes one, puts its place in `tch0` and `tch1`, and in `tch2` and `tch3`,
@@ -220,8 +223,7 @@ from nxwright.testing.simulation_log import END, LOGGED, SENT, hex_bytes, shown,
 from nxwright.source.page_source import table_limits
 from nxwright.testing.source_runner import (FolderPageTables, SourceFolderRunner,
                                             component_start_values)
-from nxwright.testing.signal_generators import (WaveformGeneratorRun,
-                                                WaveformGeneratorSettings, WaveformName)
+from nxwright.testing.signal_generators import VALUE, WAVEFORM, WaveformName
 
 # The commands of "other commands" that hold and resume the serial line, as
 # the machine records them (_take_serial).
@@ -511,12 +513,15 @@ class Simulation:
         # The serial line's bytes not yet used (serial_line.py), which each
         # start empties (_begin).
         self._line = SerialLine()
-        # The generators running, {number: WaveformGeneratorRun}, in the
-        # order they started. They stand for devices outside the screen, so
-        # they outlive each start (signal_generators.py). A generator's
-        # number is never given again.
+        # The generators running, {number: its run}, in the order they
+        # started. They stand for devices outside the screen, so they outlive
+        # each start (signal_generators.py). A generator's number is never
+        # given again.
         self._generators = {}
         self._generators_started = 0
+        # The numbers of the waveform generators whose points the log said
+        # are held, since the serial line was last stopped.
+        self._held_told = set()
         self._start = (start_page, values, eeprom)
         self._begin()
 
@@ -584,9 +589,10 @@ class Simulation:
         self.fields = {name: dict(page.start) for name, page in self.pages.items()}
         if hasattr(self, "clock"):
             # The clock starts again from 0, and the generators keep
-            # sending at their pace.
+            # sending at their pace. The screen has lost what they sent it.
             for run in self._generators.values():
                 run.shift(-self.clock)
+                run.app_started()
         self.clock = 0
         self.page = None
         self.starts += 1
@@ -859,8 +865,7 @@ class Simulation:
     def _hold_ended(self):
         """A hold of the serial line ended, by `com_star` or by a start: the
         log reports again the next time a generator's points are held."""
-        for run in self._generators.values():
-            run.held_noted = False
+        self._held_told.clear()
 
     def _resume_when_asked(self):
         """Runs the held serial instructions when the code that just ran
@@ -1358,13 +1363,23 @@ class Simulation:
         return self.page
 
     def advance(self, milliseconds: int):
-        """Lets `milliseconds` pass: the timers of the page shown fall due and
-        run, and its clocked components (clocked.py) step, in time order, and
-        a screen idle for `thsp` seconds sleeps. The generators send their
-        points on time, even while the screen sleeps. Points due at the same
-        time as a step of the screen come after it."""
+        """Lets `milliseconds` pass. In time order, the timers of the page
+        shown fall due and run, its clocked components (clocked.py) step,
+        and the generators send their points. A screen idle for `thsp`
+        seconds sleeps, and then only the generators go on. A point due at
+        the same time as a step of the screen comes after it. When a step
+        starts the app again, such as a timer running `rest`, the clock
+        starts again from 0, and the time that remained still passes after
+        it."""
         end = self.clock + milliseconds
+        # How many times the app has started, and the time that was left to
+        # pass when the last step ran. If the count has changed, that step
+        # started the app again, and the time left is counted from the new
+        # clock.
+        starts, left = self.starts, milliseconds
         while True:
+            if self.starts != starts:
+                end, starts = self.clock + left, self.starts
             # Nothing of the screen steps while it sleeps.
             due = [] if self.asleep else [(when, name) for name, when in self._dues()
                                           if when <= end]
@@ -1375,11 +1390,13 @@ class Simulation:
                 break
             if not due or (sent is not None and sent < min(due)[0]):
                 self.clock = max(self.clock, sent)
+                left = end - self.clock
                 self._check_sleep()
                 self._generators_tick()
                 continue
             when, name = min(due)
             self.clock = max(self.clock, when)
+            left = end - self.clock
             self._check_sleep()
             if self.asleep:
                 continue
@@ -2083,45 +2100,46 @@ class Simulation:
     # The signal generators: devices outside the screen that send it values
     # following a wave (signal_generators.py).
 
-    def start_generator(self, settings: WaveformGeneratorSettings) -> int:
-        """Starts a generator with `settings`, beside those running. Its
-        first points go out one interval from now. Returns the generator's
-        number, which identifies it from then on. Numbers start at 1 and
-        are never reused. Raises NxwrightError, and starts nothing, if the
-        app's pages lack one of its waveforms, or if none of its waveforms
+    def start_generator(self, settings) -> int:
+        """Starts a generator with `settings`, a WaveformGeneratorSettings
+        or a ValueGeneratorSettings, beside those running. Its first points
+        go out one interval from now. Returns the generator's number, which
+        identifies it from then on. Numbers start at 1 and are never reused.
+        Raises NxwrightError, and starts nothing, if the app's pages lack
+        one of a waveform generator's waveforms, or if none of its waveforms
         has one of its channels."""
         self._check_generator(settings)
         self._generators_started += 1
         number = self._generators_started
-        self._generators[number] = WaveformGeneratorRun(settings, self.clock)
-        channels = ", ".join(str(channel.channel) for channel in settings.channels)
-        self._write_log("waveform generator %d starts, sending to channel%s %s of %s"
-                        % (number, "s" if len(settings.channels) > 1 else "", channels,
-                           ", ".join("%s.%s" % (name.page, name.waveform)
-                                     for name in settings.waveforms)))
+        self._generators[number] = settings.started(self.clock)
+        self._write_log("%s generator %d starts, %s" % (settings.kind, number, settings.sends()))
         return number
 
-    def change_generator(self, number: int, settings: WaveformGeneratorSettings):
-        """Gives the running generator `number` new settings, from its next
-        points on. Each channel it keeps goes on from its place in its wave
-        (WaveformGeneratorRun.change). Raises NxwrightError, changing
-        nothing, when it does not run, or for settings start_generator
-        refuses."""
+    def change_generator(self, number: int, settings):
+        """Gives the running generator `number` new settings of its kind,
+        from its next points on. Its waves go on from their places
+        (WaveformGeneratorRun.change, ValueGeneratorRun.change). Raises
+        NxwrightError, changing nothing, when it does not run, for settings
+        of the other kind, or for settings start_generator refuses."""
         run = self._running_generator(number)
+        if settings.kind != run.settings.kind:
+            raise NxwrightError("generator %d is a %s generator, so it cannot take the "
+                                "settings of a %s generator"
+                                % (number, run.settings.kind, settings.kind))
         self._check_generator(settings)
         run.change(settings, self.clock)
-        self._write_log("waveform generator %d takes new settings" % number)
+        self._write_log("%s generator %d takes new settings" % (settings.kind, number))
 
     def stop_generator(self, number: int):
-        """Stops the generator `number`. Its points held by `com_stop` stay
-        held. Raises NxwrightError when it does not run."""
-        self._running_generator(number)
+        """Stops the generator `number`. What it sent that `com_stop` holds
+        stays held. Raises NxwrightError when it does not run."""
+        run = self._running_generator(number)
         del self._generators[number]
-        self._write_log("waveform generator %d stops" % number)
+        self._write_log("%s generator %d stops" % (run.settings.kind, number))
 
     def generators(self) -> dict:
-        """Returns the settings of each generator running, {number:
-        WaveformGeneratorSettings}, in the order they started."""
+        """Returns the settings of each generator running, {number: its
+        settings}, in the order they started."""
         return {number: run.settings for number, run in self._generators.items()}
 
     def waveforms(self) -> list:
@@ -2130,15 +2148,22 @@ class Simulation:
         return [(WaveformName(page, name), self.fields[page].get(name + ".ch", 1))
                 for page in self.pages for name in self._of_kind(page, "waveform")]
 
-    def _running_generator(self, number: int) -> WaveformGeneratorRun:
+    def _running_generator(self, number: int):
+        """Returns the run of the generator `number`. Raises NxwrightError
+        when it does not run."""
         if number not in self._generators:
             raise NxwrightError("generator %s is not running" % (number,))
         return self._generators[number]
 
-    def _check_generator(self, settings: WaveformGeneratorSettings):
-        """Raises NxwrightError for a waveform of `settings` that the app's
-        pages lack, or a channel that none of its waveforms has. A channel
-        that only some of them have goes to those alone (_generator_tick)."""
+    def _check_generator(self, settings):
+        """Raises NxwrightError if `settings` are a waveform generator's,
+        and name a waveform that the app's pages lack, or a channel that
+        none of their waveforms has. A channel that only some of them have
+        goes to those alone (_waveform_generator_tick). A value generator's
+        instructions are not checked, because the screen answers each one
+        the same way it would answer a device."""
+        if settings.kind != WAVEFORM:
+            return
         for name in settings.waveforms:
             if name.page not in self.pages:
                 raise NxwrightError("waveform generator: the app has no page %s" % name.page)
@@ -2159,15 +2184,34 @@ class Simulation:
         in."""
         now = self._generators_due()
         # Loops over a copy of the generators. Their points can run the
-        # app's code, for example when a point wakes the screen and the wake
-        # page loads. If the debugger stops inside that code, generators can
-        # be started and stopped in the meantime. One stopped then sends
-        # nothing more, and one started then waits for its first interval.
+        # app's code, for example when an instruction clicks a component. If
+        # the debugger stops inside that code, generators can be started and
+        # stopped in the meantime. One stopped then sends nothing more, and
+        # one started then waits for its first interval.
         for number, run in list(self._generators.items()):
-            if run.due() == now and self._generators.get(number) is run:
-                self._generator_tick(number, run)
+            if run.due() != now or self._generators.get(number) is not run:
+                continue
+            if run.settings.kind == VALUE:
+                self._value_generator_tick(run)
+            else:
+                self._waveform_generator_tick(number, run)
 
-    def _generator_tick(self, number: int, run: WaveformGeneratorRun):
+    def _value_generator_tick(self, run):
+        """Sends the instructions a value generator has due now, in order.
+        Each arrives the same way as a typed instruction (serial_input). The
+        run moves on to its next point before any of them is sent
+        (ValueGeneratorRun.tick), so an instruction that affects the
+        generator finds it already at its next point. If an instruction
+        such as `rest` starts the app again, the point's remaining
+        instructions are dropped, the same way as held instructions after
+        one that starts the app again (_resume_serial)."""
+        starts = self.starts
+        for text in run.tick():
+            if self.starts != starts:
+                return
+            self.serial_input(text)
+
+    def _waveform_generator_tick(self, number: int, run):
         """Sends the points the waveform generator `number` has due now.
         Each point goes as an `add` to the generator's waveforms on the page
         shown, but only to those that have the point's channel, going by
@@ -2185,9 +2229,9 @@ class Simulation:
             texts += ["add %d,%d,%d" % (component_id, channel, value)
                       for channel, value in points if channel < count]
         if texts:
-            self._generated_serial(texts, number, run)
+            self._generated_serial(texts, number)
 
-    def _generated_serial(self, texts: list, number: int, run: WaveformGeneratorRun):
+    def _generated_serial(self, texts: list, number: int):
         """Takes the points of the waveform generator `number` the same way
         the serial line takes typed instructions (serial_input). `texts` are
         the points' `add` instructions. During a transfer, or in protocol
@@ -2204,8 +2248,8 @@ class Simulation:
         self._overflowed = False
         self._serial_arrived()
         if self._held is not None:
-            if not run.held_noted:
-                run.held_noted = True
+            if number not in self._held_told:
+                self._held_told.add(number)
                 self._write_log("waveform generator %d's points are held: the serial line "
                                 "is stopped" % number)
             for text in texts:

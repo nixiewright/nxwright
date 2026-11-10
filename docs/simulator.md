@@ -401,14 +401,17 @@ A waveform draws the points that code adds with `add`, each channel in its colou
 
 ### The signal generator
 
-To see a waveform move without a device, use the signal generator. It sends points to your app's waveforms, the same way a device on the serial line would with `add`. Open it with **Signal generator** in the Simulator section.
+The signal generator stands in for devices on the serial line. Open it with **Signal generator** in the Simulator section. It can run several generators at once, of two kinds:
 
-You can run several generators at once, each with its own waveforms and its own waves.
+- A waveform generator sends points to your app's waveforms, the same way a device would with `add`, so that you can see a waveform move.
+- A value generator sends instructions that carry a value, such as `temp.val=215`, so that you can run the code that reads it.
+
+Each generator follows a wave:
 
 | Setting | What it is |
 | --- | --- |
 | Shape | Sine, square, triangle, sawtooth, inverted sawtooth, pulse, random, or custom. |
-| Min, Max | The wave's lowest and highest values, from 0 to 255. |
+| Min, Max | The wave's lowest and highest values: from 0 to 255 for a waveform generator, and from -2147483648 to 2147483647 for a value generator. |
 | Interval | The milliseconds between two points. |
 | Period | The number of points in one cycle of the wave. |
 | Duty | For a pulse, the percentage of the cycle spent at the highest value. |
@@ -416,19 +419,37 @@ You can run several generators at once, each with its own waveforms and its own 
 
 A custom wave plays a list of values in a loop, one value for each point. You can type the values, or read them from the first column of numbers in a CSV file.
 
-- Each channel starts a quarter of its wave's cycle after the channel before it, so that channels with the same wave do not draw over each other.
-- If you feed waveforms that have different numbers of channels, each waveform gets only the channels it has.
 - You can change the settings while a generator runs, and each change takes effect at the next point.
-- A waveform gets points only while its page is shown.
 - Generators keep running when the app starts again.
 
 You can save the panel's generators to a file. Opening a file stops the generators that are running, and replaces them with the file's. To start saved generators with the simulation, give their file as the launch configuration's `signalGenerators`.
+
+**A waveform generator** feeds one or more waveforms, on the channels you tick.
+
+- Each channel starts a quarter of its wave's cycle after the channel before it, so that channels with the same wave do not draw over each other.
+- If you feed waveforms that have different numbers of channels, each waveform gets only the channels it has.
+- A waveform gets points only while its page is shown.
 
 The points arrive the same way as instructions from the serial line:
 
 - `com_stop` holds the points until `com_star`.
 - The points count as serial data, so while they arrive, `ussp` does not put the screen to sleep, and a sleeping screen wakes if `usup` is 1.
 - The screen answers each point as `bkcmd` specifies. The log shows those answers, but not the points themselves.
+
+At each point of its wave, **a value generator** sends the instructions you type, in order. Type one instruction on each line, and write `{value}` where the wave's value goes:
+
+```
+temp.val={value}
+click refresh,1
+```
+
+A screen has no event for a value that changes, so a device often sends a `click` after the value, to run the event where your code reads it.
+
+- If you tick **Only when the value changes**, the generator skips a point whose value is the same as the last one it sent. The first point after the app starts again is always sent.
+- Write the instructions in strict Nextion syntax, the way a device sends them. To put the value in a text, write `{value}` inside the quotes: `t0.txt="x={value}"` sends `t0.txt="x=215"`. Strict Nextion syntax cannot join a number to a text the way nxlang can, so `t0.txt="x="+{value}` gets the return code 0x1B.
+- The instructions arrive the same way as an instruction you type ([Typing an instruction](#typing-an-instruction)): the log shows each one, and the screen answers it as `bkcmd` specifies.
+- Every instruction is sent whichever page shows, so one for a component of another page gets the return code 0x1A.
+- If an instruction such as `rest` starts the app again, the instructions after it are not sent for that point of the wave.
 
 ### Opening effects
 
@@ -516,7 +537,7 @@ A failed instruction has no effect. The screen answers it with one of these code
 | 0x05 | `xstr`'s font the project lacks. |
 | 0x12 | A waveform, or a channel, the page lacks. `addt` for more than 1024 bytes. |
 | 0x1A | A name the screen does not know (see below). A first word containing a capital letter, or `movelayer`. A system variable the screen's series lacks. A `twfile` size that is not a number. |
-| 0x1B | An operator on a text other than `+` and `-=`. |
+| 0x1B | An operator other than `+` or `-=` used on a text. A number joined to a text with `+`. |
 | 0x1C | A picture or font ID the project lacks. A `txt` given a number, or a `val` a text. An assignment to an attribute that code cannot change, such as `t0.w=10` ([build-rules.md](build-rules.md#attributes-code-cannot-change)). The attribute keeps its value. `addr` given a number other than 0, or 256 to 2815. |
 | 0x1D | An EEPROM access that does not fit in it. `wept` at a place before 0. |
 | 0x1E | A command given the wrong number of parameters, or none where it needs some. |

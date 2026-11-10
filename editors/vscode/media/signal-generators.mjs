@@ -11,6 +11,10 @@
 // wave in one colour per channel, each channel a quarter cycle after the
 // one before, the same way the generator sends them.
 //
+// A value generator sends instructions that carry its wave's value. In its
+// block, the user types the instructions, one on each line, and sets its
+// wave.
+//
 // A setting changed while its generator runs is sent to the simulation,
 // and takes effect at the generator's next point. Save writes every
 // generator to one settings file, and Open replaces the panel's generators
@@ -21,8 +25,9 @@
 import { element } from "./elements.mjs";
 import {
   channelCount, fileText, generatorOfSettings, generatorsOfRunning, isRunning, markStopped,
-  newGenerator, NUMBER_SETTINGS, sameWaveform, setSame, settingsOf, settingsOfAll,
-  settingsOfFileText, SHAPES, sketchLength, sketchValues, valuesOfCsv, valuesOfText,
+  newGenerator, newValueGenerator, numberSettings, sameWaveform, setSame, settingsOf,
+  settingsOfAll, settingsOfFileText, SHAPES, sketchLength, sketchSpan, sketchValues, VALUE,
+  valuesOfCsv, valuesOfText,
 } from "./signal-generators-model.mjs";
 
 const vscode = acquireVsCodeApi();
@@ -32,9 +37,11 @@ const place = byId("generators");
 // How long a running generator's settings must stay unchanged before they
 // are sent, in ms, so that a number being typed is sent once.
 const CHANGE_PAUSE = 250;
-// The scope that names the wave every channel sends. A channel's own wave
-// has the channel's number as its scope.
+// The scope that names the wave every channel of a waveform generator
+// sends. A channel's own wave has the channel's number as its scope. A value
+// generator's one wave has the scope WAVE.
 const COMMON = "common";
+const WAVE = "wave";
 // The colour of each channel's line in the sketches, as VS Code's charts
 // have them.
 const CHANNEL_COLOURS = ["--vscode-charts-blue", "--vscode-charts-red",
@@ -114,6 +121,11 @@ window.addEventListener("message", ({ data }) => {
 
 byId("add-waveform").addEventListener("click", () => {
   generators.push(keyed(newGenerator(offered)));
+  say("");
+  show();
+});
+byId("add-value").addEventListener("click", () => {
+  generators.push(keyed(newValueGenerator()));
   say("");
   show();
 });
@@ -226,7 +238,7 @@ function open(text, name) {
 // Takes a custom wave's values from a CSV file's text, for the wave of
 // `generator` the file was asked for.
 function takeCsv(generator, { scope, text, name }) {
-  const read = valuesOfCsv(text);
+  const read = valuesOfCsv(text, generator.kind);
   if (read.error !== undefined) {
     generator.notice = `${name}: ${read.error}`;
     return;
@@ -236,8 +248,12 @@ function takeCsv(generator, { scope, text, name }) {
   changed(generator);
 }
 
-// The wave a scope names: the one every channel sends, or a channel's own.
+// The wave a scope names: a value generator's one wave, the wave every
+// channel of a waveform generator sends, or a channel's own.
 function waveIn(generator, scope) {
+  if (scope === WAVE) {
+    return generator.wave;
+  }
   return scope === COMMON ? generator.common : generator.channels[Number(scope)].wave;
 }
 
@@ -251,6 +267,7 @@ function show() {
   byId("add-waveform").disabled = offered.length === 0;
   byId("add-hint").textContent = offered.length === 0
     ? "This app has no waveform to send points to." : "";
+  byId("add-value").disabled = false;
   byId("start-all").disabled = !generators.some((one) => !isRunning(one) && !one.waiting);
   byId("stop-all").disabled = !generators.some((one) => isRunning(one) && !one.waiting);
   // A file can be opened once the simulation has said what it has.
@@ -292,18 +309,47 @@ function block(generator) {
     remove(generator);
     show();
   });
+  const value = generator.kind === VALUE;
   const head = element("div", "head");
-  head.append(element("span", "title", "Waveform generator"), run, state, removal);
+  head.append(element("span", "title", value ? "Value generator" : "Waveform generator"),
+              run, state, removal);
   const notice = element("p", "problem", generator.notice);
   notice.dataset.notice = String(generator.key);
   const made = element("section", "generator");
-  made.append(head, notice, ...parts(generator));
+  made.append(head, notice, ...(value ? valueParts(generator) : waveformParts(generator)));
   return made;
+}
+
+// Returns a value generator's parts: the instructions it sends, whether it
+// sends them only when its value changes, and its wave.
+function valueParts(generator) {
+  const send = element("textarea");
+  send.dataset.field = `${generator.key} send`;
+  send.rows = Math.max(generator.send.split("\n").length, 2);
+  send.value = generator.send;
+  send.placeholder = "temp.val={value}";
+  send.title = "The instructions sent at each point, one on each line, in strict " +
+    "Nextion syntax. {value} stands for the wave's value.";
+  send.addEventListener("input", () => {
+    generator.send = send.value;
+    changed(generator);
+  });
+  const sends = element("label", "send", "Sends");
+  sends.append(send);
+  const only = tickBox(" Only when the value changes", generator.onlyWhenChanged, (ticked) => {
+    generator.onlyWhenChanged = ticked;
+    changed(generator);
+    show();
+  });
+  only.className = "same";
+  const table = element("table");
+  table.append(headings(VALUE), waveRows(generator, WAVE, element("td", "name")));
+  return [sends, only, table];
 }
 
 // Returns a waveform generator's parts: the waveforms it feeds, whether
 // every channel sends the same wave, and its channels with their waves.
-function parts(generator) {
+function waveformParts(generator) {
   const same = tickBox(" Same wave on every channel", generator.same, (ticked) => {
     setSame(generator, ticked);
     changed(generator);
@@ -312,7 +358,7 @@ function parts(generator) {
   same.className = "same";
   const rows = generator.channels.slice(0, channelCount(generator.waveforms, offered));
   const table = element("table");
-  table.append(headings());
+  table.append(headings(generator.kind));
   if (!generator.same) {
     for (const row of rows) {
       const first = element("td", "name");
@@ -378,10 +424,11 @@ function tickBox(text, ticked, take) {
   return label;
 }
 
-function headings() {
+// Returns the headings of the table of waves of a generator of `kind`.
+function headings(kind) {
   const row = element("tr");
   row.append(element("th"), element("th", "", "Shape"));
-  for (const setting of NUMBER_SETTINGS) {
+  for (const setting of numberSettings(kind)) {
     const heading = element("th", "", setting.label);
     heading.title = setting.title;
     row.append(heading);
@@ -417,7 +464,7 @@ function waveRows(generator, scope, first, on = true) {
   shapeCell.append(shape);
   row.append(shapeCell);
 
-  for (const setting of NUMBER_SETTINGS) {
+  for (const setting of numberSettings(generator.kind)) {
     const cell = element("td");
     cell.append(numberField(`${named} ${setting.key}`, wave[setting.key], setting, (value) => {
       wave[setting.key] = value;
@@ -450,15 +497,15 @@ function waveRows(generator, scope, first, on = true) {
 function valuesRow(generator, scope, wave, on) {
   const row = element("tr", on ? "values" : "values off");
   const cell = element("td");
-  cell.colSpan = NUMBER_SETTINGS.length + 3;
+  cell.colSpan = numberSettings(generator.kind).length + 3;
   const field = element("input");
   field.type = "text";
   field.dataset.field = `${generator.key} ${scope} values`;
   field.value = wave.values.join(", ");
-  field.placeholder = "The wave's values, from 0 to 255, such as 10, 20, 30";
+  field.placeholder = "The wave's values, such as 10, 20, 30";
   field.title = "The values the wave plays in a loop, one for each point";
   field.addEventListener("change", () => {
-    const read = valuesOfText(field.value);
+    const read = valuesOfText(field.value, generator.kind);
     if (read.error !== undefined) {
       generator.notice = read.error;
     } else {
@@ -511,12 +558,14 @@ function redraw() {
 }
 
 // Draws the sketch of the wave of `generator` that `scope` names: two of
-// its cycles, the values from 0 at the bottom to 255 at the top, a line in
-// its colour for each channel that sends it. The wave every channel sends
-// is drawn for each channel turned on, or for channel 0 when none is.
+// its cycles, one line for each channel that sends it, in the channel's
+// colour. The wave every channel sends is drawn for each channel turned on,
+// or for channel 0 when none is. A value generator's wave is drawn in
+// channel 0's colour. The sketch's height spans the values sketchSpan gives
+// for the generator's kind.
 function draw(sketch, generator, scope) {
   const wave = waveIn(generator, scope);
-  let channels = [Number(scope)];
+  let channels = [scope === WAVE ? 0 : Number(scope)];
   if (scope === COMMON) {
     const count = channelCount(generator.waveforms, offered);
     channels = generator.channels.filter((row) => row.on && row.channel < count)
@@ -530,14 +579,15 @@ function draw(sketch, generator, scope) {
   context.clearRect(0, 0, width, height);
   const styles = getComputedStyle(document.documentElement);
   for (const channel of channels) {
-    const values = sketchValues(wave, sketchLength(wave), channel);
+    const values = sketchValues(wave, sketchLength(wave), channel, generator.kind);
+    const [lowest, highest] = sketchSpan(generator.kind, values);
     context.strokeStyle = styles.getPropertyValue(CHANNEL_COLOURS[channel]).trim() ||
       getComputedStyle(sketch).color;
     context.lineWidth = 1;
     context.beginPath();
     values.forEach((value, point) => {
       const x = 0.5 + point * (width - 1) / Math.max(values.length - 1, 1);
-      const y = 0.5 + (height - 1) * (1 - value / 255);
+      const y = 0.5 + (height - 1) * (1 - (value - lowest) / (highest - lowest));
       if (point === 0) {
         context.moveTo(x, y);
       } else {

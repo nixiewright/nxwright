@@ -27,13 +27,17 @@ the thread sends those points on their own, at most once every WAVES_PACE
 seconds. The panel paints them over the last drawing, so that a waveform fed
 fast moves smoothly without the cost of drawing the whole page.
 
-A look at what the simulation holds, as its values, is taken on its
-thread too, so that it never reads the simulation half changed: in turn
-with the presses while the simulation runs, and at once while the debugger
-holds the thread stopped, as the debugger's own views read it then. A
-change to what is outside the screen, such as starting a signal
-generator (change_outside), takes its turn the same way, since it runs none
-of the app's code. The generators' points then take turns with the timers.
+A look reads the simulation's values, and changes nothing. Looks are done
+on the simulation's thread too, so that a look never finds the simulation
+half changed. While the simulation runs, a look takes its turn with the
+presses. While the debugger holds the thread stopped, a look is done at
+once, the same way the debugger's own views read the simulation then. A
+change outside the screen, such as starting a signal generator
+(change_outside), runs none of the app's code, so it takes its turn the same
+way as a look. Once a generator runs, its points take turns with the timers.
+A value generator's instruction can run the app's code, the way a `click`
+runs an event, and that code is recorded, and stops at a breakpoint, the
+same way as a timer's event.
 
 An error in the code, such as a division by zero, stops the simulation as
 on an exception, at the last step recorded; continuing goes on from there.

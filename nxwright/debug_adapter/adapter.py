@@ -153,8 +153,7 @@ from nxwright.testing.pinyin_table import installed_pinyin_table, read_pinyin_ta
 from nxwright.testing.sd_cards import card_folder
 from nxwright.testing.simulation import read_eeprom_file
 from nxwright.testing.simulation_log import END, log_format, shown, shown_instruction
-from nxwright.testing.signal_generators import (generator_dict, generator_settings,
-                                                read_generators_file)
+from nxwright.testing.signal_generators import generator_settings, read_generators_file
 from nxwright.testing.preview import Previews
 from nxwright.testing.recording import PythonPlace, Recorder, recording
 
@@ -851,7 +850,7 @@ class DebugAdapter:
         `number`, and its `settings` in the form a settings file uses
         (signal_generators.py)."""
         return self._look(lambda simulation: {"generators": [
-            {"number": number, "settings": generator_dict(settings)}
+            {"number": number, "settings": settings.json_form()}
             for number, settings in simulation.generators().items()]})
 
     def _start_generator(self, arguments: dict):

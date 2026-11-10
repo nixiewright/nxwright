@@ -4,6 +4,7 @@ from collections import Counter
 from datetime import datetime
 import os
 from pathlib import Path
+import threading
 import tomllib
 import unittest
 from unittest import mock
@@ -2979,6 +2980,23 @@ on away.timer:
         simulation = Simulation(self.root, "page0", {"tick.en": 0})
         simulation.advance(1600)
         self.assertEqual(simulation.globals["ticks"], 0)
+
+    def test_time_goes_on_passing_after_a_timer_starts_the_app_again(self):
+        # The clock starts again from 0 with the app, and the time that
+        # remained still passes, but no more. Over 120 ms, the timer runs at
+        # 50 and at 100, and the clock ends 20 ms after the last start.
+        self.page("page0", [table("again", "timer", tim=50)], """on again.timer:
+  rest
+""")
+        simulation = Simulation(self.root)
+        starts = simulation.starts
+        # Run on a thread, so that if the time never ends passing, the test
+        # fails instead of hanging.
+        passing = threading.Thread(target=simulation.advance, args=(120,), daemon=True)
+        passing.start()
+        passing.join(30)
+        self.assertFalse(passing.is_alive(), "the time never ended passing")
+        self.assertEqual((simulation.starts - starts, simulation.clock), (2, 20))
 
     def test_timers_run_in_time(self):
         simulation = Simulation(self.root)

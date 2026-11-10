@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   channelCount, fileText, generatorOfSettings, generatorsOfRunning, isRunning, markStopped,
-  newGenerator, NUMBER_SETTINGS, setSame, settingsOf, settingsOfAll, settingsOfFileText,
-  sketchLength, sketchValues, valuesOfCsv, valuesOfText, WAVE_DEFAULTS,
+  newGenerator, newValueGenerator, numberSettings, setSame, settingsOf, settingsOfAll,
+  settingsOfFileText, sketchLength, sketchSpan, sketchValues, valuesOfCsv, valuesOfText,
+  WAVE_DEFAULTS,
 } from "../media/signal-generators-model.mjs";
 
 const OFFERED = [
@@ -32,8 +33,64 @@ test("the settings are the ones the simulation takes: no phase, and no seed", ()
   assert.deepEqual(Object.keys(WAVE_DEFAULTS).sort(),
                    ["duty", "interval", "maximum", "minimum", "noise", "period", "shape",
                     "values"]);
-  assert.deepEqual(NUMBER_SETTINGS.map((setting) => setting.key),
-                   ["minimum", "maximum", "interval", "period", "duty", "noise"]);
+  for (const kind of ["waveform", "value"]) {
+    assert.deepEqual(numberSettings(kind).map((setting) => setting.key),
+                     ["minimum", "maximum", "interval", "period", "duty", "noise"]);
+  }
+});
+
+test("a wave's numbers keep to the bounds of its generator's kind", () => {
+  const bounds = (kind) => Object.fromEntries(numberSettings(kind).map(
+    (setting) => [setting.key, [setting.low, setting.high]]));
+  assert.deepEqual(bounds("waveform"), {
+    minimum: [0, 255], maximum: [0, 255], interval: [1, undefined], period: [1, undefined],
+    duty: [0, 100], noise: [0, 255],
+  });
+  // A value is a whole number of 32 bits.
+  assert.deepEqual(bounds("value"), {
+    minimum: [-2147483648, 2147483647], maximum: [-2147483648, 2147483647],
+    interval: [1, undefined], period: [1, undefined], duty: [0, 100], noise: [0, 2147483647],
+  });
+});
+
+test("a new value generator needs an instruction, and sends one for each line typed", () => {
+  const generator = newValueGenerator();
+  assert.equal(isRunning(generator), false);
+  for (const typed of ["", "  \n \n"]) {
+    generator.send = typed;
+    assert.deepEqual(settingsOf(generator, OFFERED),
+                     { error: "Type an instruction to send, such as temp.val={value}." });
+  }
+  generator.send = "temp.val={value}\n\n  click refresh,1  \n";
+  // Its wave sends a value each second.
+  assert.deepEqual(settingsOf(generator, []), { settings: {
+    kind: "value", send: ["temp.val={value}", "click refresh,1"],
+    ...SENT_DEFAULTS, interval: 1000, period: 20,
+  } });
+  generator.onlyWhenChanged = true;
+  generator.wave.minimum = -40;
+  assert.deepEqual(settingsOf(generator, []).settings, {
+    kind: "value", send: ["temp.val={value}", "click refresh,1"], onlyWhenChanged: true,
+    ...SENT_DEFAULTS, minimum: -40, interval: 1000, period: 20,
+  });
+});
+
+test("a value generator of a file comes back as it was written", () => {
+  const settings = {
+    kind: "value", send: ["temp.val={value}", "click refresh,1"], onlyWhenChanged: true,
+    ...SENT_DEFAULTS, shape: "custom", values: [-5, 70000], interval: 1000,
+  };
+  const generator = generatorOfSettings(settings);
+  assert.equal(generator.send, "temp.val={value}\nclick refresh,1");
+  assert.equal(generator.onlyWhenChanged, true);
+  assert.deepEqual(settingsOf(generator, []).settings, settings);
+  // What a file leaves out takes the simulation's defaults.
+  const bare = generatorOfSettings({ kind: "value", send: ["n0.val={value}"] });
+  assert.equal(bare.onlyWhenChanged, false);
+  assert.deepEqual(bare.wave, WAVE_DEFAULTS);
+  // A file may list generators of both kinds.
+  const both = [settingsOf(newGenerator(OFFERED), OFFERED).settings, settings];
+  assert.deepEqual(settingsOfFileText(fileText(both)), { settings: both });
 });
 
 test("the same wave on every channel is given once", () => {
@@ -180,6 +237,22 @@ test("a sketch's random values and noise stay in range, and are the same each ti
   assert.ok(noisy.includes(255));
 });
 
+test("a value generator's sketch spans its wave's own values", () => {
+  const wave = { ...WAVE_DEFAULTS, shape: "sawtooth", minimum: 1000, maximum: 2000, period: 4 };
+  // The values are not kept within a waveform's 0 to 255.
+  const values = sketchValues(wave, 4, 0, "value");
+  assert.deepEqual(values, [1000, 1250, 1500, 1750]);
+  assert.deepEqual(sketchValues(wave, 4, 0, "waveform"), [255, 255, 255, 255]);
+  assert.deepEqual(sketchSpan("value", values), [1000, 1750]);
+  assert.deepEqual(sketchSpan("value", [-7, -7]), [-8, -6]);
+  // A waveform generator's sketch spans the values a point can take.
+  assert.deepEqual(sketchSpan("waveform", [10, 20]), [0, 255]);
+  const noisy = sketchValues({ ...WAVE_DEFAULTS, shape: "custom", values: [2147483640],
+                               noise: 40 }, 100, 0, "value");
+  assert.ok(noisy.every((value) => value <= 2147483647));
+  assert.ok(noisy.includes(2147483647));
+});
+
 test("a sketch shows two cycles of its wave", () => {
   assert.equal(sketchLength({ ...WAVE_DEFAULTS, period: 50 }), 100);
   assert.equal(sketchLength({ ...WAVE_DEFAULTS, period: 5000 }), 240);
@@ -193,6 +266,18 @@ test("typed values are whole numbers from 0 to 255, apart by commas or spaces", 
     assert.deepEqual(valuesOfText(text),
                      { error: "The values must be whole numbers from 0 to 255." });
   }
+});
+
+test("a value generator's typed values are whole numbers of 32 bits", () => {
+  assert.deepEqual(valuesOfText("-5, 70000 2147483647", "value"),
+                   { values: [-5, 70000, 2147483647] });
+  for (const text of ["2147483648", "-2147483649", "1.5", "x"]) {
+    assert.deepEqual(valuesOfText(text, "value"), {
+      error: "The values must be whole numbers from -2147483648 to 2147483647.",
+    });
+  }
+  assert.deepEqual(valuesOfCsv("t,v\n0,-300.4\n1,90000\n", "value"), { values: [0, 1] });
+  assert.deepEqual(valuesOfCsv("v\n-300.4\n90000\n", "value"), { values: [-300, 90000] });
 });
 
 test("a CSV file gives the values of its first column of numbers", () => {
@@ -231,6 +316,13 @@ test("a settings file reads back what was written, and other files say why not",
   assert.deepEqual(settingsOfFileText(later), {
     error: 'Generator 2 of the file is of a kind this extension does not know: "sequence".',
   });
+  // Only a known kind is accepted. That excludes a name every object has,
+  // such as "constructor", and a list such as ["value"], which reads as
+  // "value" when used as a key.
+  assert.match(settingsOfFileText(fileText([{ kind: "constructor" }])).error,
+               /is of a kind this extension does not know: "constructor"/);
+  assert.match(settingsOfFileText(fileText([{ kind: ["value"] }])).error,
+               /is of a kind this extension does not know: \["value"\]/);
   for (const lacking of [{ waveforms: [] }, 3, null]) {
     assert.deepEqual(settingsOfFileText(fileText([lacking])),
                      { error: 'Generator 1 in the file has no "kind".' });

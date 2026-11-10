@@ -21,7 +21,7 @@ from nxwright.testing.gpio_pins import checked_level
 from nxwright.testing.pinyin_table import installed_pinyin_table, read_pinyin_table
 from nxwright.testing.preview import Previews
 from nxwright.testing.simulation import Simulation
-from nxwright.testing.signal_generators import generator_dict, generator_settings
+from nxwright.testing.signal_generators import generator_settings
 
 
 class HeadlessSimulation(DrivenSimulation):
@@ -107,7 +107,7 @@ class HeadlessSimulation(DrivenSimulation):
         return looks.values(self._simulation, names)
 
     def generators(self) -> list:
-        return [{"number": number, "settings": generator_dict(settings)}
+        return [{"number": number, "settings": settings.json_form()}
                 for number, settings in self._simulation.generators().items()]
 
     def log(self, after: int = 0) -> list:

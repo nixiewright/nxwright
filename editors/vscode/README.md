@@ -92,7 +92,7 @@ You can also:
 - Connect a real screen beside the simulation, and send both the same instructions to compare them.
 - Let the program on the serial port talk to the real screen in place of the simulation, or to both at once, and watch what passes between them.
 - Flip the screen's GPIO inputs, in place of buttons or switches wired to them.
-- Feed your waveforms with test waves from the Signal generator panel, in place of a device sending points.
+- Send test waves from the Signal generator panel to your waveforms, and to the values your code reads, in place of a device.
 - Use folders on your computer as the screen's SD cards, so the app reads and writes real files.
 - Set breakpoints in your code, step through it, and step back.
 

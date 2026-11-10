@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.1] - 2026-11-10
+
+- Added value generators to the simulator's signal generator, which send instructions that carry a value.
+- Fixed the simulator never ending a step when a timer's event runs `rest`.
+
 ### [0.3.0] - 2026-11-10
 
 - `nxwright remove` no longer looks for uses first unless `--checked` is specified.
@@ -111,6 +116,12 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.13] - 2026-11-10
+
+Needs nxwright 0.3.1 or later.
+
+- The Signal generator panel can add value generators, which send instructions that carry a value.
 
 ### [0.3.12] - 2026-11-10
 
