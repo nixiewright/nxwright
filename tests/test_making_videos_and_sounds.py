@@ -360,7 +360,7 @@ class SoundCommandTest(MediaCommandTestCase):
         with mock.patch("nxwright.project.ffmpeg.shutil.which", return_value=None):
             with self.assertRaisesRegex(NxwrightError, "odd8.wav has 8 bits a sample at 22050 "
                                                        "samples a second .*A screen plays only "
-                                                       "16-bit sounds.*not one at this rate\. "
+                                                       r"16-bit sounds.*not one at this rate\. "
                                                        "Converting odd8.wav needs ffmpeg, "
                                                        "which is not on the PATH"):
                 add_sound(self.source, SOURCES / "odd8.wav")
@@ -380,7 +380,7 @@ class SoundCommandTest(MediaCommandTestCase):
             with self.assertRaisesRegex(NxwrightError, "surround.wav has 4 channels at 22050 "
                                                        "samples a second .*A screen plays only "
                                                        "mono and stereo sounds.*not one at this "
-                                                       "rate\. "
+                                                       r"rate\. "
                                                        "Add --mono, or give another --rate"):
                 add_sound(self.source, source)
             self.assertFalse((self.source / "sounds").exists())

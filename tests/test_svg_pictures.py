@@ -191,7 +191,7 @@ class DrawingTest(SvgTestCase):
 class FontTest(SvgTestCase):
 
     def ink(self) -> int:
-        return sum(1 for pixel in self.drawn().getdata() if pixel[3])
+        return sum(1 for pixel in self.drawn().get_flattened_data() if pixel[3])
 
     def text(self, family: str, before: str = "") -> str:
         return svg('<text x="2" y="15" font-size="14"%s>Hi</text>'

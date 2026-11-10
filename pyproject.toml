@@ -96,3 +96,10 @@ addopts = "-n auto --dist loadfile"
 # test_, or a helper class whose name begins with Test, as a test.
 python_functions = []
 python_classes = []
+# The filter keeps one deprecation warning out of pytest's summary, where
+# hundreds of copies of it would hide any other warning. Each time the
+# language server handles a request, pygls 2.1.1 calls a function that
+# Python 3.14 deprecates, and nothing in nxwright can change that call.
+filterwarnings = [
+    "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning:pygls.protocol.json_rpc",
+]
