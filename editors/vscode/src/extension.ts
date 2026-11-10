@@ -250,10 +250,14 @@ async function startServer(searched: NxwrightSearch): Promise<void> {
       // can draw a picture from their unsaved text.
       { scheme: "file", pattern: "**/*.{svg,css}" },
     ],
-    // Changes on disk, such as an extract or a git checkout, are checked too.
     synchronize: {
+      // Changes on disk, such as an extract or a git checkout, are checked too.
       fileEvents: vscode.workspace.createFileSystemWatcher(
         "**/*.{nx,toml,png,jpg,jpeg,bmp,gif,svg,css,ttf,otf,zi,gmov,video,wav}"),
+      // Sends the server the nxwright.checks settings when it starts, and
+      // when one changes. They decide whether the server checks a rename, an
+      // added component, or a paste against the build.
+      configurationSection: "nxwright.checks",
     },
   };
   const starting = new LanguageClient("nxwright", "nxwright", serverOptions, clientOptions);

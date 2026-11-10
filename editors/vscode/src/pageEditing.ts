@@ -209,8 +209,13 @@ export class PageEditing {
     }
   }
 
-  // Renames an object as Rename Symbol does, so that its code follows.
-  // Returns whether it was renamed; says why when it was not.
+  // Renames an object, and each use of its name in the code. Returns
+  // whether the object was renamed, and shows why when it was not.
+  //
+  // The rename request goes straight to nxwright's language server. VS
+  // Code's own rename command would first ask every extension that offers
+  // rename for page files, such as one for TOML files, whether the name can
+  // be renamed, and would stop if any of them answered no.
   async rename(toml: vscode.Uri, name: string, newName: string): Promise<boolean> {
     const client = this.client();
     if (!client || !newName || newName === name) {
@@ -221,13 +226,12 @@ export class PageEditing {
         textDocument: { uri: toml.toString() },
         name,
       });
-      const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
-        "vscode.executeDocumentRenameProvider",
-        toml,
-        new vscode.Position(properties.nameLine, properties.nameCharacter),
+      const edit = await client.sendRequest("textDocument/rename", {
+        textDocument: { uri: toml.toString() },
+        position: { line: properties.nameLine, character: properties.nameCharacter },
         newName,
-      );
-      return !!edit && (await this.applyShown(toml, edit));
+      });
+      return await this.apply(client, toml, edit);
     } catch (error) {
       void vscode.window.showErrorMessage(`nxwright: ${errorText(error)}`);
       return false;

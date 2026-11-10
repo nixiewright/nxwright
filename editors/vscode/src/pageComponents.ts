@@ -46,9 +46,10 @@ export class PageComponents {
                                         this.onComponents(target, (toml, names) =>
                                           this.editing.deleteComponents(toml, names))),
       vscode.commands.registerCommand("nxwright.renameComponent",
-                                      (target: PreviewMenuContext | PageObject) =>
+                                      (target: PreviewMenuContext | PageObject,
+                                       newName?: unknown) =>
                                         this.onComponents(target, (toml, names) =>
-                                          this.rename(toml, names))),
+                                          this.rename(toml, names, newName))),
       vscode.commands.registerCommand("nxwright.copyComponent",
                                       (target: PreviewMenuContext | PageObject) =>
                                         this.onComponents(target, (toml, names) =>
@@ -176,16 +177,18 @@ export class PageComponents {
   }
 
   // Asks for a new name for the one component in `names`, then renames the
-  // component and each use of its name. The language server checks the new
-  // name. If `names` does not have exactly one component, it only shows a
-  // message asking the user to select one.
-  private async rename(toml: vscode.Uri, names: string[]): Promise<void> {
+  // component and each use of its name. The input box accepts any name,
+  // and the language server refuses one that is not valid. If `names` does
+  // not contain exactly one component, the method only shows a message
+  // asking the user to select one. If `given` is a text, it is used as the
+  // new name and the user is not asked. The extension's tests pass one.
+  private async rename(toml: vscode.Uri, names: string[], given?: unknown): Promise<void> {
     if (names.length !== 1) {
       void vscode.window.showInformationMessage("nxwright: select one component to rename.");
       return;
     }
     const [name] = names;
-    const newName = await vscode.window.showInputBox({
+    const newName = typeof given === "string" ? given : await vscode.window.showInputBox({
       title: `nxwright: rename ${name}, and each use of its name`,
       value: name,
     });

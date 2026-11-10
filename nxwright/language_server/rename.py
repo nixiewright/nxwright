@@ -15,11 +15,12 @@ Renaming a page also moves its files and changes its entry in app.toml
 `nxwright new-page` would take. Unlike other new names, it may contain
 hyphens.
 
-The rename is rejected when the folder built before it and would not build
-after it. That check covers the build's rules for names (their length, a
-leading "__" in nxlang, keywords, a name already taken). In a folder that does
-not build, a page's rename is rejected, and any other rename goes ahead
-without the check.
+A rename is checked against the build only if the editor's settings turn
+that check on (server.py). A checked rename is refused when the folder built
+before it and would not build after it. The check covers the build's rules
+for names (their length, a leading "__" in nxlang, keywords, a name already
+taken). In a folder that does not build, a checked rename of a page is
+refused, and any other rename goes ahead without the check.
 """
 import re
 
@@ -35,13 +36,14 @@ _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 def rename(index: FolderIndex, path: str, line: int, column: int, new_name: str,
-           read, exists) -> dict:
+           read, exists, checked: bool = False) -> dict:
     """Returns the changes that rename the name at a place to `new_name`, as
     {"edits": {file: [(Place, new text)]}, "moves": [(old path, new path)]}.
     Only a page's rename moves files, and its edits are keyed by each file's
     path before the moves. `read(path)` returns a file of the folder, raising
     NxwrightError for a missing one, and `exists(path)` returns whether a file
-    exists.
+    exists. With `checked`, the rename is checked against the build. The
+    module's docstring says when a checked rename is refused.
 
     Raises NxwrightError saying why a rename is refused."""
     targets = targets_at(index, path, line, column)
@@ -50,7 +52,7 @@ def rename(index: FolderIndex, path: str, line: int, column: int, new_name: str,
     page = _page_named(index, targets)
     if page is not None:
         moves, edits = page_rename(index, read, exists, folder_lister(index.root), page,
-                                   new_name)
+                                   new_name, checked=checked)
         return {"edits": edits, "moves": moves}
     if any(target.end == 0 or target.path == APP_FILE for target in targets):
         raise NxwrightError("pictures, fonts, animations, videos, and sounds are renamed with "
@@ -61,7 +63,7 @@ def rename(index: FolderIndex, path: str, line: int, column: int, new_name: str,
     for place in references(index, path, line, column, with_declarations=True):
         edits.setdefault(place.path, []).append((place, new_name))
     listed = folder_lister(index.root)
-    if not check_folder(read, exists, listed=listed).errors():
+    if checked and not check_folder(read, exists, listed=listed).errors():
         texts = {file: text_with_edits(read(file), file_edits)
                  for file, file_edits in edits.items()}
         errors = check_folder(lambda file: texts[file] if file in texts else read(file),

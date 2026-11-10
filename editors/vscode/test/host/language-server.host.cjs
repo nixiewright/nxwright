@@ -1,6 +1,10 @@
-// The language server inside VS Code: the build's errors show in a .nx file
-// as it is typed, unsaved, a quick fix of one applies, and the server still
-// answers once its command is set again to an equal one.
+// Tests the language server inside VS Code:
+//  - the build's errors show in a .nx file while it is typed, before it is
+//    saved;
+//  - a quick fix for one of those errors applies;
+//  - the server still answers after nxwright.command is set again to the
+//    same value;
+//  - a rename is checked against the build only while its setting is on.
 const assert = require("node:assert/strict");
 const vscode = require("vscode");
 const { folderFile, test, waitFor } = require("./runner.cjs");
@@ -75,4 +79,36 @@ test("the server still answers once nxwright.command is set again, equal", async
   assert.ok(command.length > 0, "run.mjs set nxwright.command");
   await configuration.update("command", [...command], vscode.ConfigurationTarget.Global);
   await brokenThenMended();
+});
+
+test("a rename is checked against the build only while its setting is on", async () => {
+  // The fixture has an error, a font whose file is missing. A checked
+  // rename of a page is refused in a folder with an error, and an unchecked
+  // one goes through. browsers.nx opens the page browsers2 by name.
+  const uri = folderFile("pages", "browsers.nx");
+  const document = await vscode.workspace.openTextDocument(uri);
+  const lines = document.getText().split(/\r?\n/);
+  const line = lines.findIndex((text) => text.includes("page browsers2"));
+  const position = new vscode.Position(line, lines[line].indexOf("browsers2"));
+  const renamed = async () => {
+    try {
+      const edit = await vscode.commands.executeCommand(
+        "vscode.executeDocumentRenameProvider", uri, position, "browsers3");
+      return edit.size > 0 ? "renamed" : "nothing";
+    } catch (error) {
+      return String(error?.message ?? error);
+    }
+  };
+  assert.equal(await renamed(), "renamed");
+  const settings = vscode.workspace.getConfiguration("nxwright");
+  await settings.update("checks.rename", true, vscode.ConfigurationTarget.Global);
+  try {
+    // The server hears of the setting a moment after VS Code changes it.
+    await waitFor(async () => /the folder's checks find an error/.test(await renamed()),
+                  "the rename to be refused once the setting is on");
+  } finally {
+    await settings.update("checks.rename", undefined, vscode.ConfigurationTarget.Global);
+  }
+  await waitFor(async () => await renamed() === "renamed",
+                "the rename to go through again once the setting is off");
 });

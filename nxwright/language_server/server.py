@@ -8,6 +8,12 @@ routing of each request to its answer. The server answers:
     workspace/didChangeWatchedFiles, by which the editor tells of changes on
     disk: once changes pause, the server checks what they may affect, and
     sends textDocument/publishDiagnostics (live_checks.py).
+  - the notification workspace/didChangeConfiguration, by which the editor
+    tells of its settings. The settings under `nxwright.checks` turn on the
+    check of an action: `rename`, `addComponent`, or `paste`. While an
+    action's check is on, the server builds the folder before and after
+    that action, and refuses one that would break the build. Every check is
+    off until the editor sends a setting that turns it on.
   - textDocument/definition, with the places defining the name at a
     position (source/definitions.py), and textDocument/references, with
     the places using it (source/references.py).
@@ -157,6 +163,10 @@ class NxwrightServer(LanguageServer):
         self._initialized = False
         self.shut_down = False
         self._pause = None          # the checks to run once changes pause
+        # The actions that are checked against the build: any of "rename",
+        # "addComponent", and "paste". The editor's settings turn each check
+        # on (_on_settings_change).
+        self._checked = frozenset()
 
         self._follows(types.INITIALIZE, self._on_initialize)
         self._follows(types.SHUTDOWN, self._on_shutdown)
@@ -164,6 +174,7 @@ class NxwrightServer(LanguageServer):
                              types.TEXT_DOCUMENT_DID_CLOSE):
             self._follows(notification, self._on_document_change)
         self._follows(types.WORKSPACE_DID_CHANGE_WATCHED_FILES, self._on_files_change)
+        self._follows(types.WORKSPACE_DID_CHANGE_CONFIGURATION, self._on_settings_change)
 
         self._answers(types.TEXT_DOCUMENT_DEFINITION, self._definition)
         self._answers(types.TEXT_DOCUMENT_REFERENCES, self._references)
@@ -264,6 +275,16 @@ class NxwrightServer(LanguageServer):
     def _on_document_change(self, params):
         # The file on disk may differ from the text the editor had, as when closed.
         self._mark(params.text_document.uri)
+
+    def _on_settings_change(self, params):
+        """Records the actions whose check the editor's settings turn on.
+        The settings come as {"nxwright": {"checks": {action: true or
+        false}}}. Settings of any other form turn every check off."""
+        settings = params.settings if isinstance(params.settings, dict) else {}
+        section = settings.get("nxwright")
+        checks = section.get("checks") if isinstance(section, dict) else None
+        self._checked = frozenset(action for action, on in checks.items() if on is True) \
+            if isinstance(checks, dict) else frozenset()
 
     def _on_files_change(self, params):
         for change in params.changes:
@@ -421,7 +442,8 @@ class NxwrightServer(LanguageServer):
             raise NxwrightError("only names of a source folder can be renamed")
         index = position[0]
         renamed = rename(*position, params.new_name, self._texts.folder_reader(index.root),
-                         lambda path: (index.root / path).is_file())
+                         lambda path: (index.root / path).is_file(),
+                         checked="rename" in self._checked)
         edits = {file: [{"range": self._range(index, place), "newText": new_text}
                         for place, new_text in file_edits]
                  for file, file_edits in renamed["edits"].items()}
@@ -663,7 +685,7 @@ class NxwrightServer(LanguageServer):
         point = params.get("point") or {"x": 0, "y": 0}
         found = add_component(index, self._texts.folder_reader(index.root),
                               lambda path: (index.root / path).is_file(), page, params["type"],
-                              point["x"], point["y"])
+                              point["x"], point["y"], checked="addComponent" in self._checked)
         return {"edit": self._workspace_edit(index, found["edits"]), "name": found["name"],
                 "passedOver": [{"name": passed["name"], "uri": uri_of(index.root / passed["path"])}
                                for passed in found["passedOver"]]}
@@ -787,7 +809,8 @@ class NxwrightServer(LanguageServer):
                                  lambda path: (index.root / path).is_file(), page,
                                  params["text"], params.get("code") or [],
                                  at=(at["x"], at["y"]) if at else None,
-                                 in_place=params.get("inPlace") is True)
+                                 in_place=params.get("inPlace") is True,
+                                 checked="paste" in self._checked)
         return {"edit": self._workspace_edit(index, found["edits"], found["created"]),
                 "names": found["names"]}
 
@@ -800,7 +823,8 @@ class NxwrightServer(LanguageServer):
         index, page = self._unlocked_page_of(params)
         found = paste_parts(index, self._texts.folder_reader(index.root),
                             lambda path: (index.root / path).is_file(), page, params["names"],
-                            params["text"], params.get("code") or [], params["parts"])
+                            params["text"], params.get("code") or [], params["parts"],
+                            checked="paste" in self._checked)
         return {"edit": self._workspace_edit(index, found["edits"], found["created"]),
                 "notes": found["notes"]}
 

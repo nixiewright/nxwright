@@ -368,7 +368,8 @@ def _run_replace(arguments) -> str:
         if getattr(arguments, option) is not None}
     name, warning, removed, left = replace_resource(arguments.source_folder, arguments.kind,
                                                     arguments.name, arguments.files,
-                                                    arguments.new_name, **options)
+                                                    arguments.new_name,
+                                                    checked=arguments.checked, **options)
     if warning:
         print("nxwright replace: warning: %s" % warning, file=sys.stderr)
     lines = ["Replaced the %s %s in %s%s%s"
@@ -382,10 +383,11 @@ def _run_replace(arguments) -> str:
 
 def _run_rename(arguments) -> str:
     if arguments.kind == "page":
-        written = rename_page(arguments.source_folder, arguments.name, arguments.new_name)
+        written = rename_page(arguments.source_folder, arguments.name, arguments.new_name,
+                              checked=arguments.checked)
     else:
         written = rename_resource(arguments.source_folder, arguments.kind, arguments.name,
-                                  arguments.new_name)
+                                  arguments.new_name, checked=arguments.checked)
     return "Renamed the %s %s to %s in %s, writing %s" % (
         arguments.kind, arguments.name, arguments.new_name, arguments.source_folder,
         ", ".join(written))
@@ -818,9 +820,11 @@ _SUBCOMMANDS = [
      "taken from the current resource: a font drawn from a typeface keeps its height and "
      "smoothing, and in utf-8 its characters; an animation keeps its frames' duration; and a "
      "video keeps its rate, and its size when cut from a video file. A placeholder, such as "
-     "empty-slot-1, has no settings to keep. With --name, the command fails if the folder uses "
-     "the resource by name: rename it first. --settings takes no file, changes nothing, and "
-     "prints as JSON the settings that would be kept.",
+     "empty-slot-1, has no settings to keep. --name does not change the uses of the old "
+     "name, so a page file or code that still uses it no longer builds. To change those uses "
+     "too, rename the resource first. With --name and --checked, the command fails if the "
+     "folder uses the resource by name. --settings takes no file, changes nothing, and prints "
+     "as JSON the settings that would be kept.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
       ("kind", {"choices": list(KINDS), "help": "the kind of resource"}),
       ("name", {"help": "its name, as app.toml lists it"}),
@@ -829,6 +833,9 @@ _SUBCOMMANDS = [
                          "pictures of an animation, or a GmovMaker file; a video file or "
                          "pictures; or a sound"}),
       ("--name", {"dest": "new_name", "help": "a new name for it (default: its own)"}),
+      ("--checked", {"action": "store_true",
+                     "help": "with --name, look for what uses the old name first, and replace "
+                             "nothing if the folder still uses it"}),
       ("--settings", {"action": "store_true",
                       "help": "print the settings it would keep, as JSON, and write nothing"}),
       ("--height", {"type": int, "help": "a font's height in pixels, from 12 to 254"}),
@@ -859,11 +866,17 @@ _SUBCOMMANDS = [
      "numbers in the code still point to it. Changing only the letter case is a rename too. "
      "A page's new name must be one that new-page would take. The command fails, and changes "
      "nothing, if another page, or another resource of the same kind, has the new name in "
-     "any letter case, or if the folder's checks find an error, before or after the rename.",
+     "any letter case. Unless --checked is given, the command does not check that the folder "
+     "still builds, so a rename can cause an error, such as a new name that a component "
+     "already has. With --checked, the command builds the folder before and after the "
+     "rename, and fails, changing nothing, if either build finds an error.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
       ("kind", {"choices": ["page", *KINDS], "help": "what to rename"}),
       ("name", {"help": "its name, as app.toml lists it"}),
-      ("new_name", {"help": "its new name"})]),
+      ("new_name", {"help": "its new name"}),
+      ("--checked", {"action": "store_true",
+                     "help": "build the folder before and after the rename, and rename nothing "
+                             "if either build finds an error"})]),
     ("device", _run_device, "change a source folder's screen model, rotation, or encoding",
      "Changes app.toml's screen model, rotation, or character encoding, as the Nextion Editor's "
      "Device window does, along with what depends on them. Each page takes the new screen's "

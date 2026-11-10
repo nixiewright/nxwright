@@ -216,7 +216,8 @@ On a Mac, use Cmd instead of Ctrl, and the delete key to delete.
 
 - The status bar shows how many objects the page has (its components plus the page itself), out of the 251 allowed, and its longest chain of calls and `click` commands, out of the 7 allowed.
 - Some commands, such as adding a font or changing the screen model, need your changes saved first.
-- Rename, adding or pasting a component, and Format Document fail if the project would no longer build. For example, you can't rename to a name already in use, add or paste on a page that is full, or format a file with errors.
+- Format Document fails on a file that has errors.
+- By default, Rename, adding a component, and pasting do not check that the project still builds. For example, you can rename a component to a name that another component has, or add one to a page that is full, and the Problems panel then shows the error. To have nxwright check first, and change nothing if the project would no longer build, turn on the Checks settings ([Settings](#settings)).
 - `.nx` files are always UTF-8. VS Code saves them in UTF-8 whatever your `files.encoding` and `files.autoGuessEncoding` settings are, and the build fails on a `.nx` file that is not valid UTF-8.
 
 ## Settings
@@ -229,7 +230,11 @@ You can change these in VS Code's Settings, where they are grouped by category.
 - `nxwright.previewGrid`: the size of the grid, in pixels, that dragged components snap to. The default is 1, which means no grid.
 - `nxwright.warnWhenComponentIdsChange`: warns you when deleting, cutting, or moving components would change the IDs of components on their page. It is on by default, and choosing Don't Warn Again in the warning turns it off.
 - `nxwright.testFolders`: the folders of tests that Test Explorer lists. By default, it lists every folder named `tests` next to a source folder.
-- `nxwright.checks.delete`: searches your project before deleting a page or a resource, and keeps one that is still used. It is off by default, because the search takes time on a large project.
+- The Checks settings make an action check your project first, and do nothing if the action would break it. They are off by default, because each check searches or builds your project, which takes time on a large one.
+  - `nxwright.checks.delete`: Delete keeps a page or a resource that your project still uses.
+  - `nxwright.checks.rename`: a rename changes nothing if the project would no longer build.
+  - `nxwright.checks.replace`: when Replace gives a resource a new name, it replaces nothing if the project still uses the old name.
+  - `nxwright.checks.addComponent` and `nxwright.checks.paste`: adding a component or pasting changes nothing if the page would no longer build.
 - The Simulator settings, used when a launch configuration doesn't set its own value:
   - `nxwright.simulator.serialPort` and `nxwright.simulator.serialBaud`: the serial port, such as `COM4`, and its speed. Leave the port empty for none.
   - `nxwright.simulator.sdCard0` and `nxwright.simulator.sdCard1`: the full paths of the folders to use as SD cards. Leave one empty to keep that card in memory.

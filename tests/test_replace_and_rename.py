@@ -5,6 +5,7 @@ import contextlib
 import io
 import json
 from pathlib import Path
+import shutil
 from unittest import mock
 
 from nxwright import NxwrightError
@@ -116,7 +117,8 @@ class ReplaceTest(FolderTestCase):
         green = self.picture("green", (0, 255, 0))
         before = self.files()
         for replace, message in (
-                (lambda: replace_resource(self.source, "picture", "a", [green], new_name="c"),
+                (lambda: replace_resource(self.source, "picture", "a", [green], new_name="c",
+                                          checked=True),
                  "cannot give the picture a another name"),
                 (lambda: replace_resource(self.source, "picture", "c", [green]),
                  "no picture named c"),
@@ -127,6 +129,30 @@ class ReplaceTest(FolderTestCase):
             with self.subTest(message=message), self.assertRaisesRegex(NxwrightError, message):
                 replace()
             self.assertEqual(self.files(), before)
+
+    def test_the_command_searches_for_the_old_name_only_when_asked(self):
+        self.add("p0", "picture", pic="a")
+        green = self.picture("green", (0, 255, 0))
+        arguments = ["replace", str(self.source), "picture", "a", str(green), "--name", "c"]
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            self.assertEqual(main(arguments + ["--checked"]), 1)
+        self.assertIn("cannot give the picture a another name", errors.getvalue())
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(arguments), 0)
+        self.assertEqual(self.app()["pictures"][0], "c")
+
+    def test_a_new_name_is_given_without_a_search_unless_checked(self):
+        self.add("p0", "picture", pic="a")
+        green = self.picture("green", (0, 255, 0))
+        with mock.patch("nxwright.source.resource_removal.check_folder",
+                        side_effect=AssertionError("the folder was built")):
+            self.assertEqual(replace_resource(self.source, "picture", "a", [green],
+                                              new_name="c")[0], "c")
+        self.assertEqual(self.app()["pictures"][0], "c")
+        # p0 still gives the old name, so the folder no longer builds.
+        check = check_folder(folder_reader(self.source), lambda path: (self.source / path).exists())
+        self.assertNotEqual(check.errors(), [])
 
     def test_the_command(self):
         output = io.StringIO()
@@ -200,6 +226,36 @@ class RenameTest(FolderTestCase):
             with self.subTest(new=new), self.assertRaisesRegex(NxwrightError, message):
                 rename_resource(self.source, kind, name, new)
             self.assertEqual(self.files(), before)
+
+    def test_a_rename_builds_the_folder_only_when_checked(self):
+        self.write_code("zz.val=1")
+        before = self.files()
+        with self.assertRaisesRegex(NxwrightError, "the folder's checks find an error"):
+            rename_resource(self.source, "picture", "a", "logo", checked=True)
+        self.assertEqual(self.files(), before)
+        with mock.patch("nxwright.source.resource_renaming.check_folder",
+                        side_effect=AssertionError("the folder was built")):
+            rename_resource(self.source, "picture", "a", "logo")
+        self.assertEqual(self.app()["pictures"], ["logo", "b"])
+
+    def test_a_checked_rename_writes_the_same_files(self):
+        self.add("p0", "picture", pic="a")
+        checked = self.folder / "checked"
+        shutil.copytree(self.source, checked)
+        self.assertEqual(rename_resource(checked, "picture", "a", "logo", checked=True),
+                         rename_resource(self.source, "picture", "a", "logo"))
+        self.assertEqual(self.files(checked), self.files())
+
+    def test_the_command_builds_the_folder_only_when_asked(self):
+        self.write_code("zz.val=1")
+        arguments = ["rename", str(self.source), "picture", "a", "logo"]
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            self.assertEqual(main(arguments + ["--checked"]), 1)
+        self.assertIn("the folder's checks find an error", errors.getvalue())
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(arguments), 0)
+        self.assertEqual(self.app()["pictures"], ["logo", "b"])
 
     def test_a_failed_write_leaves_the_folder_as_it_was(self):
         self.add("p0", "picture", pic="a")

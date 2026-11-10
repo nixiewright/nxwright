@@ -178,13 +178,24 @@ export function newNameCheck(name: string, old: string, others: string[]): strin
   return null;
 }
 
-// Turns the arguments of a command adding a resource, as mediaCommands.ts
-// gives them, ["animation", folder, ...files and options], into those of
-// `nxwright replace`, which puts it in the place of the resource `name`,
-// named `newName` when given.
-export function replaceArguments(addArguments: string[], name: string,
-                                 newName?: string): string[] {
+// Turns the arguments of a command that adds a resource into those of the
+// `nxwright replace` that puts the new resource in the place of the
+// resource `name`. mediaCommands.ts gives the first as ["animation", folder,
+// ...files and options]. If `newName` is given, the new resource takes that
+// name. With `checked` too, `nxwright replace` first looks for what uses
+// the old name, and replaces nothing if the folder still uses it.
+export function replaceArguments(addArguments: string[], name: string, newName: string | undefined,
+                                 checked: boolean): string[] {
   const [kind, folder, ...rest] = addArguments;
   return ["replace", folder, kind, name, ...rest,
-          ...(newName === undefined ? [] : ["--name", newName])];
+          ...(newName === undefined ? [] : ["--name", newName, ...(checked ? ["--checked"] : [])])];
+}
+
+// Returns the arguments of the `nxwright rename` that renames the resource
+// `name` of `kind` to `newName` in `folder`. With `checked`, the command
+// builds the folder before and after the rename, and renames nothing if
+// either build finds an error.
+export function renameArguments(folder: string, kind: string, name: string, newName: string,
+                                checked: boolean): string[] {
+  return ["rename", folder, kind, name, newName, ...(checked ? ["--checked"] : [])];
 }

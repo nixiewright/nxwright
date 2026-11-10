@@ -4,11 +4,14 @@ stands, so that its ID stays the same. Each use of its name that Find All
 References finds (references.py) changes too, such as `pic = "logo"` in a
 page file or `@pic(logo)` in code.
 
-Every edit is worked out before anything is written, and the folder's
-checks run on the folder as the edits would leave it, so that a rename the
-build would refuse writes nothing. The files are then moved, and app.toml
-and the files that use the name are written. If any step fails, everything
-is put back as it was.
+Every edit is worked out before anything is written. The files are then
+moved, and app.toml and the files that use the name are written. If any step
+fails, everything is put back as it was.
+
+A rename does not run the folder's checks, unless it is a checked rename
+(`nxwright rename --checked`). A checked rename runs them before the edits,
+because an error could hide a use of the name, and again on the folder as
+the edits would leave it. If either run finds an error, nothing is written.
 """
 import codecs
 from pathlib import Path
@@ -30,17 +33,18 @@ from nxwright.source.source_folder import (app_text_in, folder_file_exists, fold
 _RENAMING_SUFFIX = ".renaming"
 
 
-def rename_resource(source_folder: Path, kind: str, name: str, new_name: str) -> list:
+def rename_resource(source_folder: Path, kind: str, name: str, new_name: str,
+                    checked: bool = False) -> list:
     """Renames the resource `name` of `kind`, a word of KINDS, to `new_name`,
     as the module's docstring says. Returns the paths, within the folder, of
     the files written: those moved, under their new names, and those edited.
 
     Raises NxwrightError, writing nothing, for a kind or a name the folder
     does not have, a new name that is the old one, that another resource of
-    its kind has in any letter case, or that app.toml may not contain, a file
-    already where a moved one would go, and a folder whose checks find an
-    error, before or after the edits. A failure while moving or writing puts
-    back what was done, and is raised."""
+    its kind has in any letter case, or that app.toml may not contain, and a
+    file already where a moved one would go. With `checked`, also raises it
+    for a folder whose checks find an error, before or after the edits. A
+    failure while moving or writing puts back what was done, and is raised."""
     source_folder = Path(source_folder)
     if kind not in KINDS:
         raise NxwrightError("%s is not a kind of resource: %s" % (kind, ", ".join(KINDS)))
@@ -53,8 +57,9 @@ def rename_resource(source_folder: Path, kind: str, name: str, new_name: str) ->
     check_resource_name(source_folder, app, listed, new_name, Slot(name))
     read, exists = folder_reader(source_folder), folder_file_exists(source_folder)
     lister = folder_lister(source_folder)
-    check_builds(read, exists, lister, "the folder's checks find an error, so its uses of %s %s "
-                                       "cannot all be found" % (kind, name))
+    if checked:
+        check_builds(read, exists, lister, "the folder's checks find an error, so its uses of "
+                                           "%s %s cannot all be found" % (kind, name))
     moves = [(old, listed + "/" + new_name + old[len(listed) + 1 + len(name):])
              for old in resource_file_paths(source_folder, listed, name)]
     for old, new in moves:
@@ -64,8 +69,9 @@ def rename_resource(source_folder: Path, kind: str, name: str, new_name: str) ->
     texts = _edited_texts(source_folder, read, listed, name, new_name)
     renamed = [new_name if known == name else known for known in app[listed]]
     texts[APP_FILE] = app_text_in(source_folder, dict(app, **{listed: renamed}))
-    check_builds(*as_renamed(read, exists, lister, texts, moves),
-                 "the folder would not build after the rename")
+    if checked:
+        check_builds(*as_renamed(read, exists, lister, texts, moves),
+                     "the folder would not build after the rename")
     move_files(source_folder, moves)
     try:
         write_texts(source_folder, texts)

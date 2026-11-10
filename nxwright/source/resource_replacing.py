@@ -72,7 +72,7 @@ def current_settings(source_folder: Path, kind: str, name: str) -> dict:
 
 
 def replace_resource(source_folder: Path, kind: str, name: str, files: list,
-                     new_name: str = None, **options) -> tuple:
+                     new_name: str = None, checked: bool = False, **options) -> tuple:
     """Writes a new resource of `kind` into the place of the resource `name`.
     The new resource is made from `files` with `options` (OPTIONS), and is
     named `new_name`, or else `name`. A setting not given defaults to the
@@ -80,10 +80,12 @@ def replace_resource(source_folder: Path, kind: str, name: str, files: list,
     or None, the old files deleted, a sentence for each that could not be).
 
     Raises NxwrightError, writing nothing, for a kind or a name the folder
-    does not have, an option its kind does not take, no file, a `new_name`
-    while the folder uses the resource by name, a font's height that neither
-    is given nor can be read, and whatever the function adding the kind
-    refuses."""
+    does not have, an option its kind does not take, no file, a font's
+    height that neither is given nor can be read, and whatever the function
+    adding the kind refuses. With `checked` and a `new_name`, also raises it
+    if the folder uses the resource by name. Without `checked`, the folder
+    is not searched, so a page file or code that still uses the old name no
+    longer builds."""
     source_folder = Path(source_folder)
     _listed(source_folder, kind, name)
     wrong = sorted(set(options) - set(OPTIONS[kind]))
@@ -91,7 +93,7 @@ def replace_resource(source_folder: Path, kind: str, name: str, files: list,
         raise NxwrightError("a %s takes no %s" % (kind, wrong[0].replace("_", " ")))
     if not files:
         raise NxwrightError("replacing a %s needs a file" % kind)
-    if new_name is not None and new_name != name:
+    if checked and new_name is not None and new_name != name:
         _check_unused_by_name(source_folder, kind, name)
     options = _with_defaults(source_folder, kind, name, files, options)
     slot, warning = Slot(name), None

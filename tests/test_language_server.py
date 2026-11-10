@@ -1152,6 +1152,32 @@ class LiveCheckTest(CheckFolderTestCase):
                          [{"range": {"start": {"line": 1, "character": 2},
                                      "end": {"line": 1, "character": 7}}, "newText": "heading"}])
 
+    def test_rename_is_checked_only_once_the_settings_ask(self):
+        # The build refuses a name longer than 14 characters.
+        self.change("pages/page0.nx", "on page0.load:\n  title.txt = \"a\"\n",
+                    "textDocument/didOpen")
+
+        def rename() -> dict:
+            return self.request("textDocument/rename", "pages/page0.nx",
+                                position={"line": 1, "character": 3},
+                                newName="a_name_much_too_long")
+
+        def settings(value):
+            self.connection.handle({"jsonrpc": "2.0", "method": "workspace/didChangeConfiguration",
+                                    "params": {"settings": value}})
+        self.assertIn("changes", rename()["result"])
+        settings({"nxwright": {"checks": {"rename": True, "paste": False}}})
+        reply = rename()
+        self.assertEqual(reply["error"]["code"], -32803)
+        self.assertIn("would not build after the rename", reply["error"]["message"])
+        # Settings that turn the check off, and settings of another form.
+        for value in ({"nxwright": {"checks": {"rename": False}}}, {"nxwright": {}}, None):
+            with self.subTest(settings=value):
+                settings({"nxwright": {"checks": {"rename": True}}})
+                self.assertIn("error", rename())
+                settings(value)
+                self.assertIn("changes", rename()["result"])
+
     def test_rename_a_page(self):
         # The page's files are renamed first, so the edits to them use their new paths.
         self.change("pages/page0.nx", "on page0.load:\n  title.txt = \"a\"\n",

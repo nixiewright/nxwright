@@ -6,6 +6,7 @@ nxwright/pasteComponents, nxwright/pasteParts, and nxwright/groupComponents
 requests."""
 import tomllib
 import unittest
+from unittest import mock
 
 import tomli_w
 
@@ -19,6 +20,7 @@ from nxwright.language_server.page_components import (add_component, clear_event
                                                        lock_components, place_components,
                                                        reorder_components)
 from tests.test_folder_check import edited_app
+from tests.language_server_connection import initialized
 from tests.test_page_editing import ServerTestCase
 
 
@@ -42,9 +44,10 @@ class ComponentsTestCase(ServerTestCase):
     def exists(self, path: str) -> bool:
         return (self.root / path).is_file()
 
-    def add(self, type_name: str, x: int = 0, y: int = 0) -> str:
+    def add(self, type_name: str, x: int = 0, y: int = 0, checked: bool = False) -> str:
         """Adds a component to page0's file, and returns its name."""
-        found = add_component(self.index(), self.read(), self.exists, "page0", type_name, x, y)
+        found = add_component(self.index(), self.read(), self.exists, "page0", type_name, x, y,
+                              checked=checked)
         self.assertEqual(list(found["edits"]), ["pages/page0.page.toml"])
         self.write("pages/page0.page.toml", applied(self.text("pages/page0.page.toml"),
                                                     found["edits"]["pages/page0.page.toml"]))
@@ -124,7 +127,13 @@ class AddTest(ComponentsTestCase):
             '\n[[component]]\nname = "v%d"\ntype = "variable"\n' % number for number in range(249)))
         with self.assertRaisesRegex(NxwrightError, "the page would not build after adding va0: "
                                                    "pages/page0.page.toml"):
-            self.add("variable")
+            self.add("variable", checked=True)
+        # When not checked, the component is added without building the page, which
+        # then no longer builds.
+        with mock.patch("nxwright.language_server.page_components.check_folder",
+                        side_effect=AssertionError("the page was built")):
+            self.assertEqual(self.add("variable"), "va0")
+        self.assertNotEqual(self.check(["page0"]).errors(), [])
 
     def test_a_page_that_did_not_build_takes_it_still(self):
         self.write("pages/page0.nx", "on page0.load:\n  nobody.txt = 1\n")
@@ -422,9 +431,9 @@ class CopyPasteTest(ComponentsTestCase):
         self.assertEqual(self.paste("page0", {"text": text})["names"], ["title0", "title1"])
         self.assertEqual([(table["x"], table["y"]) for table in self.tables_of("page0")[-2:]],
                          [(10, 10), (10, 15)])
-        # A table without its y is the build's to refuse.
+        # The build refuses a table without its y, so only a checked paste fails.
         with self.assertRaisesRegex(NxwrightError, "title3 needs its place on the screen; y missing"):
-            self.paste("page0", {"text": text.replace("y = 5\r\n", "")})
+            self.paste("page0", {"text": text.replace("y = 5\r\n", "")}, checked=True)
 
     def test_a_page_file_that_does_not_read(self):
         self.write("pages/page0.page.toml", self.text("pages/page0.page.toml") + "[[component]]\nname = ")
@@ -473,7 +482,11 @@ class CopyPasteTest(ComponentsTestCase):
     def test_tables_that_would_stop_the_page_building(self):
         text = self.copy("title")["text"].replace('txt = "x"', 'txt = "far too long a text"')
         with self.assertRaisesRegex(NxwrightError, "the page would not build after pasting"):
-            self.paste("second", {"text": text})
+            self.paste("second", {"text": text}, checked=True)
+        # When not checked, the tables are pasted without building the page.
+        with mock.patch("nxwright.language_server.page_components.check_folder",
+                        side_effect=AssertionError("the page was built")):
+            self.assertEqual(self.paste("second", {"text": text})["names"], ["title0"])
 
 
 class ClearEventsTest(ComponentsTestCase):
@@ -541,11 +554,11 @@ class PasteSpecialTest(ComponentsTestCase):
     def copy(self, *names: str) -> dict:
         return copy_components(self.index(), self.read(), "page0", list(names))
 
-    def paste_parts(self, names: list, copied: dict, *parts: str) -> dict:
+    def paste_parts(self, names: list, copied: dict, *parts: str, checked: bool = False) -> dict:
         """Pastes `parts` of `copied` onto the components `names` of page0,
         writing the files, and returns the reply."""
         found = paste_parts(self.index(), self.read(), self.exists, "page0", names,
-                            copied["text"], copied.get("code", []), list(parts))
+                            copied["text"], copied.get("code", []), list(parts), checked=checked)
         for path, edits in found["edits"].items():
             self.write(path, applied(self.text(path) if self.exists(path) else "", edits))
         return found
@@ -715,7 +728,12 @@ class PasteSpecialTest(ComponentsTestCase):
     def test_the_page_file_checked_and_the_code_not(self):
         typed = '[[component]]\nname = "t9"\ntype = "text"\nx = 0\ny = 0\nw = 1\nh = 1\n'
         with self.assertRaisesRegex(NxwrightError, "the page would not build after pasting parts"):
+            self.paste_parts(["b0"], {"text": typed}, "size", checked=True)
+        # When not checked, the size is pasted without building the page.
+        with mock.patch("nxwright.language_server.page_components.check_folder",
+                        side_effect=AssertionError("the page was built")):
             self.notes(["b0"], {"text": typed}, "size")
+        self.assertEqual([self.table_of("b0")[key] for key in ("w", "h")], [1, 1])
         # Code is pasted as Paste pastes it, even code that would not build.
         self.notes(["b0"], {"text": typed, "code": ["on t9.down:\n  nothing.txt = 1\n"]}, "code")
         self.assertIn("on b0.down:\n  nothing.txt = 1\n", self.text("pages/page0.nx"))
@@ -919,6 +937,40 @@ class ServerRequestTest(ComponentsTestCase):
         self.assertEqual(reply["namedElsewhere"], [{"uri": uri_of(self.root / "pages/page0.nx"),
                                                     "line": 1}])
         self.assertIn("error", self.request("nxwright/addComponent", type="label"))
+
+    def test_adding_and_pasting_are_checked_only_once_the_settings_ask(self):
+        # A page has at most 250 components: here title, and 249 more.
+        self.write("pages/page0.page.toml", self.text("pages/page0.page.toml") + "".join(
+            '\n[[component]]\nname = "v%d"\ntype = "variable"\n' % number for number in range(249)))
+        copied = self.request("nxwright/copyComponents", names=["title"])["result"]
+        connection = initialized()
+
+        def ask(method: str, **params) -> dict:
+            params["textDocument"] = {"uri": uri_of(self.root / "pages/page0.page.toml")}
+            connection.handle({"jsonrpc": "2.0", "id": 2, "method": method, "params": params})
+            return connection.sent[-1]
+
+        def settings(**checks):
+            connection.handle({"jsonrpc": "2.0", "method": "workspace/didChangeConfiguration",
+                               "params": {"settings": {"nxwright": {"checks": checks}}}})
+        requests = (("nxwright/addComponent", {"type": "variable"}, "adding va0"),
+                    ("nxwright/pasteComponents", {"text": copied["text"]}, "pasting"),
+                    ("nxwright/pasteParts", {"names": ["title"], "text": copied["text"],
+                                             "parts": ["size"]}, None))
+        for method, params, _ in requests:
+            self.assertIn("result", ask(method, **params))
+        settings(addComponent=True, paste=True)
+        for method, params, refused in requests:
+            reply = ask(method, **params)
+            if refused is None:
+                # Pasting a size adds no component, so the page still builds.
+                self.assertIn("result", reply)
+            else:
+                self.assertIn("the page would not build after " + refused,
+                              reply["error"]["message"])
+        settings(addComponent=False, paste=False)
+        for method, params, _ in requests:
+            self.assertIn("result", ask(method, **params))
 
     def test_placing_and_reordering(self):
         uri = uri_of(self.root / "pages/page0.page.toml")

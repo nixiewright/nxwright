@@ -4,10 +4,11 @@
 // `replace`, or `rename`, after asking the questions that mediaEditing.ts
 // builds. A font is replaced from the Fonts panel instead (fontPanel.ts).
 // The Pages section's Delete Page deletes a page the same way.
-// Delete runs `remove` without its search for uses, unless the setting
-// nxwright.checks.delete is on.
-// Each action refuses to run while a file of the folder has unsaved
-// changes, because the subcommand could rewrite that file.
+// An action passes --checked to its subcommand only if its setting is on:
+// nxwright.checks.delete, nxwright.checks.replace, or nxwright.checks.rename.
+// Without --checked, the subcommand does not search or build the folder
+// first. No action runs while a file of the folder has unsaved changes,
+// because the subcommand could rewrite that file.
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import { CurrentProject } from "./currentProject";
@@ -15,7 +16,7 @@ import { FontPanels } from "./fontPanel";
 import { animationArguments, MediaQuestions, MediaSettings, pictureArguments, soundArguments,
          videoArguments } from "./mediaCommands";
 import { DeleteAction, deleteDialog, deleteTarget, DeleteTarget, isPlaceholder, newNameCheck,
-         removeArguments, replaceArguments } from "./mediaEditing";
+         removeArguments, renameArguments, replaceArguments } from "./mediaEditing";
 import { MediaEntry } from "./mediaView";
 import { runJson } from "./tftRun";
 import { refusedForUnsaved } from "./unsavedChanges";
@@ -96,11 +97,9 @@ export class MediaActions {
       }
     } else if (action !== undefined) {
       const keepIds = action === "keepIds";
-      const checked = vscode.workspace.getConfiguration("nxwright")
-        .get<boolean>("checks.delete", false);
       await this.run(keepIds ? `deleting the ${kind} ${name}, and leaving an empty slot...`
                        : `deleting the ${kind} ${name}...`,
-                     removeArguments(folder.fsPath, deleted, keepIds, checked));
+                     removeArguments(folder.fsPath, deleted, keepIds, this.checked("delete")));
     }
   }
 
@@ -187,7 +186,8 @@ export class MediaActions {
       : kind === "video" ? await videoArguments(folder.fsPath, questions, settings)
       : await soundArguments(folder.fsPath, questions);
     if (added) {
-      await this.run(`replacing the ${kind} ${name}...`, replaceArguments(added, name, newName));
+      await this.run(`replacing the ${kind} ${name}...`,
+                     replaceArguments(added, name, newName, this.checked("replace")));
     }
   }
 
@@ -205,7 +205,8 @@ export class MediaActions {
     });
     if (newName !== undefined) {
       await this.run(`renaming the ${kind} ${name} to ${newName}...`,
-                     ["rename", folder.fsPath, kind, name, newName]);
+                     renameArguments(folder.fsPath, kind, name, newName,
+                                     this.checked("rename")));
     }
   }
 
@@ -220,6 +221,12 @@ export class MediaActions {
       return undefined;
     }
     return { folder, kind: KINDS[entry.list], name: entry.name };
+  }
+
+  // Returns whether the setting nxwright.checks.<action> is on. When it is,
+  // the action passes --checked to its subcommand.
+  private checked(action: "delete" | "replace" | "rename"): boolean {
+    return vscode.workspace.getConfiguration("nxwright").get<boolean>(`checks.${action}`, false);
   }
 
   // The names in app.toml's list `list`, as the extension last read them.

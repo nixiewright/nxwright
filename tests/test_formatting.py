@@ -212,15 +212,17 @@ class RenameTest(FolderTestCase):
         self.write("pages/second.page.toml", self.text("pages/second.page.toml").replace(
             'name = "title"\n', 'name = "title"\nvscope = 1\n'))
 
-    def rename_at(self, path: str, needle: str, new_name: str, inside: str = None) -> dict:
+    def rename_at(self, path: str, needle: str, new_name: str, inside: str = None,
+                  checked: bool = False) -> dict:
         """Renames the name at the first `needle` of `path`, or at `inside` it,
-        and returns {file: its new text}."""
+        and returns {file: its new text}. With `checked`, the rename is
+        checked against the build."""
         lines = self.text(path).split("\n")
         line = next(number for number, text in enumerate(lines) if needle in text)
         column = lines[line].index(needle) + (needle.index(inside) if inside else 0)
         index = FolderIndex(self.root, FileTexts().read)
         edits = rename(index, path, line, column, new_name, folder_reader(self.root),
-                       lambda file: (self.root / file).is_file())["edits"]
+                       lambda file: (self.root / file).is_file(), checked=checked)["edits"]
         texts = {}
         for file, file_edits in edits.items():
             file_lines = self.text(file).split("\n")
@@ -260,7 +262,7 @@ class RenameTest(FolderTestCase):
             self.rename_at("macros.nx", "call mark it", "two words", "mark it")
         # A name another macro has: the folder would not build.
         with self.assertRaisesRegex(NxwrightError, "would not build after the rename"):
-            self.rename_at("macros.nx", "call mark it", "other", "mark it")
+            self.rename_at("macros.nx", "call mark it", "other", "mark it", checked=True)
 
     def test_a_name_a_shared_library_gives_every_page(self):
         # The library names each page's own title: renaming one page's would
@@ -268,7 +270,7 @@ class RenameTest(FolderTestCase):
         self.write("pages/lib/show.nx", self.text("pages/lib/show.nx").replace(
             "sys0 = shown", "title.txt = shown"))
         with self.assertRaisesRegex(NxwrightError, "would not build after the rename"):
-            self.rename_at("pages/page0.nx", "vis title", "heading", "title")
+            self.rename_at("pages/page0.nx", "vis title", "heading", "title", checked=True)
 
     def test_another_pages_component(self):
         texts = self.rename_at("pages/page0.nx", "second.title", "label", "title")
@@ -308,7 +310,12 @@ class RenameTest(FolderTestCase):
         add_line = '\n[[component]]\nname = "taken"\ntype = "text"\nx = 0\ny = 0\nw = 9\nh = 9\n'
         self.write("pages/page0.page.toml", self.text("pages/page0.page.toml") + add_line)
         with self.assertRaisesRegex(NxwrightError, "would not build after the rename"):
-            self.rename_at("pages/page0.nx", "vis title", "taken", "title")
+            self.rename_at("pages/page0.nx", "vis title", "taken", "title", checked=True)
+        # When not checked, the rename is made without building the folder.
+        with mock.patch("nxwright.language_server.rename.check_folder",
+                        side_effect=AssertionError("the folder was built")):
+            texts = self.rename_at("pages/page0.nx", "vis title", "taken", "title")
+        self.assertIn("vis taken", texts["pages/page0.nx"])
 
     def test_a_folder_that_does_not_build(self):
         self.write("pages/second.nx", 'include "lib/show.nx"\n\non second.load:\n  bogus.txt = 1\n')

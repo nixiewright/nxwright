@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { deleteDialog, deleteTarget, isPlaceholder, newNameCheck, removeArguments,
-         replaceArguments, warningText } from "../out/mediaEditing.js";
+         renameArguments, replaceArguments, warningText } from "../out/mediaEditing.js";
 import { animationArguments, pictureArguments, videoArguments } from "../out/mediaCommands.js";
 
 // What Delete deletes: the picture `name`, ID `id`, with `later` after it.
@@ -109,10 +109,24 @@ test("a new name is checked as nxwright checks it", () => {
 });
 
 test("adding's arguments become replacing's", () => {
-  assert.deepEqual(replaceArguments(["animation", "app", "a.png", "--duration", "80"], "blink"),
+  assert.deepEqual(replaceArguments(["animation", "app", "a.png", "--duration", "80"], "blink",
+                                    undefined, false),
                    ["replace", "app", "animation", "blink", "a.png", "--duration", "80"]);
-  assert.deepEqual(replaceArguments(["picture", "app", "a.png"], "empty-slot-1", "logo"),
+  assert.deepEqual(replaceArguments(["picture", "app", "a.png"], "empty-slot-1", "logo", false),
                    ["replace", "app", "picture", "empty-slot-1", "a.png", "--name", "logo"]);
+});
+
+test("replacing and renaming are checked only when asked for", () => {
+  assert.deepEqual(replaceArguments(["picture", "app", "a.png"], "empty-slot-1", "logo", true),
+                   ["replace", "app", "picture", "empty-slot-1", "a.png", "--name", "logo",
+                    "--checked"]);
+  // Without a new name, the resource keeps its name, so there are no uses to look for.
+  assert.deepEqual(replaceArguments(["picture", "app", "a.png"], "logo", undefined, true),
+                   ["replace", "app", "picture", "logo", "a.png"]);
+  assert.deepEqual(renameArguments("app", "picture", "a", "logo", false),
+                   ["rename", "app", "picture", "a", "logo"]);
+  assert.deepEqual(renameArguments("app", "sound", "beep", "chime", true),
+                   ["rename", "app", "sound", "beep", "chime", "--checked"]);
 });
 
 // Questions answered in turn from `answers`, each question's second argument

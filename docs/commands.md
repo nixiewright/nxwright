@@ -29,8 +29,8 @@ nxwright video <source-folder> <video-file or pictures...>
 nxwright sound <source-folder> <sound-file>
 nxwright sd-picture <pictures...> --output <folder>
 nxwright remove <source-folder> <page|picture|font|animation|video|sound> <name> [--keep-ids] [--checked]
-nxwright replace <source-folder> <picture|font|animation|video|sound> <name> <files...>
-nxwright rename <source-folder> <page|picture|font|animation|video|sound> <name> <new-name>
+nxwright replace <source-folder> <picture|font|animation|video|sound> <name> <files...> [--name NAME] [--checked]
+nxwright rename <source-folder> <page|picture|font|animation|video|sound> <name> <new-name> [--checked]
 nxwright device <source-folder> [--screen MODEL] [--rotation DEGREES] [--encoding NAME]
 nxwright upgrade <source-folder>
 nxwright language <source-folder> nxlang
@@ -631,7 +631,8 @@ Details:
 
 - A font file (`.zi`) is used as it is, and takes no settings.
 - A placeholder that [remove](#remove) `--keep-ids` left, such as `empty-slot-1`, has no settings to keep. To replace a placeholder font with one drawn from a typeface, give `--height`.
-- `--name` gives the new resource another name, for example to name what replaces a placeholder. If the folder uses the old name, the command fails: [rename](#rename) the resource first.
+- `--name` gives the new resource another name, for example to specify what replaces a placeholder. The command does not change uses of the old name, so if a page file or code still uses it, the folder no longer builds. To change those uses too, [rename](#rename) the resource first.
+- `--checked`, with `--name`, makes the command look for uses of the old name first. If the folder still uses it, the command fails without changing anything.
 - `--settings` prints, as JSON, the settings that would be kept, and changes nothing.
 
 ## rename
@@ -650,7 +651,9 @@ Details:
 - `rename` does not change paths inside SVG <use> statements. A path to a renamed picture's file stops working, and so does a relative path inside a picture that moves to another folder. `nxwright check` then reports each path you need to fix ([SVG pictures](source-folder.md#svg-pictures)).
 - A page's new name must be one that [new-page](#new-page) would accept.
 - `rename` does not change your Python tests or launch configurations, so update any that use the page's old name.
-- The command fails and changes nothing if another page, or another resource of the same kind, has the new name in any letter case, or if the folder's checks find an error, before or after the rename.
+- The command fails and changes nothing if another page, or another resource of the same kind, has the new name in any letter case.
+- The command does not check that the folder still builds, unless you give `--checked`. If the rename causes an error, such as a new name that a component already has, `nxwright check` reports the error.
+- `--checked` makes the command check the folder for errors, both before the rename and with the rename's changes applied. If either check finds an error, the command fails without changing anything. An error before the rename counts because it could hide a use of the name.
 
 ## device
 

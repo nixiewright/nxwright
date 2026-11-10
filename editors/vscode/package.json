@@ -204,6 +204,26 @@
             "type": "boolean",
             "default": false,
             "markdownDescription": "Searches your project before deleting a page, picture, font, animation, video, or sound. If the project still uses it, nothing is deleted, and the terminal lists each use. The search reads your whole project, so it takes time on a large project, and it cannot find a number that your code computes."
+          },
+          "nxwright.checks.rename": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Builds your project before and after a rename, and renames nothing if the project would no longer build. The check applies to every rename: Rename Symbol in your code, renaming a page or a component, and the Media section's Rename. The builds take time on a large project."
+          },
+          "nxwright.checks.replace": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Replace in the Media section asks for a new name when you replace a placeholder. With this setting, it searches your project first, and replaces nothing if the project still uses the placeholder's name. The search takes time on a large project."
+          },
+          "nxwright.checks.addComponent": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Builds the page before and after adding a component, and adds nothing if the page would no longer build, for example because it is already full."
+          },
+          "nxwright.checks.paste": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Builds the page before and after Paste or Paste Special, and pastes nothing if the page would no longer build."
           }
         }
       }

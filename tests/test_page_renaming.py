@@ -81,20 +81,42 @@ class PageRenamingTest(unittest.TestCase):
                     rename_page(self.source, page, new_name)
         self.assertEqual(self.files(), before)
 
-    def test_a_folder_with_an_error_is_refused(self):
+    def test_a_checked_rename_of_a_folder_with_an_error_is_refused(self):
         with (self.source / "pages/home.nx").open("a", encoding="utf-8") as code:
             code.write("\non home.load:\n  nosuch.txt=\"x\"\n")
         before = self.files()
         with self.assertRaisesRegex(NxwrightError, "the folder's checks find an error"):
-            rename_page(self.source, "settings", "config")
+            rename_page(self.source, "settings", "config", checked=True)
         self.assertEqual(self.files(), before)
+        # A rename that is not checked does not build the folder, so the error does not
+        # stop it.
+        rename_page(self.source, "settings", "config")
+        self.assertIn("config", self.pages())
 
-    def test_a_rename_the_build_would_refuse_writes_nothing(self):
+    def test_a_checked_rename_the_build_would_refuse_writes_nothing(self):
         # A component of the page home already has the name.
         before = self.files()
         with self.assertRaisesRegex(NxwrightError, "would not build after the rename"):
-            rename_page(self.source, "settings", "navHome")
+            rename_page(self.source, "settings", "navHome", checked=True)
         self.assertEqual(self.files(), before)
+        # When not checked, the page is renamed, and the folder then no longer builds.
+        rename_page(self.source, "settings", "navHome")
+        self.assertIn("navHome", self.pages())
+        self.assertFalse(self.builds())
+
+    def test_a_rename_does_not_build_the_folder_unless_checked(self):
+        with mock.patch("nxwright.source.resource_renaming.check_folder",
+                        side_effect=AssertionError("the folder was built")):
+            rename_page(self.source, "settings", "config")
+        self.assertIn("config", self.pages())
+
+    def test_a_checked_rename_writes_the_same_files(self):
+        checked = self.source.with_name("checked")
+        shutil.copytree(self.source, checked)
+        self.assertEqual(rename_page(checked, "settings", "config", checked=True),
+                         rename_page(self.source, "settings", "config"))
+        self.assertEqual({str(path.relative_to(checked)): path.read_bytes()
+                          for path in checked.rglob("*") if path.is_file()}, self.files())
 
     def test_a_failed_write_puts_the_files_back(self):
         before = self.files()

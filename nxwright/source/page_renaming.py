@@ -15,9 +15,11 @@ project can have a name such as `a:b`. Its files then have encoded names,
 code cannot use its name, and its event headings quote it, as in
 `on "a:b".load`. The rename changes those headings too.
 
-The rename is rejected if the folder's checks find an error before it,
-because an error could hide a use of the name, or if they would find one
-after it.
+A rename does not build the folder, unless it is checked: by `nxwright
+rename --checked`, or by an editor that told the language server to check
+renames. A checked rename is rejected if the folder's checks find an error
+before it, because an error could hide a use of the name, or if they would
+find one after it.
 """
 from pathlib import Path
 
@@ -30,7 +32,8 @@ from nxwright.source.source_folder import (check_new_page_name, folder_file_exis
                                            folder_lister, folder_reader)
 
 
-def page_rename(index: FolderIndex, read, exists, lister, page: str, new_name: str) -> tuple:
+def page_rename(index: FolderIndex, read, exists, lister, page: str, new_name: str,
+                checked: bool = False) -> tuple:
     """Returns (moves, edits), which rename the page `page` to `new_name`,
     without writing anything. `moves` lists (old path, new path) for each of
     the page's files. `edits` is {path: [(Place, new text)]}, keyed by each
@@ -38,16 +41,17 @@ def page_rename(index: FolderIndex, read, exists, lister, page: str, new_name: s
     `exists(path)`, and `lister(folder)`.
 
     Raises NxwrightError if the folder has no page `page`, if `new_name` is
-    the old name or one that check_new_page_name rejects, if a file is
-    already where a moved one would go, or if the folder's checks find an
-    error before or after the rename."""
+    the old name or one that check_new_page_name rejects, or if a file is
+    already where a moved one would go. With `checked`, also raises it if
+    the folder's checks find an error before or after the rename."""
     if page not in index.pages:
         raise NxwrightError("the folder has no page named %s" % page)
     if new_name == page:
         raise NxwrightError("the page is named %s already" % page)
     check_new_page_name(new_name, index.pages, renamed=page)
-    check_builds(read, exists, lister, "the folder's checks find an error, so the uses of the "
-                                       "page %s cannot all be found" % page)
+    if checked:
+        check_builds(read, exists, lister, "the folder's checks find an error, so the uses of "
+                                           "the page %s cannot all be found" % page)
     moves = [(old, new) for old, new in ((page_toml_path(page), page_toml_path(new_name)),
                                          (page_nx_path(page), page_nx_path(new_name)))
              if exists(old)]
@@ -65,24 +69,25 @@ def page_rename(index: FolderIndex, read, exists, lister, page: str, new_name: s
     moved = dict(moves)
     texts = {moved.get(path, path): text_with_edits(read(path), file_edits)
              for path, file_edits in edits.items()}
-    check_builds(*as_renamed(read, exists, lister, texts, moves),
-                 "the folder would not build after the rename")
+    if checked:
+        check_builds(*as_renamed(read, exists, lister, texts, moves),
+                     "the folder would not build after the rename")
     return moves, edits
 
 
-def rename_page(source_folder: Path, page: str, new_name: str) -> list:
+def rename_page(source_folder: Path, page: str, new_name: str, checked: bool = False) -> list:
     """Renames the page `page` of a source folder to `new_name`. Returns the
     paths, within the folder, of the files written: those moved, under their
     new names, and those edited.
 
     Raises NxwrightError, before writing anything, for the reasons that
-    page_rename gives. If moving or writing fails, the files are put back as
-    they were, and the error is raised."""
+    page_rename gives, which depend on `checked`. If moving or writing
+    fails, the files are put back as they were, and the error is raised."""
     source_folder = Path(source_folder)
     read = folder_reader(source_folder)
     moves, edits = page_rename(FolderIndex(source_folder, text_on_disk), read,
                                folder_file_exists(source_folder), folder_lister(source_folder),
-                               page, new_name)
+                               page, new_name, checked=checked)
     moved = dict(moves)
     texts = {moved.get(path, path): text_with_edits(read(path), file_edits)
              for path, file_edits in edits.items()}

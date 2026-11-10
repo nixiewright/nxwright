@@ -8,6 +8,9 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 - `nxwright remove` no longer looks for uses first unless `--checked` is specified.
 - The build now reports `page` given a name that is not a page or a variable.
+- `nxwright rename` no longer checks that the folder builds unless `--checked` is specified.
+- `nxwright replace --name` no longer looks for uses first unless `--checked` is specified.
+- The language server no longer checks renames, added components, or pastes unless a setting asks.
 
 ### [0.2.16] - 2026-11-10
 
@@ -113,6 +116,9 @@ Needs nxwright 0.3.0 or later.
 
 - Delete now confirms immediately, and by default deletes a page or resource that is still used.
 - New setting `nxwright.checks.delete` adds an opt-in check for page or resource uses before deleting.
+- By default, Rename, Replace, adding a component, and pasting no longer check the project first.
+- New settings `nxwright.checks.rename`, `.replace`, `.addComponent`, and `.paste` turn those checks back on.
+- Fixed Rename in the Components list and preview menu failing when a TOML extension is installed.
 
 ### [0.3.11] - 2026-11-10
 

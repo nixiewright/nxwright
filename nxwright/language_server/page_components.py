@@ -6,14 +6,18 @@ undo works.
 
 A new component's name is its type's prefix and the lowest number that no
 object of the page and no page has, such as t0, or t2 once t0 and t1 are
-taken (NAME_PREFIXES). A name that a file the page includes has events for
-is passed over too, so that the new component starts without that code, and
-the reply says so. It takes the size its type has in the folder's
-defaults.toml, and its table goes at the end of the page file, so last in
-the ID order, on top. The table is written as extract writes one: its
-name, its type, and its place, every other attribute being its type's
-default. The edit is refused when the page built before it and would not
-after it, as with a page already holding as many objects as the build
+taken (NAME_PREFIXES). If a file that the page includes has events for
+that name, the name is passed over for the next free one, so that the new
+component starts without that code. The reply lists the names passed over.
+The new component takes the size its type has in the folder's
+defaults.toml. Its table goes at the end of the page file, which makes it
+last in the ID order, and on top. The table contains its name, its type,
+and its place, and leaves every other attribute to its type's default.
+Extract writes a table the same way.
+
+If the editor's settings turn on the check of added components (server.py),
+the edit is refused when the page built before it and would not build after
+it, for example because the page already has as many objects as the build
 allows.
 
 Deleting a component removes its table, and the code of its events, each
@@ -56,16 +60,18 @@ and group:
     member of its group joins none. The Editor keeps the pair instead, so
     that its copies join their originals' group; nxwright's small pairs
     would then make a paste into another page join that page's group.
-The code that came with them goes at the end of the page's own .nx file,
-made when the page has none, its headings following the new names; the
-code under them is pasted as it was, as a copy made by hand would be. An
-event that a file the page includes already defines is not pasted when its
-text is the same, as when a component is cut and pasted back, and the
-paste is refused when it differs: the event would be defined twice. The
-paste is refused when the page built before and its tables would stop it
-building; the pasted code need not build, since code copied from another
-page may name what this page lacks, and is better pasted and mended than
-lost.
+The code that came with the tables goes at the end of the page's own .nx
+file, which is made if the page has none. Its headings take the new names,
+and the code under them is pasted unchanged. If a file the page includes
+already defines one of the events, the event is not pasted when its text is
+the same, for example when a component is cut and pasted back. The paste is
+refused when the text differs, because the event would be defined twice.
+
+If the editor's settings turn on the check of pastes (server.py), the paste
+is also refused when the page built before it and the pasted tables would
+stop the page building. Only the tables are checked. The pasted code may
+fail to build, because code copied from another page can use what this page
+lacks, and it is better pasted and mended than lost.
 
 Pasting parts, as Paste Special does, takes the table of one component and
 its code, and applies the parts asked for (PARTS) to each component named:
@@ -80,8 +86,9 @@ its code, and applies the parts asked for (PARTS) to each component named:
     component's own name in the code. An event the selected type lacks is
     left out. Code to replace in a file other pages include too is refused,
     as deleting refuses it.
-Each thing left out is said in a note. As with pasting, the page file is
-checked, and the code is not.
+Each thing left out is said in a note. If the editor's settings turn on
+the check of pastes, the edited page file is checked the same way as for a
+paste, and the code is not.
 
 Placing several components at once, as aligning them does, is one edit, so
 that one undo takes it back. A component is refused a size under 2 by 2,
@@ -150,7 +157,7 @@ def component_types(read, page: str) -> list:
 
 
 def add_component(index, read, exists, page: str, type_name: str, x: int = 0,
-                  y: int = 0) -> dict:
+                  y: int = 0, checked: bool = False) -> dict:
     """Returns {"edits": {path: [TextEdit]}, "name", "passedOver"}: the edits
     adding a new component of the type `type_name` to `page`, its top left
     corner at (x, y) when it has a place, its name, and [{"name", "path"}]
@@ -158,8 +165,8 @@ def add_component(index, read, exists, page: str, type_name: str, x: int = 0,
     includes, has events for them. It takes the folder's defaults,
     but for the values the Editor gives one on the series of the folder's
     screen (editor_limits.SERIES_NEW_COMPONENT_VALUES), written out. Raises
-    NxwrightError for a type no component has, and when the page built
-    before the edit and would not after it."""
+    NxwrightError for a type no component has. With `checked`, also raises
+    it when the page built before the edit and would not after it."""
     object_type = TYPES_BY_NAME.get(type_name)
     if object_type not in NAME_PREFIXES:
         raise NxwrightError("%s is not a type of component" % type_name)
@@ -185,7 +192,8 @@ def add_component(index, read, exists, page: str, type_name: str, x: int = 0,
     path = page_toml_path(page)
     text = read(path)
     new_text = _with_table(text, "[[component]]\n" + tomli_w.dumps(values))
-    _refuse_breaking(index, read, exists, page, {path: new_text}, "adding %s" % name)
+    if checked:
+        _refuse_breaking(index, read, exists, page, {path: new_text}, "adding %s" % name)
     return {"edits": {path: line_edits(text, new_text)}, "name": name,
             "passedOver": passed_over}
 
@@ -256,17 +264,18 @@ def copy_components(index, read, page: str, names: list) -> dict:
 
 
 def paste_components(index, read, exists, page: str, text: str, code: list = (),
-                     at: tuple = None, in_place: bool = False) -> dict:
+                     at: tuple = None, in_place: bool = False,
+                     checked: bool = False) -> dict:
     """Returns {"edits": {path: [TextEdit]}, "created": [path], "names"}:
     the edits pasting the tables of `text`, and the code that came with them
     (`code`, a text per event), into `page`; the files they make; and the
     pasted components' new names, in order. They go where the module's
     docstring says, or with `at`, (x, y), the box holding those with a place
     has its top left corner there, or with `in_place`, they are not moved.
-    Raises NxwrightError for text that is not components' tables, when the
-    page built before and the tables would stop it building, and for an
-    event a file the page includes already defines with other code
-    (_events_not_included)."""
+    Raises NxwrightError for text that is not components' tables, and for
+    an event a file the page includes already defines with other code
+    (_events_not_included). With `checked`, also raises it when the page
+    built before and the tables would stop it building."""
     # A clipboard may hold a text's lines ended as Windows ends them.
     tables = _pasted_tables(text.replace("\r\n", "\n"))
     path = page_toml_path(page)
@@ -302,7 +311,8 @@ def paste_components(index, read, exists, page: str, text: str, code: list = (),
         chunks.append("".join(_with_values(line, new_values) + "\n" for line in lines
                               if _key_of(line) not in dropped))
     new_text = _with_table(page_text, "\n".join(chunks))
-    _refuse_breaking(index, read, exists, page, {path: new_text}, "pasting")
+    if checked:
+        _refuse_breaking(index, read, exists, page, {path: new_text}, "pasting")
     edits, created = {path: line_edits(page_text, new_text)}, []
     pasted = _events_not_included(index, page,
                                   [_with_new_headings(block, renamed) for block in code])
@@ -317,7 +327,7 @@ def paste_components(index, read, exists, page: str, text: str, code: list = (),
 
 
 def paste_parts(index, read, exists, page: str, names: list, text: str, code: list,
-                parts: list) -> dict:
+                parts: list, checked: bool = False) -> dict:
     """Returns {"edits": {path: [TextEdit]}, "created": [path], "notes"}:
     the edits applying `parts` (PARTS) of the one component whose table
     `text` holds, its code being `code`, a text per event, to each of the
@@ -325,9 +335,9 @@ def paste_parts(index, read, exists, page: str, names: list, text: str, code: li
     they make; and what was left out, a sentence each. Raises NxwrightError
     for text that holds no one component's table, a part not of PARTS, a
     type the folder's defaults.toml lacks, the code part while a .nx file
-    of the page cannot be read (_refuse_unread_code), code in a file other
-    pages include too, and when the page built before and its page file
-    would stop it building."""
+    of the page cannot be read (_refuse_unread_code), and code in a file
+    other pages include too. With `checked`, also raises it when the page
+    built before the paste and would not build with the edited page file."""
     unknown = [part for part in parts if part not in PARTS]
     if unknown:
         raise NxwrightError("%s is not a part of a component" % unknown[0])
@@ -364,7 +374,8 @@ def paste_parts(index, read, exists, page: str, names: list, text: str, code: li
         if values:
             page_edits += attribute_edits(index, read, page, name, values)
     new_page_text = edited_text(page_text, page_edits)
-    _refuse_breaking(index, read, exists, page, {path: new_page_text}, "pasting parts")
+    if checked:
+        _refuse_breaking(index, read, exists, page, {path: new_page_text}, "pasting parts")
     edits = {path: page_edits} if page_edits else {}
     created = []
     if "code" in parts and code:
