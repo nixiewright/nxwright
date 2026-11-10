@@ -960,6 +960,49 @@ class CommandComponentTest(_CodeOnFirstTestCase):
         self.assert_refused(r"first\.nx line 2", 'page "first"', '("Invalid Page ID")',
                             "nxlang")
 
+    def test_page_given_a_name_that_is_no_page(self):
+        # The Nextion Editor refused each of these when it compiled, and its
+        # error gave the name. They are a name that is not defined, a
+        # component's name, and a page's name in an expression or in another
+        # letter case.
+        refused = ("page zz", "page t0", "page second+1", "page 1+second", "page Second",
+                   "page sys0+zz")
+        taken = ("page second", "page first", "page sys0", "page sys0+1", "page RED", "page dim",
+                 "page 5", "page n0.val", "page appid&0x000000FF")
+        for language in ("nextion", "nxlang"):
+            if language == "nxlang":
+                self.switch_to_nxlang()
+            for number, line in enumerate(refused):
+                with self.subTest(language=language, line=line):
+                    self.write_code(line)
+                    self.assert_refused(r"first\.nx line 2", line, '("Invalid Page ID")',
+                                        "%s-refused%d" % (language, number))
+            for number, line in enumerate(taken):
+                with self.subTest(language=language, line=line):
+                    self.write_code(line)
+                    export_dump(self.source, self.folder / ("%s-taken%d" % (language, number)))
+            # An int variable of program.nx that is none of sys0 to sys2.
+            lines = self.program_text.split("\n")
+            declaration = next(place for place, text in enumerate(lines)
+                               if text.startswith("int "))
+            lines[declaration] += ",total=0"
+            self.program.write_text("\n".join(lines), encoding="utf-8", newline="\n")
+            self.write_code("page total")
+            export_dump(self.source, self.folder / ("%s-int" % language))
+            self.program.write_text(self.program_text, encoding="utf-8", newline="\n")
+            self.write_code("n0.val=0")
+            line_number = self.write_program_line("page zz")
+            self.assert_refused(r"program\.nx line %d" % line_number, "page zz",
+                                '("Invalid Page ID")', "%s-program" % language)
+            self.write_program_line("page second")
+            export_dump(self.source, self.folder / ("%s-program-taken" % language))
+            self.program.write_text(self.program_text, encoding="utf-8", newline="\n")
+        # nxlang also takes a constant and a local.
+        (self.source / "pages" / "first.nx").write_text(
+            "const HOME = 1\n\non first.down:\n  var where = 1\n  page HOME\n  page where\n",
+            encoding="utf-8", newline="\n")
+        export_dump(self.source, self.folder / "nxlang-constant-and-local")
+
 
 class NumberArgumentTest(_CodeOnFirstTestCase):
     """A command's argument where it takes a number. The Nextion Editor

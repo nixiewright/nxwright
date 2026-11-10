@@ -1,7 +1,8 @@
-"""Stands in for nxwright in the tests of the commands on TFT files inside VS
-Code (tft.host.cjs). A real compile needs the vendor's firmware, a real
-upload a screen, and a real decompile a TFT file of the vendor's, none of
-which the tests have.
+"""Stands in for nxwright in the tests inside VS Code of the commands on TFT
+files (tft.host.cjs) and of Delete (media.host.cjs). A real compile needs
+the vendor's firmware, a real upload a screen, and a real decompile a TFT
+file of the vendor's, none of which the tests have. A real remove would
+delete from the source folder the tests share.
 
 These subcommands are answered here, as the real ones answer with --json:
   - compile: without --firmware, --editor, or --download, no firmware is
@@ -19,6 +20,8 @@ These subcommands are answered here, as the real ones answer with --json:
     does, on its output. Without --continue-unconfirmed, the round trip
     does not confirm the folder, and it exits with 3; with it, it writes
     app.toml in the folder.
+  - remove: it deletes nothing, says what the real one would have removed,
+    and exits with 0.
 Every other subcommand, such as the language server's, runs the real
 nxwright of this checkout, so that the rest of the extension goes on
 working.
@@ -98,7 +101,13 @@ def decompile(arguments: list) -> int:
     return 0
 
 
-ANSWERED = {"compile": compile_, "upload": upload, "decompile": decompile}
+def remove(arguments: list) -> int:
+    print("Removed the %s %s from %s: nothing, as this is the stand-in"
+          % (arguments[1], arguments[2], arguments[0]))
+    return 0
+
+
+ANSWERED = {"compile": compile_, "upload": upload, "decompile": decompile, "remove": remove}
 
 if __name__ == "__main__":
     name = sys.argv[1] if len(sys.argv) > 1 else ""

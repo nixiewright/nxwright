@@ -108,7 +108,8 @@ from nxwright.language.code_checks import (COMPONENT_PLACES, DATA_RECORD_ARGUMEN
                                            READ_ONE_OPERAND_PLACES, SCREEN_ARRAY,
                                            TEXTS_READ_BYTE_BY_BYTE, ends_in_escaped_backslash,
                                            is_one_operand, method_count_refusal,
-                                           misread_byte_by_byte)
+                                           misread_byte_by_byte, page_name_refusal,
+                                           refused_page_name)
 from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, chain_parts, command_arguments,
                                           command_word,
                                           declared_int_names, goto_label, minus_is_sign,
@@ -1306,7 +1307,7 @@ class _PageState:
     """What every event of a page shares: its names and generated variables."""
 
     def __init__(self, page_name: str, component_names, program: ProgramNames, page_id: int = 0,
-                 object_types: dict = None, codec: TextCodec = None):
+                 object_types: dict = None, codec: TextCodec = None, pages=None):
         self.page_name, self.page_id = page_name, page_id
         self.codec = codec      # the project's encoding, or None (compile_page)
         # {text as the code writes it, such as big.txt or page1.big.txt: its
@@ -1327,6 +1328,9 @@ class _PageState:
         self.component_names = set(component_names)
         # {page: {name: type}}, a page's None while unknown (compile_page)
         self.object_types = object_types or {}
+        # The names of the folder's pages, which a `page` command may open:
+        # `pages`, or those `object_types` has. None where neither is given.
+        self.pages = pages if pages is not None else (frozenset(self.object_types) or None)
         self.data_records = frozenset(      # which components are data records
             name for name, kind in (self.object_types.get(page_name) or {}).items()
             if _type_number(kind) == TYPES_BY_NAME["data-record"])
@@ -2095,10 +2099,12 @@ def _check_no_cycle(callees: dict, functions: dict):
     _depth_first(functions, lambda name: sorted(callees.get(name, ())), refuse)
 
 
-def compile_program(lines: list, program: ProgramNames) -> list:
+def compile_program(lines: list, program: ProgramNames, pages=None) -> list:
     """Compiles program.nx's lines, its `const` lines left out (read them first
-    with read_program_names). Its code cannot have locals or temporaries."""
-    page = _PageState("program", (), program)
+    with read_program_names). Its code cannot have locals or temporaries.
+    With `pages`, the names of the folder's pages, a `page` command must
+    give one of them, or a value (check_page_argument)."""
+    page = _PageState("program", (), program, pages=pages)
     kept = [(number, text) for number, text in lines
             if not _CONST_LINE.match(split_line(text, number)[1])
             and not _INCLUDE_LINE.match(split_line(text, number)[1])]
@@ -2781,6 +2787,8 @@ class _EventCompiler:
             self.data_record_call(number, indent, call, comment)
             return
         command = command_word(code)
+        if command == "page":
+            self.check_page_argument(code, number)
         if command in COMPONENT_PLACES:
             code = self.component_arguments(command, code, number)
         if ((command in NUMBER_PLACES and command not in ONE_OPERAND_FIRST
@@ -2915,12 +2923,9 @@ class _EventCompiler:
                 # The name written in its place is checked as any other.
                 component = array[1].strip()
             if (re.fullmatch(r"[A-Za-z_]\w*", component)
-                  and self.scope.lookup(component) is None
+                  and not self.is_value_name(component)
                   and component not in self.page.component_names
-                  and (in_program or component != self.page.page_name)
-                  and component not in self.page.variables
-                  and component not in EDITOR_SYSTEM_VARIABLES
-                  and component not in EDITOR_COLOURS):
+                  and (in_program or component != self.page.page_name)):
                 if component in EDITOR_PROGRAM_VARIABLES:
                     raise NxwrightError(UNDECLARED_PROGRAM_VARIABLE % component, line=number,
                                         fix={"kind": "declare", "variable": component})
@@ -2930,6 +2935,32 @@ class _EventCompiler:
         # Joined again only when rewritten, as the split drops an empty
         # argument, which the line is otherwise written with.
         return code[:len(word)] + ",".join(arguments) if rewritten else code
+
+    def is_value_name(self, name: str) -> bool:
+        """Whether `name`, alone in a command's argument, gives a value: a
+        constant, a local, an int variable, a system variable, or a colour."""
+        return (self.scope.lookup(name) is not None or name in self.page.variables
+                or name in EDITOR_SYSTEM_VARIABLES or name in EDITOR_COLOURS)
+
+    def check_page_argument(self, code: str, number: int):
+        """Raises NxwrightError if the `page` command in the line `code` has
+        a name alone that `page` does not take
+        (code_checks.refused_page_name). `page` takes a page's name as its
+        whole argument, and otherwise only names that give a value
+        (is_value_name). If the folder's pages are not known, nothing is
+        checked."""
+        pages = self.page.pages
+        if pages is None:
+            return
+        name = refused_page_name(code[len("page"):].strip(), pages, self.is_value_name)
+        if name is None:
+            return
+        if name in EDITOR_PROGRAM_VARIABLES:
+            raise NxwrightError(UNDECLARED_PROGRAM_VARIABLE % name, line=number,
+                                fix={"kind": "declare", "variable": name})
+        raise NxwrightError(page_name_refusal(code, name, pages, "a constant, a local, an int "
+                                              "variable, a system variable, or a colour"),
+                            line=number)
 
     def computed_arguments(self, number: int, indent: str, word: str, code: str,
                            comment: str) -> bool:

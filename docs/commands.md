@@ -28,7 +28,7 @@ nxwright animation <source-folder> <pictures...>
 nxwright video <source-folder> <video-file or pictures...>
 nxwright sound <source-folder> <sound-file>
 nxwright sd-picture <pictures...> --output <folder>
-nxwright remove <source-folder> <page|picture|font|animation|video|sound> <name> [--keep-ids]
+nxwright remove <source-folder> <page|picture|font|animation|video|sound> <name> [--keep-ids] [--checked]
 nxwright replace <source-folder> <picture|font|animation|video|sound> <name> <files...>
 nxwright rename <source-folder> <page|picture|font|animation|video|sound> <name> <new-name>
 nxwright device <source-folder> [--screen MODEL] [--rotation DEGREES] [--encoding NAME]
@@ -572,25 +572,31 @@ nxwright remove app picture icons/back
 
 `remove` removes a picture, font, animation, video, or sound: its files, including a picture's source file, and its name in `app.toml`.
 
-The command fails while the folder still uses the resource, and lists each use it found. The folder can use a resource by its name, or by a number from the resource's ID to the last ID of its kind. Numbers in that range count because removing a resource gives every later one of its kind an ID one lower, so those numbers would then point to the wrong resource. The command looks for these uses:
+The command does not look for what still uses the resource, unless you give `--checked`. A removal can break your project in two ways:
 
-- by name, wherever a code editor's Find All References finds it;
-- in a page file, an attribute of its kind, written there or left to the defaults, such as a text's `font` of 0;
-- in code, a number written there or given by an nxlang constant, assigned to such an attribute or compared with it (`p0.pic=2`);
-- in code, the picture of `pic`, `picq`, `xpic`, or of `xstr`'s background while its `sta` is 0 or 2, the font of `xstr`, or the sound of `play`.
+- If a page file or code uses the resource by name, the folder no longer builds, and `nxwright check` reports the error.
+- Every later resource of its kind gets an ID one lower. A number in your code or page files that gave one of those IDs now points to another resource, and `nxwright check` does not report it. To keep every ID, give `--keep-ids`.
 
 Details:
 
-- A number that code computes, or keeps in a variable, as in `p0.pic=n0.val`, is not found.
-- A path to the picture's file in another SVG picture, as in `<use href="normal.svg#home"/>`, is not found either. After the removal, `nxwright check` reports that path ([SVG pictures](source-folder.md#svg-pictures)).
-- The command also fails on a folder whose checks find an error, since the error could hide a use.
 - A file that cannot be deleted is listed, and stays, though `app.toml` no longer lists it.
 - A folder that a picture's name made, such as `icons/`, stays, even when empty.
 
 Options:
 
-- `--keep-ids` puts a placeholder in the resource's place, so that no ID changes. The command then fails only if the folder uses the resource itself, by its name or by its own ID. The placeholder is an ordinary resource of the same kind, named `empty-slot-1`, or `empty-slot-2` and so on if that name is taken. It is as small as nxwright can make it: a picture of 2 by 1 pixels, a font of 12 pixels, an animation or a video of one such picture, or 10 ms of silence.
+- `--keep-ids` puts a placeholder in the resource's place, so that no ID changes. The placeholder is an ordinary resource of the same kind, named `empty-slot-1`, or `empty-slot-2` and so on if that name is taken. It is as small as nxwright can make it: a picture of 2 by 1 pixels, a font of 12 pixels, an animation or a video of one such picture, or 10 ms of silence.
   - In a utf-8 folder, a placeholder font contains only the space. In any other encoding, it contains every character of the encoding, so it takes about 6 KB in a one-byte encoding, and about 135 KB in a two-byte one such as gb2312.
+- `--checked` makes the command look for uses first. If the folder still uses the resource, the command lists each use it found, and fails without changing anything. The folder can use a resource by its name, or by a number from the resource's ID to the last ID of its kind. The command looks for these uses:
+  - by name, wherever a code editor's Find All References finds it;
+  - in a page file, an attribute of its kind, written there or left to the defaults, such as a text's `font` of 0;
+  - in code, a number written there or given by an nxlang constant, assigned to such an attribute or compared with it (`p0.pic=2`);
+  - in code, the picture of `pic`, `picq`, `xpic`, or of `xstr`'s background while its `sta` is 0 or 2, the font of `xstr`, or the sound of `play`.
+
+  Details of `--checked`:
+  - A number that code computes, or keeps in a variable, as in `p0.pic=n0.val`, is not found.
+  - A path to the picture's file in another SVG picture, as in `<use href="normal.svg#home"/>`, is not found either. After the removal, `nxwright check` reports that path ([SVG pictures](source-folder.md#svg-pictures)).
+  - The command also fails on a folder whose checks find an error, since the error could hide a use.
+  - With `--keep-ids`, the command fails only if the folder uses the resource itself, by its name or by its own ID.
 - `--report` changes nothing, and prints as JSON what removing the resource would affect: its ID, the folder's encoding, whether it is the last of its kind, the names of the later ones, and each use, by name or by number, of the resource itself or of a later one. The report is printed even when the folder uses the resource.
 
 ### A page
@@ -599,10 +605,11 @@ Options:
 nxwright remove app page settings
 ```
 
-Removing a page works just like removing a resource: the command fails while the folder uses the page, by name or by a number from its ID to the last page's ID, and `--keep-ids` and `--report` work the same too. The command deletes the page's page file, its `.nx` file, and its name in `app.toml`. A file the page includes stays, since other pages may include it too.
+Removing a page works just like removing a resource, with the same options. The command deletes the page's page file, its `.nx` file, and its name in `app.toml`. A file the page includes stays, since other pages may include it too.
 
-- The command looks for page IDs written as numbers in two places: the argument of `page`, as in `page 2`, and a number given to `dp` or compared with it. Uses in the page's own files don't count, since they are deleted with the page.
-- The command also fails for the folder's only page, and if the folder would not build without the page.
+- Code that still uses the deleted page by name, as in `page settings`, no longer builds, and `nxwright check` reports it.
+- With `--checked`, the command fails if the folder still uses the page by name, or by a number that gives its ID or a later page's ID. The command finds those numbers where they are the argument of `page`, as in `page 2`, and where they are assigned to `dp` or compared with it. Uses in the page's own files don't count, since they are deleted with the page.
+- The command fails for the folder's only page. With `--checked`, it also fails if the folder would not build without the page.
 - `--keep-ids` leaves a blank page in the deleted page's place, named `empty_slot_1`, or `empty_slot_2` and so on if that name is taken. To use the blank page, rename it and add components.
 
 ## replace

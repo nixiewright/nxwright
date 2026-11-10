@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.0] - 2026-11-10
+
+- `nxwright remove` no longer looks for uses first unless `--checked` is specified.
+- The build now reports `page` given a name that is not a page or a variable.
+
 ### [0.2.16] - 2026-11-10
 
 - Renamed waveform generator to signal generator, added ability to runs multiple generators at once.
@@ -101,6 +106,13 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.12] - 2026-11-10
+
+Needs nxwright 0.3.0 or later.
+
+- Delete now confirms immediately, and by default deletes a page or resource that is still used.
+- New setting `nxwright.checks.delete` adds an opt-in check for page or resource uses before deleting.
 
 ### [0.3.11] - 2026-11-10
 

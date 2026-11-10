@@ -4,6 +4,8 @@
 // `replace`, or `rename`, after asking the questions that mediaEditing.ts
 // builds. A font is replaced from the Fonts panel instead (fontPanel.ts).
 // The Pages section's Delete Page deletes a page the same way.
+// Delete runs `remove` without its search for uses, unless the setting
+// nxwright.checks.delete is on.
 // Each action refuses to run while a file of the folder has unsaved
 // changes, because the subcommand could rewrite that file.
 import * as vscode from "vscode";
@@ -12,8 +14,8 @@ import { CurrentProject } from "./currentProject";
 import { FontPanels } from "./fontPanel";
 import { animationArguments, MediaQuestions, MediaSettings, pictureArguments, soundArguments,
          videoArguments } from "./mediaCommands";
-import { deleteDialog, isPlaceholder, newNameCheck, RemovalReport, replaceArguments }
-  from "./mediaEditing";
+import { DeleteAction, deleteDialog, deleteTarget, DeleteTarget, isPlaceholder, newNameCheck,
+         removeArguments, replaceArguments } from "./mediaEditing";
 import { MediaEntry } from "./mediaView";
 import { runJson } from "./tftRun";
 import { refusedForUnsaved } from "./unsavedChanges";
@@ -45,7 +47,8 @@ export class MediaActions {
   register(): vscode.Disposable[] {
     return [
       vscode.commands.registerCommand("nxwright.deleteResource",
-                                      (entry: MediaEntry) => this.delete(entry)),
+                                      (entry: MediaEntry, answer?: DeleteAction) =>
+                                        this.delete(entry, answer)),
       vscode.commands.registerCommand("nxwright.replaceResource",
                                       (entry: MediaEntry) => this.replace(entry)),
       vscode.commands.registerCommand("nxwright.renameResource",
@@ -53,74 +56,65 @@ export class MediaActions {
       // The Pages section's item for a page, deleted as an entry of app.toml's
       // `pages`.
       vscode.commands.registerCommand("nxwright.deletePage",
-                                      (page: { name: string }) =>
-                                        this.delete({ list: "pages", name: page.name })),
+                                      (page: { name: string }, answer?: DeleteAction) =>
+                                        this.delete({ list: "pages", name: page.name }, answer)),
     ];
   }
 
-  // Deletes the resource of `entry`, in the way the user picks in the
-  // dialog that mediaEditing.ts builds. `rewroteNumbers` is true once
-  // Replace Numbers with Names has run for it, and the dialog then no
-  // longer offers that button.
-  private async delete(entry: MediaEntry, rewroteNumbers = false): Promise<void> {
+  // Deletes the resource of `entry`, in the way the user chooses when
+  // answering the question that mediaEditing.ts builds. The question needs
+  // only what the extension already knows about the project, so it shows
+  // immediately. If `answer` is one of the question's choices, it is used in
+  // place of asking. The extension's tests pass it. `rewroteNumbers` is true
+  // once Replace Numbers with Names has run for the resource, and the
+  // question no longer offers that button.
+  private async delete(entry: MediaEntry, answer?: DeleteAction,
+                       rewroteNumbers = false): Promise<void> {
     const target = this.target(entry, "deleting a resource");
     if (!target) {
       return;
     }
     const { folder, kind, name } = target;
-    const report = await this.json<RemovalReport>(
-      `checking where the ${kind} ${name} is used...`,
-      `the report on deleting the ${kind} ${name}`,
-      ["remove", folder.fsPath, kind, name, "--report"]);
-    if (!report) {
+    const deleted = deleteTarget(kind, name, this.names(entry.list),
+                                 this.means.project.info?.encoding);
+    if (!deleted) {
+      void vscode.window.showErrorMessage(
+        `nxwright: could not delete the ${kind} ${name}: app.toml no longer lists it.`);
       return;
     }
-    const dialog = deleteDialog(report, rewroteNumbers);
-    const show = dialog.error ? vscode.window.showErrorMessage : vscode.window.showWarningMessage;
-    const chosen = await show(dialog.message, { modal: true, detail: dialog.detail || undefined },
-                              ...dialog.buttons.map((button) => button.label));
-    const action = dialog.buttons.find((button) => button.label === chosen)?.action;
-    if (action === "showUses") {
-      await this.showUses(folder, entry.list, report);
-    } else if (action === "keepIds") {
-      await this.run(`deleting the ${kind} ${name}, and leaving an empty slot...`,
-                     ["remove", folder.fsPath, kind, name, "--keep-ids"]);
-    } else if (action === "shift" || action === "delete") {
-      await this.run(`deleting the ${kind} ${name}...`, ["remove", folder.fsPath, kind, name]);
-    } else if (action === "namesForNumbers" && await this.writeNumbersAsNames(folder, report)) {
-      await this.delete(entry, true);
+    const dialog = deleteDialog(deleted, rewroteNumbers);
+    let action = dialog.buttons.find((button) => button.action === answer)?.action;
+    if (action === undefined) {
+      const chosen = await vscode.window.showWarningMessage(
+        dialog.message, { modal: true, detail: dialog.detail || undefined },
+        ...dialog.buttons.map((button) => button.label));
+      action = dialog.buttons.find((button) => button.label === chosen)?.action;
+    }
+    if (action === "namesForNumbers") {
+      if (await this.writeNumbersAsNames(folder, deleted)) {
+        await this.delete(entry, undefined, true);
+      }
+    } else if (action !== undefined) {
+      const keepIds = action === "keepIds";
+      const checked = vscode.workspace.getConfiguration("nxwright")
+        .get<boolean>("checks.delete", false);
+      await this.run(keepIds ? `deleting the ${kind} ${name}, and leaving an empty slot...`
+                       : `deleting the ${kind} ${name}...`,
+                     removeArguments(folder.fsPath, deleted, keepIds, checked));
     }
   }
 
-  // Opens VS Code's References view on the report's uses, by name and by
-  // number, anchored at the resource's name in its list in app.toml.
-  private async showUses(folder: vscode.Uri, list: string, report: RemovalReport):
-      Promise<void> {
-    const appToml = vscode.Uri.joinPath(folder, "app.toml");
-    const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(appToml));
-    const lines = text.split("\n");
-    // A picture and a font may share a name: the name is sought in its own list.
-    const listStart = Math.max(0, lines.findIndex((each) => each.startsWith(`${list} =`)));
-    const line = Math.max(0, lines.findIndex((each, index) => index >= listStart &&
-                                             each.includes(`"${report.name}"`)));
-    const anchor = new vscode.Position(line, Math.max(0, lines[line].indexOf(report.name)));
-    const locations = report.uses.map((use) => new vscode.Location(
-      vscode.Uri.joinPath(folder, use.path), new vscode.Range(use.line - 1, 0, use.line - 1, 0)));
-    await vscode.commands.executeCommand("editor.action.showReferences", appToml, anchor,
-                                         locations);
-  }
-
-  // Writes as names the numbers that give the IDs after the report's
-  // resource, as far as the language server can, and saves the files it
-  // changed. Returns whether the edit was applied.
-  private async writeNumbersAsNames(folder: vscode.Uri, report: RemovalReport):
+  // Writes as names the numbers that give the IDs after `deleted`, as far
+  // as the language server can, and saves the files it changed. Returns
+  // whether the edit was applied.
+  private async writeNumbersAsNames(folder: vscode.Uri, deleted: DeleteTarget):
       Promise<boolean> {
     const client = this.means.client();
     if (!client) {
       void vscode.window.showErrorMessage("nxwright: the language server is not running.");
       return false;
     }
-    const ids = report.later.map((_, index) => report.id + 1 + index);
+    const ids = deleted.later.map((_, index) => deleted.id + 1 + index);
     return vscode.window.withProgress({
       location: vscode.ProgressLocation.Notification,
       title: "nxwright: replacing numbers with names...",
@@ -128,7 +122,7 @@ export class MediaActions {
       let edit: vscode.WorkspaceEdit | undefined;
       try {
         const reply = await client.sendRequest("nxwright/resourceNumbersAsNames",
-                                               { folder: folder.fsPath, kind: report.kind, ids });
+                                               { folder: folder.fsPath, kind: deleted.kind, ids });
         edit = await client.protocol2CodeConverter.asWorkspaceEdit(
           reply as Parameters<typeof client.protocol2CodeConverter.asWorkspaceEdit>[0]);
       } catch (error) {
@@ -228,9 +222,10 @@ export class MediaActions {
     return { folder, kind: KINDS[entry.list], name: entry.name };
   }
 
-  // The names app.toml's list `list` holds.
+  // The names in app.toml's list `list`, as the extension last read them.
   private names(list: string): string[] {
-    return this.means.project.info?.resources?.[list] ?? [];
+    const info = this.means.project.info;
+    return (list === "pages" ? info?.pages : info?.resources?.[list]) ?? [];
   }
 
   // Runs `nxwright <args>` in a terminal, for a subcommand that changes the

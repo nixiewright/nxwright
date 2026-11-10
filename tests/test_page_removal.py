@@ -4,6 +4,7 @@ writing a page's number as the page's name (source/resource_numbers.py)."""
 import contextlib
 import io
 import json
+import shutil
 import tempfile
 import tomllib
 import unittest
@@ -42,9 +43,10 @@ class PageRemovalTest(unittest.TestCase):
         (self.source / "pages/page0.nx").write_text(
             "on page0.load:\n" + "".join("  %s\n" % line for line in lines), encoding="utf-8")
 
-    def files(self) -> dict:
-        return {str(path.relative_to(self.source)): path.read_bytes()
-                for path in self.source.rglob("*") if path.is_file()}
+    def files(self, source: Path = None) -> dict:
+        source = source or self.source
+        return {str(path.relative_to(source)): path.read_bytes()
+                for path in source.rglob("*") if path.is_file()}
 
     def pages(self) -> list:
         return tomllib.loads((self.source / "app.toml").read_text(encoding="utf-8"))["pages"]
@@ -81,19 +83,44 @@ class PageRemovalTest(unittest.TestCase):
         self.code("page 0")
         self.assertEqual(page_uses(self.source, "second")[1], [])
 
-    def test_a_page_in_use_stays(self):
+    def test_a_page_in_use_is_deleted_without_a_search(self):
+        self.code("page second")
+        with mock.patch("nxwright.source.page_removal.check_folder",
+                        side_effect=AssertionError("the folder was checked")), \
+                mock.patch("nxwright.source.page_removal.references",
+                           side_effect=AssertionError("the uses were searched")):
+            written = remove_page(self.source, "second")
+        self.assertEqual(written, (["pages/second.page.toml", "pages/second.nx"], []))
+        self.assertEqual(self.pages(), ["page0", "third"])
+        # The use is left as it was, so the folder no longer builds.
+        self.assertIn("page second", (self.source / "pages/page0.nx").read_text(
+            encoding="utf-8"))
+        self.assertFalse(self.builds())
+
+    def test_a_checked_deletion_writes_the_same_files(self):
+        for remove in (remove_page, remove_page_keeping_ids):
+            with self.subTest(remove=remove.__name__):
+                checked = self.source.with_name("checked-" + remove.__name__)
+                plain = self.source.with_name("plain-" + remove.__name__)
+                shutil.copytree(self.source, checked)
+                shutil.copytree(self.source, plain)
+                self.assertEqual(remove(checked, "second", checked=True),
+                                 remove(plain, "second"))
+                self.assertEqual(self.files(checked), self.files(plain))
+
+    def test_a_page_in_use_stays_when_checked(self):
         self.code("page second")
         before = self.files()
         with self.assertRaisesRegex(NxwrightError, "the page second is used, so it stays:\n"
                                                    "  pages/page0.nx line 2: page second"):
-            remove_page(self.source, "second")
+            remove_page(self.source, "second", checked=True)
         self.assertEqual(self.files(), before)
 
     def test_a_later_page_used_by_number_needs_keep_ids(self):
         self.code("page 2")
         with self.assertRaisesRegex(NxwrightError, "page 2"):
-            remove_page(self.source, "second")
-        name, deleted, left = remove_page_keeping_ids(self.source, "second")
+            remove_page(self.source, "second", checked=True)
+        name, deleted, left = remove_page_keeping_ids(self.source, "second", checked=True)
         self.assertEqual((name, deleted, left),
                          ("empty_slot_1", ["pages/second.page.toml", "pages/second.nx"], []))
         self.assertEqual(self.pages(), ["page0", "empty_slot_1", "third"])
@@ -124,7 +151,7 @@ class PageRemovalTest(unittest.TestCase):
         [use] = page_uses(self.source, "second")[1]
         self.assertEqual((use.path, use.text, use.of), ("pages/lib/shared.nx", "page 2", "later"))
         self.code()
-        remove_page(self.source, "second")
+        remove_page(self.source, "second", checked=True)
         self.assertTrue((self.source / "pages/lib/shared.nx").exists())
         self.assertTrue(self.builds())
 
@@ -137,10 +164,11 @@ class PageRemovalTest(unittest.TestCase):
         self.assertEqual(remove_page_keeping_ids(self.source, "second")[0], "empty_slot_2")
         self.assertTrue(self.builds())
 
-    def test_keeping_the_ids_still_refuses_a_use_of_the_page_itself(self):
+    def test_keeping_the_ids_still_refuses_a_use_of_the_page_itself_when_checked(self):
         self.code("dp=1")
         with self.assertRaisesRegex(NxwrightError, "dp=1"):
-            remove_page_keeping_ids(self.source, "second")
+            remove_page_keeping_ids(self.source, "second", checked=True)
+        self.assertEqual(remove_page_keeping_ids(self.source, "second")[0], "empty_slot_1")
 
     def test_the_only_page_stays(self):
         remove_page(self.source, "second")
@@ -148,15 +176,23 @@ class PageRemovalTest(unittest.TestCase):
         for remove in (remove_page, remove_page_keeping_ids, page_removal_report):
             with self.assertRaisesRegex(NxwrightError, "the folder's only page"):
                 remove(self.source, "page0")
+        for remove in (remove_page, remove_page_keeping_ids):
+            with self.assertRaisesRegex(NxwrightError, "the folder's only page"):
+                remove(self.source, "page0", checked=True)
 
-    def test_a_deletion_the_checks_reject_afterwards_writes_nothing(self):
+    def test_a_page_the_folder_lacks(self):
+        for checked in (False, True):
+            with self.assertRaisesRegex(NxwrightError, "the folder has no page named fourth"):
+                remove_page(self.source, "fourth", checked=checked)
+
+    def test_a_checked_deletion_the_checks_reject_afterwards_writes_nothing(self):
         before = self.files()
         error = mock.Mock(place="x", message="y")
         with mock.patch("nxwright.source.page_removal.check_folder",
                         side_effect=[mock.Mock(errors=lambda: []),
                                      mock.Mock(errors=lambda: [error])]):
             with self.assertRaisesRegex(NxwrightError, "would not build after the deletion"):
-                remove_page(self.source, "second")
+                remove_page(self.source, "second", checked=True)
         self.assertEqual(self.files(), before)
 
     def test_the_report(self):
@@ -184,11 +220,20 @@ class PageRemovalTest(unittest.TestCase):
         with contextlib.redirect_stdout(printed):
             self.assertEqual(main(["remove", str(self.source), "page", "second", "--report"]), 0)
         self.assertEqual(json.loads(printed.getvalue())["later"], ["third"])
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            self.assertEqual(main(["remove", str(self.source), "page", "second", "--checked"]),
+                             1)
+        self.assertIn("pages/page0.nx line 2: page 2", errors.getvalue())
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
             self.assertEqual(main(["remove", str(self.source), "page", "second", "--keep-ids"]),
                              0)
         self.assertIn("with the empty slot page empty_slot_1", printed.getvalue())
+        # Without --checked, the page is deleted though page0's code gives its ID as a number.
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(["remove", str(self.source), "page", "third"]), 0)
+        self.assertEqual(self.pages(), ["page0", "empty_slot_1"])
 
 
 if __name__ == "__main__":

@@ -2,28 +2,32 @@
 page file, its `.nx` file, and its entry in app.toml's `pages`. A file the
 page includes stays, since other pages may include it too.
 
-The deletion is rejected, and nothing is written, while a file other than
-the page's own uses the page by name, or gives its ID or a later page's ID
-as a number:
+A deletion does not look at the rest of the folder, unless it is checked
+(`nxwright remove --checked`). After an unchecked deletion, code that used
+the page by name no longer builds. A page's ID is its place in `pages`, so
+each later page also has an ID one lower, and a number that gave one of
+those IDs stands for another page. Every deletion is rejected for a page
+the folder does not have, and for the folder's only page.
+
+A checked deletion is also rejected, and nothing is written, if a file
+other than the page's own uses the page by name, or gives its ID or a later
+page's ID as a number:
   - by name, wherever Find All References finds it, such as `page settings`
     or `settings.t0.txt` (references.py);
   - by number, as the argument of `page`, or given to `dp` or compared with
     it (resource_numbers.page_numbers).
-Later IDs count because a page's ID is its place in `pages`, so deleting a
-page lowers the ID of each later page. Code that names a later page still
-reaches it, but a number would then stand for another page. A number that
-code computes, or keeps in a variable, is not found.
+A number that code computes, or keeps in a variable, is not found.
 
-The deletion is also rejected for the folder's only page, and when the
-folder's checks find an error before or after the deletion. An error found
-before the deletion could hide a use.
+A checked deletion is rejected too when the folder's checks find an error
+before or after the deletion. An error found before the deletion could hide
+a use.
 
 remove_page_keeping_ids instead leaves an empty slot page in the deleted
 page's place: a blank page named `empty_slot_1`, or `empty_slot_2` and so on
-if that name is taken, so that no page's ID changes. It then rejects the
-deletion only while the folder uses the page itself, by name or by its own
-ID. page_removal_report returns what a deletion would affect, in the form of
-resource_removal.removal_report, and writes nothing.
+if that name is taken, so that no page's ID changes. When it is checked, it
+rejects the deletion only while the folder uses the page itself, by name or
+by its own ID. page_removal_report returns what a deletion would affect, in
+the form of resource_removal.removal_report, and writes nothing.
 """
 import dataclasses
 from pathlib import Path
@@ -53,9 +57,7 @@ def page_uses(source_folder: Path, page: str) -> tuple:
     Raises NxwrightError for a page the folder does not have, and for a
     folder whose checks find an error."""
     source_folder = Path(source_folder)
-    pages = read_app(source_folder)["pages"]
-    if page not in pages:
-        raise NxwrightError("the folder has no page named %s" % page)
+    pages = _pages_with(source_folder, page)
     read = folder_reader(source_folder)
     errors = check_folder(read, folder_file_exists(source_folder),
                           listed=folder_lister(source_folder)).errors()
@@ -99,26 +101,28 @@ def page_removal_report(source_folder: Path, page: str) -> dict:
             "uses": [dataclasses.asdict(use) for use in uses]}
 
 
-def remove_page(source_folder: Path, page: str) -> tuple:
+def remove_page(source_folder: Path, page: str, checked: bool = False) -> tuple:
     """Deletes the page `page` and its files. Returns (the paths deleted, a
     sentence "path: why" for each file that could not be deleted). Raises
-    NxwrightError, and writes nothing, when the module's docstring says the
-    deletion is rejected. The error lists each use."""
-    pages, uses = page_uses(source_folder, page)
+    NxwrightError, and writes nothing, for a page the folder does not have,
+    and for the folder's only page. With `checked`, also raises it while the
+    folder uses the page, listing each use, and when the folder's checks
+    find an error (see the module's docstring)."""
+    pages, uses = _pages_and_uses(source_folder, page, checked)
     _check_not_only(pages, page)
     _reject_for(page, uses)
-    return _replace_page(Path(source_folder), pages, page, None)
+    return _replace_page(Path(source_folder), pages, page, None, checked=checked)
 
 
-def remove_page_keeping_ids(source_folder: Path, page: str) -> tuple:
+def remove_page_keeping_ids(source_folder: Path, page: str, checked: bool = False) -> tuple:
     """Deletes the page `page`, and writes an empty slot page in its place,
     so that no page's ID changes. Returns (the empty slot page's name, the
     paths deleted, a sentence "path: why" for each file that could not be
     deleted). Raises NxwrightError, and writes nothing, in the same cases as
-    remove_page, except that only uses of the page itself count, by name or
-    by its own ID. Also raises it for a page that is an empty slot page
-    already."""
-    pages, uses = page_uses(source_folder, page)
+    remove_page, except that with `checked` only uses of the page itself
+    count, by name or by its own ID. Also raises it for a page that is an
+    empty slot page already."""
+    pages, uses = _pages_and_uses(source_folder, page, checked)
     _check_not_only(pages, page)
     if re.fullmatch(EMPTY_SLOT_NAME.replace("%d", "[1-9][0-9]*"), page):
         raise NxwrightError("the page %s is an empty slot page already" % page)
@@ -132,8 +136,28 @@ def remove_page_keeping_ids(source_folder: Path, page: str) -> tuple:
     while (EMPTY_SLOT_NAME % number).lower() in taken:
         number += 1
     name = EMPTY_SLOT_NAME % number
-    deleted, left = _replace_page(Path(source_folder), pages, page, name)
+    deleted, left = _replace_page(Path(source_folder), pages, page, name, checked=checked)
     return name, deleted, left
+
+
+def _pages_with(source_folder: Path, page: str) -> list:
+    """Returns the folder's pages. Raises NxwrightError for a folder that
+    does not have the page `page`."""
+    pages = read_app(Path(source_folder))["pages"]
+    if page not in pages:
+        raise NxwrightError("the folder has no page named %s" % page)
+    return pages
+
+
+def _pages_and_uses(source_folder: Path, page: str, checked: bool) -> tuple:
+    """Returns (the folder's pages, the uses of the page `page` that stop a
+    deletion). With `checked`, the uses are those page_uses finds. Without
+    `checked`, the folder is not searched, and the list of uses is empty.
+    Raises NxwrightError for a page the folder does not have, and with
+    `checked` for a folder whose checks find an error."""
+    if checked:
+        return page_uses(source_folder, page)
+    return _pages_with(source_folder, page), []
 
 
 def _check_not_only(pages: list, page: str):
@@ -150,14 +174,16 @@ def _reject_for(page: str, uses: list):
                             % (page, "\n".join("  %s" % use for use in uses)))
 
 
-def _replace_page(source_folder: Path, pages: list, page: str, empty_slot) -> tuple:
+def _replace_page(source_folder: Path, pages: list, page: str, empty_slot,
+                  checked: bool) -> tuple:
     """Takes the page `page` out of app.toml's `pages`, or puts the empty
     slot page `empty_slot` in its place, then deletes the page's own files.
     The empty slot page's files are written first, then app.toml, so that
     app.toml never lists a page whose files are missing. Returns (the paths
     deleted, a sentence for each that could not be). Raises NxwrightError,
     writing nothing, if a file is already where one of the empty slot page's
-    files would go, and for a folder whose checks would find an error after the deletion."""
+    files would go, and with `checked` for a folder whose checks would find
+    an error after the deletion."""
     app = read_app(source_folder)
     new_pages = [empty_slot if known == page else known for known in pages
                  if known != page or empty_slot is not None]
@@ -170,7 +196,8 @@ def _replace_page(source_folder: Path, pages: list, page: str, empty_slot) -> tu
     gone = [path for path in (page_toml_path(page), page_nx_path(page))
             if (source_folder / path).is_file()]
     texts = {path: data.decode("utf-8") for path, data in new_files.items()}
-    _check_after(source_folder, dict(texts, **{APP_FILE: app_text}), gone)
+    if checked:
+        _check_after(source_folder, dict(texts, **{APP_FILE: app_text}), gone)
     app_path = source_folder / APP_FILE
     written = [(app_path, app_path.read_bytes())]
     try:

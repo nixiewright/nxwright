@@ -2,7 +2,7 @@
   "name": "nxwright-language",
   "displayName": "nxwright",
   "description": "Design, write, simulate, test, compile, and upload Nextion screen apps in VS Code.",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "publisher": "nxwright",
   "icon": "images/icon.png",
   "license": "Apache-2.0",
@@ -194,6 +194,16 @@
             },
             "default": [],
             "markdownDescription": "The folders of tests that Test Explorer lists, relative to the workspace's first folder. When empty, each folder named `tests` beside a source folder."
+          }
+        }
+      },
+      {
+        "title": "Checks",
+        "properties": {
+          "nxwright.checks.delete": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Searches your project before deleting a page, picture, font, animation, video, or sound. If the project still uses it, nothing is deleted, and the terminal lists each use. The search reads your whole project, so it takes time on a large project, and it cannot find a number that your code computes."
           }
         }
       }

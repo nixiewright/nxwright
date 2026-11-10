@@ -322,9 +322,9 @@ class PlaceholderTest(DefinesTestCase):
                             encoding="utf-8", newline="\n")
         self.edit("pages/page0.page.toml",
                   ('vscope = "%SCOPE%"', 'vscope = "%SCOPE%"\nfont = "%FONT%"'))
-        self.assertEqual(run(["remove", str(self.source), "font", "Other"])[0], 1)
+        self.assertEqual(run(["remove", str(self.source), "font", "Other", "--checked"])[0], 1)
         self.edit("app.toml", ('FONT = "Other"', 'FONT = "NotoSans24"'))
-        self.assertEqual(run(["remove", str(self.source), "font", "Other"])[0], 0)
+        self.assertEqual(run(["remove", str(self.source), "font", "Other", "--checked"])[0], 0)
         self.assertIn('rotation = "%ROTATION%"\n', self.app.read_text(encoding="utf-8"))
 
     def test_commands_that_rewrite_app_toml_keep_its_placeholders(self):

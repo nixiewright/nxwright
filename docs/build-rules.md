@@ -286,6 +286,9 @@ The build refuses missing attributes in nxlang too.
   - The numbers of arguments come from the vendor's instruction set or, for an undocumented command, from what it was seen to compile with.
   - A command whose number of arguments is not fixed, such as `sets`, takes any number.
 - `page` given a quoted text, as in `page "page0"` ("Invalid Page ID"). It takes a page's name without quotes, or its number.
+- `page` given a name that is neither a page nor a variable, as in `page zz` ("Invalid Page ID"). That also covers a component's name, as in `page t0`, and a page's name in another letter case.
+  - A page's name must be the whole argument: `page settings+1` is refused too.
+  - A value is fine, such as `page sys0`, `page sys0+1`, or `page n0.val`.
 
 ### Long lines
 

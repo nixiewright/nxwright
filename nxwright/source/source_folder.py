@@ -1667,7 +1667,8 @@ def _program_from_source(text: str, names: ResourceNames, program: ProgramNames 
     try:
         lines = numbered_lines(text)
         if program is not None:
-            lines = compile_program(lines, program)
+            lines = compile_program(lines, program,
+                                    pages=None if pages is None else frozenset(pages))
         lines = preprocess(lines, names, variables=variables, macros=macros, screen=screen,
                            program_pages=pages, codec=TextCodec(encoding),
                            program_globals=page_globals, suggest_nxlang=program is None)

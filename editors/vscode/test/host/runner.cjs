@@ -14,10 +14,18 @@ const path = require("node:path");
 // server, a Python process.
 const TIME_LIMIT = 90000;
 const tests = [];
+// The tests to run after all the others, whichever file registered them.
+const lastTests = [];
 
 // Registers a test: `body` is an async function, which fails by throwing.
 function test(name, body) {
   tests.push({ name, body });
+}
+
+// Registers a test that runs after every test registered with test(). Use
+// it to restore what a set-up shared by several test files changed.
+function testLast(name, body) {
+  lastTests.push({ name, body });
 }
 
 // Returns found()'s first result that is not false, null, or undefined,
@@ -56,20 +64,25 @@ async function run() {
   for (const file of fs.readdirSync(__dirname).filter((name) => name.endsWith(".host.cjs")).sort()) {
     require(path.join(__dirname, file));
   }
+  let ran = 0;
   let failed = 0;
-  for (const { name, body } of tests) {
-    try {
-      await withinLimit(Promise.resolve().then(body), TIME_LIMIT, name);
-      console.log(`ok - ${name}`);
-    } catch (error) {
-      failed += 1;
-      console.log(`not ok - ${name}\n  ${String(error?.stack ?? error).replace(/\n/g, "\n  ")}`);
+  // lastTests is read once the others have run, because a test may add to it.
+  for (const list of [tests, lastTests]) {
+    for (const { name, body } of list) {
+      ran += 1;
+      try {
+        await withinLimit(Promise.resolve().then(body), TIME_LIMIT, name);
+        console.log(`ok - ${name}`);
+      } catch (error) {
+        failed += 1;
+        console.log(`not ok - ${name}\n  ${String(error?.stack ?? error).replace(/\n/g, "\n  ")}`);
+      }
     }
   }
-  console.log(`# ${tests.length - failed} passed, ${failed} failed`);
+  console.log(`# ${ran - failed} passed, ${failed} failed`);
   if (failed > 0) {
-    throw new Error(`${failed} of ${tests.length} tests inside VS Code failed`);
+    throw new Error(`${failed} of ${ran} tests inside VS Code failed`);
   }
 }
 
-module.exports = { folderFile, run, test, waitFor };
+module.exports = { folderFile, run, test, testLast, waitFor };

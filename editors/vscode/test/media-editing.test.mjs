@@ -4,71 +4,59 @@
 // (src/mediaCommands.ts).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { deleteDialog, isPlaceholder, newNameCheck, replaceArguments, warningText }
-  from "../out/mediaEditing.js";
+import { deleteDialog, deleteTarget, isPlaceholder, newNameCheck, removeArguments,
+         replaceArguments, warningText } from "../out/mediaEditing.js";
 import { animationArguments, pictureArguments, videoArguments } from "../out/mediaCommands.js";
 
-// A report of the picture `name`, ID `id`, with `later` after it and `uses`.
-function report(name, id, later, uses = [], kind = "picture", encoding = "iso-8859-1") {
-  return { kind, name, id, encoding, last: later.length === 0, later, uses };
+// What Delete deletes: the picture `name`, ID `id`, with `later` after it.
+function target(name, id, later, kind = "picture", encoding = "iso-8859-1") {
+  return { kind, name, id, later, encoding };
 }
 
-const use = (by, of) => ({ path: "pages/main.nx", line: 3, text: "p0.pic=2", by, of });
 const actions = (dialog) => dialog.buttons.map((button) => button.action);
 
-test("a resource used by name or by its own ID cannot be deleted", () => {
-  for (const by of ["name", "number"]) {
-    const dialog = deleteDialog(report("logo", 1, ["b"], [use(by, "itself"), use(by, "itself")]));
-    assert.equal(dialog.error, true);
-    assert.match(dialog.message, /^Cannot delete the picture logo: it is still used in 2 places\.$/);
-    assert.deepEqual(actions(dialog), ["showUses"]);
-  }
+test("what Delete deletes is read from the names of its list", () => {
+  assert.deepEqual(deleteTarget("picture", "b", ["a", "b", "c"], "utf-8"),
+                   { kind: "picture", name: "b", id: 1, later: ["c"], encoding: "utf-8" });
+  assert.deepEqual(deleteTarget("page", "c", ["a", "b", "c"], undefined).later, []);
+  // A name the list no longer has.
+  assert.equal(deleteTarget("picture", "d", ["a", "b", "c"], "utf-8"), undefined);
 });
 
 test("the last of its kind is deleted after a plain confirmation", () => {
-  const dialog = deleteDialog(report("logo", 2, []));
+  const dialog = deleteDialog(target("logo", 2, []));
   assert.equal(dialog.message, "Delete the picture logo?");
+  assert.equal(dialog.detail, "");
   assert.deepEqual(actions(dialog), ["delete"]);
 });
 
-test("IDs that would shift: an empty slot by default, or delete and shift", () => {
-  const dialog = deleteDialog(report("logo", 1, ["b", "c"]));
+test("IDs that would shift: an empty slot by default, a shift, or names for the numbers", () => {
+  const dialog = deleteDialog(target("logo", 1, ["b", "c"]));
   assert.equal(dialog.message, "Delete the picture logo?");
   assert.match(dialog.detail,
                /^Deleting the picture logo will change the IDs of pictures 2 to 3 \(b and c\)\./);
-  assert.deepEqual(actions(dialog), ["keepIds", "shift"]);
+  assert.deepEqual(actions(dialog), ["keepIds", "shift", "namesForNumbers"]);
   assert.match(dialog.detail, /microcontroller/);
   assert.match(dialog.detail, /Leave an Empty Slot keeps every ID/);
-  assert.match(deleteDialog(report("logo", 1, ["b"])).detail,
+  assert.match(dialog.detail, /Delete and Shift IDs removes/);
+  assert.match(dialog.detail, /Replace Numbers with Names first replaces/);
+  assert.match(deleteDialog(target("logo", 1, ["b"])).detail,
                /^Deleting the picture logo will change the ID of picture 2 \(b\)\./);
-  const many = deleteDialog(report("logo", 0, ["a", "b", "c", "d", "e", "f", "g"]));
+  const many = deleteDialog(target("logo", 0, ["a", "b", "c", "d", "e", "f", "g"]));
   assert.match(many.detail, /pictures 1 to 7 \(a, b, c, d, e and 2 more\)\./);
 });
 
-test("later IDs given as numbers: no shift until they are names", () => {
-  const dialog = deleteDialog(report("logo", 1, ["b"], [use("number", "later")]));
-  assert.match(dialog.message, /use some of those IDs as numbers, in 1 place\.$/);
-  assert.deepEqual(actions(dialog), ["keepIds", "namesForNumbers", "showUses"]);
-  // Once the names were written, those left are to change by hand.
-  const after = deleteDialog(report("logo", 1, ["b"], [use("number", "later")]), true);
-  assert.match(after.message, /1 place could not be written as names: change them by hand\.$/);
-  assert.deepEqual(actions(after), ["keepIds", "showUses"]);
-  // The detail explains only the buttons the dialog offers.
-  for (const offered of [dialog, after]) {
-    assert.doesNotMatch(offered.detail, /Delete and Shift IDs/);
-    assert.match(offered.detail, /Leave an Empty Slot keeps every ID/);
-  }
-  assert.match(deleteDialog(report("logo", 1, ["b"])).detail, /Delete and Shift IDs removes/);
-  // A placeholder is offered neither an empty slot nor a shift, so only the risk is told.
-  const placeholder = deleteDialog(report("empty-slot-1", 1, ["b"], [use("number", "later")]));
-  assert.deepEqual(actions(placeholder), ["namesForNumbers", "showUses"]);
-  assert.match(placeholder.detail, /^Code that computes picture IDs/);
-  assert.doesNotMatch(placeholder.detail, /Empty Slot|Delete and Shift IDs/);
+test("once the numbers were written as names, the question no longer offers it", () => {
+  const after = deleteDialog(target("logo", 1, ["b"]), true);
+  assert.deepEqual(actions(after), ["keepIds", "shift"]);
+  // The detail explains only the buttons the question offers.
+  assert.doesNotMatch(after.detail, /Replace Numbers with Names/);
+  assert.match(after.detail, /Leave an Empty Slot keeps every ID/);
 });
 
 test("a placeholder is not offered another in its place", () => {
-  const dialog = deleteDialog(report("empty-slot-1", 0, ["b"]));
-  assert.deepEqual(actions(dialog), ["shift"]);
+  const dialog = deleteDialog(target("empty-slot-1", 0, ["b"]));
+  assert.deepEqual(actions(dialog), ["shift", "namesForNumbers"]);
   assert.doesNotMatch(dialog.detail, /Empty Slot/);
   assert.equal(isPlaceholder("empty-slot-12"), true);
   assert.equal(isPlaceholder("empty-slot-0"), false);
@@ -79,18 +67,33 @@ test("a placeholder is not offered another in its place", () => {
 });
 
 test("a page's empty slot is a blank page, reused by renaming it", () => {
-  const dialog = deleteDialog(report("settings", 1, ["about"], [], "page"));
+  const dialog = deleteDialog(target("settings", 1, ["about"], "page"));
   assert.match(dialog.detail, /^Deleting the page settings will change the ID of page 2 \(about\)/);
   assert.match(dialog.detail, /a blank page takes settings's place, and you can reuse it by renaming it/);
-  assert.deepEqual(actions(dialog), ["keepIds", "shift"]);
+  assert.deepEqual(actions(dialog), ["keepIds", "shift", "namesForNumbers"]);
   // An empty slot page is not offered another in its place.
-  assert.deepEqual(actions(deleteDialog(report("empty_slot_1", 1, ["about"], [], "page"))),
-                   ["shift"]);
+  assert.deepEqual(actions(deleteDialog(target("empty_slot_1", 1, ["about"], "page"))),
+                   ["shift", "namesForNumbers"]);
 });
 
 test("a font's empty slot in a two-byte encoding says what it takes", () => {
-  assert.match(warningText(report("Big", 0, ["b"], [], "font", "gb2312"), false), /135 KB/);
-  assert.doesNotMatch(warningText(report("Big", 0, ["b"], [], "font"), false), /135 KB/);
+  assert.match(warningText(target("Big", 0, ["b"], "font", "gb2312"), false, true), /135 KB/);
+  assert.doesNotMatch(warningText(target("Big", 0, ["b"], "font"), false, true), /135 KB/);
+  // A folder without device settings has no encoding.
+  assert.doesNotMatch(warningText(target("Big", 0, ["b"], "font", undefined), false, true),
+                      /135 KB/);
+});
+
+test("the command that deletes: an empty slot, and the check, only when asked for", () => {
+  const logo = target("logo", 1, ["b"]);
+  assert.deepEqual(removeArguments("app", logo, false, false),
+                   ["remove", "app", "picture", "logo"]);
+  assert.deepEqual(removeArguments("app", logo, true, false),
+                   ["remove", "app", "picture", "logo", "--keep-ids"]);
+  assert.deepEqual(removeArguments("app", logo, false, true),
+                   ["remove", "app", "picture", "logo", "--checked"]);
+  assert.deepEqual(removeArguments("app", target("settings", 1, [], "page"), true, true),
+                   ["remove", "app", "page", "settings", "--keep-ids", "--checked"]);
 });
 
 test("a new name is checked as nxwright checks it", () => {

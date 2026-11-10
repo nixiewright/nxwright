@@ -229,6 +229,7 @@ You can change these in VS Code's Settings, where they are grouped by category.
 - `nxwright.previewGrid`: the size of the grid, in pixels, that dragged components snap to. The default is 1, which means no grid.
 - `nxwright.warnWhenComponentIdsChange`: warns you when deleting, cutting, or moving components would change the IDs of components on their page. It is on by default, and choosing Don't Warn Again in the warning turns it off.
 - `nxwright.testFolders`: the folders of tests that Test Explorer lists. By default, it lists every folder named `tests` next to a source folder.
+- `nxwright.checks.delete`: searches your project before deleting a page or a resource, and keeps one that is still used. It is off by default, because the search takes time on a large project.
 - The Simulator settings, used when a launch configuration doesn't set its own value:
   - `nxwright.simulator.serialPort` and `nxwright.simulator.serialBaud`: the serial port, such as `COM4`, and its speed. Leave the port empty for none.
   - `nxwright.simulator.sdCard0` and `nxwright.simulator.sdCard1`: the full paths of the folders to use as SD cards. Leave one empty to keep that card in memory.

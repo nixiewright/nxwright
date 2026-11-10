@@ -330,7 +330,9 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
     _check_components(code, objects, variables, program_pages, number)
     _check_number_arguments(code, number)
     _check_one_operand_arguments(code, number)
-    _check_page_argument(code, number)
+    pages = program_pages if program_pages is not None else (
+        objects.pages if objects is not None else None)
+    _check_page_argument(code, pages, variables, number)
     if variables is not None:
         _check_program_variables(code, variables, number)
         _check_names_alone(code, objects, variables, number)
@@ -824,15 +826,74 @@ def _check_one_operand_arguments(code: str, number: int):
                             % (code, word, argument, advice, INVALID_VARIABLES), line=number)
 
 
-def _check_page_argument(code: str, number: int):
-    """Raises NxwrightError for a quoted text given to `page`, as
-    `page "page0"`, which the Nextion Editor refused as it compiled
-    ("Invalid Page ID"). `page` takes a page's name without quotes, or its
-    number. nxlang does not read a quoted text as a page's name either."""
-    if command_word(code) == "page" and STRING.fullmatch(code[len("page"):].strip()):
+def _check_page_argument(code: str, pages, variables: frozenset, number: int):
+    """Raises NxwrightError for an argument of `page` that the Nextion
+    Editor refused when it compiled ("Invalid Page ID"):
+      - a quoted text, as in `page "page0"`. `page` takes a page's name
+        without quotes, or its number. nxlang does not read a quoted text
+        as a page's name either.
+      - a name alone that `page` does not take (refused_page_name), as in
+        `page zz`.
+    `pages` contains the folder's pages, by name. If it is None, the pages
+    are not known, and no name is checked. `variables` contains
+    program.nx's ints. It is None in nxlang, whose compiler checks the
+    names itself (nxlang.py)."""
+    if command_word(code) != "page":
+        return
+    argument = code[len("page"):].strip()
+    if STRING.fullmatch(argument):
         raise NxwrightError("%s: page takes a page's name without quotes, or its number, and "
                             "the Nextion Editor refuses a text (\"%s\")"
                             % (code, INVALID_PAGE_ID), line=number)
+    if pages is None or variables is None:
+        return
+    known = (variables | EDITOR_SYSTEM_VARIABLES | frozenset(EDITOR_COLOURS)
+             | frozenset(EDITOR_PROGRAM_VARIABLES))
+    name = refused_page_name(argument, pages, known.__contains__)
+    if name is not None:
+        raise NxwrightError(page_name_refusal(code, name, pages, "an int variable, a system "
+                                              "variable, or a colour"), line=number)
+
+
+def refused_page_name(argument: str, pages, is_value):
+    """Returns the first name alone in `argument`, the argument of a `page`
+    command, that the Nextion Editor refused when it compiled ("Invalid Page
+    ID:" followed by the name). Returns None if it took every name. A name
+    alone is a name that stands by itself, such as `zz` in `page sys0+zz`.
+    The `n0` and the `val` of `n0.val` are not names alone, nor is the `b`
+    of `b[2]`.
+
+    `page` takes a page's name, one of `pages`, as its whole argument. Any
+    other argument is a value, read the same way as the right side of an
+    assignment. A name alone in a value must be one that `is_value(name)`
+    accepts: an int variable, a system variable, or a colour, and in nxlang
+    also a constant or a local. The Nextion Editor therefore refused:
+      - a name that is not defined, as in `page zz` and `page sys0+zz`;
+      - a component's name, as in `page t0`;
+      - a page's name in an expression, as in `page page1+1`;
+      - a page's name in another letter case, as in `page PAGE1`."""
+    if argument in pages:
+        return None
+    for part in STRING.split(argument)[::2]:
+        for name in _NAME_ALONE.findall(part):
+            if not is_value(name):
+                return name
+    return None
+
+
+def page_name_refusal(code: str, name: str, pages, values: str) -> str:
+    """Returns the error message for `name`, a name that `page` does not
+    take in the line `code` (refused_page_name). `values` lists the kinds of
+    name that give a value in `page`'s argument, such as "an int variable, a
+    system variable, or a colour"."""
+    if name in pages:
+        words = "%s is a page's name, which must be the whole argument of page" % name
+    else:
+        written = next((page for page in pages if page.lower() == name.lower()), None)
+        words = ("no page is named %s, though one is named %s" % (name, written) if written
+                 else "%s is not a page, %s" % (name, values))
+    return "%s: %s. The Nextion Editor refuses this line (\"%s\")" % (code, words,
+                                                                   INVALID_PAGE_ID)
 
 
 def _check_program_attributes(code: str, pages: dict, globals_: dict, number: int):

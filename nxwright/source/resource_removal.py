@@ -2,8 +2,14 @@
 font, an animation, a video, or a sound, its files, and its name in
 app.toml.
 
-The removal is refused, writing nothing, while the folder uses the
-resource by its name, or uses a number from its ID to the last ID of its
+A removal does not look at the rest of the folder, unless it is checked
+(`nxwright remove --checked`). After an unchecked removal, a page file or
+code that used the resource by name no longer builds, and a number that
+gave a later resource's ID stands for another resource. Every removal is
+refused for a kind or a name the folder does not have.
+
+A checked removal is also refused, writing nothing, while the folder uses
+the resource by its name, or uses a number from its ID to the last ID of its
 kind. Those numbers count because a removal gives each later resource of
 its kind an ID one lower: a name follows its resource, but a number would
 silently stand for another resource. The uses looked for are:
@@ -19,9 +25,9 @@ checks that `nxwright check` runs come first, because a file they cannot
 read could hide a use.
 
 A removal can instead leave a placeholder in the resource's place
-(remove_keeping_ids), so that no ID changes. It then fails only while the
-folder uses the resource itself. removal_report gives what a removal would
-affect, writing nothing.
+(remove_keeping_ids), so that no ID changes. When it is checked, it fails
+only while the folder uses the resource itself. removal_report gives what a
+removal would affect, writing nothing.
 
 The language server's index imports source_folder.py, so this module, which
 only the command imports, stands apart from it.
@@ -68,15 +74,15 @@ class ResourceUse:
         return "%s line %d: %s" % (self.path, self.line, self.text)
 
 
-def remove_resource(source_folder: Path, kind: str, name: str) -> tuple:
-    """Removes the resource `name` of `kind`, a word of KINDS, from the source
-    folder, as the module's docstring says; returns what
-    remove_resource_files returns. Raises NxwrightError,
-    writing nothing, for a kind or a name the folder does not have, a folder
-    whose checks find an error, and a resource the folder uses, naming each
-    place."""
+def remove_resource(source_folder: Path, kind: str, name: str, checked: bool = False) -> tuple:
+    """Removes the resource `name` of `kind`, one of the words in KINDS, from
+    the source folder (see the module's docstring). Returns (the paths
+    deleted, a sentence for each file that could not be deleted). Raises
+    NxwrightError, writing nothing, for a kind or a name the folder does not
+    have. With `checked`, also raises it for a folder whose checks find an
+    error, and for a resource the folder uses, listing each use."""
     source_folder = Path(source_folder)
-    listed, _, uses = resource_uses(source_folder, kind, name)
+    listed, uses = _list_and_uses(source_folder, kind, name, checked)
     _refuse_for(kind, name, uses)
     return remove_resource_files(source_folder, listed, name)
 
@@ -97,15 +103,17 @@ def removal_report(source_folder: Path, kind: str, name: str) -> dict:
             "uses": [dataclasses.asdict(use) for use in uses]}
 
 
-def remove_keeping_ids(source_folder: Path, kind: str, name: str) -> tuple:
+def remove_keeping_ids(source_folder: Path, kind: str, name: str,
+                       checked: bool = False) -> tuple:
     """Removes the resource `name` of `kind`, writing a placeholder into its
     place (resource_adding.add_placeholder), so that no later resource's ID
     changes. Returns (the placeholder's name, the old files deleted, a
     sentence for each that could not be). Raises NxwrightError, writing
-    nothing, as remove_resource does, but only for uses of the resource
-    itself, by name or by its own ID."""
+    nothing, in the same cases as remove_resource, except that with
+    `checked` only uses of the resource itself count, by name or by its own
+    ID."""
     source_folder = Path(source_folder)
-    listed, _, uses = resource_uses(source_folder, kind, name)
+    listed, uses = _list_and_uses(source_folder, kind, name, checked)
     _refuse_for(kind, name, [use for use in uses if use.of == "itself"])
     slot = Slot(name)
     placeholder = add_placeholder(source_folder, listed, slot)
@@ -119,6 +127,32 @@ def _refuse_for(kind: str, name: str, uses: list):
                             % (kind, name, "\n".join("  %s" % use for use in uses)))
 
 
+def _list_and_uses(source_folder: Path, kind: str, name: str, checked: bool) -> tuple:
+    """Returns (the name of app.toml's list of the kind, the uses of the
+    resource `name` of `kind` that stop a removal). With `checked`, the uses
+    are those resource_uses finds. Without `checked`, the folder is not
+    searched, and the list of uses is empty. Raises NxwrightError for a kind
+    or a name the folder does not have, and with `checked` for a folder
+    whose checks find an error."""
+    if checked:
+        listed, _, uses = resource_uses(source_folder, kind, name)
+        return listed, uses
+    return _list_with(source_folder, kind, name)[0], []
+
+
+def _list_with(source_folder: Path, kind: str, name: str) -> tuple:
+    """Returns (the name of app.toml's list for the kind, the names in that
+    list), where `kind` is a word of KINDS. Raises NxwrightError for a kind
+    that is not in KINDS, and for a list that does not have `name`."""
+    if kind not in KINDS:
+        raise NxwrightError("%s is not a kind of resource: %s" % (kind, ", ".join(KINDS)))
+    listed = LISTS[KINDS[kind]]
+    names = read_app(source_folder)[listed]
+    if name not in names:
+        raise NxwrightError("the folder has no %s named %s" % (kind, name))
+    return listed, names
+
+
 def resource_uses(source_folder: Path, kind: str, name: str) -> tuple:
     """Returns (the name of app.toml's list of the kind, the names in that
     list, the uses) of the resource `name` of `kind`, a word of KINDS. The
@@ -126,12 +160,7 @@ def resource_uses(source_folder: Path, kind: str, name: str) -> tuple:
     to the last ID of its kind. The folder's checks run first. Raises
     NxwrightError for a kind or a name the folder does not have, and a
     folder whose checks find an error."""
-    if kind not in KINDS:
-        raise NxwrightError("%s is not a kind of resource: %s" % (kind, ", ".join(KINDS)))
-    listed = LISTS[KINDS[kind]]
-    names = read_app(source_folder)[listed]
-    if name not in names:
-        raise NxwrightError("the folder has no %s named %s" % (kind, name))
+    listed, names = _list_with(source_folder, kind, name)
     read = folder_reader(source_folder)
     errors = check_folder(read, lambda path: (source_folder / path).is_file(),
                           listed=folder_lister(source_folder)).errors()
@@ -158,7 +187,7 @@ def remove_resource_files(source_folder: Path, listed: str, name: str) -> tuple:
 
     app.toml is written first, so that a failure can leave a file that
     app.toml does not list, but never a listed name whose file is gone. The
-    function does not check whether the folder uses the resource:
+    function does not check whether the folder uses the resource: a checked
     remove_resource does that first."""
     app = read_app(source_folder)
     paths = resource_file_paths(source_folder, listed, name)

@@ -1,13 +1,16 @@
-"""`nxwright remove`: removing a resource from a source folder, refused while
-the folder uses it by name, or by a number that is its ID or a later one's,
-as a removal gives each later resource of its kind an ID one lower."""
+"""`nxwright remove`: removing a resource from a source folder. With
+`--checked`, a removal is refused while the folder uses the resource by name,
+or by a number that is its ID or a later one's, because a removal gives each
+later resource of its kind an ID one lower."""
 import contextlib
 import io
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import tomllib
 import unittest
+from unittest import mock
 
 from nxwright import NxwrightError
 from nxwright.cli import main
@@ -72,18 +75,19 @@ class RemoveResourceTestCase(unittest.TestCase):
                                                          encoding="utf-8", newline="\n")
 
     def assert_refused(self, kind: str, name: str, *places: str):
-        """Asserts removing `name` is refused, naming each of `places`, and
-        that the folder is left as it was."""
+        """Asserts a checked removal of `name` is refused, naming each of
+        `places`, and that the folder is left as it was."""
         before = self.files()
         with self.assertRaises(NxwrightError) as refused:
-            remove_resource(self.source, kind, name)
+            remove_resource(self.source, kind, name, checked=True)
         for place in places:
             self.assertIn(place, str(refused.exception))
         self.assertEqual(self.files(), before)
 
-    def files(self) -> dict:
-        return {path.relative_to(self.source).as_posix(): path.read_bytes()
-                for path in self.source.rglob("*") if path.is_file()}
+    def files(self, source: Path = None) -> dict:
+        source = source or self.source
+        return {path.relative_to(source).as_posix(): path.read_bytes()
+                for path in source.rglob("*") if path.is_file()}
 
 
 class UnusedTest(RemoveResourceTestCase):
@@ -106,6 +110,17 @@ class UnusedTest(RemoveResourceTestCase):
         check = check_folder(folder_reader(self.source), lambda path: (self.source / path).exists())
         self.assertEqual(check.errors(), [])
 
+    def test_a_checked_removal_writes_the_same_files(self):
+        for remove in (remove_resource, remove_keeping_ids):
+            with self.subTest(remove=remove.__name__):
+                checked = self.folder / ("checked-" + remove.__name__)
+                plain = self.folder / ("plain-" + remove.__name__)
+                shutil.copytree(self.source, checked)
+                shutil.copytree(self.source, plain)
+                self.assertEqual(remove(checked, "picture", "a", checked=True),
+                                 remove(plain, "picture", "a"))
+                self.assertEqual(self.files(checked), self.files(plain))
+
     def test_a_later_resource_takes_its_place(self):
         # b, by its name, is picture 0 once a is removed.
         self.add("p0", "picture", pic="b")
@@ -120,6 +135,22 @@ class UsedByNameTest(RemoveResourceTestCase):
         self.add("p0", "picture", pic="a")
         self.write_code("p0.pic=@pic(a)")
         self.assert_refused("picture", "a", "pages/page0.page.toml line", "pages/page0.nx line 2")
+
+    def test_it_is_removed_without_a_search_unless_checked(self):
+        self.add("p0", "picture", pic="a")
+        self.write_code("p0.pic=@pic(a)")
+        code = (self.source / "pages" / "page0.nx").read_bytes()
+        with mock.patch("nxwright.source.resource_removal.check_folder",
+                        side_effect=AssertionError("the folder was checked")), \
+                mock.patch("nxwright.source.resource_removal.references",
+                           side_effect=AssertionError("the uses were searched")):
+            self.assertEqual(remove_resource(self.source, "picture", "a"),
+                             (["pictures/a.png"], []))
+        self.assertEqual(self.app()["pictures"], ["b"])
+        # The uses are left as they were, so the folder no longer builds.
+        self.assertEqual((self.source / "pages" / "page0.nx").read_bytes(), code)
+        check = check_folder(folder_reader(self.source), lambda path: (self.source / path).exists())
+        self.assertNotEqual(check.errors(), [])
 
 
 class UsedByNumberTest(RemoveResourceTestCase):
@@ -172,14 +203,19 @@ class UsedByNumberTest(RemoveResourceTestCase):
 class RefusalTest(RemoveResourceTestCase):
 
     def test_a_name_or_kind_the_folder_lacks(self):
-        with self.assertRaisesRegex(NxwrightError, "the folder has no picture named c"):
-            remove_resource(self.source, "picture", "c")
-        with self.assertRaisesRegex(NxwrightError, "colour is not a kind"):
-            remove_resource(self.source, "colour", "a")
+        for checked in (False, True):
+            with self.assertRaisesRegex(NxwrightError, "the folder has no picture named c"):
+                remove_resource(self.source, "picture", "c", checked=checked)
+            with self.assertRaisesRegex(NxwrightError, "colour is not a kind"):
+                remove_resource(self.source, "colour", "a", checked=checked)
 
     def test_a_folder_whose_checks_find_an_error(self):
         self.write_code("zz.val=1")
         self.assert_refused("picture", "a", "pages/page0.nx", "zz")
+        # A removal that is not checked does not build the folder, so the error does not
+        # stop it.
+        remove_resource(self.source, "picture", "a")
+        self.assertEqual(self.app()["pictures"], ["b"])
 
 
 class ReportTest(RemoveResourceTestCase):
@@ -273,13 +309,14 @@ class KeepIdsTest(RemoveResourceTestCase):
         font = decode_font((folder / "fonts" / "empty-slot-1.zi").read_bytes())
         self.assertEqual(sorted(font.characters), [0x20])
 
-    def test_a_use_of_the_resource_itself_refuses(self):
+    def test_a_use_of_the_resource_itself_refuses_when_checked(self):
         self.write_code("p0.pic=0")
         self.add("p0", "picture")
         before = self.files()
         with self.assertRaisesRegex(NxwrightError, "line 2"):
-            remove_keeping_ids(self.source, "picture", "a")
+            remove_keeping_ids(self.source, "picture", "a", checked=True)
         self.assertEqual(self.files(), before)
+        self.assertEqual(remove_keeping_ids(self.source, "picture", "a")[0], "empty-slot-1")
 
     def test_the_command(self):
         output = io.StringIO()
@@ -291,7 +328,7 @@ class KeepIdsTest(RemoveResourceTestCase):
 
 class CommandTest(RemoveResourceTestCase):
 
-    def test_it_says_what_it_removed_and_refused(self):
+    def test_it_says_what_it_removed_and_what_a_checked_removal_refused(self):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             self.assertEqual(main(["remove", str(self.source), "picture", "a"]), 0)
@@ -300,8 +337,13 @@ class CommandTest(RemoveResourceTestCase):
         self.add("p0", "picture")
         errors = io.StringIO()
         with contextlib.redirect_stderr(errors):
-            self.assertEqual(main(["remove", str(self.source), "picture", "b"]), 1)
+            self.assertEqual(main(["remove", str(self.source), "picture", "b", "--checked"]),
+                             1)
         self.assertIn("pages/page0.nx line 2", errors.getvalue())
+        self.assertIn("pictures/b.png", self.files())
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(["remove", str(self.source), "picture", "b"]), 0)
+        self.assertNotIn("pictures/b.png", self.files())
 
 
 if __name__ == "__main__":

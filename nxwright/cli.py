@@ -335,18 +335,20 @@ def _run_remove(arguments) -> str:
         return json.dumps(page_removal_report(arguments.source_folder, arguments.name) if page
                           else removal_report(arguments.source_folder, arguments.kind,
                                               arguments.name))
+    checked = arguments.checked
     if arguments.keep_ids:
         placeholder, removed, left = (
-            remove_page_keeping_ids(arguments.source_folder, arguments.name) if page
-            else remove_keeping_ids(arguments.source_folder, arguments.kind, arguments.name))
+            remove_page_keeping_ids(arguments.source_folder, arguments.name, checked=checked)
+            if page else remove_keeping_ids(arguments.source_folder, arguments.kind,
+                                            arguments.name, checked=checked))
         lines = ["Replaced the %s %s in %s with the %s %s, deleting %s"
                  % (arguments.kind, arguments.name, arguments.source_folder,
                     "empty slot page" if page else "placeholder", placeholder,
                     ", ".join(removed) or "no file")]
     else:
-        removed, left = (remove_page(arguments.source_folder, arguments.name) if page
-                         else remove_resource(arguments.source_folder, arguments.kind,
-                                              arguments.name))
+        removed, left = (remove_page(arguments.source_folder, arguments.name, checked=checked)
+                         if page else remove_resource(arguments.source_folder, arguments.kind,
+                                                      arguments.name, checked=checked))
         lines = ["Removed the %s %s from %s: %s" % (arguments.kind, arguments.name,
                                                    arguments.source_folder,
                                                    ", ".join(removed) or "it had no files")]
@@ -777,26 +779,32 @@ _SUBCOMMANDS = [
       ("pictures", {"type": Path, "nargs": "+", "help": "the picture files"})]),
     ("remove", _run_remove, "remove a page or a resource from a source folder",
      "Removes a picture, font, animation, video, or sound: its files, and its name in "
-     "app.toml. The command fails, and changes nothing, while the folder still uses the "
-     "resource, by name or by a number from its ID to the last ID of its kind. Numbers in that "
-     "range count because removing a resource gives each later one of its kind an ID one "
-     "lower, so those numbers would then point to the wrong resource. The command looks in "
-     "page files, including values left to the defaults, and in code, including "
-     "numbers given by nxlang constants, and lists each use it finds. It does not see a number "
-     "that code computes or keeps in a variable. It also fails on a folder whose checks find "
-     "an error. --keep-ids leaves a placeholder in its place, named empty-slot-1, or "
-     "empty-slot-2 and so on if that name is taken, so that no ID changes. The command then "
-     "fails only if the folder uses the resource itself, by name or by its own ID. --report "
+     "app.toml. Unless --checked is given, the command does not look for what still uses "
+     "the resource, so a page file or code that uses it by name no longer builds afterwards. "
+     "Each later resource of its kind also gets an ID one lower, so a number that gave one of "
+     "those IDs then points to another resource. --keep-ids leaves a placeholder in the "
+     "resource's place, named empty-slot-1, or empty-slot-2 and so on if that name is taken, "
+     "so that no ID changes. --checked makes the command look for uses first, and fail "
+     "without changing anything if the folder still uses the resource, by name or by a number "
+     "from its ID to the last ID of its kind. The command looks in page files, including "
+     "values left to the defaults, and in code, including numbers given by nxlang constants, "
+     "and lists each use it finds. A number that code computes or keeps in a variable is not "
+     "found. The command also fails if the folder's checks find an error. With --keep-ids "
+     "too, it fails only if the folder uses the resource itself, by name or by its own ID. "
+     "--report "
      "changes nothing, and prints as JSON what removing the resource would affect: its ID, "
      "the folder's encoding, whether it is the last of its kind, the names of the later ones, "
      "and each use, by name or by number, of the resource or of a later one. A page is "
      "removed the same way, with its page file and its .nx file, but a file the page "
-     "includes stays. For a page, the command looks for numbers given to the page command, or "
+     "includes stays. For a page, --checked looks for numbers given to the page command, or "
      "given to dp or compared with it. With --keep-ids, a blank page named empty_slot_1 takes "
      "the page's place. The folder's only page cannot be removed.",
      [("source_folder", {"type": Path, "help": "the source folder"}),
       ("kind", {"choices": ["page", *KINDS], "help": "what to remove"}),
       ("name", {"help": "its name, as app.toml lists it"}),
+      ("--checked", {"action": "store_true",
+                     "help": "look for what uses it first, and remove nothing if the "
+                             "folder still uses it"}),
       ("--keep-ids", {"action": "store_true",
                       "help": "leave a placeholder, or a blank page, in its place, so that "
                               "no ID changes"}),

@@ -1,58 +1,17 @@
 // Tests the commands on TFT files inside VS Code (src/tftCommands.ts):
 // Compile TFT, Upload TFT, choosing the screen, and Decompile. A real
 // compile needs the vendor's firmware, a real upload a screen, and a real
-// decompile a TFT file of the vendor's, none of which the tests have, so
-// nxwright's command is stand_in_nxwright.py while they run: it answers
-// those subcommands, and runs every other with the real nxwright. The tests
-// choose the files and the screen, and give the answers to the questions,
-// so that nothing prompts.
+// decompile a TFT file of the vendor's. The tests have none of these, so
+// nxwright's command is stand_in_nxwright.py while they run (stand_in.cjs).
+// It answers those subcommands, and runs every other with the real
+// nxwright. The tests choose the files and the screen, and give the answers
+// to the questions, so that nothing prompts.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const vscode = require("vscode");
-const { test, waitFor } = require("./runner.cjs");
-
-// nxwright's command before the tests set the stand-in, once they have.
-let commandBefore;
-
-// Reads the stand-in's log `log`: the arguments of each run of the
-// subcommand `name`, such as "compile", in order.
-function runsIn(log, name) {
-  return (fs.existsSync(log)
-    ? fs.readFileSync(log, "utf8").trim().split("\n").map((line) => JSON.parse(line)) : [])
-    .filter((run) => run[0] === name).map((run) => run.slice(1));
-}
-
-// Sets the stand-in as nxwright's command, the first time. The extension
-// takes a new command once it has searched again, which waits behind the
-// language server's restart: once the server runs through the stand-in, the
-// commands do too. The last test sets the command back.
-async function useStandIn() {
-  if (commandBefore !== undefined) {
-    return;
-  }
-  const settings = vscode.workspace.getConfiguration("nxwright");
-  commandBefore = settings.get("command");
-  const log = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "nxwright-tft-")), "server.log");
-  process.env.NXWRIGHT_STAND_IN_LOG = log;
-  await settings.update("command",
-                        [commandBefore[0], path.join(__dirname, "stand_in_nxwright.py")],
-                        vscode.ConfigurationTarget.Global);
-  await waitFor(() => runsIn(log, "lsp").length > 0, "the language server started by the stand-in");
-}
-
-// Runs `body` with the stand-in as nxwright's command, logging what it runs
-// to a file of its own, and gives `body` a new folder, and a function that
-// returns the arguments of each run of a subcommand, such as "compile", in
-// order. Each run reads the log's name when it starts.
-async function withStandIn(body) {
-  await useStandIn();
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "nxwright-tft-"));
-  const log = path.join(work, "runs.log");
-  process.env.NXWRIGHT_STAND_IN_LOG = log;
-  await body(work, (name) => runsIn(log, name));
-}
+const { test } = require("./runner.cjs");
+const { withStandIn } = require("./stand_in.cjs");
 
 test("Compile TFT takes the firmware from the answer once it is missing", async () => {
   await withStandIn(async (work, runs) => {
@@ -150,11 +109,4 @@ test("Decompile writes a folder the round trip did not confirm only when told to
     assert.ok(fs.existsSync(path.join(written, "app.toml")));
     assert.deepEqual(runs("decompile").at(-1), [file, written, "--continue-unconfirmed"]);
   });
-});
-
-test("nxwright's command is set back once the tests of TFT files are done", async () => {
-  if (commandBefore !== undefined) {
-    await vscode.workspace.getConfiguration("nxwright")
-      .update("command", commandBefore, vscode.ConfigurationTarget.Global);
-  }
 });

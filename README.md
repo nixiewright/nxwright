@@ -445,7 +445,7 @@ A few more commands you will use:
 | `nxwright video app intro.mp4 --size 320,240` | makes a video with ffmpeg |
 | `nxwright sound app beep.wav` | adds a sound |
 | `nxwright device app --rotation 90` | changes the screen model, rotation, or encoding |
-| `nxwright remove app font NotoSans20` | removes a page, picture, font, or media file your code no longer uses |
+| `nxwright remove app font NotoSans20` | removes a page, picture, font, or media file |
 | `nxwright replace app picture logo new-logo.png` | puts a new file in a resource's place, keeping its ID |
 | `nxwright rename app picture picture-0012 logo` | renames a page or a resource, and each use of its name |
 | `nxwright rescue rescue.tft --screen NX4832T035` | writes a file for an SD card, to recover a screen that no longer responds |
