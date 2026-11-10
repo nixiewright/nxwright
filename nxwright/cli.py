@@ -8,6 +8,11 @@ Exit codes: 0 when the subcommand succeeded, 1 when it failed (the message
 says why), and 2 when its arguments are wrong. The subcommands on TFT files
 have more, such as 3 when they could not prompt for an answer. Each one's
 module docstring lists them (tft/commands/).
+
+The language server, the debug adapter, the MCP server, and the test runner
+are imported by the subcommands that run them. No other subcommand uses
+them, and importing them at the top of this module would more than double
+the time every subcommand takes to start.
 """
 import argparse
 import importlib
@@ -17,9 +22,6 @@ import sys
 import unittest
 
 from nxwright import NxwrightError, installed_version
-from nxwright.debug_adapter import adapter as debug_adapter
-from nxwright.language_server.server import serve
-from nxwright.mcp_server import server as mcp_server
 from nxwright.project.device_settings import (DEFAULT_ENCODING, ENCODINGS, DeviceSettings,
                                               password_hash)
 from nxwright.project.dump_folder import is_dump_folder
@@ -59,7 +61,6 @@ from nxwright.source.resource_adding import (VIDEO_RATE, add_animation, add_font
                                              write_card_pictures)
 from nxwright.source.keyboard_adding import add_keyboard
 from nxwright.source.upgrade import upgrade
-from nxwright.testing.reports import RecordingResult, results, test_ids
 from nxwright.tft.commands import command_summary
 
 
@@ -520,6 +521,7 @@ def _run_upgrade(arguments) -> str:
 
 
 def _run_test(arguments) -> str:
+    from nxwright.testing.reports import RecordingResult, results, test_ids
     folder = arguments.folder.resolve()
     if not folder.is_dir():
         raise NxwrightError("%s is not a folder" % arguments.folder)
@@ -551,16 +553,19 @@ def _run_test(arguments) -> str:
 
 
 def _run_debug_adapter(arguments) -> str:
-    debug_adapter.serve(sys.stdin.buffer, sys.stdout.buffer)
+    from nxwright.debug_adapter import adapter
+    adapter.serve(sys.stdin.buffer, sys.stdout.buffer)
     return ""
 
 
 def _run_mcp(arguments) -> str:
-    mcp_server.serve(sys.stdin.buffer, sys.stdout.buffer)
+    from nxwright.mcp_server import server
+    server.serve(sys.stdin.buffer, sys.stdout.buffer)
     return ""
 
 
 def _run_lsp(arguments) -> str:
+    from nxwright.language_server.server import serve
     if serve(sys.stdin.buffer, sys.stdout.buffer) != 0:
         raise NxwrightError("the editor ended the session without a shutdown request")
     return ""
