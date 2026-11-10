@@ -6,3 +6,5 @@ tools/editor/build/
 # What `pip install` builds in a copy of the repository.
 /build/
 *.egg-info/
+# A checkout's own Python environment.
+/.venv/
