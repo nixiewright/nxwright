@@ -318,7 +318,8 @@ class SerialPortSessionTest(LiveTestCase):
         self.assertFalse(self.wait_for("nxwright/serialState")["connected"])
         self.wait_for("nxwright/drawing")
         offered = self.request("nxwright/serialPorts")["body"]
-        self.assertEqual(set(offered), {"ports", "rates", "state", "screen", "bridged"})
+        self.assertEqual(set(offered),
+                         {"ports", "rates", "state", "screen", "bridged", "simulator"})
         self.assertFalse(offered["screen"]["connected"])
         self.assertFalse(offered["bridged"])
         self.assertIn(115200, offered["rates"])
@@ -477,6 +478,16 @@ class ScreenPortSessionTest(ScreenPortTestCase):
         self.assertEqual(screen.written, [b"rest\xff\xff\xff"])
         wait_until(lambda: self.count() == 0)
 
+    def test_starting_the_screen_again(self):
+        screen = self.connect_screen()
+        self.assertTrue(self.request("nxwright/startScreenAgain")["success"])
+        self.assertEqual(screen.written, [b"rest\xff\xff\xff"])
+        self.assertIn("SCR RECV: rest", self.log_lines())
+        # An agent never reaches the real screen.
+        agents = self.reply_later("nxwright/startScreenAgain", handled=True, agent=True)
+        self.assertFalse(agents["success"])
+        self.assertEqual(len(screen.written), 1)
+
     def test_finding_the_screen_connects_at_the_rate_it_answers_at(self):
         with mock.patch.object(adapter_module, "screen_rate", return_value=115200):
             reply = self.reply_later("nxwright/findScreen", name="COM7")
@@ -527,9 +538,10 @@ class BridgeSessionTest(ScreenPortTestCase):
         self.mcu = self.ports.opened[-1]
         self.screen = self.connect_screen()
 
-    def join(self, bauds: int = 9600):
-        """Joins the ports, and answers the bridge's `get bauds` with `bauds`."""
-        self.assertTrue(self.request("nxwright/bridge", on=True)["body"]["bridged"])
+    def join(self, bauds: int = 9600, **simulator):
+        """Joins the ports, and answers the bridge's `get bauds` with `bauds`.
+        `simulator`, "listens" or "answers", has the simulation take part."""
+        self.assertTrue(self.request("nxwright/bridge", on=True, **simulator)["body"]["bridged"])
         wait_until(lambda: b"get bauds\xff\xff\xff" in self.screen.written)
         self.screen.arriving.put(b"\x71" + bauds.to_bytes(4, "little") + b"\xff\xff\xff")
         wait_until(lambda: any(line.startswith("bridge: did not pass 71")
@@ -610,6 +622,59 @@ class BridgeSessionTest(ScreenPortTestCase):
         self.assertTrue(any("did not take it in 0.05 s" in line
                             for line in self.log_lines("console")))
 
+    def test_both_with_the_screen_answering(self):
+        self.join(simulator="listens")
+        self.assertEqual(self.events("nxwright/bridgeState")[-1],
+                         {"bridged": True, "simulator": "listens"})
+        self.mcu.arriving.put(b"count=3\xff\xff\xff")
+        wait_until(lambda: self.count() == 3)
+        wait_until(lambda: b"count=3\xff\xff\xff" in b"".join(self.screen.written))
+        # The screen's bytes reach the MCU; the simulation's go to the log.
+        self.screen.arriving.put(b"\x1a\xff\xff\xff")
+        wait_until(lambda: b"\x1a\xff\xff\xff" in b"".join(self.mcu.written))
+        self.request("nxwright/press", x=10, y=10)
+        wait_until(lambda: self.count() == 14)
+        self.assertNotIn(b"pressed", b"".join(self.mcu.written))
+        self.assertIn("SIM SEND: 70 72 65 73 73 65 64", self.log_lines())
+
+    def test_both_with_the_simulator_answering(self):
+        self.join(simulator="answers")
+        self.mcu.arriving.put(b"count=3\xff\xff\xff")
+        wait_until(lambda: self.count() == 3)
+        wait_until(lambda: b"count=3\xff\xff\xff" in b"".join(self.screen.written))
+        # The simulation's bytes reach the MCU; the screen's go to the log.
+        self.request("nxwright/press", x=10, y=10)
+        wait_until(lambda: b"pressed" in b"".join(self.mcu.written))
+        self.screen.arriving.put(b"\x1a\xff\xff\xff")
+        wait_until(lambda: "SCR SEND: 1a ff ff ff" in self.log_lines())
+        self.assertNotIn(b"\x1a\xff\xff\xff", b"".join(self.mcu.written))
+
+    def test_with_the_simulator_answering_the_rate_follows_after_the_pause(self):
+        # The screen's answer does not switch the ports, so that the
+        # simulation's answer reaches the MCU at the old rate first.
+        self.join(simulator="answers")
+        self.mcu.arriving.put(b"baud=115200\xff\xff\xff")
+        wait_until(lambda: b"baud=115200\xff\xff\xff" in b"".join(self.screen.written))
+        self.screen.arriving.put(b"\x01\xff\xff\xff")
+        wait_until(lambda: self.screen.rates == [9600, 115200])
+        self.assertEqual(self.mcu.rates, [9600, 115200])
+        self.assertNotIn(b"\x01\xff\xff\xff", b"".join(self.mcu.written))
+
+    def test_choosing_who_answers_while_joined(self):
+        self.join()
+        self.request("nxwright/bridge", on=True, simulator="answers")
+        self.assertEqual(self.events("nxwright/bridgeState")[-1],
+                         {"bridged": True, "simulator": "answers"})
+        self.request("nxwright/press", x=10, y=10)
+        wait_until(lambda: b"pressed" in b"".join(self.mcu.written))
+        # The bridge did not start again: one `get bauds` only.
+        self.assertEqual(self.screen.written.count(b"get bauds\xff\xff\xff"), 1)
+
+    def test_the_bridges_arguments_refused(self):
+        for arguments in ({"on": "yes"}, {"on": True, "simulator": "both"}):
+            with self.subTest(arguments=arguments):
+                self.assertFalse(self.request("nxwright/bridge", **arguments)["success"])
+
     def test_joining_the_simulation_again(self):
         self.join()
         self.request("nxwright/bridge", on=False)
@@ -647,6 +712,26 @@ class BridgeSessionTest(ScreenPortTestCase):
         self.mcu.arriving.put(b"rest\xff\xff\xff")
         wait_until(lambda: self.screen.rates[-1] == 9600)
         self.assertEqual(self.mcu.rates, [9600, 115200, 9600])
+
+    def test_starting_the_screen_again_while_joined(self):
+        # A real screen can start again without the program knowing. Both
+        # ports then follow it to its `bauds` rate, and its start-up bytes
+        # reach the program.
+        self.join(bauds=9600)
+        self.mcu.arriving.put(b"baud=115200\xff\xff\xff")
+        wait_until(lambda: self.screen.rates == [9600, 115200])
+        # The FF FF FF that ends the stray bytes of that change comes first.
+        wait_until(lambda: self.screen.written[-1] == b"\xff\xff\xff")
+        self.assertTrue(self.request("nxwright/startScreenAgain")["success"])
+        self.assertEqual(self.screen.written[-1], b"rest\xff\xff\xff")
+        wait_until(lambda: self.screen.rates[-1] == 9600)
+        self.assertEqual(self.mcu.rates[-1], 9600)
+        self.screen.arriving.put(b"\x00\x00\x00\xff\xff\xff\x88\xff\xff\xff")
+        wait_until(lambda: b"\x00\x00\x00\xff\xff\xff\x88\xff\xff\xff"
+                   in b"".join(self.mcu.written))
+        self.assertIn("SCR RECV: rest", self.log_lines())
+        agents = self.reply_later("nxwright/startScreenAgain", handled=True, agent=True)
+        self.assertFalse(agents["success"])
 
     def test_bauds_set_by_the_mcu_is_the_rate_after_rest(self):
         self.join(bauds=9600)

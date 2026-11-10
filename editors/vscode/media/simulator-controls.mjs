@@ -100,13 +100,15 @@ const bridgeRow = document.getElementById("bridge-row");
 const bridgeChoice = document.getElementById("bridge");
 const sendButton = document.querySelector("#serial button[type=submit]");
 bridgeChoice.addEventListener("change", () =>
-  vscode.postMessage({ type: "bridge", on: bridgeChoice.value === "screen" }));
+  vscode.postMessage({ type: "bridge", choice: bridgeChoice.value }));
 
 // Whether each port is connected, and whether the bridge joins the MCU port
 // to the real screen, in place of the simulator.
 let mcuConnected = false;
 let screenConnected = false;
 let bridged = false;
+// While joined, whether the simulation "listens" or "answers" too, or null.
+let simulator = null;
 
 // The MCU port, which the simulation's serial line is connected to.
 const mcuPort = portControls({
@@ -155,11 +157,10 @@ const screenPort = portControls({
 // message handlers only, because it uses controls declared further down,
 // such as `findButton`.
 function showBridge() {
-  const shown = bridgeControls({ bridged, mcuConnected, screenConnected, finding });
+  const shown = bridgeControls({ bridged, simulator, mcuConnected, screenConnected, finding });
   bridgeRow.hidden = !shown.choiceShown;
   bridgeChoice.value = shown.choice;
-  for (const control of [field, sendButton, toSimulator, toScreen,
-                         ...screenStarts.querySelectorAll("button")]) {
+  for (const control of [field, sendButton, toSimulator, toScreen]) {
     control.disabled = shown.typingDisabled;
   }
   for (const id of ["port", "rate", "screen-port", "screen-rate"]) {
@@ -182,15 +183,19 @@ function setFinding(value) {
   screenConnect.disabled = value;
   showBridge();
 }
+// The buttons that start the screen again work while the bridge runs too.
+// A real screen can start again without the program on the MCU port
+// knowing, and that program then receives the screen's start-up bytes.
 document.getElementById("start-screen").addEventListener("click", () =>
-  vscode.postMessage({ type: "serial", text: "rest", to: ["screen"] }));
+  vscode.postMessage({ type: "startScreen" }));
 document.getElementById("start-both").addEventListener("click", () =>
-  vscode.postMessage({ type: "serial", text: "rest", to: ["simulator", "screen"] }));
+  vscode.postMessage({ type: "startBoth" }));
 
 window.addEventListener("message", (event) => {
   const message = event.data;
   if (message.type === "ports") {
     bridged = message.bridged === true;
+    simulator = message.simulator ?? null;
     mcuPort.offer(message.ports, message.rates, message.state);
     // While Find is looking, leave its "Looking for a screen" note in place
     // until Find answers.
@@ -204,6 +209,7 @@ window.addEventListener("message", (event) => {
     screenPort.show(message.state);
   } else if (message.type === "bridgeState") {
     bridged = message.bridged === true;
+    simulator = message.simulator ?? null;
     showBridge();
   } else if (message.type === "idle") {
     showIdle(message);

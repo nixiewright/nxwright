@@ -512,14 +512,20 @@ A real screen can run beside the simulation, so that you can compare the two, li
 - The Start the screen again button sends `rest` to the screen, and Start both again sends it to the screen and the simulation at once.
 - An agent can't reach the real screen. Its instructions go to the simulator only, and the log it reads leaves out the screen's lines.
 
-You can also join the MCU port to the real screen, in place of the simulator. The program on the MCU port then talks to the real screen through nxwright, and the log shows what passes in both directions. To join them, connect both ports, then choose the real screen in Goes to, under the MCU port.
+You can also join the MCU port to the real screen, in place of the simulator. The program on the MCU port then talks to the real screen through nxwright, and the log shows what passes in both directions. To join them, connect both ports, then choose the real screen in the Goes to list, under the MCU port.
 
 - Bytes pass on unchanged, as they arrive.
-- To end the join, choose the simulator in Goes to again. Until then, the controls that send the screen instructions, or that change either port, are disabled.
+- To end the join, choose the simulator in Goes to again. Until then, you can't type instructions or change either port.
 - Both ports close when either one is closed or lost, or does not take a write within a second. The log gives the reason.
-- When the program changes the screen's rate with `baud=` or `bauds=`, or starts the screen again with `rest`, both ports change to the screen's new rate.
-- nxwright sends the screen two instructions of its own, and does not pass the screen's answers to them on to the program. When the ports are joined, it asks the screen `get bauds`, to learn the rate the screen starts at. After each change of rate, it sends FF FF FF, to end the stray bytes that the change can put on the line. The log shows each of these in a line starting with `bridge:`.
+- You can still start the screen again from the Simulator section. The program then receives the screen's start-up bytes, the same as after a power cycle.
+- Both ports change to the screen's new rate when the program sends `baud=`, `bauds=`, or `rest`, and when you start the screen again.
+- nxwright sends the screen two instructions of its own, and does not pass the screen's answers to them on to the program. When the ports are joined, it asks the screen `get bauds`, to learn the rate the screen starts at. After each change of rate, it sends FF FF FF, so that the screen does not take the stray bytes that the change can put on the line for the start of the program's next instruction. The log shows each of these in a line starting with `bridge:`.
 - nxwright cannot see a rate change made by the app's own code, such as `baud=115200` in an event. The line then stops working. To fix it, choose the simulator in Goes to, connect both ports again at the new rate, and join them again.
+
+To compare the simulator and the real screen in the log, you can join the MCU port to both at once. Both then receive the program's bytes, but only one of them answers the program, and Goes to has an entry for each choice. The other one's answers show only in the log. The points about joining the MCU port to the real screen apply here too.
+
+- Sending to both works best for an app used only as a display, because touches make the two drift apart.
+- When the simulator answers the program, keep the simulation running while the program changes the rate. If the debugger holds the simulation at that moment, its answer arrives after both ports have changed rate, and the program can't read it.
 
 ### Holding instructions
 

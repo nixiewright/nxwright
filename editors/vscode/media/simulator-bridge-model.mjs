@@ -2,22 +2,29 @@
 // enables, depending on whether the MCU port is joined to a real screen in
 // place of the simulator (nxwright/debug_adapter/bridge.py).
 
-// Given whether the bridge joins the ports (`bridged`), whether each port is
-// connected, and whether Find is looking for the screen (`finding`), returns:
+// Given whether the bridge joins the ports (`bridged`), whether the
+// simulation then "listens" or "answers" too (`simulator`, null for
+// neither), whether each port is connected, and whether Find is looking for
+// the screen (`finding`), returns:
 //  - `choiceShown`: whether "Goes to" shows, offered while both ports are
 //    connected;
-//  - `choice`: the value Goes to shows, "simulator" or "screen";
-//  - `typingDisabled`: whether the field, its boxes, and the buttons that
-//    start the screen again are disabled. While joined, only the program on
-//    the MCU port sends the screen instructions;
+//  - `choice`: the value Goes to shows. It is "simulator", "screen",
+//    "both-screen" if both take the MCU's bytes and the screen answers, or
+//    "both-simulator" if the simulator answers;
+//  - `typingDisabled`: whether the field and its boxes are disabled. While
+//    joined, only the program on the MCU port sends the screen
+//    instructions. The buttons that start the screen again still work;
 //  - `listsDisabled`: whether the lists of ports and rates are disabled.
 //    While joined, connecting one port again at another rate would leave the
 //    two ports at different rates;
 //  - `findDisabled`: whether Find is disabled.
-export function bridgeControls({ bridged, mcuConnected, screenConnected, finding }) {
+export function bridgeControls({ bridged, simulator, mcuConnected, screenConnected,
+                                finding }) {
   return {
     choiceShown: bridged || (mcuConnected && screenConnected),
-    choice: bridged ? "screen" : "simulator",
+    choice: !bridged ? "simulator"
+      : simulator === "listens" ? "both-screen"
+        : simulator === "answers" ? "both-simulator" : "screen",
     typingDisabled: bridged,
     listsDisabled: bridged,
     findDisabled: bridged || finding,

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bridgeControls } from "../media/simulator-bridge-model.mjs";
 
-const PORTS = { mcuConnected: true, screenConnected: true, finding: false };
+const PORTS = { mcuConnected: true, screenConnected: true, finding: false, simulator: null };
 
 test("Goes to shows only while both ports are connected", () => {
   assert.equal(bridgeControls({ ...PORTS, bridged: false }).choiceShown, true);
@@ -25,6 +25,13 @@ test("while the ports are joined, typing, the lists, and Find are disabled", () 
   assert.deepEqual(bridgeControls({ ...PORTS, bridged: true }),
                    { choiceShown: true, choice: "screen", typingDisabled: true,
                      listsDisabled: true, findDisabled: true });
+});
+
+test("Goes to shows which side answers while both take the MCU's bytes", () => {
+  assert.equal(bridgeControls({ ...PORTS, bridged: true, simulator: "listens" }).choice,
+               "both-screen");
+  assert.equal(bridgeControls({ ...PORTS, bridged: true, simulator: "answers" }).choice,
+               "both-simulator");
 });
 
 test("Find is disabled while it looks", () => {

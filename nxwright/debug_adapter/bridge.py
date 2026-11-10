@@ -1,7 +1,9 @@
-"""The bridge joins the MCU port to a real screen's port, in place of the
-simulation, so that a program at the MCU's end talks to the real screen
-through the computer, and the log shows both sides. Both ports are
-SerialLinks from serial_port.py.
+"""The bridge joins the MCU port to a real screen's port, so that a program at
+the MCU's end talks to the real screen through the computer, and the log
+shows both sides. Both ports are SerialLinks from serial_port.py. The
+simulation can receive the MCU's bytes as well (adapter.py), and can answer
+the MCU in the screen's place. What the screen sends then goes only to the
+log (set_screen_answers).
 
 What arrives on either port is written whole, and in order, to the other.
 If the other port does not take a write in time, the bridge ends rather
@@ -50,12 +52,14 @@ class Bridge:
     threads hand what arrives to `from_mcu` and `from_screen`. `note(line)`
     logs what the bridge itself does, and `ended(why)` is called once if the
     bridge ends on its own, for example when a port does not take a write in
-    time."""
+    time. `screen_answers`, true by default, sets whether what the screen
+    sends reaches the MCU (set_screen_answers)."""
 
-    def __init__(self, mcu, screen, note, ended):
+    def __init__(self, mcu, screen, note, ended, screen_answers: bool = True):
         self._mcu, self._screen = mcu, screen
         self._note, self._ended = note, ended
         self._lock = threading.Lock()
+        self._screen_answers = screen_answers
         # Held while the bridge writes the screen's bytes to the MCU, so that
         # newer bytes cannot overtake the ones it held back.
         self._to_mcu = threading.Lock()
@@ -88,6 +92,25 @@ class Bridge:
             self._stop_timers()
             self._held = b""
 
+    def set_screen_answers(self, screen_answers: bool):
+        """Sets whether what the screen sends reaches the MCU. If it does not,
+        the screen's bytes go only to the log. After a rate change from the
+        MCU, the bridge then switches both ports once the vendor's pause has
+        passed, without waiting for the screen's answer, so that the
+        simulation's answer reaches the MCU at the old rate first."""
+        with self._lock:
+            self._screen_answers = screen_answers
+
+    def start_screen_again(self) -> bool:
+        """Sends the screen `rest`, then sets both ports to the rate in
+        `bauds`, the same as after a `rest` from the MCU. The MCU then
+        receives the screen's start-up bytes, the same as after a power
+        cycle. Returns whether `rest` was sent."""
+        if self._over or not self._write(self._screen, b"rest" + END):
+            return False
+        self._watch(b"rest")
+        return True
+
     def from_mcu(self, data: bytes):
         """Passes what arrived from the MCU to the screen, and watches it for
         an instruction that changes the screen's rate."""
@@ -114,8 +137,9 @@ class Bridge:
                     return
                 if self._keeping is not None:
                     data = self._take_kept(data)
-                switching = self._next_rate is not None and bool(data)
-            problem = self._mcu.send_whole(data, WRITE_WAIT) if data else None
+                switching = (self._screen_answers and self._next_rate is not None
+                             and bool(data))
+            problem = self._pass_on(data)
         # Ending the bridge closes both ports, which waits for their reading
         # threads to stop. One of those threads may be waiting for the lock,
         # so the bridge ends outside it.
@@ -197,7 +221,7 @@ class Bridge:
                 self._keep_timer = threading.Timer(seconds, self._keep_no_more)
                 self._keep_timer.daemon = True
                 self._keep_timer.start()
-            problem = self._mcu.send_whole(held, WRITE_WAIT) if held else None
+            problem = self._pass_on(held)
         if problem:
             self._end(problem)
 
@@ -227,8 +251,9 @@ class Bridge:
                     return
                 held = self._held
                 self._stop_keeping()
-                switching = self._next_rate is not None and bool(held)
-            problem = self._mcu.send_whole(held, WRITE_WAIT) if held else None
+                switching = (self._screen_answers and self._next_rate is not None
+                             and bool(held))
+            problem = self._pass_on(held)
         if problem:
             self._end(problem)
         elif switching:
@@ -252,6 +277,14 @@ class Bridge:
         """Notes `line` from a thread of its own, because the caller holds the
         lock."""
         threading.Thread(target=self._note, args=(line,), daemon=True).start()
+
+    def _pass_on(self, data: bytes):
+        """Writes what came from the screen to the MCU, if the screen answers
+        the MCU. Returns why the MCU port did not take it, or None. Called
+        with `_to_mcu` held."""
+        if not data or not self._screen_answers:
+            return None
+        return self._mcu.send_whole(data, WRITE_WAIT)
 
     def _write(self, link, data: bytes) -> bool:
         """Writes `data` whole to `link`, or ends the bridge, saying why."""

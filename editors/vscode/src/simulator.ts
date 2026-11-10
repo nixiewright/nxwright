@@ -8,8 +8,8 @@
 //    field for what the serial line brings the screen, and the MCU port the
 //    line is connected to. It also has a port for a real screen beside the
 //    simulation. The field can send that screen instructions too, a button
-//    starts it again, and the MCU port can be joined to it in place of the
-//    simulator. While none runs, it can simulate the current project with
+//    starts it again, and the MCU port can be joined to it, in place of the
+//    simulator or beside it. While none runs, it can simulate the current project with
 //    the Simulator settings, from program.nx or from the page shown, run
 //    each launch configuration that simulates it, and create one;
 //  - the button "Simulate this page" above a page file's text and its
@@ -464,18 +464,34 @@ export class Simulator implements vscode.WebviewViewProvider {
     }
   }
 
-  // Joins the MCU port to the real screen when `on` is true, or back to the
-  // simulator when it is false, then shows whether the two are joined. If the
-  // debug adapter refuses, for example because a port is not connected, it
-  // shows them not joined.
-  private async joinPorts(on: boolean): Promise<void> {
-    let bridged = false;
-    try {
-      bridged = (await this.session?.customRequest("nxwright/bridge", { on }))?.bridged === true;
-    } catch {
-      // Refused, or the session ended meanwhile.
+  // Starts the real screen again, then the simulation, each with `rest`.
+  // The simulation starts again even if the screen's request is refused.
+  private async startBothAgain(): Promise<void> {
+    for (const [command, args] of [["nxwright/startScreenAgain", {}],
+                                   ["nxwright/serial", { text: "rest" }]] as const) {
+      try {
+        await this.session?.customRequest(command, args);
+      } catch {
+        // Refused, or the session ended meanwhile.
+      }
     }
-    void this.controls?.webview.postMessage({ type: "bridgeState", bridged });
+  }
+
+  // Joins the MCU port to what `choice`, the value of Goes to, selects
+  // (BRIDGE_CHOICES), then shows the bridge's state. If the debug adapter
+  // refuses, for example because a port is not connected, it shows the ports
+  // as not joined.
+  private async joinPorts(choice: string): Promise<void> {
+    const args = BRIDGE_CHOICES[choice];
+    let state = { bridged: false, simulator: null };
+    if (args) {
+      try {
+        state = (await this.session?.customRequest("nxwright/bridge", args)) ?? state;
+      } catch {
+        // Refused, or the session ended meanwhile.
+      }
+    }
+    void this.controls?.webview.postMessage({ type: "bridgeState", ...state });
   }
 
   // Sends the request `command` to connect, find, or disconnect the screen
@@ -626,6 +642,8 @@ export class Simulator implements vscode.WebviewViewProvider {
     <select id="bridge">
       <option value="simulator">the simulator</option>
       <option value="screen">the real screen</option>
+      <option value="both-screen">both, the real screen answering</option>
+      <option value="both-simulator">both, the simulator answering</option>
     </select>
   </div>
 </div>
@@ -689,8 +707,12 @@ export class Simulator implements vscode.WebviewViewProvider {
         void this.chooseScreenPort("nxwright/screenPort", { name: "" });
       } else if (message.type === "findScreen" && message.name) {
         void this.chooseScreenPort("nxwright/findScreen", { name: message.name });
-      } else if (message.type === "bridge" && typeof message.on === "boolean") {
-        void this.joinPorts(message.on);
+      } else if (message.type === "startScreen") {
+        void this.session?.customRequest("nxwright/startScreenAgain");
+      } else if (message.type === "startBoth") {
+        void this.startBothAgain();
+      } else if (message.type === "bridge" && typeof message.choice === "string") {
+        void this.joinPorts(message.choice);
       } else if (message.type === "pin" && Number.isInteger(message.pin)
                  && (message.level === 0 || message.level === 1)) {
         void this.session?.customRequest("nxwright/gpioInput",
@@ -715,6 +737,8 @@ const STYLES = `
     border: none; padding: 4px 8px; cursor: pointer;
   }
   button:hover { background: var(--vscode-button-hoverBackground); }
+  button:disabled, input:disabled, select:disabled { opacity: 0.5; cursor: default; }
+  button:disabled:hover { background: var(--vscode-button-background); }
   form, .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
   label { width: 100%; }
   input, select {
@@ -758,6 +782,16 @@ const STYLES = `
     flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor;
     stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round;
   }`;
+
+// The arguments that each value of Goes to sends with "nxwright/bridge".
+// With both, `simulator` is "listens" if the screen answers the MCU, and
+// "answers" if the simulation does.
+const BRIDGE_CHOICES: Record<string, { on: boolean; simulator?: string }> = {
+  "simulator": { on: false },
+  "screen": { on: true },
+  "both-screen": { on: true, simulator: "listens" },
+  "both-simulator": { on: true, simulator: "answers" },
+};
 
 // Whether a debugging session is a simulation: nxwright's, naming a source folder.
 function isSimulation(session: vscode.DebugSession): boolean {

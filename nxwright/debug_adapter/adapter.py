@@ -53,10 +53,14 @@ called the screen port. These requests act on it:
     then connects that port as the screen port at that rate;
   - "nxwright/serialPorts" also answers with the screen port's state, in
     `screen`, and whether the bridge runs, in `bridged`;
+  - "nxwright/startScreenAgain" sends the screen `rest`, whether the bridge
+    runs or not;
   - "nxwright/bridge" joins the MCU port to the screen port when `on` is
     true, so that a program on the MCU port talks to the real screen
-    (bridge.py). When `on` is false, it joins the MCU port back to the
-    simulation;
+    (bridge.py). If `simulator` is given too, the simulation also receives
+    the program's bytes. `simulator` is "listens" if the screen answers the
+    program, or "answers" if the simulation does. When `on` is false, it
+    joins the MCU port back to the simulation;
   - "nxwright/serial" sends its instruction to each place that `to` lists,
     such as ["simulator", "screen"], or to the simulation alone when `to`
     is not given.
@@ -166,6 +170,7 @@ class DebugAdapter:
         # The LoggedPieces of what the MCU sends the screen, while bridged.
         self._mcu_instructions = None
         self._bridge = None          # the Bridge joining the MCU port to the screen, if any
+        self._bridge_simulator = None  # while bridged: "listens", "answers", or None
         self._bridge_lock = threading.Lock()
         self._log_formats = None     # its log's forms, {"received": ..., "sent": ...}
         self._finding = False        # whether a screen's rate is being found
@@ -205,6 +210,7 @@ class DebugAdapter:
                           "nxwright/screenPort": self._screen_port,
                           "nxwright/findScreen": self._find_screen,
                           "nxwright/bridge": self._join_ports,
+                          "nxwright/startScreenAgain": self._start_screen_again,
                           "nxwright/components": self._components,
                           "nxwright/values": self._values, "nxwright/log": self._log,
                           "nxwright/screen": self._screen}
@@ -661,6 +667,25 @@ class DebugAdapter:
             return {}
         return self._action(arguments, lambda simulation: simulation.serial_input(text))
 
+    def _start_screen_again(self, arguments: dict) -> dict:
+        """Starts the screen on the screen port again by sending it `rest`.
+        The Start the screen again button sends this request. While the
+        bridge runs, the bridge sends `rest` (Bridge.start_screen_again), so
+        that both ports follow the screen's rate, and the program on the MCU
+        port receives the screen's start-up bytes. An agent never reaches the
+        screen."""
+        self._simulation_only()
+        bridge = self._bridge
+        if bridge is None:
+            self._send_to_screen("rest", arguments.get("agent") is True)
+            return {}
+        if arguments.get("agent") is True:
+            raise NxwrightError("an agent cannot start the real screen again. Only the user "
+                                "can, from the Simulator section")
+        self._screen_received(b"rest" + END)
+        bridge.start_screen_again()
+        return {}
+
     def _send_to_screen(self, text: str, agent: bool):
         """Writes the instruction `text` to the screen on the screen port, in
         the project's encoding, followed by FF FF FF, and logs it. An agent
@@ -812,7 +837,7 @@ class DebugAdapter:
         state of the MCU port (`state`) and of the screen port (`screen`)."""
         self._simulation_only()
         return {"ports": port_names(), "rates": RATES, "state": self._link.state(),
-                "screen": self._screen_link.state(), "bridged": self._bridge is not None}
+                "screen": self._screen_link.state(), **self._bridge_state()}
 
     def _serial_port(self, arguments: dict) -> dict:
         """Connects the port `name` at `baud`, or disconnects when `name` is
@@ -869,39 +894,57 @@ class DebugAdapter:
 
     def _join_ports(self, arguments: dict) -> dict:
         """Joins the MCU port to the screen port when `on` is true (Bridge),
-        or back to the simulation when it is false. Both ports must be
-        connected to join them. Answers with whether they are joined."""
+        or back to the simulation when it is false. If `simulator` is given
+        too, the simulation also receives what the MCU sends. `simulator` is
+        "listens" if the screen answers the MCU, or "answers" if the
+        simulation does.
+        Both ports must be connected to join them. Answers with the bridge's
+        state (_bridge_state)."""
         self._simulation_only()
-        on = arguments.get("on")
+        on, simulator = arguments.get("on"), arguments.get("simulator")
         if not isinstance(on, bool):
             raise NxwrightError('`on` must be true or false, not %r' % (on,))
-        if on:
-            mcu, screen = self._link.state(), self._screen_link.state()
-            if not (mcu["connected"] and screen["connected"]):
-                raise NxwrightError("both the MCU port and the screen port must be connected "
-                                    "to join them")
-            with self._bridge_lock:
-                if self._bridge is None:
-                    self._bridge = Bridge(self._link, self._screen_link,
-                                          lambda line: self._log_output(line, "console"),
-                                          self._bridge_ended)
-                    started = self._bridge
-                else:
-                    started = None
-            if started is not None:
-                self._log_output("MCU port %s joined to screen port %s"
-                                 % (mcu["name"], screen["name"]), "console")
-                self._event("nxwright/bridgeState", {"bridged": True})
-                started.start()
-        else:
+        if simulator not in (None, "listens", "answers"):
+            raise NxwrightError('`simulator` must be "listens" or "answers", or not given, not %r'
+                                % (simulator,))
+        if not on:
             with self._bridge_lock:
                 bridge, self._bridge = self._bridge, None
+                self._bridge_simulator = None
             if bridge is not None:
                 bridge.stop()
                 self._mcu_instructions.stop()
                 self._log_output("MCU port joined to the simulator again", "console")
-                self._event("nxwright/bridgeState", {"bridged": False})
-        return {"bridged": self._bridge is not None}
+                self._event("nxwright/bridgeState", self._bridge_state())
+            return self._bridge_state()
+        mcu, screen = self._link.state(), self._screen_link.state()
+        if not (mcu["connected"] and screen["connected"]):
+            raise NxwrightError("both the MCU port and the screen port must be connected "
+                                "to join them")
+        with self._bridge_lock:
+            started = None
+            if self._bridge is None:
+                self._bridge = started = Bridge(
+                    self._link, self._screen_link,
+                    lambda line: self._log_output(line, "console"), self._bridge_ended,
+                    screen_answers=simulator != "answers")
+            else:
+                self._bridge.set_screen_answers(simulator != "answers")
+            self._bridge_simulator = simulator
+        self._log_output("MCU port %s joined to %s" % (mcu["name"], _joined_to(screen["name"],
+                                                                               simulator)),
+                         "console")
+        self._event("nxwright/bridgeState", self._bridge_state())
+        if started is not None:
+            started.start()
+        return self._bridge_state()
+
+    def _bridge_state(self) -> dict:
+        """Returns whether the bridge runs (`bridged`), and what the simulation
+        does meanwhile (`simulator`): "listens", "answers", or None if it
+        takes no part."""
+        bridged = self._bridge is not None
+        return {"bridged": bridged, "simulator": self._bridge_simulator if bridged else None}
 
     def _refuse_while_joined(self):
         """Raises NxwrightError while the bridge joins the two ports, so that
@@ -917,23 +960,26 @@ class DebugAdapter:
         in time, or a port that closed (Bridge's `ended`)."""
         with self._bridge_lock:
             bridge, self._bridge = self._bridge, None
+            self._bridge_simulator = None
         if bridge is None:
             return
         bridge.stop()
         self._mcu_instructions.stop()
         self._log_output("the bridge ended, and closed both ports: %s" % why, "console")
-        self._event("nxwright/bridgeState", {"bridged": False})
+        self._event("nxwright/bridgeState", self._bridge_state())
         self._link.disconnect()
         self._screen_link.disconnect()
 
     def _mcu_bytes(self, data: bytes):
-        """Hands what arrives on the MCU port to the simulation's queue, or,
-        while the bridge runs, to the screen and to the log."""
+        """Hands what arrives on the MCU port to the simulation's queue. While
+        the bridge runs, the bytes go to the screen and to the log, and to the
+        simulation only if it listens or answers."""
         bridge = self._bridge
         if bridge is not None:
             bridge.from_mcu(data)
             self._mcu_instructions.add(data)
-            return
+            if self._bridge_simulator is None:
+                return
         self._live.act(lambda simulation: simulation.serial_received(data))
 
     def _screen_bytes(self, data: bytes):
@@ -945,16 +991,17 @@ class DebugAdapter:
         self._screen_replies.add(data)
 
     def _simulation_sends(self, data: bytes):
-        """The simulation's `sending`: what it sends goes to the MCU port,
-        but nowhere while the bridge joins that port to the screen."""
-        if self._bridge is not None:
+        """The simulation's `sending`: what it sends goes to the MCU port.
+        While the bridge joins that port to the screen, it goes nowhere,
+        unless the simulation answers the MCU in place of the screen."""
+        if self._bridge is not None and self._bridge_simulator != "answers":
             return None
         return self._link.send(data)
 
     def _screen_received(self, instruction: bytes):
-        """Logs an instruction the MCU sent the screen through the bridge, in
-        the form `logReceived` sets, or in hexadecimal before the app has
-        started."""
+        """Logs an instruction that the MCU, or the Start the screen again
+        button, sent to the screen through the bridge. It uses the form
+        `logReceived` sets, or hexadecimal before the app has started."""
         encoding = self._encoding()
         form = self._log_formats["received"] if encoding is not None else "hex"
         self._log_output("SCR RECV: %s" % shown(instruction, form, encoding))
@@ -1268,6 +1315,16 @@ def _shown(value) -> str:
 def _log_line(time: int, text: str) -> str:
     """A line of the simulator's log, with the simulation's time in seconds."""
     return "%9.3f s  %s\n" % (time / 1000, text)
+
+
+def _joined_to(screen: str, simulator) -> str:
+    """Returns what the MCU port is joined to, for the log: the screen port
+    `screen`, and also the simulator if `simulator` is not None
+    (DebugAdapter._join_ports)."""
+    if simulator is None:
+        return "screen port %s" % screen
+    return "screen port %s and to the simulator, with the %s answering" % (
+        screen, "simulator" if simulator == "answers" else "screen")
 
 
 def _destinations(to) -> set:
