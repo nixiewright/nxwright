@@ -476,11 +476,7 @@ A few more commands you will use:
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/nixiewright/nxwright/blob/main/CONTRIBUTING.md). From this folder, run the tests with:
-
-```
-python -m unittest discover -s tests -t .
-```
+See [CONTRIBUTING.md](https://github.com/nixiewright/nxwright/blob/main/CONTRIBUTING.md) for how to work on nxwright and run its tests.
 
 ## License
 

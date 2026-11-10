@@ -73,3 +73,26 @@ packages = ["nxwright", "nxwright.debug_adapter", "nxwright.drawing", "nxwright.
 # The contributors' writing guide, of no use to an agent working on an app.
 [tool.setuptools.exclude-package-data]
 "nxwright.docs" = ["STYLE.md"]
+
+# The packages nxwright's own tests need. Installing nxwright does not install
+# them, but `python -m pip install --group test` does.
+[dependency-groups]
+test = [
+    # The tests pass with these versions. Older ones were not tried.
+    "pytest>=9.2",
+    "pytest-xdist>=3.8",
+]
+
+# pytest runs nxwright's own tests, which are written with unittest.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Both options belong to pytest-xdist, which runs the tests in several
+# processes. `-n auto` uses every processor, unless you pass another `-n` on
+# the command line. `--dist loadfile` keeps the tests of a file in one
+# process, so that the setup of a class or of a module runs only once.
+addopts = "-n auto --dist loadfile"
+# Both lists are empty so that pytest runs only the unittest test classes.
+# By default, it would also treat a helper function whose name begins with
+# test_, or a helper class whose name begins with Test, as a test.
+python_functions = []
+python_classes = []

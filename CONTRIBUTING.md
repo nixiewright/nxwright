@@ -5,16 +5,18 @@ Bug reports, fixes, and documentation are welcome. For a larger change, open an 
 ## Working on nxwright
 
 - You need Python 3.11 or later.
-- Add tests for what you change, and run the tests from the repository's root:
+- Add tests for what you change, written as `unittest` test classes like the existing ones. pytest is set up to run only those, so it would skip a test written as a plain function.
+- Run nxwright's tests, and the thermostat demo's, from the repository's root:
 
   ```
-  python -m pip install -e .
-  python -m unittest discover -s tests -t .
+  python -m pip install -e . --group test
+  python -m pytest
   python run.py test examples/thermostat/tests
   ```
 
-  You only need to run the `pip install` command once. With `-e`, the `nxwright` command runs your copy's code.
+  You only need to run the `pip install` command once. Its `-e` option makes the `nxwright` command run the code in your checkout. `--group test` installs pytest, and needs pip 25.1 or later.
 
+- pytest runs the tests on all of your computer's processors. To use only four of them, run `python -m pytest -n 4`.
 - The tests compare the project files nxwright writes byte for byte. If your change alters those files, that is a change of behaviour, so say so in the pull request.
 - For standard formats and protocols (images, fonts, QR codes, TOML, the Language Server Protocol), use a well-known, maintained library, and never write your own implementation. Get the maintainers' agreement before adding a new dependency.
 - If you add a folder of Python modules under `nxwright/`, also add it to the `packages` list in `pyproject.toml`. `tests/test_mcp_server.py` checks that list.
