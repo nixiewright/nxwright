@@ -545,6 +545,17 @@ The screen's serial line can also go to a program over TCP, so a program on your
 - A TCP connection has no rate, so setting the system variable `baud` or `bauds` does not affect it.
 - You can join a TCP connection to a real screen, the same way as a serial port ([A real screen](#a-real-screen)).
 
+### An MCU emulator
+
+If your project has an MCU emulator ([mcu-emulator.md](mcu-emulator.md)), the simulator can listen on your computer for the emulator to connect. This is the Emulator port, and the project's simulations start with it unless you chose another port or set one in the Simulator settings ([The port a simulation starts with](#the-port-a-simulation-starts-with)). You can also give it with a launch configuration's `serialPort`, or choose Emulator in the MCU port list of the Simulator section.
+
+```json
+"serialPort": "emulator"
+```
+
+- The Simulator section shows the address the simulator listens at. To start the emulator with that address, see [The simulator listens](mcu-emulator.md#the-simulator-listens).
+- The port counts as connected while the simulator listens, so you can join it to a real screen before the emulator starts ([A real screen](#a-real-screen)). Stopping the emulator does not end the join.
+
 ### The port a simulation starts with
 
 The port you connect from the MCU port list of the Simulator section is remembered for the project, and the project's next simulations start with it. Choosing None is remembered too, but disconnecting is not, so the next simulation starts with the same port again.
@@ -554,6 +565,7 @@ A simulation takes its port from the first of these that is set:
 1. The `serialPort` of its launch configuration. `"serialPort": "none"` starts the simulation without a port.
 2. The port you last chose in the Simulator section for the project.
 3. The serial port of the Simulator settings.
+4. Emulator, if the project has an MCU emulator.
 
 ### Typing an instruction
 

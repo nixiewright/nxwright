@@ -34,6 +34,9 @@ export interface ProjectInfo {
   size?: string;
   rotation?: number;
   encoding?: string;
+  // The full path of the MCU emulator's file, if the project has an MCU
+  // emulator.
+  emulator?: string;
 }
 
 export class CurrentProject {
@@ -74,6 +77,15 @@ export class CurrentProject {
     const info = this.folder?.fsPath === folder.fsPath && this.info
       ? this.info : await this.ask(folder.fsPath);
     return appName(info, folder.fsPath);
+  }
+
+  // Returns the full path of the MCU emulator's file for the project in
+  // `folder`, or undefined if the project has no MCU emulator. The path
+  // comes from the language server.
+  async emulatorOf(folder: vscode.Uri): Promise<string | undefined> {
+    const info = this.folder?.fsPath === folder.fsPath && this.info
+      ? this.info : await this.ask(folder.fsPath);
+    return info?.emulator;
   }
 
   // The workspace's source folders.

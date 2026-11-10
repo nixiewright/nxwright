@@ -6,8 +6,8 @@
 //  - the field whose text goes to the screen as an instruction from the
 //    serial line;
 //  - the MCU port, which the serial line is connected to: none, a serial
-//    port, or a program that listens at an address, over TCP
-//    (simulator-port-model.mjs);
+//    port, a program that listens at a TCP address, or the port that listens
+//    for the project's MCU emulator (simulator-port-model.mjs);
 //  - the screen port, for a real screen beside the simulation. The field
 //    can send that screen instructions too, and the MCU port can be joined
 //    to it in place of the simulator;
@@ -66,10 +66,11 @@ function showIdle(message) {
     : `, and Simulate page starts it on ${message.page}, without running program.nx`;
   idleNote.replaceChildren(
     `Simulate project starts the app from program.nx${fromPage}. A simulation started here ` +
-    "uses the MCU port you last chose for this project, or else the serial port of the " +
-    "Simulator settings. The SD cards' folders and the log's formats come from those " +
-    "settings too. A launch configuration can give its own, and also the values a page " +
-    "starts from. ", settings);
+    "uses the MCU port you last chose for this project. If you have not chosen one, it " +
+    "uses the serial port of the Simulator settings, or the project's MCU emulator if that " +
+    "setting is empty. The SD cards' folders and the log's formats come from the Simulator " +
+    "settings too. A launch configuration can give its own port, folders, and formats, " +
+    "and also the values a page starts from. ", settings);
   idleButtons.replaceChildren(
     glyphButton({ command: "nxwright.simulate" }, "simulate", "Simulate project"),
     ...(message.page === undefined ? []
@@ -117,7 +118,8 @@ let bridged = false;
 let simulator = null;
 
 // The MCU port, which the simulation's serial line is connected to. Its
-// list also has None and TCP. Choosing None posts "noPort".
+// list also has None and TCP, and Emulator if the project has an MCU
+// emulator. Choosing None posts "noPort".
 const mcuPort = portControls({
   portList: document.getElementById("port"),
   rateList: document.getElementById("rate"),
@@ -204,7 +206,7 @@ window.addEventListener("message", (event) => {
   if (message.type === "ports") {
     bridged = message.bridged === true;
     simulator = message.simulator ?? null;
-    mcuPort.offer(message.ports, message.rates, message.state);
+    mcuPort.offer(message.ports, message.rates, message.state, message.emulator === true);
     // While Find is looking, leave its "Looking for a screen" note in place
     // until Find answers.
     if (message.screen && !finding) {
@@ -256,14 +258,17 @@ agentConnect.addEventListener("click", () => {
 // `shown(connected)`.
 //
 // Given `addressField` and `noneType`, as for the MCU port, the list also
-// has None and TCP. TCP shows the field, for the address of the program to
-// connect to, in place of the rates. Choosing None posts `noneType`.
+// has None and TCP, and Emulator when it is offered. TCP shows the field,
+// for the address of the program to connect to, in place of the rates.
+// Choosing None posts `noneType`.
 function portControls({ portList, rateList, addressField, connectButton, stateLine: line,
                         connectType, disconnectType, noneType, shown = () => {} }) {
   const kinds = addressField !== undefined;
   let connected = false;
-  // The serial ports last offered, which the list shows.
+  // The serial ports last offered, which the list shows, and whether
+  // Emulator was offered with them.
   let offered = [];
+  let emulatorOffered = false;
 
   // Posts the port chosen to connect. Returns false when there is none to
   // connect, as for TCP while its address is empty.
@@ -329,7 +334,9 @@ function portControls({ portList, rateList, addressField, connectButton, stateLi
     connectButton.textContent = connected ? "Disconnect" : "Connect";
     if (connected) {
       const entry = entryOfState(state);
-      fillPorts(portList, portOptions(offered, kinds, entry), entry);
+      fillPorts(portList,
+                portOptions(offered, { kinds, emulator: emulatorOffered, chosen: entry }),
+                entry);
       fill(rateList, [...rateList.options].map((option) => option.value), state.baud);
     }
     // A program's address shows in the field: the one connected, or the one
@@ -347,13 +354,15 @@ function portControls({ portList, rateList, addressField, connectButton, stateLi
 
   return {
     show,
-    // Lists the computer's ports and the rates. While not connected, what
-    // the user picked stays picked.
-    offer(ports, rates, state) {
+    // Lists the computer's ports and the rates, with Emulator when
+    // `emulator` is true. While not connected, what the user picked stays
+    // picked.
+    offer(ports, rates, state, emulator = false) {
       const kept = !state.connected;
       offered = ports;
+      emulatorOffered = emulator;
       const chosen = (kept && portList.value) || entryOfState(state);
-      fillPorts(portList, portOptions(ports, kinds, chosen), chosen);
+      fillPorts(portList, portOptions(ports, { kinds, emulator, chosen }), chosen);
       fill(rateList, rates, (kept && rateList.value) || state.baud);
       show(state);
     },

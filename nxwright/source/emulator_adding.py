@@ -4,7 +4,7 @@ gives the program's path (mcu_table.py)."""
 from pathlib import Path
 
 from nxwright import NxwrightError
-from nxwright.source.mcu_table import EMULATOR
+from nxwright.source.mcu_table import EMULATOR, emulator_file
 from nxwright.source.source_folder import app_text_in, parse_app, read_text
 
 # Where the emulator's file goes by default, as a path from the source
@@ -16,8 +16,10 @@ _FIRST_EMULATOR = '''\
 """This app's MCU emulator. It emulates the microcontroller at the other end
 of the screen's serial line while the app runs in nxwright's simulator.
 
-Run it with a port number, as in `python main.py 7000`, then connect the
-simulator's MCU port over TCP to 127.0.0.1:7000.
+To run it, put the address the simulator listens at in the environment
+variable NXWRIGHT_MCU. The simulator shows that address while its MCU port
+is Emulator. Or run it with a port number, as in `python main.py 7000`, then
+connect the simulator's MCU port over TCP to 127.0.0.1:7000.
 """
 import sys
 
@@ -78,7 +80,7 @@ def add_emulator(source_folder: Path, emulator: str = DEFAULT_EMULATOR) -> Path:
     # Parsing the new app.toml checks `emulator`, before anything is written.
     text = app_text_in(source_folder, dict(app, mcu={EMULATOR: emulator}))
     parse_app(text)
-    file = (source_folder / emulator).resolve()
+    file = emulator_file(source_folder, {EMULATOR: emulator})
     if file.exists():
         raise NxwrightError("%s is already there" % file)
     file.parent.mkdir(parents=True, exist_ok=True)

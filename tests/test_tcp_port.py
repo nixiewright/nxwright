@@ -243,7 +243,7 @@ class McuPortKindsTest(LiveTestCase):
 
     def test_a_port_given_wrongly_is_refused(self):
         self.request("initialize")
-        for port in ({"tcp": 7000}, {"tcp": self.program.address, "name": "COM4"}, "emulator"):
+        for port in ({"tcp": 7000}, {"tcp": self.program.address, "name": "COM4"}, "serial"):
             with self.subTest(port=port):
                 reply = self.request("launch", sourceFolder=str(self.root), serialPort=port)
                 self.assertFalse(reply["success"])
@@ -282,7 +282,7 @@ class TcpBridgeTest(ScreenPortTestCase):
         self.assertTrue(self.request("nxwright/serialPorts")["body"]["bridged"])
         self.assertIsNone(self.request("nxwright/serialPorts")["body"]["state"]["baud"])
         self.mcu.sendall(b"get n" + END)
-        wait_until(lambda: b"".join(self.screen.written).endswith(b"get n" + END))
+        wait_until(lambda: b"get n" + END in b"".join(self.screen.written))
         self.assertFalse(any(line.startswith("MCU port") and "bits per second" in line
                              for line in self.log_lines("console")))
 

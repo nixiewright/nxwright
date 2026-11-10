@@ -15,9 +15,10 @@
 //  - a simulation the channel starts has no serial port, unless the
 //    setting nxwright.agents.startWithoutSerialPort is off. With that
 //    setting off, the simulation takes the port last chosen for the project
-//    in the Simulator section, or else the Simulator settings' port. If the
-//    simulation takes a port and nxwright.agents.askBeforeSerialActions is
-//    on, the user is asked before the app runs;
+//    in the Simulator section, or else the Simulator settings' port, or else
+//    the port of the project's MCU emulator. If the simulation takes a port
+//    and nxwright.agents.askBeforeSerialActions is on, the user is asked
+//    before the app runs;
 //  - an agent's first action on a simulation whose port is connected makes
 //    VS Code ask the user, if nxwright.agents.askBeforeSerialActions is on.
 //    The answer lasts until the simulation ends. The debug adapter refuses
@@ -311,13 +312,14 @@ export class AgentChannel implements ChannelHost {
     const settings = vscode.workspace.getConfiguration(SETTINGS);
     let withPort = !settings.get<boolean>("startWithoutSerialPort", true);
     let allowed = false;
-    // The port the simulation would take: the one last chosen for the
-    // project in the Simulator section, or else the Simulator settings'.
-    const port = withPort ? this.simulator.defaultPortOf(folder) : undefined;
+    // The port a simulation of the folder starts with when its launch
+    // configuration gives none (Simulator.defaultPortOf).
+    const port = withPort ? await this.simulator.defaultPortOf(folder) : undefined;
     if (port?.shown) {
       // The app may send at once, as program.nx runs: the user answers first.
-      const from = port.chosen ? "which you last chose in the Simulator section"
-        : "which is set in the Simulator settings";
+      const from = port.from === "choice" ? "which you last chose in the Simulator section"
+        : port.from === "settings" ? "which is set in the Simulator settings"
+          : "which is set in the project's app.toml";
       allowed = !settings.get<boolean>("askBeforeSerialActions", true)
         || await this.userAllows("An agent is requesting to start a simulation for the "
                                  + `nxwright application in ${real} with its serial line `

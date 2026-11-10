@@ -107,6 +107,8 @@ from nxwright.source.source_folder import (LANGUAGES, NXLANG, SOURCE_FORMAT, add
                                            new_source_folder, parse_app, read_app,
                                            read_folder_source)
 from nxwright.source.keyboard_adding import add_keyboard, chinese_keyboard_fonts
+from nxwright.source.emulator_adding import add_emulator
+from nxwright.source.mcu_table import emulator_file
 from nxwright.source.upgrade import folder_format
 
 # How long changes must pause, in seconds, before the server checks them.
@@ -241,6 +243,7 @@ class NxwrightServer(LanguageServer):
                                "addFont": self._add_font,
                                "project": self._project,
                                "addPage": self._add_page,
+                               "addEmulator": self._add_emulator,
                                "newFolderChoices": self._new_folder_choices,
                                "newSourceFolder": self._new_source_folder}.items():
             self._answers(_OWN + method, answer)
@@ -900,13 +903,19 @@ class NxwrightServer(LanguageServer):
         return {"fonts": chinese_keyboard_fonts(folder, read_app(folder))}
 
     def _project(self, params: dict) -> dict | None:
-        """Returns what the side bar shows of the source folder `folder`:
-        {"format", "currentFormat"}, and in the current format, from its
-        app.toml, "language", "pages", and "resources", each kind's names by
-        its list's name, as "fonts", and with screen settings, "screen", its
-        "size" as "800 x 480", "rotation", and "encoding". The format is read
-        first, as app.toml's other keys are read only in the current format.
-        Returns None when the format cannot be read."""
+        """Returns what the side bar shows of the source folder `folder`, or
+        None when the folder's format cannot be read. The result always has
+        "format" and "currentFormat". For a folder in the current format, it
+        also has these, from app.toml:
+          - "name", "language", and "pages";
+          - "resources", the names of each kind of resource under the name of
+            its list, such as "fonts";
+          - "screen", "size" (such as "800 x 480"), "rotation", and
+            "encoding", if app.toml gives the screen's settings;
+          - "emulator", the full path of the MCU emulator's file, if the
+            project has an MCU emulator (source/mcu_table.py).
+        The format is read first, because app.toml's other keys are read only
+        in the current format."""
         folder = Path(params["folder"])
         try:
             found = folder_format(folder)
@@ -926,7 +935,17 @@ class NxwrightServer(LanguageServer):
             model = model_named(app["screen"])
             project.update(screen=model.name, size="%d x %d" % (model.width, model.height),
                            rotation=app["rotation"], encoding=app["encoding"])
+        if "mcu" in app:
+            project.update(emulator=str(emulator_file(folder, app["mcu"])))
         return project
+
+    def _add_emulator(self, params: dict) -> dict:
+        """Adds an MCU emulator to the source folder of the request's file,
+        writing a first program and app.toml's [mcu] table
+        (emulator_adding.add_emulator), and returns {"file"}, the path of the
+        program."""
+        root = self._rewritable_folder(params, "adding an MCU emulator")
+        return {"file": str(add_emulator(root))}
 
     def _add_page(self, params: dict) -> dict:
         """Adds a blank page named `name`, or the first free pageN without

@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.7] - 2026-11-10
+
+- The simulator can now listen for a connection from a project's MCU emulator.
+
 ### [0.3.6] - 2026-11-10
 
 - Faster language server updates.
@@ -141,6 +145,14 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.17] - 2026-11-10
+
+Needs nxwright 0.3.7 or later.
+
+- Added Emulator to the Simulator section's MCU port list, for a project that has an MCU emulator.
+- Simulations of a project that has an MCU emulator now start with the Emulator port by default.
+- Added the command Add an MCU emulator.
 
 ### [0.3.16] - 2026-11-10
 

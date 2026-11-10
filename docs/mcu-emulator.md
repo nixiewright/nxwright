@@ -50,8 +50,28 @@ The line has the members of pyserial's `Serial` that an emulator needs, so code 
 
 The emulator needs nxwright installed in the Python environment that runs it, and nothing else, because `nxwright.mcu` uses only Python's standard library.
 
+The simulator and the emulator can find each other in two ways. If the simulator listens, you can stop the emulator and start it again while your app keeps running. If the emulator listens, its address stays the same from one simulation to the next, but you must start it before each simulation.
+
+### The simulator listens
+
+1. Start the simulation. A project that has an emulator starts its simulations with the Emulator port, and the Simulator section of nxwright's side bar shows the address the simulator listens at, such as `127.0.0.1:53124`. If you chose another port for the project earlier, or set one in the Simulator settings, the simulation starts with that port ([The port a simulation starts with](simulator.md#the-port-a-simulation-starts-with)). To see the address, choose Emulator in the MCU port list and connect.
+2. Start the emulator with that address in the environment variable `NXWRIGHT_MCU`. `mcu.open` then connects to the simulator, whatever `listen` is.
+
+   ```
+   # PowerShell
+   $env:NXWRIGHT_MCU = "127.0.0.1:53124"; python mcu/main.py
+
+   # Linux and macOS
+   NXWRIGHT_MCU=127.0.0.1:53124 python mcu/main.py
+   ```
+
+- The simulator keeps listening at the same address until the simulation ends, or until you choose another MCU port, so you can stop the emulator and start it again while your app keeps running. The next simulation listens at a new address.
+- One emulator is connected at a time. What your app sends while none is connected is lost.
+
+### The emulator listens
+
 1. Start the emulator with a port number, as in `python mcu/main.py 7000`. It then waits for the simulator to connect.
 2. Start the simulation.
-3. In the Simulator section of nxwright's side bar, choose TCP in the MCU port list, enter `127.0.0.1:7000`, and connect ([A program over TCP](simulator.md#a-program-over-tcp)).
+3. In the Simulator section, choose TCP in the MCU port list, enter `127.0.0.1:7000`, and connect ([A program over TCP](simulator.md#a-program-over-tcp)).
 
 The simulator remembers the port, so the project's next simulations connect when they start. Start the emulator before each one, because it serves one simulation and ends when that simulation ends.

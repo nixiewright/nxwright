@@ -7,9 +7,10 @@
 //    While a simulation runs, it has pause, resume, start again, the log, the
 //    button opening the Signal generator panel (signalGenerators.ts), a
 //    field for what the serial line brings the screen, and the MCU port the
-//    line is connected to: none, a serial port, or a program that listens at
-//    an address, over TCP. The port chosen there is remembered for the
-//    project (simulatorSettings.ts). The section also has a port for a real
+//    line is connected to: none, a serial port, a program that listens at
+//    an address over TCP, or the port that listens for the project's MCU
+//    emulator. The port chosen there is remembered for the project
+//    (simulatorSettings.ts). The section also has a port for a real
 //    screen beside the simulation. The field can send that screen
 //    instructions too, a button starts it again, and the MCU port can be
 //    joined to it, in place of the simulator or beside it. While no simulation runs,
@@ -42,8 +43,8 @@ import { CurrentProject, NO_PROJECT_ERROR } from "./currentProject";
 import { Simulation, simulationsOf } from "./launchConfiguration";
 import { isPageFile, Pages, tomlOf } from "./pages";
 import { appName } from "./projectName";
-import { DefaultPort, defaultPort, PortChoice, portChoiceKey, SimulatorSettings,
-         withSimulatorSettings } from "./simulatorSettings";
+import { DefaultPort, defaultPort, PortChoice, portChoiceKey, ProjectPorts, SimulatorSettings,
+         sourceFolderPath, withSimulatorSettings } from "./simulatorSettings";
 import { SignalGeneratorPanel } from "./signalGenerators";
 import { PictureFile, pictureSources, webviewPage, ZOOM_STYLES } from "./webviewPage";
 
@@ -73,18 +74,22 @@ interface StartProgress {
 }
 
 // The MCU port's state, as the adapter sends it (serial_port.py). The port
-// is a serial port, or a program over TCP. For a program over TCP, `name`
-// is the program's address, and `baud` is null.
+// is a serial port, a program over TCP, or the port that listens for the
+// project's MCU emulator. For the last two, `name` is an address, and `baud`
+// is null. The emulator's port is connected from the moment it listens, and
+// `attached` is whether an emulator is connected to it.
 export interface PortState {
-  kind: "serial" | "tcp";
+  kind: "serial" | "tcp" | "emulator";
   name: string | null;
   baud: number | null;
   connected: boolean;
+  attached?: boolean;
 }
 
 // The MCU port the side bar's section asks to connect: a serial port at a
-// rate, or the program listening at an address.
-type PortToConnect = { name: string; baud: number } | { tcp: string };
+// rate, the program listening at an address, or the port that listens for
+// the project's MCU emulator.
+type PortToConnect = { name: string; baud: number } | { tcp: string } | { emulator: true };
 
 // A GPIO pin, as the adapter sends it: its cfgpio mode, the component a
 // bound pin presses, and what it reads.
@@ -129,6 +134,9 @@ export class Simulator implements vscode.WebviewViewProvider {
   private portState: PortState | undefined;
   private agentDriven = false;
   private answer: AgentAnswer;
+  // How many times showAgent was called. A call that is no longer the
+  // latest does not tell the section.
+  private agentShown = 0;
   // The starts the channel asked for, by the mark in their launch
   // configuration: each waits for VS Code to announce its session, and
   // whether the user allowed the agent as it started.
@@ -173,13 +181,14 @@ export class Simulator implements vscode.WebviewViewProvider {
         }
       }),
       // The simulator's settings fill in what a simulation's configuration
-      // leaves out, before VS Code replaces its variables, such as
-      // ${workspaceFolder}, in theirs too. The MCU port last chosen for the
-      // project comes before the settings' port.
+      // leaves out. This happens before VS Code replaces variables such as
+      // ${workspaceFolder}, so that VS Code replaces them in the settings'
+      // values too. The MCU port last chosen for the project comes before
+      // the settings' port, and the project's MCU emulator after it.
       vscode.debug.registerDebugConfigurationProvider("nxwright", {
-        resolveDebugConfiguration: (folder, config) => withSimulatorSettings(
+        resolveDebugConfiguration: async (folder, config) => withSimulatorSettings(
           config, simulatorSettings(folder),
-          this.rememberedPort(config.sourceFolder, folder)) as vscode.DebugConfiguration,
+          await this.projectPorts(config.sourceFolder, folder)) as vscode.DebugConfiguration,
       }),
     ];
   }
@@ -221,32 +230,39 @@ export class Simulator implements vscode.WebviewViewProvider {
   agentActed(session: vscode.DebugSession): void {
     if (session === this.session && !this.agentDriven) {
       this.agentDriven = true;
-      this.showAgent();
+      void this.showAgent();
     }
   }
 
   // The MCU port that a simulation of the source folder `folder` takes when
   // its launch configuration gives none: the port last chosen for the
-  // project in the section, or else the Simulator settings' port
-  // (simulatorSettings.ts).
-  defaultPortOf(folder: vscode.Uri): DefaultPort {
+  // project in the section, or else the Simulator settings' port, or else
+  // the project's MCU emulator (simulatorSettings.ts).
+  async defaultPortOf(folder: vscode.Uri): Promise<DefaultPort> {
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(folder);
     return defaultPort(simulatorSettings(workspaceFolder),
-                       this.rememberedPort(folder.fsPath, workspaceFolder));
+                       await this.projectPorts(folder.fsPath, workspaceFolder));
   }
 
   // Returns the MCU port the user last chose in the section for the project
-  // in `sourceFolder`, or undefined if the user has not chosen yet. Choosing
-  // None counts as a choice. `sourceFolder` comes from a launch
-  // configuration, so it may contain ${workspaceFolder}, which stands for the
-  // workspace folder `folder`.
-  private rememberedPort(sourceFolder: unknown,
-                         folder: vscode.WorkspaceFolder | undefined): PortChoice | undefined {
+  // in `sourceFolder`, and whether that project has an MCU emulator. The port
+  // is undefined if the user has not chosen yet. Choosing None counts as a
+  // choice. `sourceFolder` comes from a launch configuration, so it may
+  // contain ${workspaceFolder}, which stands for the workspace folder
+  // `folder`.
+  private async projectPorts(sourceFolder: unknown,
+                             folder: vscode.WorkspaceFolder | undefined): Promise<ProjectPorts> {
     if (typeof sourceFolder !== "string" || !sourceFolder) {
-      return undefined;
+      return { hasEmulator: false };
     }
-    return this.context.workspaceState.get<PortChoice>(
-      portChoiceKey(sourceFolder, process.platform, folder?.uri.fsPath));
+    const workspaceFolder = folder?.uri.fsPath;
+    const emulator = await this.project.emulatorOf(
+      vscode.Uri.file(path.resolve(sourceFolderPath(sourceFolder, workspaceFolder))));
+    return {
+      remembered: this.context.workspaceState.get<PortChoice>(
+        portChoiceKey(sourceFolder, process.platform, workspaceFolder)),
+      hasEmulator: emulator !== undefined,
+    };
   }
 
   // Remembers `choice` as the MCU port of the project being simulated. Then
@@ -257,7 +273,7 @@ export class Simulator implements vscode.WebviewViewProvider {
     if (typeof sourceFolder === "string" && sourceFolder) {
       await this.context.workspaceState.update(
         portChoiceKey(sourceFolder, process.platform), choice);
-      this.showAgent();
+      void this.showAgent();
     }
   }
 
@@ -368,7 +384,7 @@ export class Simulator implements vscode.WebviewViewProvider {
       this.agentStarts.delete(session.configuration.agentStart);
       agentStart.started(session);
     }
-    this.showAgent();
+    void this.showAgent();
     this.showPins();
     void vscode.commands.executeCommand("setContext", SIMULATING, true);
     this.offerIdle();
@@ -394,7 +410,7 @@ export class Simulator implements vscode.WebviewViewProvider {
     this.portState = undefined;
     this.agentDriven = false;
     this.answer = undefined;
-    this.showAgent();
+    void this.showAgent();
     this.showPins();
     void vscode.commands.executeCommand("setContext", SIMULATING, false);
     this.offerIdle();
@@ -433,7 +449,7 @@ export class Simulator implements vscode.WebviewViewProvider {
       this.showWaves();
     } else if (event.event === "nxwright/serialState") {
       this.portState = event.body as PortState;
-      this.showAgent();
+      void this.showAgent();
       // The adapter sends one at launch, so the section learns of the ports
       // once the simulation can answer; and the ports may have changed.
       void this.controls?.webview.postMessage({ type: "portState", state: event.body });
@@ -453,13 +469,24 @@ export class Simulator implements vscode.WebviewViewProvider {
   // (defaultPortOf). While no port is connected, the section offers to
   // connect that port. The port is null when such a simulation would start
   // without one.
-  private showAgent(): void {
+  private async showAgent(): Promise<void> {
+    // Only the latest call tells the section. An earlier call that is still
+    // waiting for the project's port would otherwise show a port that is out
+    // of date.
+    const shown = ++this.agentShown;
     const session = this.session;
     const port = session
-      ? this.defaultPortOf(vscode.Uri.file(session.configuration.sourceFolder)) : undefined;
+      ? await this.defaultPortOf(vscode.Uri.file(session.configuration.sourceFolder))
+      : undefined;
+    if (shown !== this.agentShown) {
+      return;
+    }
+    // A launch configuration gives the emulator's port as "emulator". The
+    // request that connects the port takes { emulator: true }.
+    const connection = port?.serialPort === "emulator" ? { emulator: true } : port?.serialPort;
     void this.controls?.webview.postMessage({
-      type: "agent", driven: session !== undefined && this.agentDriven,
-      port: port?.shown ? { shown: port.shown, connection: port.serialPort } : null,
+      type: "agent", driven: this.session !== undefined && this.agentDriven,
+      port: port?.shown ? { shown: port.shown, connection } : null,
       connected: this.portState?.connected === true,
     });
   }
@@ -502,7 +529,8 @@ export class Simulator implements vscode.WebviewViewProvider {
   }
 
   // Gives the side bar's section the computer's ports, the rates, and the
-  // states of the MCU port and of the screen port.
+  // states of the MCU port and of the screen port. Also says whether the
+  // project has an MCU emulator, so that the section can list Emulator.
   private async offerPorts(): Promise<void> {
     const session = this.session;
     if (!this.controls || !session) {
@@ -510,7 +538,10 @@ export class Simulator implements vscode.WebviewViewProvider {
     }
     try {
       const offer = await session.customRequest("nxwright/serialPorts");
-      void this.controls?.webview.postMessage({ type: "ports", ...offer });
+      const emulator = await this.project.emulatorOf(
+        vscode.Uri.file(session.configuration.sourceFolder));
+      void this.controls?.webview.postMessage({ type: "ports", ...offer,
+                                                emulator: emulator !== undefined });
     } catch {
       // The session ended meanwhile.
     }
@@ -524,8 +555,9 @@ export class Simulator implements vscode.WebviewViewProvider {
     if (this.agentDriven) {
       this.answer = "yes";
     }
-    await this.rememberPort("tcp" in port ? { kind: "tcp", address: port.tcp }
-      : { kind: "serial", name: port.name, baud: port.baud });
+    await this.rememberPort("emulator" in port ? { kind: "emulator" }
+      : "tcp" in port ? { kind: "tcp", address: port.tcp }
+        : { kind: "serial", name: port.name, baud: port.baud });
     await this.requestPort(port);
   }
 
@@ -732,7 +764,7 @@ export class Simulator implements vscode.WebviewViewProvider {
   <label for="port">MCU port</label>
   <div class="row">
     <select id="port"
-            title="What the screen talks to: a serial port, or a program at an address"></select>
+            title="What the screen talks to: a port, a program, or the MCU emulator"></select>
     <select id="rate" title="Its rate, in bits per second"></select>
     <input id="address" placeholder="127.0.0.1:7000" autocomplete="off" hidden
            title="The address the program listens at: a host and a port number">
@@ -775,7 +807,7 @@ export class Simulator implements vscode.WebviewViewProvider {
         this.offerIdle();
         void this.offerPorts();
         this.showPins();
-        this.showAgent();
+        void this.showAgent();
       } else if (message.type === "openSettings") {
         // The settings a simulation takes its defaults from.
         void vscode.commands.executeCommand("workbench.action.openSettings", "nxwright.simulator");
@@ -802,6 +834,8 @@ export class Simulator implements vscode.WebviewViewProvider {
         void this.session?.customRequest("nxwright/serial", {
           text: message.text, ...(Array.isArray(message.to) ? { to: message.to } : {}),
         });
+      } else if (message.type === "connect" && message.emulator === true) {
+        void this.connectPort({ emulator: true });
       } else if (message.type === "connect" && typeof message.tcp === "string" && message.tcp) {
         void this.connectPort({ tcp: message.tcp });
       } else if (message.type === "connect" && message.name) {

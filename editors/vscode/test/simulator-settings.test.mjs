@@ -43,22 +43,49 @@ test("a test's configuration is left as it is", () => {
   assert.equal(withSimulatorSettings(config, settings), config);
 });
 
+// Returns a project for which the port `remembered` was last chosen. The
+// project has an MCU emulator only if `hasEmulator` is true.
+const chose = (remembered, hasEmulator = false) => ({ remembered, hasEmulator });
+
 test("the port last chosen for the project comes before the settings' port", () => {
   const config = { type: "nxwright", sourceFolder: "app" };
   assert.deepEqual(
-    withSimulatorSettings(config, settings, { kind: "serial", name: "COM7", baud: 9600 })
+    withSimulatorSettings(config, settings, chose({ kind: "serial", name: "COM7", baud: 9600 }))
       .serialPort,
     { name: "COM7", baud: 9600 });
   assert.deepEqual(
-    withSimulatorSettings(config, settings, { kind: "tcp", address: "127.0.0.1:7000" })
+    withSimulatorSettings(config, settings, chose({ kind: "tcp", address: "127.0.0.1:7000" }))
       .serialPort,
     { tcp: "127.0.0.1:7000" });
   // None chosen: the settings' port is not connected.
-  assert.equal(withSimulatorSettings(config, settings, { kind: "none" }).serialPort, "none");
+  assert.equal(withSimulatorSettings(config, settings, chose({ kind: "none" })).serialPort,
+               "none");
+});
+
+test("the project's MCU emulator comes after the settings' port", () => {
+  const config = { type: "nxwright", sourceFolder: "app" };
+  const empty = { ...settings, serialPort: "" };
+  assert.equal(withSimulatorSettings(config, empty, chose(undefined, true)).serialPort,
+               "emulator");
+  assert.deepEqual(withSimulatorSettings(config, settings, chose(undefined, true)).serialPort,
+                   { name: "COM4", baud: 115200 });
+  // Chosen in the section, the emulator comes before the settings' port.
+  assert.equal(withSimulatorSettings(config, settings, chose({ kind: "emulator" }, true))
+    .serialPort, "emulator");
+  // If the user chose the emulator and the project no longer has one, that
+  // choice is skipped.
+  assert.deepEqual(withSimulatorSettings(config, settings, chose({ kind: "emulator" }))
+    .serialPort, { name: "COM4", baud: 115200 });
+  assert.equal(withSimulatorSettings(config, empty, chose({ kind: "emulator" })).serialPort,
+               undefined);
+  // None chosen: the simulation starts without a port, even though the
+  // project has an MCU emulator.
+  assert.equal(withSimulatorSettings(config, empty, chose({ kind: "none" }, true)).serialPort,
+               "none");
 });
 
 test("the configuration's own port comes before the port last chosen", () => {
-  const chosen = { kind: "tcp", address: "127.0.0.1:7000" };
+  const chosen = chose({ kind: "tcp", address: "127.0.0.1:7000" });
   const own = { sourceFolder: "app", serialPort: { name: "COM9", baud: 9600 } };
   assert.deepEqual(withSimulatorSettings(own, settings, chosen).serialPort,
                    { name: "COM9", baud: 9600 });
@@ -71,15 +98,21 @@ test("the configuration's own port comes before the port last chosen", () => {
 
 test("the port a simulation takes without one of its own, in words", () => {
   const empty = { ...settings, serialPort: "" };
-  assert.deepEqual(defaultPort(settings),
-                   { serialPort: { name: "COM4", baud: 115200 }, shown: "COM4", chosen: false });
-  assert.deepEqual(defaultPort(empty), { serialPort: undefined, shown: "", chosen: false });
-  assert.deepEqual(defaultPort(settings, { kind: "tcp", address: "127.0.0.1:7000" }),
+  assert.deepEqual(defaultPort(settings, chose(undefined)),
+                   { serialPort: { name: "COM4", baud: 115200 }, shown: "COM4",
+                     from: "settings" });
+  assert.deepEqual(defaultPort(empty, chose(undefined)),
+                   { serialPort: undefined, shown: "", from: undefined });
+  assert.deepEqual(defaultPort(settings, chose({ kind: "tcp", address: "127.0.0.1:7000" })),
                    { serialPort: { tcp: "127.0.0.1:7000" }, shown: "127.0.0.1:7000",
-                     chosen: true });
+                     from: "choice" });
   // None chosen: no port, so nothing to ask the user about.
-  assert.deepEqual(defaultPort(settings, { kind: "none" }),
-                   { serialPort: "none", shown: "", chosen: true });
+  assert.deepEqual(defaultPort(settings, chose({ kind: "none" })),
+                   { serialPort: "none", shown: "", from: "choice" });
+  assert.deepEqual(defaultPort(empty, chose(undefined, true)),
+                   { serialPort: "emulator", shown: "the MCU emulator", from: "project" });
+  assert.deepEqual(defaultPort(settings, chose({ kind: "emulator" }, true)),
+                   { serialPort: "emulator", shown: "the MCU emulator", from: "choice" });
 });
 
 test("a project's choice is kept under one key, however its folder is written", () => {

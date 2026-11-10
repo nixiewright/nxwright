@@ -2,7 +2,7 @@
   "name": "nxwright-language",
   "displayName": "nxwright",
   "description": "Design, write, simulate, test, compile, and upload Nextion screen apps in VS Code.",
-  "version": "0.3.16",
+  "version": "0.3.17",
   "publisher": "nxwright",
   "icon": "images/icon.png",
   "license": "Apache-2.0",
@@ -92,7 +92,7 @@
           "nxwright.simulator.serialPort": {
             "type": "string",
             "default": "",
-            "markdownDescription": "The serial port a simulation's serial line is connected to, such as `COM4`. Leave it empty for none. This setting is used only when the simulation's launch configuration gives no `serialPort`, and you have not chosen an MCU port for the project in the Simulator section."
+            "markdownDescription": "The serial port a simulation's serial line is connected to, such as `COM4`. This setting is used only when the simulation's launch configuration gives no `serialPort`, and you have not chosen an MCU port for the project in the Simulator section. If you leave it empty, the simulation starts without a port, or with the Emulator port if the project has an MCU emulator."
           },
           "nxwright.simulator.serialBaud": {
             "type": "integer",
@@ -786,6 +786,11 @@
           "light": "media/icons/launchConfiguration-light.svg",
           "dark": "media/icons/launchConfiguration-dark.svg"
         }
+      },
+      {
+        "command": "nxwright.addMcuEmulator",
+        "title": "Add an MCU emulator",
+        "category": "nxwright"
       }
     ],
     "viewsContainers": {
@@ -985,7 +990,7 @@
                 "description": "Optional: the file that keeps the EEPROM, as the Nextion Editor keeps its eeprom.bin: the simulation starts from it, and each write the app makes reaches it. Made when missing. Without it, the EEPROM starts empty and lasts for the simulation alone."
               },
               "serialPort": {
-                "description": "Optional: what the screen's serial line is connected to. A serial port is {\"name\": \"COM4\", \"baud\": 115200}, a program that listens at an address is {\"tcp\": \"127.0.0.1:7000\"}, and \"none\" is no port.",
+                "description": "Optional: what the screen's serial line is connected to. A serial port is {\"name\": \"COM4\", \"baud\": 115200}, a program that listens at an address is {\"tcp\": \"127.0.0.1:7000\"}, \"emulator\" is the project's MCU emulator, and \"none\" is no port.",
                 "oneOf": [
                   {
                     "type": "object",
@@ -1017,6 +1022,12 @@
                       "tcp"
                     ],
                     "additionalProperties": false
+                  },
+                  {
+                    "enum": [
+                      "emulator"
+                    ],
+                    "description": "The port that listens for the project's MCU emulator, on this computer."
                   },
                   {
                     "enum": [

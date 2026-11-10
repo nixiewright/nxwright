@@ -88,6 +88,7 @@ The simulator can be started on the whole application, like your screen would, o
 You can also:
 
 - Connect the simulation to a device on a real serial port, or to a program over TCP.
+- Add an MCU emulator, a Python program that emulates the microcontroller for the screen ([Writing an MCU emulator](https://github.com/nixiewright/nxwright/blob/main/docs/mcu-emulator.md)).
 - Send the screen an instruction from the Simulator section, as if it came from the serial line.
 - Connect a real screen beside the simulation, and send both the same instructions to compare them.
 - Let the program on the serial port talk to the real screen in place of the simulation, or to both at once, and watch what passes between them.
@@ -149,6 +150,7 @@ All commands are in the command palette, under "nxwright:". Most of them do what
 | Add a video | Makes a video from a video file or from pictures. |
 | Write pictures for the SD card | Writes picture files that the screen can show from an SD card. |
 | Add a launch configuration | Adds a configuration to `launch.json` that simulates the project, with every parameter listed and commented out. |
+| Add an MCU emulator | Writes a first Python program that emulates the microcontroller for the screen, and records its path in `app.toml`. |
 
 ### A simulation's launch configuration
 
@@ -160,7 +162,7 @@ A launch configuration of type `nxwright` simulates the source folder given by `
 | `values` | With `page`, the values to start with, such as `{"t0.txt": "Hello"}`. |
 | `defines` | Other values for `app.toml`'s defines, such as `{"LIMIT": 40}`. |
 | `eeprom` | A file that keeps the EEPROM's contents between simulations. It is created if missing. Without it, the EEPROM starts empty every time. |
-| `serialPort` | What the screen's serial line is connected to: a serial port, such as `{"name": "COM4", "baud": 115200}`, a program that listens at an address, such as `{"tcp": "127.0.0.1:7000"}`, or `"none"`. |
+| `serialPort` | What the screen's serial line is connected to: `{"name": "COM4", "baud": 115200}` for a serial port, `{"tcp": "127.0.0.1:7000"}` for a program that listens at that address, `"emulator"` for the project's MCU emulator, or `"none"` for no port. |
 | `gpioInputs` | The levels the GPIO inputs start at, such as `{"pio2": 0}`. Without it, every input reads 1, like a pull-up input with nothing driving it. |
 | `signalGenerators` | The full path of a file saved from the Signal generator panel. The generators in that file start with the simulation. |
 | `sdCard0`, `sdCard1` | The full paths of folders on your computer to use as the screen's SD cards. Without them, each card is kept in memory. |

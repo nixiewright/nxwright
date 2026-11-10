@@ -35,7 +35,9 @@ TFT file holding it; without one, the installed Nextion Editor's
 (testing/pinyin_table.py). Its `serialPort` gives what the
 screen's serial line is connected to: {"name": "COM4", "baud": 115200} for
 that serial port (serial_port.py), {"tcp": "127.0.0.1:7000"} for the program
-listening at that address (tcp_port.py), and "none" or null for nothing.
+listening at that address (tcp_port.py), "emulator" for the project's MCU
+emulator, which the adapter listens for (emulator_port.py), and "none" or
+null for nothing.
 Its `gpioInputs`, {"pio2": 0}, gives the GPIO inputs'
 starting levels (testing/gpio_pins.py). Its `signalGenerators` names the
 settings file of the signal generators that start with it
@@ -48,7 +50,8 @@ setting several at the same moment, {"levels": {"pio2": 0, "pio5": 0}}; and
 the serial port's settings: "nxwright/serialPorts" answers with the
 computer's ports, the rates, and the port's state, and "nxwright/serialPort"
 connects the port `name` at `baud`, or the program listening at the address
-`tcp`, or disconnects the port when `name` is empty.
+`tcp`, or, given `emulator`, listens for the MCU emulator. It disconnects
+the port when none of the three is given.
 The signal generators have their own custom requests:
   - "nxwright/waveforms" answers with the waveforms a generator can feed,
     each with its page, its name, and its number of channels;
@@ -143,7 +146,7 @@ from nxwright.debug_adapter.live import LiveSimulation
 from nxwright.debug_adapter.python_steps import PythonTracer
 from nxwright.debug_adapter.replay import Timeline, path_key
 from nxwright.debug_adapter.bridge import Bridge
-from nxwright.debug_adapter.serial_port import (RATES, REPLY_LENGTHS, SERIAL, TCP,
+from nxwright.debug_adapter.serial_port import (EMULATOR, RATES, REPLY_LENGTHS, SERIAL, TCP,
                                                 LoggedPieces, SerialLink,
                                                 port_names, screen_rate)
 from nxwright.drawing.screen_pictures import ScreenPictures
@@ -942,11 +945,12 @@ class DebugAdapter:
                 "screen": self._screen_link.state(), **self._bridge_state()}
 
     def _serial_port(self, arguments: dict) -> dict:
-        """Connects the MCU port: the serial port `name` at `baud`, or the
-        program listening at the address `tcp`. Disconnects it when `name` is
-        empty and no `tcp` is given. Answers with the port's state."""
+        """Connects the MCU port: the serial port `name` at `baud`, the
+        program listening at the address `tcp`, or, when `emulator` is true,
+        a port that listens for the MCU emulator. Disconnects it when none of
+        the three is given. Answers with the port's state."""
         self._simulation_only()
-        if arguments.get("name") or arguments.get("tcp"):
+        if arguments.get("name") or arguments.get("tcp") or arguments.get("emulator"):
             self._refuse_while_joined()
             self._link.connect(*_mcu_port_settings(arguments))
         else:
@@ -1233,6 +1237,10 @@ def _agent_refusal(link, agent: bool, allowed: bool):
     runs, so that a port connected while the act waited counts."""
     state = link.state()
     if agent and not allowed and state["connected"]:
+        if state["kind"] == EMULATOR:
+            return ("the MCU port listens for the project's MCU emulator, so what the app "
+                    "sends reaches that program once it connects, and the user has not "
+                    "allowed an agent to act on this simulation")
         if state["kind"] == TCP:
             return ("the MCU port is connected to the program at %s, so what the app sends "
                     "reaches that program, and the user has not allowed an agent to act on "
@@ -1462,11 +1470,15 @@ def _mcu_port_settings(settings):
     or None when `settings` is None or "none", which give no port. A serial
     port is {"name": "COM4", "baud": 115200}, the rate optional. A program
     that listens over TCP is {"tcp": "127.0.0.1:7000"}: its name is its
-    address, and it has no rate. Raises NxwrightError for anything else. The
-    form of the address is not checked here. A badly written address stops
-    the port from opening later, and the log then gives the reason."""
+    address, and it has no rate. The port that listens for the project's MCU
+    emulator is "emulator", or {"emulator": true}: it has neither a name nor
+    a rate. Raises NxwrightError for anything else. The form of the address
+    is not checked here. A badly written address stops the port from opening
+    later, and the log then gives the reason."""
     if settings is None or settings == "none":
         return None
+    if settings == "emulator" or settings == {"emulator": True}:
+        return None, None, EMULATOR
     if isinstance(settings, dict) and isinstance(settings.get("tcp"), str):
         if "name" in settings or "baud" in settings:
             raise NxwrightError("the MCU port is either a serial port, with a name, or a "
@@ -1475,7 +1487,8 @@ def _mcu_port_settings(settings):
     if not isinstance(settings, dict) or "tcp" in settings:
         raise NxwrightError('the MCU port is given as {"name": "COM4", "baud": 115200} for a '
                             'serial port, {"tcp": "127.0.0.1:7000"} for a program that listens '
-                            'at an address, or "none"')
+                            'at an address, "emulator" for the project\'s MCU emulator, or '
+                            '"none"')
     return (*_port_settings(settings), SERIAL)
 
 

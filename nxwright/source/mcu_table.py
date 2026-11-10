@@ -11,6 +11,8 @@ The [mcu] table gives that program's path:
 `emulator` is the program's file, as a path from the source folder, with
 forward slashes. The build does not read the table.
 """
+from pathlib import Path
+
 from nxwright import NxwrightError
 
 # The table's key.
@@ -36,3 +38,9 @@ def checked_mcu(table) -> dict:
                             "Python file from the source folder, with forward slashes, such "
                             "as \"../mcu/main.py\"")
     return dict(table)
+
+
+def emulator_file(source_folder: Path, mcu: dict) -> Path:
+    """Returns the full path of the emulator's file. `mcu`, a checked [mcu]
+    table, gives the file's path from the source folder `source_folder`."""
+    return (Path(source_folder) / mcu[EMULATOR]).resolve()

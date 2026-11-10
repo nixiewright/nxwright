@@ -180,6 +180,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("nxwright.addPage", addPage),
     vscode.commands.registerCommand("nxwright.addLaunchConfiguration",
                                     () => addLaunchConfiguration(context)),
+    vscode.commands.registerCommand("nxwright.addMcuEmulator", addMcuEmulator),
     vscode.commands.registerCommand("nxwright.fonts", () => showFonts(fontPanels, false)),
     vscode.commands.registerCommand("nxwright.addFont", () => showFonts(fontPanels, true)),
     vscode.commands.registerCommand("nxwright.addKeyboard", addKeyboard),
@@ -459,8 +460,9 @@ async function changeDevice(setting: "screen" | "rotation" | "encoding"): Promis
     return;
   }
   if (!client) {
-    void showErrorWithSetting("nxwright: the language server is not running, and it lists " +
-                              "the screen models, rotations, and encodings.");
+    void showErrorWithSetting("nxwright: Cannot change the device settings because the " +
+                              "language server is not running. Please check the " +
+                              "nxwright.command setting.");
     return;
   }
   const choices = await newFolderChoices(client);
@@ -559,8 +561,9 @@ const LANGUAGE_DESCRIPTIONS: Record<string, string> = {
 // to the workspace when it is outside it.
 async function newSourceFolder(): Promise<void> {
   if (!client) {
-    void showErrorWithSetting("nxwright: the language server is not running, and it writes " +
-                              "the new project.");
+    void showErrorWithSetting("nxwright: Cannot create the project because the language " +
+                              "server is not running. Please check the nxwright.command " +
+                              "setting.");
     return;
   }
   const title = "Create a new nxwright project";
@@ -712,8 +715,8 @@ async function addPage(): Promise<void> {
     return;
   }
   if (!client) {
-    void showErrorWithSetting("nxwright: the language server is not running, and it adds " +
-                              "the page.");
+    void showErrorWithSetting("nxwright: Cannot add the page because the language server " +
+                              "is not running. Please check the nxwright.command setting.");
     return;
   }
   try {
@@ -722,6 +725,34 @@ async function addPage(): Promise<void> {
       textDocument: { uri: vscode.Uri.joinPath(folder, "app.toml").toString() },
       ...(name.trim() ? { name: name.trim() } : {}),
     });
+    await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(added.file));
+  } catch (error) {
+    void vscode.window.showErrorMessage(`nxwright: ${errorText(error)}`);
+  }
+}
+
+// Adds an MCU emulator to the current project, then opens it. The language
+// server writes a first Python program that emulates the microcontroller at
+// the other end of the screen's serial line, and records the program's path
+// in app.toml.
+async function addMcuEmulator(): Promise<void> {
+  const folder = await activeSourceFolder();
+  if (!folder || appTomlUnsaved(folder, "adding an MCU emulator")) {
+    return;
+  }
+  if (!client) {
+    void showErrorWithSetting("nxwright: Cannot add the MCU emulator because the language " +
+                              "server is not running. Please check the nxwright.command " +
+                              "setting.");
+    return;
+  }
+  try {
+    const added = await client.sendRequest<{ file: string }>("nxwright/addEmulator", {
+      // The server finds the project from any file of it.
+      textDocument: { uri: vscode.Uri.joinPath(folder, "app.toml").toString() },
+    });
+    // The Simulator section then offers the emulator's port.
+    currentProject?.serverChanged();
     await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(added.file));
   } catch (error) {
     void vscode.window.showErrorMessage(`nxwright: ${errorText(error)}`);

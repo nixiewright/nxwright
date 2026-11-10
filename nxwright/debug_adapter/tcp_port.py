@@ -8,6 +8,10 @@ methods as a serial port: `read`, `write`, `set_rate`, and `close`. So a
 program on this computer can be the MCU without a serial port, and without
 the virtual pair of ports that com0com creates.
 
+A SocketPort has those four methods for a connection that is already open,
+whichever side opened it. The port that listens for a project's MCU
+emulator uses one for the emulator that connects (emulator_port.py).
+
 A TCP connection has no rate. Its bytes arrive whatever rate the screen is
 set to, so `set_rate` does nothing.
 """
@@ -44,26 +48,16 @@ def tcp_address(text) -> tuple:
     return host, int(number)
 
 
-class TcpPort:
-    """A TCP connection to the program listening at `address`, written as
-    host:port. `read` returns what arrived, waiting a little for a first
-    byte. `write` returns how many bytes the connection took. Raises OSError
-    if `address` is not written that way, if the connection cannot open, or
-    if it fails later. A read also raises OSError once the program has closed
-    its end. A read and a write may come from two threads."""
+class SocketPort:
+    """An open TCP connection, `connection`, to a program at its other end,
+    with the methods that SerialLink calls on a port. `read` returns what
+    arrived, waiting a little for a first byte, and `write` returns how many
+    bytes the connection took. Both raise OSError if the connection fails,
+    and a read also raises it once the program has closed its end. A read
+    and a write may come from two threads."""
 
-    def __init__(self, address: str):
-        try:
-            host, number = tcp_address(address)
-        except NxwrightError as error:
-            raise OSError(str(error)) from None
-        try:
-            self._socket = socket.create_connection((host, number), timeout=_CONNECT_WAIT)
-        except UnicodeError:
-            # A host name with an empty part, such as bench..lan, or with a
-            # part longer than 63 characters makes Python raise UnicodeError
-            # before it looks the name up. UnicodeError is not an OSError.
-            raise OSError("%r is not a valid host name." % host) from None
+    def __init__(self, connection: socket.socket):
+        self._socket = connection
         # Each instruction goes out when it is written. By default, the system
         # would keep a short one back to send it with the next.
         self._socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -103,3 +97,23 @@ class TcpPort:
 
     def close(self):
         self._socket.close()
+
+
+class TcpPort(SocketPort):
+    """A TCP connection to the program listening at `address`, written as
+    host:port. Raises OSError if `address` is not written that way, or if the
+    connection cannot open."""
+
+    def __init__(self, address: str):
+        try:
+            host, number = tcp_address(address)
+        except NxwrightError as error:
+            raise OSError(str(error)) from None
+        try:
+            connection = socket.create_connection((host, number), timeout=_CONNECT_WAIT)
+        except UnicodeError:
+            # A host name with an empty part, such as bench..lan, or with a
+            # part longer than 63 characters makes Python raise UnicodeError
+            # before it looks the name up. UnicodeError is not an OSError.
+            raise OSError("%r is not a valid host name." % host) from None
+        super().__init__(connection)

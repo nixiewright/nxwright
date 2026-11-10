@@ -19,8 +19,9 @@ port therefore works on the line unchanged.
 
 `open` finds the simulation in one of two ways:
   - If the environment variable NXWRIGHT_MCU gives an address, such as
-    127.0.0.1:53124, `open` connects to that address. Whatever starts the
-    program sets the variable, to tell it where the simulation is.
+    127.0.0.1:53124, `open` connects to that address. Set the variable
+    when you start the program, to the address the simulator shows while
+    its MCU port is Emulator.
   - Otherwise, if a port number to listen on is given, as in
     `open(listen=7000)`, `open` waits for the simulator to connect to that
     port of this computer. In the simulator, connect the MCU port over TCP

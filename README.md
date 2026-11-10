@@ -389,7 +389,7 @@ The extension brings everything above into VS Code, with tools of its own:
 
   ![The Fonts panel: a typeface chosen from those installed, its height, and a sample of the font before it is added](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/fonts-panel.png)
 - **Project management.** The nxwright side bar shows your project, and the nxwright page side bar shows the page you are working on. You can change the screen model, rotation, or encoding from the Project section of the nxwright side bar.
-- **A simulator.** Run your whole app, or start it on one page. Press the screen, watch timers and pages change, connect a real serial port, compare the simulation with a real screen, and debug the code with breakpoints, stepping, and stepping back.
+- **A simulator.** Run your whole app, or start it on one page. Press the screen, watch timers and pages change, connect a real serial port or a program that emulates your microcontroller, compare the simulation with a real screen, and debug the code with breakpoints, stepping, and stepping back.
 
   ![The simulator running the demo's settings page: a press on the hour's minus button stops at a breakpoint in settings.nx, and the code is then stepped through](https://raw.githubusercontent.com/nixiewright/nxwright/main/editors/vscode/images/debug.gif)
 - **Tests.** Your tests appear in Test Explorer, where you can run and debug them.

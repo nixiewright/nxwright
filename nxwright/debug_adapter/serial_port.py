@@ -13,8 +13,9 @@ does the same for a running simulation (live.py):
     `sending`).
 
 A SerialLink can also connect the simulation's serial line to a program
-that listens at an address, over TCP (tcp_port.py). Such a connection has
-no rate.
+that listens at an address, over TCP (tcp_port.py), or listen for the
+project's MCU emulator to connect (emulator_port.py). Neither connection has
+a rate.
 
 A second SerialLink connects a real screen beside the simulation, on a port
 of its own called the screen port. Instructions typed in the Simulator section can go to the
@@ -33,15 +34,18 @@ import time
 import serial
 from serial.tools import list_ports
 
+from nxwright.debug_adapter.emulator_port import EmulatorPort
 from nxwright.debug_adapter.tcp_port import TcpPort
 from nxwright.testing.simulation_log import END, hex_bytes
 from nxwright.tft.upload import RATES_TRIED, find_screen
 
 # The kinds of port a SerialLink connects. SERIAL is a serial port of the
 # computer, given by its name and a rate. TCP is a connection to a program
-# that listens at an address. It has no rate.
+# that listens at an address. EMULATOR is a port that listens for the
+# project's MCU emulator. TCP and EMULATOR have no rate.
 SERIAL = "serial"
 TCP = "tcp"
+EMULATOR = "emulator"
 
 # The rates the screen's `baud` takes, as the vendor lists them.
 RATES = [2400, 4800, 9600, 19200, 31250, 38400, 57600, 115200, 230400, 250000, 256000,
@@ -168,56 +172,99 @@ class SerialLink:
         port's state as `state` returns it, when it changes; and "log", with
         a line saying what became of the port.
     `label` names the port in those lines, such as "MCU port". `send` writes
-    to the port. `open_port(name, rate)` opens a serial port, and
-    `open_tcp(address)` opens a connection over TCP. By default, they are
-    SerialPort and TcpPort."""
+    to the port. `open_port(name, rate)` opens a serial port,
+    `open_tcp(address)` opens a connection over TCP, and
+    `open_emulator(changed)` opens a port that listens for the MCU emulator.
+    By default, they are SerialPort, TcpPort, and EmulatorPort."""
 
-    def __init__(self, received, notify, label: str, open_port=SerialPort, open_tcp=TcpPort):
+    def __init__(self, received, notify, label: str, open_port=SerialPort, open_tcp=TcpPort,
+                 open_emulator=EmulatorPort):
         self._received = received
         self._notify = notify
         self._label = label
         self._open_port = open_port
         self._open_tcp = open_tcp
+        self._open_emulator = open_emulator
         self._lock = threading.Lock()
         self._connection = None      # the port connected, if any
         self._kind = SERIAL
         self._name = None
         self._rate = DEFAULT_RATE    # None for a port without a rate
         self._problem = None         # why the port last chosen is not connected
+        self._attached = False       # for an emulator's port: whether an emulator is connected
 
     def state(self) -> dict:
         """Returns the state of the port last chosen, with these keys:
-          - `kind`: SERIAL or TCP;
-          - `name`: the port's name, or a TCP port's address;
-          - `baud`: the port's rate, or None for a TCP port;
-          - `connected`: whether the port is connected;
-          - `problem`: why the port is not connected, or None."""
+          - `kind`: SERIAL, TCP, or EMULATOR;
+          - `name`: the port's name, or the address of a TCP port or of an
+            emulator's port;
+          - `baud`: the port's rate, or None for a port without one;
+          - `connected`: whether the port is connected. An emulator's port
+            is connected from the moment it listens;
+          - `problem`: why the port is not connected, or None;
+          - `attached`, for an emulator's port only: whether an emulator is
+            connected to it."""
         with self._lock:
-            return {"kind": self._kind, "name": self._name, "baud": self._rate,
-                    "connected": self._connection is not None, "problem": self._problem}
+            connected = self._connection is not None
+            state = {"kind": self._kind, "name": self._name, "baud": self._rate,
+                     "connected": connected, "problem": self._problem}
+            if self._kind == EMULATOR:
+                # No emulator is connected to a port that no longer listens.
+                state["attached"] = connected and self._attached
+            return state
 
-    def connect(self, name: str, rate: int = None, kind: str = SERIAL):
-        """Connects the port `name`, in place of the one connected. If `kind`
-        is SERIAL, `name` is a serial port's name, and the port opens at
-        `rate`. If `kind` is TCP, `name` is the address of a listening
-        program, and `rate` is not used. If the port cannot open, none is
-        left connected, and the log and the port's state give the reason."""
+    def connect(self, name: str = None, rate: int = None, kind: str = SERIAL):
+        """Connects a port, in place of the one connected. `kind` sets what
+        `name` and `rate` mean:
+          - SERIAL: `name` is a serial port's name, and the port opens at
+            `rate`;
+          - TCP: `name` is the address of a listening program, and `rate` is
+            not used;
+          - EMULATOR: neither is used. The port listens for the MCU emulator,
+            and its name is the address it listens at.
+        If the port cannot open, no port is left connected, and the log and
+        the port's state give the reason."""
         self.disconnect(quietly=True)
         rate = (rate or DEFAULT_RATE) if kind == SERIAL else None
         try:
-            port = self._open_port(name, rate) if kind == SERIAL else self._open_tcp(name)
+            port = self._opened(name, rate, kind)
         except OSError as error:
-            self._failed(name, rate, _words(error), "could not open: %s" % _words(error), kind)
+            self._failed(name or "Emulator", rate, _words(error),
+                         "could not open: %s" % _words(error), kind)
             return
+        if kind == EMULATOR:
+            name = port.address
         connection = _Connection(port)
         with self._lock:
             self._connection = connection
             self._kind, self._name, self._rate, self._problem = kind, name, rate, None
+            self._attached = False
         connection.thread = threading.Thread(target=self._read, args=(connection,),
                                              name="serial port", daemon=True)
         connection.thread.start()
-        at_rate = "" if rate is None else " at %d bits per second" % rate
-        self._tell("%s %s connected%s" % (self._label, name, at_rate))
+        if kind == EMULATOR:
+            self._tell("%s %s listening for the MCU emulator" % (self._label, name))
+        else:
+            at_rate = "" if rate is None else " at %d bits per second" % rate
+            self._tell("%s %s connected%s" % (self._label, name, at_rate))
+
+    def _opened(self, name: str, rate: int, kind: str):
+        """Opens the port of the kind `kind`, and returns it. Raises OSError
+        if it cannot open."""
+        if kind == TCP:
+            return self._open_tcp(name)
+        if kind == EMULATOR:
+            return self._open_emulator(self._emulator_changed)
+        return self._open_port(name, rate)
+
+    def _emulator_changed(self, attached: bool):
+        """Records and logs that an emulator connected to the emulator's
+        port, or left it. Called on the port's reading thread."""
+        with self._lock:
+            self._attached = attached
+            name = self._name
+        self._tell("%s %s: the MCU emulator %s"
+                   % (self._label, name, "connected" if attached else "disconnected"))
 
     def find_and_connect(self, name: str, find_rate):
         """Connects the port `name` at the rate that `find_rate(name)`
