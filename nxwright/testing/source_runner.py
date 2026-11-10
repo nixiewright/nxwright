@@ -20,11 +20,12 @@ from pathlib import Path
 import re
 
 from nxwright import NxwrightError
-from nxwright.language.code_checks import ObjectNames
-from nxwright.language.code_lines import program_int_variables, split_line
+from nxwright.language.code_checks import ObjectNames, check_int_declaration
+from nxwright.language.code_lines import declared_ints, program_int_variables, split_line
 from nxwright.language.code_preprocessor import (Owner, preprocess, preprocess_with_places,
                                                  with_own_attributes)
-from nxwright.language.nxlang import GENERATED_GLOBAL, GENERATED_NAME, int_starting_value
+from nxwright.language.nxlang import (GENERATED_GLOBAL, GENERATED_NAME, ProgramNames,
+                                      compile_program)
 from nxwright.language.resource_names import ResourceNames
 from nxwright.project.component_defaults import folder_defaults
 from nxwright.project.device_settings import DEFAULT_ENCODING, TextCodec
@@ -355,9 +356,9 @@ def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str
     screen = screen_model(app) if checked else None
     codec = TextCodec(_encoding(app)) if checked else None
     generated = []
-    start = _program_start(read)
     if app["language"] == folders.NXLANG:
         program = folders.program_names(read("program.nx"), read, app["defines"])
+        start = _program_start(read, program)
         # Compiled in the project's encoding even when not checked, as the
         # build compiles it.
         compiled = compile_nxlang_page(events_text, page, in_order[page], program, read=read,
@@ -384,6 +385,7 @@ def _compile_page(source_folder: Path, tables: FolderPageTables, read, page: str
         local_names = compiled.local_names
         code = {key: [text for _, text in lines] for key, lines in placed.items()}
     else:
+        start = _program_start(read)
         objects = ObjectNames(frozenset(page_objects[page]), page_objects, page, tables.globals,
                               tables.absent_attributes) if checked else None
         # As in the build, sys0 to sys2 only as program.nx declares them, and
@@ -493,7 +495,7 @@ def _compile_code(source_folder: Path, tables: FolderPageTables, read,
     # The code's own lines are of a page made up for it, with no file.
     places[_CODE_EVENT] = [None] * len(placed[_CODE_EVENT])
     code = {key: [text for _, text in lines] for key, lines in placed.items()}
-    start = _program_start(read)
+    start = _program_start(read, program)
     _add_hidden_variables(start, code.values())
     start["text limits"] = _text_limits(tables, _CODE_PAGE, compiled.generated)
     return RunnablePage(code, start, places, compiled.local_names, _encoding(app), True)
@@ -536,17 +538,34 @@ def component_start_values(components: list, screen) -> dict:
     return start
 
 
-def _program_start(read) -> dict:
-    """Returns program.nx's `int` variables, each at the value the build writes
-    for it (nxlang.int_starting_value), or 0. Only program.nx itself declares
-    them: the files it includes contain constants."""
+def _program_start(read, program: ProgramNames = None) -> dict:
+    """Returns program.nx's `int` variables, each at the starting value the
+    build writes for it, or at 0 if it has none. Only program.nx itself
+    declares them: the files it includes contain constants.
+
+    `program` is what program.nx declares when the folder is in nxlang, and
+    None when the folder is in strict Nextion syntax. In nxlang, a starting
+    value may be a constant or a hexadecimal number, so the `int` lines are
+    compiled first, the same way the build compiles them. Raises
+    NxwrightError naming program.nx for a declaration the build rejects."""
+    # In nxlang, `int` followed by a tab still starts a declaration, and
+    # nxlang writes the tab as a space. An indented `int` line is a
+    # declaration too, wherever it is, because nxlang moves it above
+    # program.nx's other code. `int` alone on a line is kept too, so that
+    # the check below reports it as malformed.
+    declarations = [(number, text) for number, text in folders.numbered_lines(read("program.nx"))
+                    if re.match(r"[ \t]*int(?:[ \t]|$)", text)]
     start = {}
-    # A tab after `int` declares in nxlang, which writes it as a space. An
-    # indented line declares too, wherever it is: nxlang moves it first.
-    for declaration in re.findall(r"^[ \t]*int[ \t]+(.*)$", read("program.nx"), re.M):
-        for name, value in re.findall(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*(-?\s*(?:0x[0-9A-Fa-f]+"
-                                      r"|[0-9]+)))?", split_line(declaration, 0)[1]):
-            start[name] = int_starting_value(re.sub(r"\s", "", value)) if value else 0
+    try:
+        if program is not None:
+            declarations = compile_program(declarations, program)
+        for number, text in declarations:
+            code = split_line(text, number)[1]
+            check_int_declaration(code, number)
+            for name, value in declared_ints(code):
+                start[name] = int(re.sub(r"\s", "", value)) if value else 0
+    except NxwrightError as error:
+        raise error.in_file("program.nx") from None
     return start
 
 

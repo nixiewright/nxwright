@@ -4,8 +4,10 @@ editor's tools read.
 split_line splits a line into its indentation, its code, and its comment.
 command_word and first_word give the command a line starts, and
 command_arguments that command's arguments. goto_label gives the label a
-goto jumps to, and LABEL matches a label line. declared_int_names and
-program_int_variables give the names that `int` lines declare.
+goto jumps to, and LABEL matches a label line. declared_ints gives the
+variables an `int` line declares, with their starting values, and
+declared_int_names and program_int_variables give their names alone.
+malformed_int_part gives the part of an `int` line that is not a variable.
 OWN_ATTRIBUTE matches an attribute of the object whose event holds the
 line, written '&name&'. OWN_FORM matches any form '&...&', and
 forms_without_spaces drops the spaces inside one.
@@ -29,8 +31,9 @@ ELSE = re.compile(r"(\}?)\s*else\b(\s+if\b)?")
 _WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _ASSIGNMENT = re.compile(r"(\+\+|--|[-+*/%&|^]?=(?!=))")
 STRING = re.compile(r'("(?:\\.|[^"\\])*")')
-# A name an int line declares: "int a=0,b" declares a and b.
-_DECLARED_NAME = re.compile(r"(?:^int|,)\s*([A-Za-z_][A-Za-z0-9_]*)")
+# One variable of an int line: its name, then "=" and its starting value
+# if it has one. In "int a=0,b", a starts at 0 and b has no starting value.
+_DECLARED_INT = re.compile(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:=(.*))?", re.DOTALL)
 # The end of an operand, after which a "-" subtracts (minus_is_sign).
 _OPERAND_END = re.compile(r"[\w\])\"]$")
 # A label line, which a goto jumps to: a name, then a colon (the vendor's
@@ -129,14 +132,68 @@ def is_declaration(code: str) -> bool:
     return code == "int" or code.startswith("int ")
 
 
+def declared_ints(code: str) -> list:
+    """Returns the variables that an `int` line declares, each as (name,
+    starting value): `int a=0,b` gives ("a", "0") and ("b", None). `code` is
+    the line without its comment. A line that is not an `int` line gives an
+    empty list.
+
+    A starting value is the text between the "=" and the next comma outside
+    a string, without the spaces around it.
+
+    A malformed line gives the variables that can still be read from it,
+    and malformed_int_part finds what is wrong with it. A part of the line
+    that does not start with a name is skipped, such as the `5=x` of
+    `int 5=x`. If a name is followed by something other than "=" and a
+    value, that text is dropped: `int a b` declares only `a`.
+
+    A line with a tab after `int` is read too, although the build rejects it
+    in strict Nextion syntax (code_preprocessor.preprocess). Reading it
+    keeps its names declared, so the build reports the declaration, and does
+    not also report every later line that uses one of the names."""
+    if not re.match(r"int\b", code):
+        return []
+    found = []
+    for part in _int_line_parts(code):
+        declared = _DECLARED_INT.match(part)
+        if declared:
+            found.append((declared[1], None if declared[2] is None else declared[2].strip()))
+    return found
+
+
+def malformed_int_part(code: str):
+    """Returns the first part of the `int` line `code` that is not a
+    variable, or None when every part is a variable. The parts are the
+    pieces of text after `int`, split at the commas outside strings
+    (_int_line_parts). A variable is a name, then "=" and a starting value
+    if it has one. The returned part has no spaces around it, and may be
+    empty: `int a b` gives "a b", and `int a,` and `int` alone give ""."""
+    for part in _int_line_parts(code):
+        if not _DECLARED_INT.fullmatch(part):
+            return part.strip()
+    return None
+
+
+def _int_line_parts(code: str) -> list:
+    """Returns the parts of the `int` line `code` after `int`, split at the
+    commas outside its strings, empty parts included: `int a=1,,b` gives
+    " a=1", "", and "b"."""
+    parts = [""]
+    for index, piece in enumerate(STRING.split(code[len("int"):])):
+        if index % 2:
+            # A string, whose commas do not separate variables.
+            parts[-1] += piece
+        else:
+            first, *others = piece.split(",")
+            parts[-1] += first
+            parts.extend(others)
+    return parts
+
+
 def declared_int_names(code: str) -> list:
-    """Returns the names that a line's `code`, its comment left out,
-    declares when it is an `int` line: `int a=0,b` declares a and b. Any
-    other line declares none. A tab after `int` is read too, so that its
-    names are known though the build refuses the line
-    (code_preprocessor.preprocess): the refusal then lands on the
-    declaration, not on a line using the name."""
-    return _DECLARED_NAME.findall(code) if re.match(r"int\b", code) else []
+    """Returns the names that an `int` line declares (declared_ints):
+    `int a=0,b` gives a and b. `code` is the line without its comment."""
+    return [name for name, _ in declared_ints(code)]
 
 
 def program_int_variables(text: str) -> frozenset:

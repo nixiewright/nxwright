@@ -350,6 +350,7 @@ Names are case-sensitive, so `int Red=1` and `int a=1,A=2` are fine. A name may 
 
 - An `int` goes in `program.nx`, in either language. The build refuses an `int` in an event, in a macro, or in an nxlang function ("Global variable definitions must precede all code in the program"). In nxlang, `var` declares a local ([language.md](language.md#local-variables)).
 - In strict Nextion syntax, an `int` goes before `program.nx`'s other code. Comments may come first. nxlang moves a later `int` line up for you ([nxlang-compiled.md](nxlang-compiled.md)).
+- A starting value must be a whole number written in decimal. In nxlang, it can also be a hexadecimal number or a constant. The build fails for anything else, such as another variable, arithmetic, or a text: `int b=a`, `int a=1+2`, `int a="x"`.
 - In strict Nextion syntax, a decimal starting value must fit in 32 bits, from -2147483648 to 2147483647. The build refuses `int a=4294967295` ("Initial value for a global variable must be a constant"). nxlang writes the value's low 32 bits instead, like C ([language.md](language.md)).
 - In strict Nextion syntax, the build refuses a tab after `int`, because the Nextion Editor reads it as part of the variable's name. nxlang writes a space there instead ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 

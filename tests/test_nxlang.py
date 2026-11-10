@@ -248,6 +248,58 @@ class ExpressionTest(unittest.TestCase):
                                                    "big=0xFFFFFFFF, n=7"), ProgramNames()),
                          [(1, "int mask=32773, low=-16, odd=1, big=-1, n=7")])
 
+    def test_a_constant_in_an_ints_starting_value(self):
+        # The Nextion Editor has no constants, so nxlang writes the constant's
+        # value in its place, in decimal. A minus sign before the name negates
+        # the value. A define of app.toml is a constant too.
+        lines = _numbered("const LIMIT = 5\nconst MASK = 0x10\nconst LOW = -3\n"
+                          "int count=LIMIT, back = - LIMIT, mask=MASK, up=-LOW, size=SIZE, n=7")
+        program = read_program_names(lines, defines={"SIZE": 40})
+        self.assertEqual(compile_program(lines, program),
+                         [(4, "int count=5, back = -5, mask=16, up=3, size=40, n=7")])
+
+    def test_a_text_constant_in_an_ints_starting_value(self):
+        lines = _numbered('const UNIT = "mm"\nint count=UNIT')
+        with self.assertRaisesRegex(NxwrightError, "int count=UNIT: the constant UNIT is a text. "
+                                                   "An int's starting value must be a "
+                                                   "number") as refusal:
+            compile_program(lines, read_program_names(lines))
+        self.assertEqual(refusal.exception.line, 2)
+
+    def test_an_ints_starting_value_that_is_no_number_and_no_constant(self):
+        # Another int, a system variable, a misspelt constant, arithmetic,
+        # a number with a fraction, a text, and nothing after the "=".
+        lines = "const LIMIT = 5\nint first=1\n"
+        for value, said in (
+                ("first", "first is not a constant"), ("dim", "dim is not a constant"),
+                ("LIMT", "LIMT is not a constant"), ("-first", "first is not a constant"),
+                ("LIMIT+1", "the starting value of a must be a whole number or a constant"),
+                ("1+2", "the starting value of a must be a whole number or a constant"),
+                ("1.5", "the starting value of a must be a whole number or a constant"),
+                # In nxlang, a hex number starts with 0x. A capital X is not
+                # accepted.
+                ("0X10", "the starting value of a must be a whole number or a constant"),
+                ('"x"', "the starting value of a must be a whole number or a constant"),
+                ("", "the starting value of a must be a whole number or a constant")):
+            with self.subTest(value=value):
+                numbered = _numbered(lines + "int a=%s, b=2" % value)
+                with self.assertRaisesRegex(NxwrightError, re.escape(
+                        "int a=%s, b=2: %s" % (value, said))) as refusal:
+                    compile_program(numbered, read_program_names(numbered))
+                self.assertEqual(refusal.exception.line, 3)
+        # The forms of a decimal number that the Nextion Editor compiled are
+        # kept as written.
+        self.assertEqual(compile_program(_numbered("int a=+5, b=-0, c=007, d = 7 , e"),
+                                         ProgramNames()),
+                         [(1, "int a=+5, b=-0, c=007, d = 7 , e")])
+
+    def test_a_sign_apart_from_its_number_in_an_ints_starting_value(self):
+        # The Nextion Editor rejects a space between a sign and its number, so
+        # nxlang writes the number without it.
+        self.assertEqual(compile_program(_numbered("int a=- 5, b=+ 5, c = - 0x10, d=-\t7"),
+                                         ProgramNames()),
+                         [(1, "int a=-5, b=5, c = -16, d=-7")])
+
     def test_random_expressions_compute_as_written(self):
         generator = random.Random(1)
         checked = 0

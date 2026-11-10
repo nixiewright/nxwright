@@ -7,6 +7,7 @@ starting value past 32 bits. The test runner and the simulator start each
 int at the value the build writes."""
 import unittest
 
+from nxwright import NxwrightError
 from nxwright.project.editor_language import EDITOR_COLOURS, EDITOR_PROGRAM_DECLARATION
 from nxwright.source.lint import ERROR
 from nxwright.source.source_folder import folder_reader, read_folder_source
@@ -80,6 +81,65 @@ class ProgramIntTest(FolderTestCase):
         self.declare("int a=2147483647,b=-2147483648")
         self.assertEqual(self.findings(), [])
 
+    def test_a_starting_value_that_is_not_a_number(self):
+        # Another variable, arithmetic, a number with a fraction, a text, and
+        # nothing after the "=". The simulator stops at the same line as the
+        # build.
+        for value in ("first", "1+2", "1.5", '"x"', ""):
+            with self.subTest(value=value):
+                self.declare("int first=1", "int a=%s" % value)
+                [finding] = self.findings()
+                self.assertEqual((finding.file, finding.line, finding.severity),
+                                 ("program.nx", 5, ERROR))
+                self.assertIn("starting value", finding.message)
+                with self.assertRaises(NxwrightError) as refusal:
+                    Simulation(self.root)
+                self.assertEqual((refusal.exception.file, refusal.exception.line),
+                                 ("program.nx", 5))
+        # The forms of a decimal number that the Nextion Editor compiled.
+        self.declare("int a=+5,b=-0,c=007, d = 7 ,e")
+        self.assertEqual(self.findings(), [])
+        globals_ = Simulation(self.root).globals
+        self.assertEqual([globals_[name] for name in "abcde"], [5, 0, 7, 7, 0])
+
+    def test_the_message_for_a_starting_value_that_is_not_a_number(self):
+        self.declare("int first=1", "int a=first")
+        self.assert_refused("program.nx", 5,
+                            "Initial value for a global variable must be a constant")
+        self.assertIn("int a=first: the starting value of a must be a whole number, written in "
+                      "decimal", self.findings()[0].message)
+
+    def test_a_sign_apart_from_its_number(self):
+        for value in ("- 5", "+ 5"):
+            with self.subTest(value=value):
+                self.declare("int a=%s" % value)
+                self.assert_refused("program.nx", 4,
+                                    "Initial value for a global variable must be a constant")
+                self.assertIn("int a=%s: the starting value of a has a space after its sign"
+                              % value, self.findings()[0].message)
+
+    def test_a_malformed_int_line(self):
+        # Text after a name, a number in place of a name, a comma with no
+        # variable beside it, and `int` alone. The simulator stops at the
+        # same line as the build.
+        missing = "a variable is missing"
+        for line, said in (("int a b", '"a b" is not a variable'),
+                           ("int a b=5", '"a b=5" is not a variable'),
+                           ("int 5", '"5" is not a variable'),
+                           ("int a,", missing), ("int ,a", missing), ("int a,,b", missing),
+                           ("int", missing)):
+            with self.subTest(line=line):
+                self.declare(line)
+                [finding] = self.findings()
+                self.assertEqual((finding.file, finding.line, finding.severity),
+                                 ("program.nx", 4, ERROR))
+                self.assertIn("%s: %s. An int line lists variables separated by commas, as in "
+                              "int a=1,b" % (line, said), finding.message)
+                with self.assertRaises(NxwrightError) as refusal:
+                    Simulation(self.root)
+                self.assertEqual((refusal.exception.file, refusal.exception.line),
+                                 ("program.nx", 4))
+
     def test_an_indented_int(self):
         # The build keeps its indentation. The simulator still reads it as a
         # declaration, not as code to run.
@@ -129,6 +189,61 @@ class NxlangProgramIntTest(ProgramIntTest):
         self.declare("int mask=0x10,all=0xFFFFFFFF")
         values = self.run_load()
         self.assertEqual((values["mask"], values["all"], "x10" in values), (16, -1, False))
+
+    def test_a_constant_as_a_starting_value(self):
+        # The build writes the constant's value. The test runner and the
+        # simulator start the int at that value, and do not take the constant's
+        # name for a variable.
+        self.write("app.toml", self.text("app.toml") + "\n[defines]\nSIZE = 40\n")
+        self.declare("const LIMIT = 5", "int count=LIMIT,back=-LIMIT,size=SIZE,ticks=0")
+        self.assertEqual(self.findings(), [])
+        program = read_folder_source(folder_reader(self.root)).build_program().decode("latin-1")
+        self.assertIn("\r\nint count=5,back=-5,size=40,ticks=0\r\n", program)
+        names = ("count", "back", "size", "ticks")
+        values = self.run_load()
+        self.assertEqual([values[name] for name in names], [5, -5, 40, 0])
+        self.assertFalse("LIMIT" in values or "SIZE" in values)
+        globals_ = Simulation(self.root).globals
+        self.assertEqual([globals_[name] for name in names], [5, -5, 40, 0])
+        self.assertFalse("LIMIT" in globals_ or "SIZE" in globals_)
+
+    def test_the_message_for_a_starting_value_that_is_not_a_number(self):
+        # nxlang has its own messages, because it also accepts a constant as a
+        # starting value.
+        for value, words in (("first", "first is not a constant"),
+                             ("LIMT", "LIMT is not a constant"),
+                             ("1+2", "the starting value of a must be a whole number or a "
+                                     "constant")):
+            with self.subTest(value=value):
+                self.declare("int first=1", "int a=%s" % value)
+                [finding] = self.findings()
+                self.assertEqual((finding.file, finding.line), ("program.nx", 5))
+                self.assertIn("int a=%s: %s" % (value, words), finding.message)
+
+    def test_a_sign_apart_from_its_number(self):
+        # nxlang writes the number without the space, so the Nextion Editor
+        # compiles the line.
+        self.declare("int a=- 5,b=+ 5")
+        self.assertEqual(self.findings(), [])
+        program = read_folder_source(folder_reader(self.root)).build_program().decode("latin-1")
+        self.assertIn("\r\nint a=-5,b=5\r\n", program)
+        values = self.run_load()
+        self.assertEqual((values["a"], values["b"]), (-5, 5))
+        globals_ = Simulation(self.root).globals
+        self.assertEqual((globals_["a"], globals_["b"]), (-5, 5))
+
+    def test_a_text_constant_as_a_starting_value(self):
+        # An int cannot start at a text. The build, the test runner, and the
+        # simulator all stop at the declaration's line.
+        self.declare('const UNIT = "mm"', "int count=UNIT")
+        [finding] = self.findings()
+        self.assertEqual((finding.file, finding.line, finding.severity), ("program.nx", 5, ERROR))
+        self.assertIn("the constant UNIT is a text. An int's starting value must be a number",
+                      finding.message)
+        for start in (self.run_load, lambda: Simulation(self.root)):
+            with self.assertRaises(NxwrightError) as refusal:
+                start()
+            self.assertEqual((refusal.exception.file, refusal.exception.line), ("program.nx", 5))
 
     def test_an_int_after_other_code(self):
         # nxlang moves it above program.nx's other code, unindented, out of

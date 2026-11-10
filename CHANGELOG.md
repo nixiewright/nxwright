@@ -4,6 +4,12 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.2] - 2026-11-10
+
+- Fixed setting the initial value of an `int` from a constant.
+- The build now reports an error for an `int` whose initial value is not a number.
+- The build now reports an error for a malformed `int` line, such as `int a b`.
+
 ### [0.3.1] - 2026-11-10
 
 - Added value generators to the simulator's signal generator, which send instructions that carry a value.

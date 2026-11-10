@@ -111,8 +111,8 @@ from nxwright.language.code_checks import (COMPONENT_PLACES, DATA_RECORD_ARGUMEN
                                            misread_byte_by_byte, page_name_refusal,
                                            refused_page_name)
 from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, chain_parts, command_arguments,
-                                          command_word,
-                                          declared_int_names, goto_label, minus_is_sign,
+                                          command_word, declared_int_names, declared_ints,
+                                          goto_label, minus_is_sign,
                                           outside_strings, split_line)
 from nxwright.language.code_preprocessor import with_own_attributes
 from nxwright.language.resource_names import REFERENCE_TEXT
@@ -229,9 +229,18 @@ _COMMAND_NUMBER = re.compile(r"(?<![\w.])(-?)(0x[0-9A-Fa-f]+|[0-9]+)(?![\w.])")
 # The commands whose arguments are bytes in hex digits, as `printh 0d 0a`,
 # not numbers. Their digits are never read as a decimal number.
 BYTE_COMMANDS = frozenset({"printh", "crcputh", "lcd_dev"})
-# A starting value of an `int` line, with any minus sign: "=" and the spaces
-# after it, the sign, and the number, hex or decimal.
-_INT_VALUE = re.compile(r"(=\s*)(-?)\s*(0x[0-9A-Fa-f]+|[0-9]+)\b")
+# A starting value in an `int` line that is a number, together with the "="
+# before it. The groups are the "=" with the spaces after it, the sign if
+# there is one, the spaces after the sign, and the number, in hex or decimal.
+_INT_VALUE = re.compile(r"(=\s*)([+-]?)(\s*)(0x[0-9A-Fa-f]+|[0-9]+)\b")
+# A starting value in an `int` line that is a name, together with the "="
+# before it. The groups are the "=" with the spaces after it, the sign if
+# there is one, and the name.
+_INT_NAMED_VALUE = re.compile(r"(=\s*)([+-]?)\s*([A-Za-z_][A-Za-z0-9_]*)\b")
+# A whole starting value that nxlang accepts in an `int` line, without its
+# "=": an optional sign, then a number, in hex or decimal, or a name. The
+# group captures the name.
+_INT_START_VALUE = re.compile(r"[+-]?\s*(?:0x[0-9A-Fa-f]+|[0-9]+|([A-Za-z_][A-Za-z0-9_]*))")
 # `int` and the whitespace after it, at an `int` line's start, when it holds
 # a tab, which the Editor would read as part of the name. Spaces alone are
 # kept, as the Editor takes them.
@@ -2769,7 +2778,7 @@ class _EventCompiler:
                                     "refuses an int in an event (\"Global variable definitions "
                                     "must precede all code in the program.c\")" % code,
                                     line=number)
-            self.put(number, indent + _int_line(code) + comment)
+            self.put(number, indent + _int_line(code, self.page.constants, number) + comment)
             return
         if goto_label(code) is not None or LABEL.fullmatch(code):
             # A goto names a label, never a local or a constant to replace.
@@ -3085,23 +3094,81 @@ def editor_number(text: str) -> str:
     return "0x" + digits
 
 
-def _int_line(code: str) -> str:
-    """Returns an `int` line as the Editor takes it. Whitespace after `int`
-    holding a tab becomes one space: the Editor reads a tab there as part of
-    the name. Each starting value written in hex, or in decimal past 32
-    bits, is written in decimal as its 32 bits (int_starting_value), as the
-    Nextion Editor refuses either: `int mask=0x8005` is `int mask=32773`, and
-    `int all=4294967295` is `int all=-1`. Another is kept as written."""
+def _int_line(code: str, constants: dict, number: int) -> str:
+    """Returns the `int` line `code` in a form the Nextion Editor accepts. The
+    line changes where the Nextion Editor would misread or reject it:
+
+    - Whitespace after `int` that contains a tab becomes one space. The
+      Nextion Editor reads a tab after `int` as part of the name.
+    - A starting value in hex, or in decimal past 32 bits, becomes a decimal
+      number made from its low 32 bits (_int_starting_value).
+      `int mask=0x8005` becomes `int mask=32773`, and `int all=4294967295`
+      becomes `int all=-1`.
+    - A space between a sign and its number is dropped: `int a=- 5` becomes
+      `int a=-5`.
+    - A starting value that is the name of one of `constants`,
+      {name: Literal}, becomes that constant's value in decimal, because the
+      Nextion Editor has no constants. With `const LIMIT = 5`,
+      `int count=LIMIT` becomes `int count=5`, and `int back=-LIMIT` becomes
+      `int back=-5`.
+
+    Raises NxwrightError naming line `number` for any other starting value
+    (_check_int_starts)."""
+    _check_int_starts(code, constants, number)
+
+    def constant_number(match) -> str:
+        constant = constants.get(match[3])
+        if constant is None:
+            # _check_int_starts has already rejected a starting value that is
+            # not a constant, so this name is not a starting value. It comes
+            # from a malformed declaration, such as `int 5=x`. The line is
+            # kept as written, and the build's check of the line then rejects
+            # it.
+            return match[0]
+        value = _int_starting_value(constant.text)
+        return match[1] + str(int32(-value) if match[2] == "-" else value)
+
     def decimal(match) -> str:
-        sign, written = match[2], match[3]
-        value = int_starting_value(sign + written)
-        if not written.startswith("0x") and value == int(sign + written):
+        sign, spaces, written = match[2].replace("+", ""), match[3], match[4]
+        value = _int_starting_value(sign + written)
+        if not written.startswith("0x") and value == int(sign + written) and not spaces:
             return match[0]
         return match[1] + str(value)
-    return _INT_VALUE.sub(decimal, _INT_START.sub("int ", code, count=1))
+    spaced = _INT_START.sub("int ", code, count=1)
+    return _INT_VALUE.sub(decimal, _INT_NAMED_VALUE.sub(constant_number, spaced))
 
 
-def int_starting_value(text: str) -> int:
+def _check_int_starts(code: str, constants: dict, number: int):
+    """Raises NxwrightError naming line `number` for a starting value of the
+    `int` line `code` that nxlang cannot write as a number. nxlang accepts a
+    whole number, in decimal or in hexadecimal, or one of `constants`,
+    {name: Literal}, whose value is a number. Either can have a sign.
+
+    The Nextion Editor accepts only a decimal number, so nxlang must be
+    able to write the starting value as one. It cannot do that for
+    arithmetic, because nxlang does not compute arithmetic itself, or for
+    an `int` variable, because a variable has no value before the screen
+    runs. A text, a constant whose value is a text, and a name that is not
+    a constant, such as a misspelt constant, are rejected too."""
+    for name, value in declared_ints(code):
+        if value is None:
+            continue
+        form = _INT_START_VALUE.fullmatch(value)
+        if form is None:
+            raise NxwrightError("%s: the starting value of %s must be a whole number or a "
+                                "constant" % (code, name), line=number)
+        named = form[1]
+        if named is None:
+            continue
+        if named not in constants:
+            raise NxwrightError("%s: %s is not a constant. An int's starting value must be a "
+                                "whole number or a constant" % (code, named), line=number)
+        if constants[named].kind != NUMBER:
+            raise NxwrightError("%s: the constant %s is a text. An int's starting value must be "
+                                "a number" % (code, named), line=number)
+
+
+def _int_starting_value(text: str) -> int:
     """Returns the value an `int` of program.nx starts at, given its
     starting value `text` as nxlang reads it: decimal, or hex after 0x, with
     or without a minus sign, in 32 bits, as editor_number writes it."""

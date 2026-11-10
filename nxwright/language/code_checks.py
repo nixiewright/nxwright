@@ -28,8 +28,9 @@ from nxwright import NxwrightError
 from nxwright.language.code_lines import (ARGUMENT, ASSIGNMENT, ELSE, LABEL, OWN_ATTRIBUTE,
                                           OWN_FORM, STRING, chain_parts, command_arguments,
                                           command_word, compact, declared_int_names,
-                                          first_word, goto_label, holds_own_attribute,
-                                          is_declaration, minus_is_sign)
+                                          declared_ints, first_word, goto_label,
+                                          holds_own_attribute, is_declaration,
+                                          malformed_int_part, minus_is_sign)
 from nxwright.project.attribute_descriptions import code_cannot_change, describe, type_has
 from nxwright.project.editor_language import (EDITOR_COLOURS, EDITOR_COMMANDS,
                                               EDITOR_PROGRAM_VARIABLES,
@@ -146,9 +147,14 @@ _HEX = re.compile(r"(?<![\w.])0[xX]([0-9A-Fa-f]*)(?![\w.])")
 # The most characters the Nextion Editor takes in the name of an int of
 # program.nx ("Illegal global variable name length").
 LONGEST_INT_NAME = 32
-# An int declaration's starting value written in decimal: its name, then,
-# after "=", the number with any minus sign.
-_DECIMAL_START = re.compile(r"([A-Za-z_]\w*)\s*=\s*(-?\s*[0-9]+)(?![\w.])")
+# An int declaration's starting value written in decimal: an optional
+# sign, then the digits.
+_DECIMAL_START = re.compile(r"([+-]?)([0-9]+)")
+# A decimal starting value with spaces or tabs between its sign and its
+# digits. The Nextion Editor rejects it.
+_SPACED_SIGN_START = re.compile(r"[+-]\s+[0-9]+")
+# The Nextion Editor's words for a starting value it rejects.
+_INITIAL_VALUE_WORDS = "Initial value for a global variable must be a constant"
 # A line the Editor reads as a label, whatever its characters.
 _LABEL_LIKE = re.compile(r"(\S+):")
 # What goes in each place of a data record's methods' arguments: a text or
@@ -290,7 +296,7 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
     if is_declaration(code):
         if program_pages is not None:
             _check_declared_names(code, program_pages, number)
-            _check_starting_values(code, number)
+            check_int_declaration(code, number)
         elif objects is not None:
             _refuse_declaration_outside_program(code, objects, number)
         return
@@ -629,17 +635,64 @@ def _check_declared_names(code: str, pages: dict, number: int):
                             "int (\"%s\")" % (code, name, what, words), line=number)
 
 
+def check_int_declaration(code: str, number: int):
+    """Raises NxwrightError for an int declaration of program.nx that is
+    malformed (_check_declaration_form), or whose starting value is not a
+    number the Nextion Editor accepts (_check_starting_values). The build
+    and the test runner both check a declaration with it."""
+    _check_declaration_form(code, number)
+    _check_starting_values(code, number)
+
+
+def _check_declaration_form(code: str, number: int):
+    """Raises NxwrightError for a malformed int declaration, such as `int a b`,
+    `int a=1,5`, `int a=1,`, or `int` alone. A well-formed declaration lists
+    its variables separated by commas, and each variable is a name that can
+    be followed by "=" and a starting value.
+
+    The Nextion Editor 1.68.2 rejected `int a=1,5` ("First character of a
+    Name can not be number"), `int a=1,` and `int a=1,,b=2` ("Illegal global
+    variable name length"), and `int` alone ("Invalid command"). It
+    compiled `int a b`, but code could then read neither `a` nor `ab`, so
+    the build rejects that line too."""
+    part = malformed_int_part(code)
+    if part is not None:
+        raise NxwrightError("%s: %s. An int line lists variables separated by commas, as in "
+                            "int a=1,b"
+                            % (code, '"%s" is not a variable' % part if part
+                               else "a variable is missing"), line=number)
+
+
 def _check_starting_values(code: str, number: int):
     """Raises NxwrightError for an int declaration of program.nx whose
-    starting value is a decimal number outside -2147483648 to 2147483647,
-    which the Nextion Editor refuses, as `int a=2147483648`."""
-    for name, value in _DECIMAL_START.findall(code):
-        value = int(value.replace(" ", "").replace("\t", ""))
+    starting value is not a whole number from -2147483648 to 2147483647,
+    written in decimal, with or without a sign right before it.
+
+    The Nextion Editor 1.68.2 compiled a decimal number in the range, with
+    or without leading zeros. It rejected every other starting value tried:
+    a number outside the range, a hexadecimal number, a sign followed by a
+    space, another variable, arithmetic, a number with a fraction, a text,
+    and nothing after the "=". Its message was always the one in
+    _INITIAL_VALUE_WORDS. In the build, _check_hex reports a hexadecimal
+    number before this check runs."""
+    for name, value in declared_ints(code):
+        if value is None:
+            continue
+        if _SPACED_SIGN_START.fullmatch(value):
+            raise NxwrightError("%s: the starting value of %s has a space after its sign. The "
+                                "Nextion Editor rejects it (\"%s\")"
+                                % (code, name, _INITIAL_VALUE_WORDS), line=number)
+        decimal = _DECIMAL_START.fullmatch(value)
+        if decimal is None:
+            raise NxwrightError("%s: the starting value of %s must be a whole number, written "
+                                "in decimal. The Nextion Editor rejects anything else (\"%s\")"
+                                % (code, name, _INITIAL_VALUE_WORDS), line=number)
+        value = int(decimal[1] + decimal[2])
         if value != int32(value):
             raise NxwrightError("%s: %s starts at %d, which does not fit in 32 bits "
-                                "(-2147483648 to 2147483647). The Nextion Editor refuses it "
-                                "(\"Initial value for a global variable must be a constant\")"
-                                % (code, name, value), line=number)
+                                "(-2147483648 to 2147483647). The Nextion Editor rejects it "
+                                "(\"%s\")" % (code, name, value, _INITIAL_VALUE_WORDS),
+                                line=number)
 
 
 def _refuse_declaration_outside_program(code: str, objects: ObjectNames, number: int):
