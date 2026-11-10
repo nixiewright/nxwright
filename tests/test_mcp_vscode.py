@@ -170,8 +170,8 @@ class StandInChannel:
             return {"values": values if names is None else {name: values[name]
                                                             for name in names}}
         if method == "log":
-            lines = [{"number": 1, "time": 0, "line": "receives page 0"},
-                     {"number": 2, "time": 40, "line": "sends 66 00"}]
+            lines = [{"number": 1, "time": 0, "line": "SIM RECV: page 0"},
+                     {"number": 2, "time": 40, "line": "SIM SEND: 66 00"}]
             return {"lines": [line for line in lines if line["number"] > params.get("after", 0)]}
         return {}
 

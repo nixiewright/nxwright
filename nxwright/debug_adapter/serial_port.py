@@ -147,7 +147,7 @@ class SerialLink:
         except OSError as error:
             with self._lock:
                 self._name, self._rate, self._problem = name, rate, _words(error)
-            self._tell("%s could not open: %s" % (name, _words(error)))
+            self._tell("MCU port %s could not open: %s" % (name, _words(error)))
             return
         connection = _Connection(port)
         with self._lock:
@@ -156,7 +156,7 @@ class SerialLink:
         connection.thread = threading.Thread(target=self._read, args=(connection,),
                                              name="serial port", daemon=True)
         connection.thread.start()
-        self._tell("connected to %s at %d bits per second" % (name, rate))
+        self._tell("MCU port %s connected at %d bits per second" % (name, rate))
 
     def disconnect(self, quietly: bool = False):
         """Disconnects the port connected, if any, once its last read ends."""
@@ -168,7 +168,7 @@ class SerialLink:
         if connection.thread is not threading.current_thread():
             connection.thread.join()
         if not quietly:
-            self._tell("%s disconnected" % self._name)
+            self._tell("MCU port %s disconnected" % self._name)
 
     def send(self, data: bytes):
         """Writes what the screen sends to the port connected, if any.
@@ -183,9 +183,10 @@ class SerialLink:
             try:
                 written = connection.port.write(data)
             except OSError as error:
-                return "%s did not send %s: %s" % (self._name, hex_bytes(data), _words(error))
+                return "MCU port %s did not send %s: %s" % (self._name, hex_bytes(data),
+                                                            _words(error))
         if written < len(data):
-            return "%s did not send %s: the port did not take it in time" % (
+            return "MCU port %s did not send %s: the port did not take it in time" % (
                 self._name, hex_bytes(data[written:]))
         return None
 
@@ -213,7 +214,7 @@ class SerialLink:
                 return          # disconnected meanwhile
             self._connection = None
             self._problem = "lost: %s" % _words(error)
-        self._tell("%s lost: %s" % (self._name, _words(error)))
+        self._tell("MCU port %s lost: %s" % (self._name, _words(error)))
 
     def _tell(self, line: str):
         self._notify("log", line)

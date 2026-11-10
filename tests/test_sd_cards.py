@@ -425,9 +425,9 @@ on go.down:
         self.assertEqual(self.sent, [READY, DONE, N_IS_0])
         self.assertEqual((self.card / "w.txt").read_bytes(), b"a\xffb\xffc")
         self.assertEqual(self.log(simulation)[-6:], [
-            "twfile: the next 5 bytes are the file sd0/w.txt", "sends fe ff ff ff",
-            "sends fd ff ff ff", "SD card: twfile sd0/w.txt 5", "receives get n",
-            "sends 71 00 00 00 00 ff ff ff (get)"])
+            "twfile: the next 5 bytes are the file sd0/w.txt", "SIM SEND: fe ff ff ff",
+            "SIM SEND: fd ff ff ff", "SD card: twfile sd0/w.txt 5",
+            "SIM RECV: get n", "SIM SEND: 71 00 00 00 00 ff ff ff (get)"])
 
     def test_ready_and_done_whatever_bkcmd_asks(self):
         simulation = self.simulation()

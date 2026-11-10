@@ -742,7 +742,7 @@ class Simulation:
         """Takes an instruction that arrived on the serial line, typed or as
         bytes, as serial_input says."""
         self._serial_arrived()
-        self._write_log("receives %s" % self._received(text))
+        self._write_log("SIM RECV: %s" % self._received(text))
         self._take_serial(text)
 
     def _typed_as_bytes(self, text: str):
@@ -750,10 +750,11 @@ class Simulation:
         serial_input says."""
         try:
             data = TextCodec(self.encoding).encode_keeping_bytes(text, "the instruction")
-        except NxwrightError as error:
-            self._write_log("receives nothing: %s" % error)
+        except NxwrightError:
+            self._write_log("SIM RECV: <nothing: instruction %r incompatible with project "
+                            "encoding %s>" % (text, self.encoding))
             return
-        self._write_log("receives %s as bytes, not as an instruction" % self._received(text))
+        self._write_log("SIM RECV: %s <as bytes, not as an instruction>" % self._received(text))
         self.serial_received(data + END)
 
     def _take_serial(self, text: str):
@@ -957,8 +958,8 @@ class Simulation:
         except NxwrightError:
             # Data arrived all the same (serial_input notes the rest).
             self._serial_arrived()
-            self._write_log("receives %s, which %s cannot read" % (hex_bytes(data),
-                                                                   self.encoding))
+            self._write_log("SIM RECV: %s <incompatible with project encoding %s>"
+                            % (hex_bytes(data), self.encoding))
             self._return_code(0x00, False)
             return
         self._instruction_received(text)
@@ -972,7 +973,7 @@ class Simulation:
     def _send_logged(self, data: bytes):
         """Sends `data` on the serial line, as the screen sends what is not
         the code's own, logging it."""
-        self._write_log("sends %s" % shown(data, self.log_formats["sent"], self.encoding))
+        self._write_log("SIM SEND: %s" % shown(data, self.log_formats["sent"], self.encoding))
         self._send(data)
 
     def _send(self, data: bytes):

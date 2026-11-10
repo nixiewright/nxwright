@@ -321,7 +321,7 @@ class RunTest(SimulationTestCase):
         # One the project lacks is ignored.
         simulation.serial_input("call nosuch")
         self.assertEqual(simulation.values()["log.txt"], "mm")
-        self.assertEqual(simulation.log[-1][1], "receives call nosuch")
+        self.assertEqual(simulation.log[-1][1], "SIM RECV: call nosuch")
 
     def test_its_click_gives_a_components_number(self):
         # A macro names a component by its number alone: b0 is 1.
@@ -344,8 +344,9 @@ class RunTest(SimulationTestCase):
         simulation.serial_input("vis 99,0")
         simulation.serial_input("call hide")
         self.assertEqual([line for _, line in simulation.log][-5:],
-                         ["receives vis 99,0", "sends 02 ff ff ff", "receives call hide",
-                          "vis 99: no component has that ID", "sends 02 ff ff ff"])
+                         ["SIM RECV: vis 99,0", "SIM SEND: 02 ff ff ff",
+                          "SIM RECV: call hide", "vis 99: no component has that ID",
+                          "SIM SEND: 02 ff ff ff"])
         self.assertEqual(simulation.values()["log.txt"], "h")
 
     def test_the_debugger_records_its_lines_in_macros_nx(self):

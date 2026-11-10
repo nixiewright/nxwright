@@ -94,22 +94,25 @@ def _sent_line(entry: tuple, encoding: str, form: str = "hex") -> str:
     written when it is no hexadecimal."""
     if entry[0] == "printh" and isinstance(entry[1], str):
         if form == "hex":
-            return "sends %s" % entry[1]
+            return "SIM SEND: %s" % entry[1]
         try:
-            return "sends %s" % shown(sent_bytes(entry, encoding), form, encoding)
+            return "SIM SEND: %s" % shown(sent_bytes(entry, encoding), form, encoding)
         except NxwrightError:
-            return "sends %s" % entry[1]
+            return "SIM SEND: %s" % entry[1]
     try:
-        return "sends %s" % shown(sent_bytes(entry, encoding), form, encoding)
+        return "SIM SEND: %s" % shown(sent_bytes(entry, encoding), form, encoding)
     except NxwrightError:
-        return "sends %r, which %s cannot write" % (entry[0], encoding)
+        return "SIM SEND: <nothing: text %r incompatible with project encoding %s>" % (
+            entry[0], encoding)
 
 
 def _reply_line(entry: tuple, encoding: str, form: str = "hex") -> str:
     try:
-        return "sends %s (%s)" % (shown(reply_bytes(entry, encoding), form, encoding), entry[0])
+        return "SIM SEND: %s (%s)" % (shown(reply_bytes(entry, encoding), form, encoding),
+                                     entry[0])
     except NxwrightError:
-        return "sends %r (%s), which %s cannot write" % (entry[1], entry[0], encoding)
+        return "SIM SEND: <nothing (%s): text %r incompatible with project encoding %s>" % (
+            entry[0], entry[1], encoding)
 
 
 def _eeprom_line(entry: tuple, encoding: str) -> str:

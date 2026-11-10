@@ -31,6 +31,7 @@ from nxwright.testing.opening_effects import STEP
 from nxwright.testing.serial_line import MOST_WAITING
 from nxwright.testing.screen_text import screen_text
 from nxwright.testing.simulation import SYSTEM_START, Simulation, StartProgress
+from nxwright.testing.simulation_log import LOGGED
 from tests.test_folder_check import FolderTestCase, edited_app, fonts_first
 from tests.test_page_drawing import differing_pixels, screen_drawing
 from tests.test_project_writer import edit_text
@@ -2111,9 +2112,9 @@ on again.down:
         self.assertEqual([line for _, line in simulation.log], [
             "EEPROM: wrote 02 01 00 00 at 4",
             "EEPROM: wrote 74 69 74 6c 65 00 00 00 00 at 10",
-            "sends 6f 6b",
+            "SIM SEND: 6f 6b",
             "EEPROM: read 'title' at 10", "EEPROM: read 258 at 4",
-            "sends 70 74 69 74 6c 65 ff ff ff (get)",
+            "SIM SEND: 70 74 69 74 6c 65 ff ff ff (get)",
             "not simulated: touch_j"])
 
     def test_the_eeprom_from_a_file_and_after_starting_again(self):
@@ -2215,7 +2216,8 @@ on again.down:
     def test_what_could_not_be_sent_is_logged(self):
         simulation = Simulation(self.root, sending=lambda data: "not sent")
         simulation.press("save")
-        self.assertEqual([line for _, line in simulation.log][-2:], ["sends 6f 6b", "not sent"])
+        self.assertEqual([line for _, line in simulation.log][-2:],
+                         ["SIM SEND: 6f 6b", "not sent"])
 
     def test_bytes_from_the_serial_line_in_the_project_encoding(self):
         simulation = Simulation(self.root)
@@ -2228,7 +2230,8 @@ on again.down:
         simulation.serial_received(b"title.txt=\"\xe9\"\xff\xff\xff")
         self.assertEqual(sent, [b"\x00\xff\xff\xff"])
         self.assertEqual([line for _, line in simulation.log][0],
-                         "receives 74 69 74 6c 65 2e 74 78 74 3d 22 e9 22, which utf-8 cannot read")
+                         "SIM RECV: 74 69 74 6c 65 2e 74 78 74 3d 22 e9 22 "
+                         "<incompatible with project encoding utf-8>")
 
     def test_the_serial_line_cuts_its_pieces_into_instructions(self):
         sent = []
@@ -2239,8 +2242,8 @@ on again.down:
         self.assertEqual(simulation.values()["title.txt"], "ab")
         self.assertEqual(sent, [b"\x70ab\xff\xff\xff"])
         self.assertEqual([line for _, line in simulation.log],
-                         ['receives title.txt="ab"', "receives get title.txt",
-                          "sends 70 61 62 ff ff ff (get)"])
+                         ['SIM RECV: title.txt="ab"', "SIM RECV: get title.txt",
+                          "SIM SEND: 70 61 62 ff ff ff (get)"])
 
     def test_bytes_never_ended_are_dropped_and_logged(self):
         simulation = Simulation(self.root)
@@ -2248,7 +2251,7 @@ on again.down:
         simulation.serial_received(b"n=4\xff\xff\xff")
         self.assertEqual([line for _, line in simulation.log],
                          ["serial line: dropped %d bytes with no FF FF FF after them"
-                          % (MOST_WAITING + 1), "receives n=4"])
+                          % (MOST_WAITING + 1), "SIM RECV: n=4"])
 
     def test_the_recording_is_the_same_when_steps_compare_only_what_changed(self):
         # Records, the EEPROM, a typed instruction, and starting again.
@@ -2272,12 +2275,12 @@ on again.down:
             simulation.serial_input(text)
         self.assertEqual(simulation.values()["title.txt"], "typed")
         self.assertEqual([line for _, line in simulation.log], [
-            'receives title.txt="typed"', "receives get title.txt",
-            "sends 70 74 79 70 65 64 ff ff ff (get)",
-            "receives nothing.txt=1", "sends 1a ff ff ff",
-            "receives xyz", "sends 00 ff ff ff",
-            "receives bkcmd=3", "sends 01 ff ff ff",
-            "receives n=1", "sends 01 ff ff ff"])
+            'SIM RECV: title.txt="typed"', "SIM RECV: get title.txt",
+            "SIM SEND: 70 74 79 70 65 64 ff ff ff (get)",
+            "SIM RECV: nothing.txt=1", "SIM SEND: 1a ff ff ff",
+            "SIM RECV: xyz", "SIM SEND: 00 ff ff ff",
+            "SIM RECV: bkcmd=3", "SIM SEND: 01 ff ff ff",
+            "SIM RECV: n=1", "SIM SEND: 01 ff ff ff"])
 
     def test_the_logs_formats(self):
         # By default what the screen receives shows as text, and what it
@@ -2288,13 +2291,15 @@ on again.down:
                     "62 6b 63 6d 64 3d 33 ff ff ff"]
         for formats, lines in (
                 ({"received": "hex", "sent": "text"},
-                 ["receives " + received[0], "receives " + received[1], "sends ptyped (get)",
-                  "receives " + received[2], r"sends \x01"]),
+                 ["SIM RECV: " + received[0], "SIM RECV: " + received[1],
+                  "SIM SEND: ptyped (get)", "SIM RECV: " + received[2],
+                  r"SIM SEND: \x01"]),
                 ({"received": "both", "sent": "both"},
-                 ['receives title.txt="typed" (%s)' % received[0],
-                  "receives get title.txt (%s)" % received[1],
-                  "sends ptyped (70 74 79 70 65 64 ff ff ff) (get)",
-                  "receives bkcmd=3 (%s)" % received[2], r"sends \x01 (01 ff ff ff)"])):
+                 ['SIM RECV: title.txt="typed" (%s)' % received[0],
+                  "SIM RECV: get title.txt (%s)" % received[1],
+                  "SIM SEND: ptyped (70 74 79 70 65 64 ff ff ff) (get)",
+                  "SIM RECV: bkcmd=3 (%s)" % received[2],
+                  r"SIM SEND: \x01 (01 ff ff ff)"])):
             with self.subTest(formats=formats):
                 simulation = Simulation(self.root, log_formats=formats)
                 for text in ('title.txt="typed"', "get title.txt", "bkcmd=3"):
@@ -2307,18 +2312,19 @@ on again.down:
         simulation = Simulation(self.root)
         sent = []
         for text, answer in (('title.txt="typed"', []),
-                             ("get title.txt", ["sends 70 74 79 70 65 64 ff ff ff (get)"]),
-                             ("get n", ["sends 71 00 00 00 00 ff ff ff (get)"]),
-                             ("xyz", ["sends 00 ff ff ff"]),
-                             ("bkcmd=3", ["sends 01 ff ff ff"]),
-                             ('title.txt="again"', ["sends 01 ff ff ff"]),
-                             ("sendme", ["sends 66 00 ff ff ff (sendme)"]),
-                             ("page second", ["sends 4c"])):
+                             ("get title.txt",
+                              ["SIM SEND: 70 74 79 70 65 64 ff ff ff (get)"]),
+                             ("get n", ["SIM SEND: 71 00 00 00 00 ff ff ff (get)"]),
+                             ("xyz", ["SIM SEND: 00 ff ff ff"]),
+                             ("bkcmd=3", ["SIM SEND: 01 ff ff ff"]),
+                             ('title.txt="again"', ["SIM SEND: 01 ff ff ff"]),
+                             ("sendme", ["SIM SEND: 66 00 ff ff ff (sendme)"]),
+                             ("page second", ["SIM SEND: 4c"])):
             with self.subTest(text=text):
                 before = len(simulation.log)
                 simulation.serial_input(text)
                 sent = [line for _, line in simulation.log[before:]]
-                self.assertEqual(sent, ["receives " + text] + answer)
+                self.assertEqual(sent, ["SIM RECV: " + text] + answer)
 
     def test_covx_to_hex_of_an_odd_length_answers_1b(self):
         # As the Editor's simulator answered, leaving the text as it was: an
@@ -2336,7 +2342,13 @@ on again.down:
         simulation = Simulation(self.root)
         simulation.serial_input('prints "\u0101",0')
         self.assertEqual([line for _, line in simulation.log][-1],
-                         "sends '\u0101', which iso-8859-1 cannot write")
+                         "SIM SEND: <nothing: text '\u0101' incompatible with project encoding "
+                         "iso-8859-1>")
+
+    def test_a_reply_the_encoding_cannot_write_is_logged(self):
+        self.assertEqual(LOGGED["replies"](("get", "\u0101"), "iso-8859-1"),
+                         "SIM SEND: <nothing (get): text '\u0101' incompatible with project "
+                         "encoding iso-8859-1>")
 
     def test_a_page_change_typed(self):
         simulation = Simulation(self.root)
@@ -2397,10 +2409,10 @@ on none.down:
         self.assertEqual(self.sent, [READY, DONE, N_IS_0])
         self.assertEqual(simulation.waves(), {"chart": {0: [10, 255, 20]}})
         self.assertEqual([line for _, line in simulation.log], [
-            "receives addt 1,0,3",
+            "SIM RECV: addt 1,0,3",
             "addt: the next 3 bytes are points of channel 0 of the waveform of ID 1",
-            "sends fe ff ff ff", "sends fd ff ff ff", "receives get n",
-            "sends 71 00 00 00 00 ff ff ff (get)"])
+            "SIM SEND: fe ff ff ff", "SIM SEND: fd ff ff ff",
+            "SIM RECV: get n", "SIM SEND: 71 00 00 00 00 ff ff ff (get)"])
 
     def test_addt_run_by_code(self):
         simulation = self.simulation()
@@ -2470,8 +2482,8 @@ on none.down:
         # So are the instructions after `rest` in its piece.
         simulation.serial_received(b"n=4\xff\xff\xffrest\xff\xff\xffn=7\xff\xff\xff")
         log = [line for _, line in simulation.log]
-        self.assertIn("receives n=4", log)
-        self.assertNotIn("receives n=7", log)
+        self.assertIn("SIM RECV: n=4", log)
+        self.assertNotIn("SIM RECV: n=7", log)
 
     def test_a_typed_instruction_in_a_transfer_is_data(self):
         simulation = self.simulation()
@@ -2484,8 +2496,10 @@ on none.down:
         self.assertEqual(self.sent, [READY, DONE])
         self.assertEqual(simulation.waves(), {"chart": {0: list(b"get n\xff\xff\xff\x01")}})
         log = [line for _, line in simulation.log]
-        self.assertIn("receives get n as bytes, not as an instruction", log)
-        self.assertIn("receives nothing: the instruction: iso-8859-1 cannot store 'Ж'", log)
+        self.assertIn("SIM RECV: get n <as bytes, not as an instruction>", log)
+        self.assertIn("SIM RECV: <nothing: instruction 'n=\"Ж\"' incompatible with project "
+                      "encoding iso-8859-1>",
+                      log)
 
 
 class ReparseModeTest(SimulationTestCase):
@@ -2604,7 +2618,7 @@ on copy.down:
         self.assertEqual(self.sent, [b"\x24\xff\xff\xff"] * 2)
         self.assertEqual([line for _, line in simulation.log][-2:],
                          ["serial line: the serial buffer overflowed, 2 bytes of protocol "
-                          "reparse mode dropped", "sends 24 ff ff ff"])
+                          "reparse mode dropped", "SIM SEND: 24 ff ff ff"])
 
     def test_a_start_empties_the_buffer_and_ends_the_mode(self):
         simulation = self.simulation
@@ -3065,7 +3079,7 @@ on go.up:
         simulation.release()
         self.assertEqual(sent, [b"\x67\x01\x2c\x01\x90\x01\xff\xff\xff",
                                 b"\x67\x01\x2c\x01\x90\x00\xff\xff\xff"])
-        self.assertIn("sends 67 01 2c 01 90 01 ff ff ff",
+        self.assertIn("SIM SEND: 67 01 2c 01 90 01 ff ff ff",
                       [line for _, line in simulation.log])
 
     def test_a_touch_while_asleep_sends_0x68_and_wakes_the_screen_as_it_ends(self):
@@ -4039,12 +4053,14 @@ on next.down:
     def test_held_until_com_star_on_the_serial_line(self):
         simulation = Simulation(self.root, values={"bkcmd": 3})
         self.assertEqual(self.serial(simulation, "com_stop", "sys0=5", "get sys0"), [
-            "receives com_stop", "receives sys0=5", "held: the serial line is stopped",
-            "receives get sys0", "held: the serial line is stopped"])
+            "SIM RECV: com_stop", "SIM RECV: sys0=5",
+            "held: the serial line is stopped", "SIM RECV: get sys0",
+            "held: the serial line is stopped"])
         self.assertEqual(simulation.globals["sys0"], 0)
         self.assertEqual(self.serial(simulation, "com_star"), [
-            "receives com_star", "runs sys0=5, held until com_star", "sends 01 ff ff ff",
-            "runs get sys0, held until com_star", "sends 71 05 00 00 00 ff ff ff (get)"])
+            "SIM RECV: com_star", "runs sys0=5, held until com_star",
+            "SIM SEND: 01 ff ff ff", "runs get sys0, held until com_star",
+            "SIM SEND: 71 05 00 00 00 ff ff ff (get)"])
         self.assertEqual(simulation.globals["sys0"], 5)
 
     def test_held_after_com_stop_run_by_code(self):

@@ -275,9 +275,9 @@ class PinyinLaunchTest(LiveTestCase):
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             lines = [line for body in self.events("output") if body["category"] == "stdout"
-                     for line in body["output"].splitlines() if " sends 71 " in line]
+                     for line in body["output"].splitlines() if " SIM SEND: 71 " in line]
             if lines:
-                return lines[-1].split(" sends ", 1)[1]
+                return lines[-1].split(" SIM SEND: ", 1)[1]
             time.sleep(0.01)
         self.fail("get count sent nothing")
 

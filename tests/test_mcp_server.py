@@ -170,8 +170,8 @@ class McpServerTest(unittest.TestCase):
         self.agent.text("send", simulation=self.simulation, instruction='prints "ok",0')
         later = self.agent.data("log", simulation=self.simulation, after=len(first))
         self.assertEqual([(entry["number"], entry["line"]) for entry in later],
-                         [(len(first) + 1, 'receives prints "ok",0'),
-                          (len(first) + 2, "sends 6f 6b")])
+                         [(len(first) + 1, 'SIM RECV: prints "ok",0'),
+                          (len(first) + 2, "SIM SEND: 6f 6b")])
 
     def test_every_value_reads_as_json(self):
         everything = self.agent.data("values", simulation=self.simulation)
@@ -281,20 +281,20 @@ class McpServerTest(unittest.TestCase):
         self.assertEqual(self.agent.text("send", simulation=self.simulation,
                                          instruction="page 9"),
                          "Sent. The log since the simulation started:\n"
-                         "sends 00 00 00 ff ff ff 88 ff ff ff\n"
-                         "receives page 9\n"
-                         "sends 03 ff ff ff")
+                         "SIM SEND: 00 00 00 ff ff ff 88 ff ff ff\n"
+                         "SIM RECV: page 9\n"
+                         "SIM SEND: 03 ff ff ff")
         self.assertEqual(self.agent.text("send", simulation=self.simulation,
                                          instruction="get t0.txt"),
                          "Sent. The log since your last send or log:\n"
-                         "receives get t0.txt\n"
-                         "sends 70 48 6f 6d 65 ff ff ff (get)")
+                         "SIM RECV: get t0.txt\n"
+                         "SIM SEND: 70 48 6f 6d 65 ff ff ff (get)")
         # Why an instruction did not run is given too.
         self.agent.text("send", simulation=self.simulation, instruction="com_stop")
         self.assertEqual(self.agent.text("send", simulation=self.simulation,
                                          instruction='t0.txt="Hi"'),
                          "Sent. The log since your last send or log:\n"
-                         'receives t0.txt="Hi"\n'
+                         'SIM RECV: t0.txt="Hi"\n'
                          "held: the serial line is stopped")
         # Lines the agent read with log are not given again.
         self.agent.text("send", simulation=self.simulation, instruction="com_star")
@@ -303,8 +303,8 @@ class McpServerTest(unittest.TestCase):
         self.assertEqual(self.agent.text("send", simulation=self.simulation,
                                          instruction="sendme"),
                          "Sent. The log since your last send or log:\n"
-                         "receives sendme\n"
-                         "sends 66 00 ff ff ff (sendme)")
+                         "SIM RECV: sendme\n"
+                         "SIM SEND: 66 00 ff ff ff (sendme)")
 
     def test_what_the_log_has_since_at_most_ten_lines(self):
         # A copy of the app whose button sends a byte 12 times as it is released.
@@ -322,7 +322,7 @@ class McpServerTest(unittest.TestCase):
         self.assertEqual(self.agent.text("send", simulation=printing, instruction="click b0,0"),
                          "\n".join(["Sent. The log since your last send or log:",
                                     "... 3 lines before these: call log with after 1"]
-                                   + ["sends 01"] * 10))
+                                   + ["SIM SEND: 01"] * 10))
 
     def test_a_start_again_that_does_not_build(self):
         # The agent's edit has a mistake: the start again is refused, and

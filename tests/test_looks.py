@@ -84,7 +84,8 @@ class LooksTest(SimulationTestCase):
             self.simulation.release()
         lines = log(self.simulation)
         self.assertEqual([(entry["number"], entry["line"]) for entry in lines],
-                         [(1, "sends 70 72 65 73 73 65 64"), (2, "sends 70 72 65 73 73 65 64")])
+                         [(1, "SIM SEND: 70 72 65 73 73 65 64"),
+                          (2, "SIM SEND: 70 72 65 73 73 65 64")])
         self.assertEqual(lines[0]["time"], self.simulation.log[0][0])
         self.assertEqual(log(self.simulation, 1), lines[1:])
         self.assertEqual(log(self.simulation, 5), [])

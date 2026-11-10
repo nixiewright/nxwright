@@ -165,7 +165,7 @@ class LiveDebuggingTest(LiveTestCase):
         self.request("next")
         self.assertEqual(self.frames()[0], ("go.down", 4))
         self.request("continue")
-        self.assertEqual(self.wait_for_log(), ["sends 70 72 65 73 73 65 64"])
+        self.assertEqual(self.wait_for_log(), ["SIM SEND: 70 72 65 73 73 65 64"])
 
     def test_a_session_ends_before_its_folder_goes(self):
         # tearDown deletes the folder, which the simulation's thread reads
@@ -226,7 +226,7 @@ class LiveDebuggingTest(LiveTestCase):
         self.assertIn("pages/page0.nx line 2: nowhere", stop["description"])
         self.request("continue")
         self.request("nxwright/press", x=10, y=10)
-        self.assertEqual(self.wait_for_log()[-1], "sends 70 72 65 73 73 65 64")
+        self.assertEqual(self.wait_for_log()[-1], "SIM SEND: 70 72 65 73 73 65 64")
         self.assertEqual(self.adapter._live.simulation.starts, drawing["start"])
 
     def test_a_press_during_a_delay_waits(self):
@@ -234,20 +234,20 @@ class LiveDebuggingTest(LiveTestCase):
         self.wait_for("nxwright/drawing")
         self.request("nxwright/press", x=10, y=310)
         self.request("nxwright/press", x=10, y=10)
-        self.assertEqual(self.wait_for_log()[-1], "sends 70 72 65 73 73 65 64")
+        self.assertEqual(self.wait_for_log()[-1], "SIM SEND: 70 72 65 73 73 65 64")
 
     def test_a_program_that_opens_no_page(self):
         self.program("int count=0, ticks=0\n")
         self.launch()
         self.request("nxwright/serial", text="count=3")
-        self.assertEqual(self.wait_for_log()[0], "receives count=3")
+        self.assertEqual(self.wait_for_log()[0], "SIM RECV: count=3")
         self.assertEqual(self.events("nxwright/drawing"), [])
         self.assertEqual(self.events("terminated"), [])
 
     def test_the_logs_formats_from_the_launch(self):
         self.launch(logReceived="hex", logSent="both")
         self.request("nxwright/serial", text="count=3")
-        self.assertEqual(self.wait_for_log()[0], "receives 63 6f 75 6e 74 3d 33 ff ff ff")
+        self.assertEqual(self.wait_for_log()[0], "SIM RECV: 63 6f 75 6e 74 3d 33 ff ff ff")
 
     def test_an_unknown_log_format_stops_the_launch(self):
         self.request("initialize")
@@ -398,7 +398,7 @@ class AgentRequestsTest(LiveTestCase):
         self.assertEqual(values, {"values": {"count": 11}})
         lines = self.reply_to(self.request_later("nxwright/log", after=0))["body"]["lines"]
         self.assertEqual([(entry["number"], entry["line"]) for entry in lines],
-                         [(1, "sends 70 72 65 73 73 65 64")])
+                         [(1, "SIM SEND: 70 72 65 73 73 65 64")])
 
     def test_a_look_at_the_screen(self):
         # Its text layout, the page shown, and a PNG picture, in base64.

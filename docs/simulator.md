@@ -417,10 +417,11 @@ This happens on the Edge and Intelligent series only. The Basic, Enhanced, and D
 
 ## The serial line
 
-The log shows what the screen receives and sends on its serial line. A launch configuration's `logReceived` and `logSent` set how each is shown: as text (`text`), in hexadecimal (`hex`), or `both`.
+The log shows what the screen receives and sends on its serial line, in lines that start with `SIM RECV:` and `SIM SEND:`. A launch configuration's `logReceived` and `logSent` set how each is shown: as text (`text`), in hexadecimal (`hex`), or `both`.
 
 - By default, what the screen receives shows as text, and what it sends in hexadecimal.
 - As text, the FF FF FF that ends an instruction or a reply is left out. A byte that is not a character shows as `\xNN`.
+- A note that is not data goes in angle brackets, as in `SIM SEND: <nothing: text 'ā' incompatible with project encoding iso-8859-1>`.
 
 ### Return codes
 
@@ -463,6 +464,7 @@ On Linux, a port has a name such as `/dev/ttyUSB0`.
 - When the screen starts again, for example with `rest`, it drops what it has received but not yet run.
 - While the simulation is paused, instructions that arrive wait, and do not count against the screen's serial buffer ([Holding instructions](#holding-instructions)).
 - You can connect the simulator to a program on the same computer by using a virtual pair of ports. On Windows, com0com creates one. On Linux or macOS, `socat -d -d pty,raw,echo=0 pty,raw,echo=0` creates one, and prints the two ports' names.
+- The log calls the port the MCU port, named after the microcontroller (MCU) usually at its other end, as in `MCU port COM4 connected at 115200 bits per second`.
 - When a port cannot open, or is lost, the log shows the reason. The simulation keeps running without the port.
 - When the port does not take what the simulator sends in time, for example because nothing reads the other end, the simulator drops the rest of the write and logs it, so that the simulation does not freeze.
 

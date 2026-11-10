@@ -155,7 +155,8 @@ test("nxwright mcp's own client drives a simulation through the channel", async 
     // A PNG's first bytes: 89, then "PNG".
     assert.equal(answers.screen.png, "89504e47");
     assert.equal(answers.components[0], "page");
-    assert.ok(answers.log.includes('receives dirLabel.txt="new"'), answers.log.join("\n"));
+    assert.ok(answers.log.includes('SIM RECV: dirLabel.txt="new"'),
+              answers.log.join("\n"));
     await waitFor(() => !vscode.debug.activeDebugSession, "the simulation's end", 10000);
   });
 });

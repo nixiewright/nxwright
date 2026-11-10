@@ -115,7 +115,7 @@ class SerialLinkTest(unittest.TestCase):
         self.assertIsNone(self.link.send(b"ok"))
         port.taken = 1
         self.assertEqual(self.link.send(b"ok"),
-                         "COM4 did not send 6b: the port did not take it in time")
+                         "MCU port COM4 did not send 6b: the port did not take it in time")
         self.assertEqual(port.written, [b"ok", b"ok"])
 
     def test_changing_the_port_and_disconnecting(self):
@@ -129,15 +129,15 @@ class SerialLinkTest(unittest.TestCase):
         self.assertTrue(second.closed)
         self.assertFalse(self.link.state()["connected"])
         self.assertEqual([body for kind, body in self.news if kind == "log"], [
-            "connected to COM4 at 115200 bits per second",
-            "connected to COM5 at 9600 bits per second", "COM5 disconnected"])
+            "MCU port COM4 connected at 115200 bits per second",
+            "MCU port COM5 connected at 9600 bits per second", "MCU port COM5 disconnected"])
 
     def test_a_port_that_cannot_open(self):
         self.ports.refusal = "Access is denied."
         self.link.connect("COM4", 115200)
         self.assertEqual(self.link.state(), {"name": "COM4", "baud": 115200, "connected": False,
                                              "problem": "Access is denied."})
-        self.assertIn(("log", "COM4 could not open: Access is denied."), self.news)
+        self.assertIn(("log", "MCU port COM4 could not open: Access is denied."), self.news)
         self.assertIn(("state", self.link.state()), self.news)
 
     def test_a_port_lost_while_open(self):
@@ -172,7 +172,7 @@ class SerialPortSessionTest(LiveTestCase):
         wait_until(lambda: self.adapter._live.simulation.globals["count"] == 3)
         self.request("nxwright/press", x=10, y=10)
         wait_until(lambda: b"pressed" in port.written)
-        self.assertIn("receives count=3", self.wait_for_log())
+        self.assertIn("SIM RECV: count=3", self.wait_for_log())
 
     def test_bytes_arriving_while_paused_wait_outside_the_serial_buffer(self):
         # More than the screen's 1024 bytes arrive while the debugger has
@@ -214,7 +214,7 @@ class SerialPortSessionTest(LiveTestCase):
         self.wait_for("nxwright/drawing")
         connection = [body["output"] for body in self.events("output")
                       if body["category"] == "console"]
-        self.assertTrue(connection[0].endswith("COM4 could not open: Access is denied.\n"))
+        self.assertTrue(connection[0].endswith("MCU port COM4 could not open: Access is denied.\n"))
         self.assertEqual(self.events("terminated"), [])
 
     def test_a_port_named_wrongly_is_refused(self):
