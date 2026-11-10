@@ -399,9 +399,11 @@ A waveform draws the points that code adds with `add`, each channel in its colou
 - `cle` clears the points.
 - A waveform of global scope (`vscope` 1) keeps its points while another page shows. Other waveforms start empty each time their page opens. Starting the app again clears every waveform.
 
-### The waveform generator
+### The signal generator
 
-To see a waveform move without a device, use the waveform generator. It sends points to your app's waveforms, the same way a device on the serial line would with `add`. Open it with **Waveform generator** in the Simulator section.
+To see a waveform move without a device, use the signal generator. It sends points to your app's waveforms, the same way a device on the serial line would with `add`. Open it with **Signal generator** in the Simulator section.
+
+You can run several generators at once, each with its own waveforms and its own waves.
 
 | Setting | What it is |
 | --- | --- |
@@ -416,9 +418,11 @@ A custom wave plays a list of values in a loop, one value for each point. You ca
 
 - Each channel starts a quarter of its wave's cycle after the channel before it, so that channels with the same wave do not draw over each other.
 - If you feed waveforms that have different numbers of channels, each waveform gets only the channels it has.
-- You can change the settings while the generator runs, and each change takes effect at the next point.
-- The generator keeps running when the app starts again, but a waveform gets points only while its page is shown.
-- To start a saved generator with the simulation, give its file as the launch configuration's `waveGenerator`.
+- You can change the settings while a generator runs, and each change takes effect at the next point.
+- A waveform gets points only while its page is shown.
+- Generators keep running when the app starts again.
+
+You can save the panel's generators to a file. Opening a file stops the generators that are running, and replaces them with the file's. To start saved generators with the simulation, give their file as the launch configuration's `signalGenerators`.
 
 The points arrive the same way as instructions from the serial line:
 

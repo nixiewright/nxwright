@@ -1,6 +1,6 @@
-"""The waveform generator (testing/wave_generators.py): its shapes, its
-settings and their file, and its points in a simulation
-(testing/simulation.py)."""
+"""Signal generators (testing/signal_generators.py): a wave's shapes, the
+generators' settings and their file, and a waveform generator's points in a
+simulation (testing/simulation.py)."""
 from fractions import Fraction
 import json
 from pathlib import Path
@@ -10,22 +10,24 @@ from unittest import mock
 
 from nxwright import NxwrightError
 from nxwright.testing.simulation import Simulation
-from nxwright.testing.wave_generators import (GeneratorRun, generator_from_json,
-                                              generator_settings, generator_to_json,
-                                              read_generator_file, wave_value)
+from nxwright.testing.signal_generators import (WaveformGeneratorRun, generator_dict,
+                                                generator_settings, generators_from_json,
+                                                generators_to_json, read_generators_file,
+                                                wave_value)
 from tests.test_simulation import SimulationTestCase, placed, table
 
 
 def settings(**given):
-    """The GeneratorSettings of a generator feeding channel 0 of page0's
+    """The settings of a waveform generator feeding channel 0 of page0's
     chart, with the generator's own settings `given`; `channels`, when
     given, replaces the channel list."""
     channels = given.pop("channels", [{"channel": 0}])
-    return generator_settings(dict({"waveforms": [{"page": "page0", "waveform": "chart"}],
+    return generator_settings(dict({"kind": "waveform",
+                                    "waveforms": [{"page": "page0", "waveform": "chart"}],
                                     "channels": channels}, **given), "test")
 
 
-def points(generator: GeneratorRun, count: int) -> list:
+def points(generator: WaveformGeneratorRun, count: int) -> list:
     """The next `count` ticks' values of the generator's first channel."""
     return [generator.tick()[0][1] for _ in range(count)]
 
@@ -54,51 +56,53 @@ class ShapeTest(unittest.TestCase):
 
     def test_the_sine_starts_at_the_minimum_and_rises(self):
         # As the Nextion Editor's generator draws it.
-        run = GeneratorRun(settings(shape="sine", minimum=10, maximum=50, period=4), 0)
+        run = WaveformGeneratorRun(settings(shape="sine", minimum=10, maximum=50, period=4), 0)
         self.assertEqual(points(run, 5), [10, 30, 50, 30, 10])
 
     def test_a_custom_wave_plays_its_values_in_a_loop(self):
-        run = GeneratorRun(settings(shape="custom", values=[5, 9, 200]), 0)
+        run = WaveformGeneratorRun(settings(shape="custom", values=[5, 9, 200]), 0)
         self.assertEqual(points(run, 5), [5, 9, 200, 5, 9])
 
     def test_random_values_and_noise_are_the_same_each_time_a_generator_starts(self):
         for given in ({"shape": "random", "minimum": 20, "maximum": 30},
                       {"shape": "sine", "noise": 10}):
             with self.subTest(given=given):
-                first = points(GeneratorRun(settings(**given), 0), 50)
-                self.assertEqual(points(GeneratorRun(settings(**given), 0), 50), first)
+                first = points(WaveformGeneratorRun(settings(**given), 0), 50)
+                self.assertEqual(points(WaveformGeneratorRun(settings(**given), 0), 50), first)
                 self.assertGreater(len(set(first)), 5)
-        values = points(GeneratorRun(settings(shape="random", minimum=20, maximum=30), 0), 200)
+        run = WaveformGeneratorRun(settings(shape="random", minimum=20, maximum=30), 0)
+        values = points(run, 200)
         self.assertEqual((min(values), max(values)), (20, 30))
 
     def test_noise_keeps_points_from_0_to_255(self):
         for shape, value, extreme in (("custom", 250, 255), ("custom", 3, 0)):
-            run = GeneratorRun(settings(shape=shape, values=[value], noise=40), 0)
+            run = WaveformGeneratorRun(settings(shape=shape, values=[value], noise=40), 0)
             self.assertIn(extreme, points(run, 100))
             self.assertTrue(all(0 <= point <= 255 for point in points(run, 100)))
 
     def test_a_channel_overrides_the_generators_settings(self):
-        run = GeneratorRun(settings(shape="square", maximum=80, period=2, interval=10,
-                                    channels=[{"channel": 0},
-                                              {"channel": 1, "shape": "sawtooth",
-                                               "interval": 20}]), 0)
+        run = WaveformGeneratorRun(settings(shape="square", maximum=80, period=2, interval=10,
+                                            channels=[{"channel": 0},
+                                                      {"channel": 1, "shape": "sawtooth",
+                                                       "interval": 20}]), 0)
         # Channel 1 starts a quarter into its cycle: a fifth of the way up.
         self.assertEqual([run.tick() for _ in range(3)],
                          [[(0, 80)], [(0, 0), (1, 20)], [(0, 80)]])
 
     def test_each_channel_starts_a_quarter_cycle_after_the_one_before(self):
         # So that channels with the same wave do not draw over each other.
-        run = GeneratorRun(settings(shape="sine", maximum=100, period=4, interval=10,
-                                    channels=[{"channel": number} for number in range(4)]), 0)
+        four = [{"channel": number} for number in range(4)]
+        run = WaveformGeneratorRun(settings(shape="sine", maximum=100, period=4, interval=10,
+                                            channels=four), 0)
         self.assertEqual(run.tick(), [(0, 0), (1, 50), (2, 100), (3, 50)])
         self.assertEqual(run.tick(), [(0, 50), (1, 100), (2, 50), (3, 0)])
         # A custom wave starts a quarter of its list further on.
-        run = GeneratorRun(settings(shape="custom", values=list(range(8)),
-                                    channels=[{"channel": number} for number in range(4)]), 0)
+        run = WaveformGeneratorRun(settings(shape="custom", values=list(range(8)),
+                                            channels=four), 0)
         self.assertEqual(run.tick(), [(0, 0), (1, 2), (2, 4), (3, 6)])
 
     def test_a_change_keeps_the_waves_place(self):
-        run = GeneratorRun(settings(shape="sawtooth", maximum=100, period=4), 0)
+        run = WaveformGeneratorRun(settings(shape="sawtooth", maximum=100, period=4), 0)
         self.assertEqual(points(run, 2), [0, 25])
         # A new period moves on from the place reached, half the cycle.
         run.change(settings(shape="sawtooth", maximum=100, period=8), 20)
@@ -111,61 +115,92 @@ class ShapeTest(unittest.TestCase):
 class SettingsFileTest(unittest.TestCase):
 
     def test_a_file_reads_back_what_was_written(self):
-        given = settings(shape="custom", values=[1, 2], interval=5,
-                         channels=[{"channel": 0}, {"channel": 2, "noise": 4}])
-        text = generator_to_json(given)
-        self.assertEqual(generator_from_json(text, "test"), given)
-        self.assertEqual(json.loads(text)["nxwrightWaves"], 1)
+        given = (settings(shape="custom", values=[1, 2], interval=5,
+                          channels=[{"channel": 0}, {"channel": 2, "noise": 4}]),
+                 settings(shape="square"))
+        text = generators_to_json(given)
+        self.assertEqual(generators_from_json(text, "test"), given)
+        written = json.loads(text)
+        self.assertEqual(written["nxwrightSignals"], 1)
+        self.assertEqual([generator["kind"] for generator in written["generators"]],
+                         ["waveform", "waveform"])
 
     def test_a_file_on_disk(self):
         folder = self.enterContext(tempfile.TemporaryDirectory())
-        path = Path(folder) / "waves.json"
-        path.write_text(generator_to_json(settings()), encoding="utf-8")
-        self.assertEqual(read_generator_file(path), settings())
+        path = Path(folder) / "signals.json"
+        path.write_text(generators_to_json([settings()]), encoding="utf-8")
+        self.assertEqual(read_generators_file(path), (settings(),))
         with self.assertRaisesRegex(NxwrightError, "cannot be read"):
-            read_generator_file(path.with_name("missing.json"))
+            read_generators_file(path.with_name("missing.json"))
 
     def test_settings_are_refused_with_their_place(self):
-        generator = {"waveforms": [{"page": "page0", "waveform": "chart"}],
+        generator = {"kind": "waveform", "waveforms": [{"page": "page0", "waveform": "chart"}],
                      "channels": [{"channel": 0}]}
         for change, refusal in (
                 ({"channels": [{"channel": 0}, {"channel": 1, "shape": "saw"}]},
-                 r"generator\.channels\[1\]: shape 'saw' is not a shape"),
+                 r"\.channels\[1\]: shape 'saw' is not a shape"),
                 ({"minimum": 90, "maximum": 10},
-                 r"generator\.channels\[0\]: minimum 90 is above maximum 10"),
+                 r"\.channels\[0\]: minimum 90 is above maximum 10"),
                 ({"shape": "custom"},
-                 r"generator\.channels\[0\]: a custom wave needs values"),
-                ({"interval": 0}, r"generator: interval must be a whole number of 1"),
+                 r"\.channels\[0\]: a custom wave needs values"),
+                ({"interval": 0}, r": interval must be a whole number of 1"),
                 ({"maximum": 256},
-                 r"generator: maximum must be a whole number from 0 to 255"),
+                 r": maximum must be a whole number from 0 to 255"),
                 ({"channels": [{"channel": 4}]},
-                 r"generator\.channels\[0\]: channel must be from 0 to 3"),
+                 r"\.channels\[0\]: channel must be from 0 to 3"),
                 ({"channels": [{"channel": 1}, {"channel": 1}]},
-                 r"generator: channels lists a channel twice"),
-                ({"waveforms": []}, r"generator: waveforms must list one waveform or more"),
+                 r": channels lists a channel twice"),
+                ({"waveforms": []}, r": waveforms must list one waveform or more"),
                 # Settings the generator once had are settings no more.
-                ({"phase": 25}, r"generator: phase is not a setting"),
-                ({"seed": 3}, r"generator: seed is not a setting"),
-                ({"speed": 2}, r"generator: speed is not a setting")):
+                ({"phase": 25}, r": phase is not a setting"),
+                ({"seed": 3}, r": seed is not a setting"),
+                ({"speed": 2}, r": speed is not a setting")):
             with self.subTest(change=change):
-                text = json.dumps({"nxwrightWaves": 1, "generator": dict(generator, **change)})
-                with self.assertRaisesRegex(NxwrightError, "^waves.json: " + refusal):
-                    generator_from_json(text, "waves.json")
+                # The second generator of the file is the one at fault.
+                text = json.dumps({"nxwrightSignals": 1,
+                                   "generators": [generator, dict(generator, **change)]})
+                with self.assertRaisesRegex(NxwrightError,
+                                            r"^signals.json: generators\[1\]" + refusal):
+                    generators_from_json(text, "signals.json")
+
+    def test_a_generator_says_its_kind(self):
+        generator = {"waveforms": [{"page": "page0", "waveform": "chart"}],
+                     "channels": [{"channel": 0}]}
+        with self.assertRaisesRegex(NxwrightError, "^test: a generator must give its kind, as "
+                                                   '"kind": "waveform"$'):
+            generator_settings(generator, "test")
+        # A kind from a later version of nxwright is refused, and the error
+        # gives its name.
+        with self.assertRaisesRegex(NxwrightError, "^test: kind 'sequence' is not a kind of "
+                                                   "generator this version of nxwright knows. "
+                                                   "It knows waveform$"):
+            generator_settings(dict(generator, kind="sequence"), "test")
+        self.assertEqual(generator_dict(settings())["kind"], "waveform")
 
     def test_a_custom_wave_ignores_the_minimum_and_the_maximum(self):
         # Its values are played as given, so a minimum above the maximum,
         # here the default of 100, refuses nothing.
-        run = GeneratorRun(settings(shape="custom", minimum=150, values=[7, 8]), 0)
+        run = WaveformGeneratorRun(settings(shape="custom", minimum=150, values=[7, 8]), 0)
         self.assertEqual(points(run, 2), [7, 8])
 
     def test_other_files_are_refused(self):
-        for text, refusal in (("{", "not JSON"), ("{}", "not a waveform generator's file"),
-                              ('{"nxwrightWaves": 2, "generator": {}}',
-                               "nxwrightWaves 2 is not a version nxwright reads"),
-                              ('{"nxwrightWaves": 1}', "a generator must be a JSON object")):
+        for text, refusal in (("{", "not JSON"),
+                              ("{}", "not a signal generator settings file"),
+                              # The form the waveform generator saved before
+                              # generators had kinds.
+                              ('{"nxwrightWaves": 1, "generator": {}}',
+                               "not a signal generator settings file"),
+                              ('{"nxwrightSignals": 2, "generators": [{}]}',
+                               "nxwrightSignals 2 is not a version nxwright reads"),
+                              ('{"nxwrightSignals": 1}',
+                               "generators must list one generator or more"),
+                              ('{"nxwrightSignals": 1, "generators": []}',
+                               "generators must list one generator or more"),
+                              ('{"nxwrightSignals": 1, "generators": [3]}',
+                               r"generators\[0\]: a generator must be a JSON object")):
             with self.subTest(text=text):
                 with self.assertRaisesRegex(NxwrightError, refusal):
-                    generator_from_json(text, "waves.json")
+                    generators_from_json(text, "signals.json")
 
 
 class GeneratorInSimulationTest(SimulationTestCase):
@@ -226,25 +261,92 @@ on go.down:
     def test_the_log_tells_the_start_and_the_stop_not_each_point(self):
         simulation = Simulation(self.root)
         feeding = self.sine(channels=[{"channel": 0}, {"channel": 1}])
-        simulation.start_generator(feeding)
+        number = simulation.start_generator(feeding)
         simulation.advance(100)
-        self.assertEqual(simulation.generator(), feeding)
-        simulation.stop_generator()
+        self.assertEqual(simulation.generators(), {1: feeding})
+        simulation.stop_generator(number)
         simulation.advance(100)
         self.assertEqual([line for _, line in simulation.log],
-                         ["the waveform generator starts, sending to channels 0, 1 of "
-                          "page0.chart", "the waveform generator stops"])
+                         ["waveform generator 1 starts, sending to channels 0, 1 of "
+                          "page0.chart", "waveform generator 1 stops"])
         self.assertEqual(len(simulation.waves()["chart"][0]), 5)
-        self.assertIsNone(simulation.generator())
+        self.assertEqual(simulation.generators(), {})
 
-    def test_a_start_replaces_the_generator_running(self):
+    def test_generators_run_side_by_side(self):
         simulation = Simulation(self.root)
-        simulation.start_generator(self.sine(shape="sawtooth"))
+        sawtooth = self.sine(shape="sawtooth")
+        square = self.sine(shape="square", channels=[{"channel": 1}])
+        self.assertEqual(simulation.start_generator(sawtooth), 1)
         simulation.advance(40)
-        # Its waves start again, and the one before sends no more.
-        simulation.start_generator(self.sine(shape="square", channels=[{"channel": 1}]))
+        self.assertEqual(simulation.start_generator(square), 2)
         simulation.advance(40)
-        self.assertEqual(simulation.waves(), {"chart": {0: [0, 25], 1: [100, 0]}})
+        # The first one went on, and the second one's wave started.
+        self.assertEqual(simulation.waves(), {"chart": {0: [0, 25, 50, 75], 1: [100, 0]}})
+        self.assertEqual(simulation.generators(), {1: sawtooth, 2: square})
+        # Stopping one leaves the other running.
+        simulation.stop_generator(1)
+        simulation.advance(20)
+        self.assertEqual(simulation.waves(), {"chart": {0: [0, 25, 50, 75], 1: [100, 0, 0]}})
+        self.assertEqual(simulation.generators(), {2: square})
+        # A number is not given twice.
+        self.assertEqual(simulation.start_generator(sawtooth), 3)
+
+    def test_generators_due_together_send_in_the_order_of_their_numbers(self):
+        simulation = Simulation(self.root)
+        simulation.start_generator(self.sine(shape="custom", values=[1]))
+        simulation.start_generator(self.sine(shape="custom", values=[2]))
+        simulation.start_generator(self.sine(shape="custom", values=[3], interval=40))
+        simulation.advance(40)
+        self.assertEqual(simulation.waves(), {"chart": {0: [1, 2, 1, 2, 3]}})
+
+    def change_while_points_arrive(self, simulation: Simulation, change):
+        """Has `change(simulation)` run once, while the next points arrive.
+        This stands in for the debugger holding the simulation inside the
+        code a point runs, as when a point wakes the screen and its wake page
+        loads: the panel can stop and start generators meanwhile."""
+        arrived = Simulation._serial_arrived
+        changed = []
+
+        def change_meanwhile(simulation):
+            arrived(simulation)
+            if not changed:
+                changed.append(True)
+                change(simulation)
+        patch = mock.patch.object(Simulation, "_serial_arrived", autospec=True,
+                                  side_effect=change_meanwhile)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_a_generator_stopped_while_points_go_out_sends_no_more(self):
+        simulation = Simulation(self.root)
+        simulation.start_generator(self.sine(shape="custom", values=[1]))
+        second = simulation.start_generator(self.sine(shape="custom", values=[2]))
+        self.change_while_points_arrive(simulation,
+                                        lambda simulation: simulation.stop_generator(second))
+        simulation.advance(40)
+        self.assertEqual(simulation.waves(), {"chart": {0: [1, 1]}})
+
+    def test_a_generator_started_while_points_go_out_waits_for_its_interval(self):
+        simulation = Simulation(self.root)
+        simulation.start_generator(self.sine(shape="custom", values=[1]))
+        other = self.sine(shape="custom", values=[2])
+        self.change_while_points_arrive(simulation,
+                                        lambda simulation: simulation.start_generator(other))
+        simulation.advance(20)
+        self.assertEqual(simulation.waves(), {"chart": {0: [1]}})
+        simulation.advance(20)
+        self.assertEqual(simulation.waves(), {"chart": {0: [1, 1, 2]}})
+
+    def test_each_generator_keeps_its_own_random_numbers(self):
+        # A generator sends the same points whether or not another runs.
+        alone = Simulation(self.root)
+        alone.start_generator(self.sine(shape="random"))
+        alone.advance(200)
+        beside = Simulation(self.root)
+        beside.start_generator(self.sine(shape="random", channels=[{"channel": 1}]))
+        beside.start_generator(self.sine(shape="random"))
+        beside.advance(200)
+        self.assertEqual(beside.waves()["chart"][0], alone.waves()["chart"][0])
 
     def test_each_point_is_answered_as_bkcmd_asks(self):
         simulation = Simulation(self.root)
@@ -264,8 +366,22 @@ on go.down:
         simulation.serial_input("com_star")
         self.assertEqual(simulation.waves(), {"chart": {0: [0, 50, 100]}})
         self.assertEqual([line for _, line in simulation.log if "held" in line],
-                         ["the waveform generator's points are held: the serial line is "
-                          "stopped", "the waveform generator's held points run"])
+                         ["waveform generator 1's points are held: the serial line is "
+                          "stopped", "waveform generator 1's held points run"])
+
+    def test_a_hold_is_told_for_each_generator(self):
+        simulation = Simulation(self.root)
+        simulation.start_generator(self.sine())
+        simulation.start_generator(self.sine(channels=[{"channel": 1}]))
+        simulation.serial_input("com_stop")
+        simulation.advance(40)
+        simulation.serial_input("com_star")
+        self.assertEqual(simulation.waves(), {"chart": {0: [0, 50], 1: [50, 100]}})
+        self.assertEqual([line for _, line in simulation.log if "held" in line],
+                         ["waveform generator 1's points are held: the serial line is stopped",
+                          "waveform generator 2's points are held: the serial line is stopped",
+                          "waveform generator 1's held points run",
+                          "waveform generator 2's held points run"])
 
     def test_each_hold_is_told_in_the_log(self):
         simulation = Simulation(self.root)
@@ -364,9 +480,13 @@ on tick.timer:
             with self.subTest(given=given):
                 with self.assertRaisesRegex(NxwrightError, refusal):
                     simulation.start_generator(settings(**given))
-        self.assertIsNone(simulation.generator())
-        for act in (simulation.stop_generator, lambda: simulation.change_generator(self.sine())):
-            with self.assertRaisesRegex(NxwrightError, "no waveform generator is running"):
+        self.assertEqual(simulation.generators(), {})
+        number = simulation.start_generator(self.sine())
+        simulation.stop_generator(number)
+        for act in (lambda: simulation.stop_generator(number),
+                    lambda: simulation.change_generator(number, self.sine()),
+                    lambda: simulation.stop_generator(7)):
+            with self.assertRaisesRegex(NxwrightError, "generator [17] is not running"):
                 act()
 
     def test_a_channel_goes_only_to_the_waveforms_that_have_it(self):
@@ -395,9 +515,9 @@ on tick.timer:
 
     def test_a_change_takes_effect_at_the_next_point(self):
         simulation = Simulation(self.root)
-        simulation.start_generator(self.sine())
+        number = simulation.start_generator(self.sine())
         simulation.advance(40)
-        simulation.change_generator(self.sine(maximum=50))
+        simulation.change_generator(number, self.sine(maximum=50))
         simulation.advance(40)
         # Half way through its cycle, with a lower maximum.
         self.assertEqual(simulation.waves(), {"chart": {0: [0, 50, 50, 25]}})

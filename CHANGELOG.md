@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.2.16] - 2026-11-10
+
+- Renamed waveform generator to signal generator, added ability to runs multiple generators at once.
+
 ### [0.2.15] - 2026-11-10
 
 - Fixed waveforms of global scope losing their points when the page changes.
@@ -97,6 +101,12 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.11] - 2026-11-10
+
+Needs nxwright 0.2.16 or later.
+
+- The Waveform generator panel is now the Signal generator panel, and runs several generators at once.
 
 ### [0.3.10] - 2026-11-10
 

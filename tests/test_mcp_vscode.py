@@ -30,8 +30,9 @@ COMPONENTS = [{"name": "page0", "type": "page", "x": 0, "y": 0, "w": 800, "h": 4
 PNG = write_png(1, 1, bytes((10, 20, 30, 255)))
 
 
-# The waveform generator's settings, as its tools give and get them.
-FEEDING = {"waveforms": [{"page": "page0", "waveform": "chart"}], "channels": [{"channel": 0}]}
+# A signal generator's settings, as its tools give and get them.
+FEEDING = {"kind": "waveform", "waveforms": [{"page": "page0", "waveform": "chart"}],
+           "channels": [{"channel": 0}]}
 
 
 class StandInChannel:
@@ -173,8 +174,10 @@ class StandInChannel:
             names = params.get("names")
             return {"values": values if names is None else {name: values[name]
                                                             for name in names}}
-        if method == "generator":
-            return {"generator": FEEDING}
+        if method == "startGenerator":
+            return {"number": 4}
+        if method == "generators":
+            return {"generators": [{"number": 4, "settings": FEEDING}]}
         if method == "log":
             lines = [{"number": 1, "time": 0, "line": "SIM RECV: page 0"},
                      {"number": 2, "time": 40, "line": "SIM SEND: 66 00"}]
@@ -302,15 +305,16 @@ class VsCodeSimulationTest(VsCodeTestCase):
 
     def test_the_generator_tools_go_to_the_windows_simulation(self):
         self.sent()
-        self.assertEqual(self.agent.text("start_generator", simulation=self.simulation,
-                                         settings=FEEDING), "Started.")
-        self.assertEqual(self.agent.data("generator", simulation=self.simulation),
-                         {"generator": FEEDING})
-        self.assertEqual(self.agent.text("stop_generator", simulation=self.simulation),
-                         "Stopped.")
+        self.assertEqual(self.agent.data("start_generator", simulation=self.simulation,
+                                         settings=FEEDING), {"numbers": [4]})
+        self.assertEqual(self.agent.data("generators", simulation=self.simulation),
+                         {"generators": [{"number": 4, "settings": FEEDING}]})
+        self.assertEqual(self.agent.text("stop_generator", simulation=self.simulation,
+                                         number=4), "Stopped.")
         session = {"session": "session-1"}
         self.assertEqual(self.sent(), [("startGenerator", dict(session, settings=FEEDING)),
-                                       ("generator", session), ("stopGenerator", session)])
+                                       ("generators", session),
+                                       ("stopGenerator", dict(session, number=4))])
 
     def test_a_wait_lets_time_pass_on_the_clock_alone(self):
         # The app runs on its own in VS Code: nothing is sent.

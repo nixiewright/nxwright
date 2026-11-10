@@ -26,7 +26,7 @@ export const CHANNEL_HOST = "127.0.0.1";
 const METHODS = new Set(["simulations", "start", "stop", "press", "move", "release", "serial",
                          "startAgain", "gpioInput", "gpioInputs", "startGenerator",
                          "stopGenerator", "screen", "components", "values", "log",
-                         "generator"]);
+                         "generators"]);
 
 // The folder of the channels' files on the system `platform`, given its
 // environment `env` and the user's home folder `home`: in the user's own

@@ -137,17 +137,21 @@ test("the GPIO methods go to the host, one pin or several", async () => {
                                 ["gpioInputs", { session: "s", levels: { pio2: 1 } }]]);
 });
 
-test("the waveform generator methods go to the host", async () => {
+test("the signal generator methods go to the host", async () => {
   const host = standInHost();
-  const settings = { waveforms: [{ page: "day", waveform: "chart" }], channels: [{ channel: 0 }] };
+  const settings = { kind: "waveform", waveforms: [{ page: "day", waveform: "chart" }],
+                     channels: [{ channel: 0 }] };
   await talk(new Conversation(TOKEN, host),
              { id: 1, method: "hello", params: { token: TOKEN } },
              { id: 2, method: "startGenerator", params: { session: "s", settings } },
-             { id: 3, method: "generator", params: { session: "s" } },
-             { id: 4, method: "stopGenerator", params: { session: "s" } });
+             { id: 3, method: "generators", params: { session: "s" } },
+             { id: 4, method: "stopGenerator", params: { session: "s", number: 1 } },
+             // The old method `generator`, from when there was one generator, is
+             // no longer accepted.
+             { id: 5, method: "generator", params: { session: "s" } });
   assert.deepEqual(host.calls, [["startGenerator", { session: "s", settings }],
-                                ["generator", { session: "s" }],
-                                ["stopGenerator", { session: "s" }]]);
+                                ["generators", { session: "s" }],
+                                ["stopGenerator", { session: "s", number: 1 }]]);
 });
 
 test("an agent may act on a simulation whose serial line reaches a device", () => {

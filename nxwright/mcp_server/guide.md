@@ -59,7 +59,7 @@ A session usually goes:
 5. `screen`, `values`, or `log`, to check what happened.
 6. `stop_simulation`.
 
-To fill a waveform with data, such as a sensor's readings, call `start_generator`. It sends points to the waveform as time passes, the way a device on the serial line would, so `wait` before you look at the `screen`.
+To fill a waveform with data, such as a sensor's readings, call `start_generator`. The generator sends points to the waveform as time passes, the way a device on the serial line would, so `wait` before you look at the `screen`. Each call adds to the generators already running, and returns the numbers of the ones it started. To stop one, pass its number to `stop_generator`.
 
 If you pass `page` to `start_simulation`, the app starts on that page without running `program.nx`. The `int` variables in `program.nx` still start at their declared values, or 0.
 

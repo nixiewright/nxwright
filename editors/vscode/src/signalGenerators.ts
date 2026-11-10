@@ -1,13 +1,13 @@
-// The waveform generator panel: the generator that sends points to the
-// waveforms of the simulation running, as a device on the serial line would
-// (nxwright/testing/wave_generators.py). The Simulator section's "Waveform
-// generator" button opens it beside the screen (simulator.ts). Its page,
-// media/wave-generators.mjs, holds the generator's settings. This side
-// passes what the page asks to the simulation's session, as the adapter's
-// custom requests (nxwright/debug_adapter/adapter.py), and shows the
-// dialogs that save the generator to a settings file, open one, and open a
-// CSV file of a custom wave's values. A file can be anywhere on the
-// computer.
+// The Signal generator panel, where the user sets up generators that send
+// values to the running simulation, the way devices on the serial line
+// would (nxwright/testing/signal_generators.py). The Simulator section's
+// "Signal generator" button opens it beside the screen (simulator.ts). The
+// panel's page, media/signal-generators.mjs, keeps the generators'
+// settings. This file passes the page's requests on to the simulation's
+// session as the adapter's custom requests
+// (nxwright/debug_adapter/adapter.py). It also shows the dialogs that save
+// the generators to a settings file, open one, and open a CSV file of a
+// custom wave's values. These files can be anywhere on the computer.
 import * as path from "path";
 import * as vscode from "vscode";
 import { webviewPage } from "./webviewPage";
@@ -17,7 +17,7 @@ import { webviewPage } from "./webviewPage";
 const ASK_AGAIN = 500;
 const MOST_ASKS = 40;
 
-export class WaveGeneratorPanel {
+export class SignalGeneratorPanel {
   private panel: vscode.WebviewPanel | undefined;
   // The folder the last file was saved to or opened from, which the next
   // dialog starts in.
@@ -33,8 +33,8 @@ export class WaveGeneratorPanel {
       return;
     }
     const panel = vscode.window.createWebviewPanel(
-      "nxwrightWaveGenerator",
-      "Waveform generator",
+      "nxwrightSignalGenerator",
+      "Signal generator",
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
       {
         enableScripts: true,
@@ -43,7 +43,7 @@ export class WaveGeneratorPanel {
       },
     );
     panel.webview.html = webviewPage(panel.webview, this.extensionUri, {
-      script: "wave-generators.mjs", styles: STYLES, body: BODY,
+      script: "signal-generators.mjs", styles: STYLES, body: BODY,
     });
     panel.webview.onDidReceiveMessage((message) => void this.received(session, panel, message));
     panel.onDidDispose(() => {
@@ -54,13 +54,14 @@ export class WaveGeneratorPanel {
     this.panel = panel;
   }
 
-  // Closes the panel: its simulation ended, and its generator with it.
+  // Closes the panel: its simulation ended, and its generators with it.
   close(): void {
     this.panel?.dispose();
   }
 
-  // Does what the page asks. What the simulation refuses goes back to the
-  // page, which shows it.
+  // Does what the page asks. A message about one generator carries the
+  // page's `key` for it, which the reply gives back. What the simulation
+  // refuses goes back to the page, which shows it.
   private async received(session: vscode.DebugSession, panel: vscode.WebviewPanel,
                          message: { type?: string; [name: string]: unknown }): Promise<void> {
     // A panel closed meanwhile takes no reply.
@@ -73,19 +74,21 @@ export class WaveGeneratorPanel {
       if (message.type === "ready") {
         post({ type: "state", ...await this.state(session, panel) });
       } else if (message.type === "start") {
-        await session.customRequest("nxwright/startGenerator", { settings: message.settings });
-        post({ type: "started" });
+        const started = await session.customRequest("nxwright/startGenerator",
+                                                    { settings: message.settings });
+        post({ type: "started", key: message.key, number: started.number });
       } else if (message.type === "change") {
-        await session.customRequest("nxwright/changeGenerator", { settings: message.settings });
-        post({ type: "changed" });
+        await session.customRequest("nxwright/changeGenerator",
+                                    { number: message.number, settings: message.settings });
+        post({ type: "changed", key: message.key });
       } else if (message.type === "stop") {
-        await session.customRequest("nxwright/stopGenerator");
-        post({ type: "stopped" });
+        await session.customRequest("nxwright/stopGenerator", { number: message.number });
+        post({ type: "stopped", key: message.key });
       } else if (message.type === "save" && typeof message.text === "string") {
         await this.save(session, message.text);
       } else if (message.type === "open") {
-        const file = await this.chosenFile(session, "Open a waveform generator",
-                                           { "Waveform generator": ["json"] });
+        const file = await this.chosenFile(session, "Open signal generators",
+                                           { "Signal generators": ["json"] });
         if (file) {
           post({ type: "opened", ...file });
         }
@@ -93,39 +96,41 @@ export class WaveGeneratorPanel {
         const file = await this.chosenFile(session, "Open a custom wave's values",
                                            { "CSV and text files": ["csv", "txt"] });
         if (file) {
-          post({ type: "csvValues", scope: message.scope, ...file });
+          post({ type: "csvValues", key: message.key, scope: message.scope, ...file });
         }
       }
     } catch (error) {
-      post({ type: "refused", message: error instanceof Error ? error.message : String(error) });
+      post({ type: "refused", key: message.key,
+             message: error instanceof Error ? error.message : String(error) });
       await this.tellRunning(session, post);
     }
   }
 
-  // Tells the page whether the generator runs, after the simulation refused
-  // something: an agent may have stopped it, or started one, meanwhile, and
-  // the page would go on offering the wrong one of Start and Stop.
+  // Tells the page which generators run, after the simulation refused
+  // something: an agent may have stopped one meanwhile, and the page would
+  // go on offering to stop it.
   private async tellRunning(session: vscode.DebugSession,
                             post: (reply: object) => void): Promise<void> {
     try {
-      const running = await session.customRequest("nxwright/generator");
-      post({ type: "running", running: (running.generator ?? null) !== null });
+      const running = await session.customRequest("nxwright/generators");
+      post({ type: "running", generators: running.generators });
     } catch {
       // A simulation that has ended answers nothing: its panel closes.
     }
   }
 
-  // The app's waveforms and the generator running, if any, once the app
-  // has started: a simulation whose pages still compile answers neither yet.
+  // Returns the app's waveforms and the generators running. A simulation
+  // whose pages are still compiling answers neither request, so this asks
+  // again until the app has started.
   private async state(session: vscode.DebugSession,
                       panel: vscode.WebviewPanel): Promise<object> {
     for (let asked = 1; ; asked += 1) {
       try {
         const [waveforms, running] = await Promise.all([
           session.customRequest("nxwright/waveforms"),
-          session.customRequest("nxwright/generator"),
+          session.customRequest("nxwright/generators"),
         ]);
-        return { waveforms: waveforms.waveforms, generator: running.generator ?? null };
+        return { waveforms: waveforms.waveforms, generators: running.generators };
       } catch (error) {
         if (asked === MOST_ASKS || this.panel !== panel) {
           throw error;
@@ -135,13 +140,13 @@ export class WaveGeneratorPanel {
     }
   }
 
-  // Asks where to save the generator, and writes `text`, its settings
+  // Asks where to save the generators, and writes `text`, their settings
   // file, there.
   private async save(session: vscode.DebugSession, text: string): Promise<void> {
     const chosen = await vscode.window.showSaveDialog({
-      title: "Save the waveform generator",
-      defaultUri: vscode.Uri.joinPath(this.startFolder(session), "waves.json"),
-      filters: { "Waveform generator": ["json"] },
+      title: "Save the signal generators",
+      defaultUri: vscode.Uri.joinPath(this.startFolder(session), "signals.json"),
+      filters: { "Signal generators": ["json"] },
     });
     if (!chosen) {
       return;
@@ -178,23 +183,35 @@ export class WaveGeneratorPanel {
 
 const BODY = `
 <div class="toolbar">
-  <button id="run" disabled>Start</button>
-  <span id="state" class="state">Stopped</span>
+  <button id="add-waveform" disabled>Add waveform generator</button>
+  <span id="add-hint" class="hint"></span>
+  <span class="gap"></span>
+  <button id="start-all" class="secondary" disabled>Start all</button>
+  <button id="stop-all" class="secondary" disabled>Stop all</button>
   <button id="open" class="secondary" disabled>Open…</button>
   <button id="save" class="secondary" disabled>Save…</button>
 </div>
 <p id="notice" class="problem"></p>
-<div id="generator"></div>`;
+<div id="generators"></div>`;
 
-// The styles of the panel: Start or Stop and the files' buttons above, then
-// the generator's waveforms, its channels, and its waves' settings in a
-// table, a row for the wave every channel sends, or one for each channel.
+// The styles of the panel. At the top are the buttons that add a
+// generator, start or stop them all, and open or save their file. Below
+// them, each generator has a block: its Start or Stop button, its waveforms,
+// its channels, and a table of its waves' settings. The table has one row
+// for the wave every channel sends, or one row for each channel.
 const STYLES = `
   body { padding: 8px 16px 16px; font-size: 12px; }
-  .toolbar, .waveforms, .channels {
+  .toolbar, .head, .waveforms, .channels {
     display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center;
   }
   .toolbar { gap: 6px; margin-bottom: 8px; }
+  .gap { margin-right: auto; }
+  .generator {
+    border-top: 1px solid var(--vscode-widget-border, var(--vscode-descriptionForeground));
+    padding: 8px 0;
+  }
+  .head { gap: 6px 8px; }
+  .title { font-weight: bold; margin-right: 4px; }
   button {
     color: var(--vscode-button-foreground); background: var(--vscode-button-background);
     border: none; padding: 4px 10px; cursor: pointer;
@@ -206,7 +223,7 @@ const STYLES = `
     background: var(--vscode-button-secondaryBackground);
   }
   button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
-  #run { min-width: 5em; }
+  .run { min-width: 5em; }
   .state { color: var(--vscode-descriptionForeground); margin-right: auto; }
   .state.running { color: var(--vscode-testing-iconPassed, var(--vscode-foreground)); }
   .waveforms { margin: 8px 0; }

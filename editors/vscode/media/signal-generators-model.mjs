@@ -1,25 +1,35 @@
-// The waveform generator panel's own rules (wave-generators.mjs), kept apart
-// from the page so that Node's test runner checks them
-// (test/wave-generators-model.test.mjs): what the panel holds of the
-// generator, the settings it sends the simulation and writes to a file, the
-// values of a custom wave typed or read from a CSV file, and the sketch of
-// a wave.
+// The logic of the Signal generator panel (signal-generators.mjs), kept
+// apart from the page so that Node's test runner can check it
+// (test/signal-generators-model.test.mjs). It covers what the panel keeps
+// for each generator, the settings the panel sends to the simulation and
+// writes to a file, the values of a custom wave typed or read from a CSV
+// file, and the sketch of a wave.
 //
 // The settings have the form of a generator in a settings file, which
-// nxwright/testing/wave_generators.py checks: {waveforms: [{page,
-// waveform}], channels: [{channel, ...}], and a wave's settings}. In a
-// file, the generator's own wave settings are shared by its channels, and
-// a channel gives only the settings it changes.
+// nxwright/testing/signal_generators.py checks. A waveform generator's
+// settings are {kind: "waveform", waveforms: [{page, waveform}], channels:
+// [{channel, ...}], and a wave's settings}. In a file, the generator's own
+// wave settings are shared by its channels, and a channel gives only the
+// settings it changes.
 //
 // The panel does not show this sharing. Either the generator sends the
 // same wave on every channel, or each channel has its own wave. The panel
-// holds the generator as {waveforms, same, common, channels, running}:
+// keeps a waveform generator as {kind, waveforms, same, common, channels,
+// number, waiting, notice}:
 //  - `same`: whether every channel sends the same wave;
 //  - `common`: that wave, with every setting given;
 //  - `channels`: a row {channel, on, wave} for each channel a waveform can
 //    have, where `wave` is the channel's own wave, with every setting
 //    given, which it sends when `same` is false;
-//  - `running`: whether the simulation runs the generator.
+//  - `number`: the number the simulation gave the generator when it
+//    started, or null while it does not run;
+//  - `waiting`: whether a start or a stop asked of the simulation has not
+//    been answered yet;
+//  - `notice`: what the generator needs before it can start, or what the
+//    simulation refused of it.
+
+// The kind of a generator that sends points to waveforms.
+export const WAVEFORM = "waveform";
 
 // The wave shapes, each with the name the panel shows.
 export const SHAPES = [
@@ -29,7 +39,7 @@ export const SHAPES = [
 ];
 
 // A wave's settings when neither the generator nor its channel gives them,
-// as wave_generators.py has them.
+// as signal_generators.py has them.
 export const WAVE_DEFAULTS = {
   shape: "sine", minimum: 0, maximum: 100, interval: 50, period: 50, duty: 50, noise: 0,
   values: [],
@@ -53,17 +63,44 @@ export const NUMBER_SETTINGS = [
 export const MOST_CHANNELS = 4;
 const LARGEST_VALUE = 255;
 const WAVE_KEYS = Object.keys(WAVE_DEFAULTS);
+// The run fields of a generator that the simulation is not running.
+const NOT_RUNNING = { number: null, waiting: false, notice: "" };
 
-// Returns a new generator for the panel: a sine wave on channel 0 of the
-// first waveform of `offered`, the app's waveforms, if it has one.
+// Returns a new waveform generator for the panel: a sine wave on channel 0
+// of the first waveform of `offered`, the app's waveforms, if it has one.
 export function newGenerator(offered) {
   return {
+    kind: WAVEFORM,
     waveforms: offered.slice(0, 1).map(({ page, waveform }) => ({ page, waveform })),
     same: true,
     common: wholeWave({}),
     channels: channelRows((channel) => ({ channel, on: channel === 0, wave: wholeWave({}) })),
-    running: false,
+    ...NOT_RUNNING,
   };
+}
+
+// Returns whether the simulation is running `generator`.
+export function isRunning(generator) {
+  return generator.number !== null;
+}
+
+// Returns the panel's generators for `running`, the generators the
+// simulation runs, each as {number, settings}. A panel opened while
+// generators run shows these.
+export function generatorsOfRunning(running) {
+  return running.map(({ number, settings }) => ({ ...generatorOfSettings(settings), number }));
+}
+
+// Marks as stopped each of `generators` that the simulation no longer
+// runs, such as one an agent stopped from outside the panel. `running`
+// lists the generators the simulation runs, each as {number}.
+export function markStopped(generators, running) {
+  const numbers = new Set(running.map(({ number }) => number));
+  for (const generator of generators) {
+    if (isRunning(generator) && !numbers.has(generator.number)) {
+      generator.number = null;
+    }
+  }
 }
 
 // Returns how many channels the panel offers for a generator feeding the
@@ -128,6 +165,7 @@ export function settingsOf(generator, offered) {
     return { error: "Turn on a channel to send points to." };
   }
   const settings = {
+    kind: generator.kind,
     waveforms: generator.waveforms.map(({ page, waveform }) => ({ page, waveform })),
     ...(generator.same ? sentWave(generator.common) : {}),
     channels: channels.map((row) => ({
@@ -145,6 +183,7 @@ export function generatorOfSettings(settings) {
   const listed = new Map((settings.channels ?? []).map((given) => [given.channel, given]));
   const common = wholeWave(waveSettings(settings));
   return {
+    kind: WAVEFORM,
     waveforms: (settings.waveforms ?? []).map(({ page, waveform }) => ({ page, waveform })),
     same: [...listed.values()].every((given) => Object.keys(waveSettings(given)).length === 0),
     common,
@@ -152,14 +191,30 @@ export function generatorOfSettings(settings) {
       channel, on: listed.has(channel),
       wave: wholeWave({ ...common, ...waveSettings(listed.get(channel) ?? {}) }),
     })),
-    running: false,
+    ...NOT_RUNNING,
   };
+}
+
+// Returns {settings}, the settings of each of `generators` in order, in the
+// form a settings file lists them. If a generator lacks something, returns
+// {error} instead, which says what is missing and gives the generator's
+// place in the panel.
+export function settingsOfAll(generators, offered) {
+  const settings = [];
+  for (const [index, generator] of generators.entries()) {
+    const made = settingsOf(generator, offered);
+    if (made.error !== undefined) {
+      return { error: `Generator ${index + 1}: ${made.error}` };
+    }
+    settings.push(made.settings);
+  }
+  return { settings };
 }
 
 // Returns `count` points of `wave` for its sketch, as channel `channel`
 // sends it. Each channel starts a quarter of the cycle, or of a custom
 // wave's list, further on than the channel before it, as in
-// wave_generators.py. The shapes follow wave_generators.py. A random wave and noise are
+// signal_generators.py. The shapes follow signal_generators.py. A random wave and noise are
 // drawn from numbers of the sketch's own, so the sketch shows how the wave
 // looks, not the very points the simulation sends.
 export function sketchValues(wave, count, channel = 0) {
@@ -222,13 +277,14 @@ export function valuesOfCsv(text) {
   return checkedValues(numbers, "The file's values");
 }
 
-// Returns the text of a settings file holding `settings`, the generator's.
+// Returns the text of a settings file that contains `settings`, the
+// settings of each generator in order.
 export function fileText(settings) {
-  return `${JSON.stringify({ nxwrightWaves: 1, generator: settings }, null, 2)}\n`;
+  return `${JSON.stringify({ nxwrightSignals: 1, generators: settings }, null, 2)}\n`;
 }
 
-// Returns {settings}, the generator's settings in `text`, a settings
-// file's text, or {error}. The simulation checks each setting when the
+// Returns {settings}, the settings of each generator in `text`, a settings
+// file's text, or {error}. The simulation checks each setting when its
 // generator starts.
 export function settingsOfFileText(text) {
   let data;
@@ -237,17 +293,27 @@ export function settingsOfFileText(text) {
   } catch {
     return { error: "The file is not JSON." };
   }
-  if (data === null || typeof data !== "object" || !("nxwrightWaves" in data)) {
-    return { error: "The file is not a waveform generator's file." };
+  if (data === null || typeof data !== "object" || !("nxwrightSignals" in data)) {
+    return { error: "The file is not a signal generator settings file." };
   }
-  if (data.nxwrightWaves !== 1) {
-    return { error: `The file's nxwrightWaves is ${JSON.stringify(data.nxwrightWaves)}, ` +
+  if (data.nxwrightSignals !== 1) {
+    return { error: `The file's nxwrightSignals is ${JSON.stringify(data.nxwrightSignals)}, ` +
                     "a version this extension does not read. It reads 1." };
   }
-  if (data.generator === null || typeof data.generator !== "object") {
+  if (!Array.isArray(data.generators) || data.generators.length === 0) {
     return { error: "The file has no generator." };
   }
-  return { settings: data.generator };
+  for (const [index, settings] of data.generators.entries()) {
+    if (settings === null || typeof settings !== "object" || !("kind" in settings)) {
+      return { error: `Generator ${index + 1} in the file has no "kind".` };
+    }
+    if (settings.kind !== WAVEFORM) {
+      // A later version of the extension may know more kinds.
+      return { error: `Generator ${index + 1} of the file is of a kind this extension does ` +
+                      `not know: ${JSON.stringify(settings.kind)}.` };
+    }
+  }
+  return { settings: data.generators };
 }
 
 function channelRows(row) {
@@ -275,7 +341,7 @@ function sentWave(wave) {
 }
 
 // Returns a shape's level at `position` in its cycle, from 0 up to 1: 0
-// for the lowest value and 1 for the highest (wave_generators.wave_value).
+// for the lowest value and 1 for the highest (signal_generators.wave_value).
 function shapeLevel(wave, position) {
   switch (wave.shape) {
     case "sine":

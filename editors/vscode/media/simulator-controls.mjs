@@ -2,7 +2,7 @@
 // While a simulation runs, it shows:
 //  - the line saying that an agent drives it, while one does
 //    (simulator-agent-model.mjs);
-//  - its buttons, including the one that opens the waveform generator panel;
+//  - its buttons, including the one that opens the Signal generator panel;
 //  - the field whose text goes to the screen as an instruction from the
 //    serial line;
 //  - the MCU port, which the serial line is connected to;

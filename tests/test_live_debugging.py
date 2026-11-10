@@ -12,7 +12,7 @@ from nxwright.debug_adapter.live import LIVE_DRAWING, WAVES_PACE, LiveSimulation
 from nxwright.drawing.screen_pictures import ScreenPictures
 from nxwright.source.source_folder import read_app
 from nxwright.testing.simulation import Simulation
-from nxwright.testing.wave_generators import generator_settings, generator_to_json
+from nxwright.testing.signal_generators import generator_settings, generators_to_json
 from tests.test_simulation import SimulationTestCase, placed, table
 
 # How long a test waits for the simulation's thread, in seconds.
@@ -607,13 +607,14 @@ class AgentRequestsTest(LiveTestCase):
 
 
 class GeneratorRequestsTest(LiveTestCase):
-    """The waveform generator's requests, on the page "second", which has a
+    """The signal generators' requests, on the page "second", which has a
     waveform of two channels, "chart"."""
 
     def setUp(self):
         super().setUp()
         self.page("second", [table("chart", "waveform", x=0, y=0, w=50, h=50, ch=2)])
-        self.feeding = {"waveforms": [{"page": "second", "waveform": "chart"}],
+        self.feeding = {"kind": "waveform",
+                        "waveforms": [{"page": "second", "waveform": "chart"}],
                         "interval": 10, "channels": [{"channel": 0}]}
 
     def later(self, command: str, **arguments) -> dict:
@@ -625,6 +626,16 @@ class GeneratorRequestsTest(LiveTestCase):
         """The points of the chart's channel 0, none while the app starts."""
         simulation = self.adapter._live.simulation
         return [] if simulation is None else simulation.waves().get("chart", {}).get(0, [])
+
+    def running(self) -> list:
+        """The generators running, as "nxwright/generators" answers them."""
+        return self.later("nxwright/generators")["body"]["generators"]
+
+    def write_file(self, *generators) -> Path:
+        file = self.root / "signals.json"
+        file.write_text(generators_to_json(generator_settings(given, "test")
+                                           for given in generators), encoding="utf-8")
+        return file
 
     def wait_for_points(self, count: int):
         deadline = time.monotonic() + _PATIENCE
@@ -641,19 +652,33 @@ class GeneratorRequestsTest(LiveTestCase):
 
     def test_the_generator_starts_changes_and_stops(self):
         self.launch(page="second")
-        self.assertEqual(self.later("nxwright/generator")["body"], {"generator": None})
-        self.assertTrue(self.later("nxwright/startGenerator", settings=self.feeding)["success"])
+        self.assertEqual(self.running(), [])
+        self.assertEqual(self.later("nxwright/startGenerator", settings=self.feeding)["body"],
+                         {"number": 1})
         self.wait_for_points(3)
-        self.assertEqual(self.later("nxwright/generator")["body"], {"generator": self.feeding})
+        self.assertEqual(self.running(), [{"number": 1, "settings": self.feeding}])
         changed = dict(self.feeding, shape="custom", values=[77])
-        self.assertTrue(self.later("nxwright/changeGenerator", settings=changed)["success"])
+        self.assertTrue(self.later("nxwright/changeGenerator", number=1,
+                                   settings=changed)["success"])
         self.wait_for_points(len(self.points()) + 3)
         self.assertEqual(self.points()[-1], 77)
-        self.assertTrue(self.later("nxwright/stopGenerator")["success"])
-        self.assertEqual(self.later("nxwright/generator")["body"], {"generator": None})
+        self.assertTrue(self.later("nxwright/stopGenerator", number=1)["success"])
+        self.assertEqual(self.running(), [])
         lines = [line for body in self.events("output") if body["category"] == "stdout"
                  for line in body["output"].splitlines()]
-        self.assertTrue(any("the waveform generator starts" in line for line in lines), lines)
+        self.assertTrue(any("waveform generator 1 starts" in line for line in lines), lines)
+
+    def test_generators_start_and_stop_each_on_its_own(self):
+        self.launch(page="second")
+        other = dict(self.feeding, channels=[{"channel": 1}])
+        self.assertEqual(self.later("nxwright/startGenerator", settings=self.feeding)["body"],
+                         {"number": 1})
+        self.assertEqual(self.later("nxwright/startGenerator", settings=other)["body"],
+                         {"number": 2})
+        self.assertEqual(self.running(), [{"number": 1, "settings": self.feeding},
+                                          {"number": 2, "settings": other}])
+        self.assertTrue(self.later("nxwright/stopGenerator", number=1)["success"])
+        self.assertEqual(self.running(), [{"number": 2, "settings": other}])
 
     def test_a_generators_points_come_on_their_own_between_drawings(self):
         self.launch(page="second")
@@ -681,11 +706,19 @@ class GeneratorRequestsTest(LiveTestCase):
                 reply = self.later("nxwright/startGenerator", settings=settings)
                 self.assertFalse(reply["success"])
                 self.assertIn(refusal, reply["message"])
-        for command, arguments in (("nxwright/stopGenerator", {}),
-                                   ("nxwright/changeGenerator", {"settings": self.feeding})):
-            reply = self.later(command, **arguments)
-            self.assertEqual((reply["success"], reply["message"]),
-                             (False, "no waveform generator is running"))
+        for command, arguments, refusal in (
+                ("nxwright/stopGenerator", {"number": 1}, "generator 1 is not running"),
+                ("nxwright/changeGenerator", {"number": 1, "settings": self.feeding},
+                 "generator 1 is not running"),
+                ("nxwright/stopGenerator", {},
+                 "invalid generator number: None. Give the number that starting the "
+                 "generator returned"),
+                ("nxwright/changeGenerator", {"number": "1", "settings": self.feeding},
+                 "invalid generator number: '1'. Give the number that starting the "
+                 "generator returned")):
+            with self.subTest(command=command, arguments=arguments):
+                reply = self.later(command, **arguments)
+                self.assertEqual((reply["success"], reply["message"]), (False, refusal))
         self.assertEqual(self.events("stopped"), [])
         self.assertTrue(self.later("nxwright/startGenerator", settings=self.feeding)["success"])
 
@@ -699,30 +732,28 @@ class GeneratorRequestsTest(LiveTestCase):
         self.request("continue", threadId=1)
         self.wait_for_points(2)
 
-    def test_a_launch_starts_the_generator_of_its_file(self):
-        file = self.root / "waves.json"
-        file.write_text(generator_to_json(generator_settings(self.feeding, "test")),
-                        encoding="utf-8")
-        self.launch(page="second", waveGenerator=str(file))
+    def test_a_launch_starts_the_generators_of_its_file(self):
+        other = dict(self.feeding, channels=[{"channel": 1}])
+        self.launch(page="second", signalGenerators=str(self.write_file(self.feeding, other)))
         self.wait_for_points(2)
-        self.assertEqual(self.later("nxwright/generator")["body"], {"generator": self.feeding})
+        self.assertEqual(self.running(), [{"number": 1, "settings": self.feeding},
+                                          {"number": 2, "settings": other}])
 
     def test_a_launch_is_refused_for_a_file_it_cannot_use(self):
         self.request("initialize")
         for file, refusal in ((str(self.root / "missing.json"), "cannot be read"),
-                              (["waves.json"], "must be a settings file's path")):
+                              (["signals.json"],
+                               "signalGenerators must be a settings file's path")):
             with self.subTest(file=file):
                 reply = self.request("launch", sourceFolder=str(self.root), page="second",
-                                     waveGenerator=file)
+                                     signalGenerators=file)
                 self.assertFalse(reply["success"])
                 self.assertIn(refusal, reply["message"])
 
     def test_a_launch_fails_for_a_waveform_the_app_lacks(self):
-        file = self.root / "waves.json"
         settings = dict(self.feeding, waveforms=[{"page": "second", "waveform": "none"}])
-        file.write_text(generator_to_json(generator_settings(settings, "test")),
-                        encoding="utf-8")
-        self.launch(page="second", waveGenerator=str(file))
+        self.launch(page="second",
+                    signalGenerators=str(self.write_file(self.feeding, settings)))
         self.wait_for("terminated")
         failed = [body["output"] for body in self.events("output")
                   if body["category"] == "stderr"]
@@ -1043,7 +1074,8 @@ on tick.timer:
         self.program("page page0\n")
         self.page("page0", [table("chart", "waveform", x=0, y=100, w=200, h=50, ch=1)])
         live = CostedLiveSimulation(self.root, self.wall, statement=0)
-        feeding = generator_settings({"waveforms": [{"page": "page0", "waveform": "chart"}],
+        feeding = generator_settings({"kind": "waveform",
+                                      "waveforms": [{"page": "page0", "waveform": "chart"}],
                                       "interval": 2, "channels": [{"channel": 0}]}, "test")
         self.wall.at(0.5, lambda: live.act(lambda simulation:
                                            simulation.start_generator(feeding)))
@@ -1067,10 +1099,11 @@ on go.down:
   count = count + 1
 """)
         live = CostedLiveSimulation(self.root, self.wall, statement=0.0005)
-        feeding = generator_settings({"waveforms": [{"page": "page0", "waveform": "chart"}],
+        feeding = generator_settings({"kind": "waveform",
+                                      "waveforms": [{"page": "page0", "waveform": "chart"}],
                                       "interval": 1, "channels": [{"channel": 0}]}, "test")
         ticks = []
-        tick = Simulation._generator_tick
+        tick = Simulation._generators_tick
 
         def costly_tick(simulation):
             ticks.append(self.wall.now())
@@ -1080,7 +1113,7 @@ on go.down:
         self.wall.at(0.5, lambda: live.act(lambda simulation:
                                            simulation.start_generator(feeding)))
         presses = [self.press_at(live, 1.0 * number) for number in range(1, 4)]
-        with mock.patch.object(Simulation, "_generator_tick", autospec=True,
+        with mock.patch.object(Simulation, "_generators_tick", autospec=True,
                                side_effect=costly_tick):
             self.run_until(live, 3.5)
         # The ticks fell behind their interval, as this test needs.

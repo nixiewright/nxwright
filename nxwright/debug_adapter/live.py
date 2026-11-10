@@ -22,7 +22,7 @@ of the page shown and the log's new lines; while an event runs long, as one
 drawing a chart, it sends them too, from the values in progress, as the
 Editor's simulator shows a long event drawing: LIVE_DRAWING seconds after
 the last drawing ended, or as long as it took if longer. When only the points of
-the page's waveforms changed, such as while the waveform generator sends them,
+the page's waveforms changed, such as while a waveform generator sends them,
 the thread sends those points on their own, at most once every WAVES_PACE
 seconds. The panel paints them over the last drawing, so that a waveform fed
 fast moves smoothly without the cost of drawing the whole page.
@@ -31,9 +31,9 @@ A look at what the simulation holds, as its values, is taken on its
 thread too, so that it never reads the simulation half changed: in turn
 with the presses while the simulation runs, and at once while the debugger
 holds the thread stopped, as the debugger's own views read it then. A
-change to what is outside the screen, such as starting the waveform
+change to what is outside the screen, such as starting a signal
 generator (change_outside), takes its turn the same way, since it runs none
-of the app's code. The generator's points then take turns with the timers.
+of the app's code. The generators' points then take turns with the timers.
 
 An error in the code, such as a division by zero, stops the simulation as
 on an exception, at the last step recorded; continuing goes on from there.
@@ -100,16 +100,16 @@ class LiveSimulation:
     methods are the debugger's, called from the adapter's thread. `sending`,
     `cards`, `eeprom_file`, `pinyin_table`, and `inputs` are the
     simulation's (simulation.py). `defines` gives app.toml's defines new
-    values, {name: value as text}, for all the simulation reads. `generator`
-    is the GeneratorSettings (wave_generators.py) of the waveform generator
-    that starts with the simulation, if any; if the app refuses it, such as
-    for a waveform the app lacks, the start fails. `wall` is the clock on the wall
+    values, {name: value as text}, for all the simulation reads. `generators`
+    gives the settings (signal_generators.py) of each signal generator that
+    starts with the simulation; if the app refuses one, such as for a
+    waveform the app lacks, the start fails. `wall` is the clock on the wall
     the simulation's time follows, a WallClock unless given."""
 
     def __init__(self, source_folder, page=None, values=None, eeprom=b"", notify=None,
                  sending=None, cards=None, log_formats=None, wall: WallClock = None,
                  eeprom_file: Path = None, pinyin_table=None, inputs: dict = None,
-                 defines: dict = None, generator=None):
+                 defines: dict = None, generators=()):
         self.recorder = Recorder(keep=KEEP)
         self._defines = defines or {}
         self.timeline = Timeline(self.recorder)
@@ -117,7 +117,7 @@ class LiveSimulation:
         self.breakpoints = set()     # {(path_key, line)}
         self._arguments = (source_folder, page, values, eeprom, sending, cards, log_formats,
                            eeprom_file, pinyin_table, inputs)
-        self._generator = generator
+        self._generators = generators
         self._notify = notify
         self._wall = wall if wall is not None else WallClock()
         self._condition = threading.Condition()
@@ -208,7 +208,7 @@ class LiveSimulation:
 
     def change_outside(self, change):
         """Has the thread do `change(simulation)`, which changes something
-        outside the screen, such as its waveform generator, and runs none
+        outside the screen, such as its signal generators, and runs none
         of the app's code. It takes its turn the same way as a look, so it is done at
         once while the debugger holds the simulation stopped. The log's new
         lines are then sent. `change` must not raise."""
@@ -263,8 +263,8 @@ class LiveSimulation:
                                          inputs=inputs,
                                          starting=lambda progress: self._notify("starting",
                                                                                 progress))
-            if self._generator is not None:
-                self.simulation.start_generator(self._generator)
+            for settings in self._generators:
+                self.simulation.start_generator(settings)
         except Ended:
             return
         except Exception as error:

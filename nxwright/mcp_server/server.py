@@ -22,7 +22,7 @@ from nxwright.mcp_server.headless import HeadlessSimulation
 from nxwright.mcp_server.simulations import DrivenSimulation
 from nxwright.mcp_server.vscode import VsCodeSimulation, VsCodeWindows, channel_folder
 from nxwright.testing.gpio_pins import levels_by_name
-from nxwright.testing.wave_generators import generator_dict, read_generator_file
+from nxwright.testing.signal_generators import generator_dict, read_generators_file
 
 # What an agent reads of the server as it connects.
 _INSTRUCTIONS = (
@@ -251,19 +251,25 @@ def mcp_server(pictures_folder: Path) -> McpServer:
     @server.tool
     @_refusals
     def start_generator(simulation: SimulationId,
-                        settings: Annotated[dict | None, "The generator's settings. Give "
+                        settings: Annotated[dict | None, "One generator's settings. Give "
                                                          "these or a file, not both."] = None,
-                        file: Annotated[str | None, "The full path of a generator's file, "
-                                                    "saved from VS Code's Waveform generator "
-                                                    "panel."] = None) -> str:
-        """Starts the waveform generator, which stands in for a device that sends points to
-        the app's waveforms with add instructions on the serial line. A simulation runs one
-        generator at most, so starting one replaces the one running.
+                        file: Annotated[str | None, "The full path of a file of generators, "
+                                                    "saved from VS Code's Signal generator "
+                                                    "panel."] = None) -> dict:
+        """Starts signal generators, which stand in for devices on the serial line.
+        Returns the number of each generator started, which stop_generator takes.
 
-        The settings give the waveforms to feed, each by its page and name, and the
-        channels to send to. A channel uses the generator's settings, except the ones it
-        sets itself. For example: {"waveforms": [{"page": "day", "waveform": "chart"}],
-        "interval": 20, "shape": "sine", "minimum": 0, "maximum": 200, "period": 100,
+        A simulation runs any number of generators, and each call adds to the ones
+        already running. To change a generator, stop it and start a new one, whose wave
+        starts from the beginning. A file starts all of its generators, or none of them
+        if the app refuses one.
+
+        A waveform generator, the kind "waveform", sends points to the app's waveforms
+        with add instructions. Its settings give the waveforms to feed, each by its page
+        and name, and the channels to send to. A channel uses the generator's settings,
+        except the ones it sets itself. For example: {"kind": "waveform",
+        "waveforms": [{"page": "day", "waveform": "chart"}], "interval": 20,
+        "shape": "sine", "minimum": 0, "maximum": 200, "period": 100,
         "channels": [{"channel": 0}, {"channel": 1, "shape": "square"}]}. In the settings,
         interval is the number of milliseconds between two points, period is the number of
         points in one cycle, and noise is the most that is added to or taken from each
@@ -277,24 +283,25 @@ def mcp_server(pictures_folder: Path) -> McpServer:
         The points arrive as time passes, so wait before you look at the screen."""
         if (settings is None) == (file is None):
             raise NxwrightError("give the generator's settings, or its file: one of the two")
-        if file is not None:
-            settings = generator_dict(read_generator_file(Path(file)))
-        simulations.get(simulation).start_generator(settings)
-        return "Started."
+        generators = [settings] if file is None else [
+            generator_dict(read) for read in read_generators_file(Path(file))]
+        return {"numbers": _start_generators(simulations.get(simulation), generators)}
 
     @server.tool
     @_refusals
-    def stop_generator(simulation: SimulationId) -> str:
-        """Stops the waveform generator."""
-        simulations.get(simulation).stop_generator()
+    def stop_generator(simulation: SimulationId,
+                       number: Annotated[int, "The generator's number, as start_generator "
+                                              "returned it."]) -> str:
+        """Stops one signal generator."""
+        simulations.get(simulation).stop_generator(number)
         return "Stopped."
 
     @server.tool
     @_refusals
-    def generator(simulation: SimulationId) -> dict:
-        """Returns the settings of the running waveform generator, in the form
-        start_generator takes, or null if none is running."""
-        return {"generator": simulations.get(simulation).generator()}
+    def generators(simulation: SimulationId) -> dict:
+        """Returns the signal generators that are running: each one's number, and its
+        settings in the form start_generator takes."""
+        return {"generators": simulations.get(simulation).generators()}
 
     @server.tool
     @_refusals
@@ -494,6 +501,22 @@ def _point(driven: DrivenSimulation, component: str, x: int, y: int) -> tuple:
     if not found["shown"]:
         raise NxwrightError("%s does not show, so it cannot be pressed" % component)
     return found["x"] + found["w"] // 2, found["y"] + found["h"] // 2
+
+
+def _start_generators(driven: DrivenSimulation, generators: list) -> list:
+    """Starts each generator of `generators`, a list of settings in the
+    form a settings file uses, and returns their numbers. Either all of them
+    start or none do. If one is refused, those started before it are stopped
+    again, and its NxwrightError is raised."""
+    numbers = []
+    try:
+        for settings in generators:
+            numbers.append(driven.start_generator(settings))
+    except NxwrightError:
+        for number in numbers:
+            driven.stop_generator(number)
+        raise
+    return numbers
 
 
 def _refusals(tool):

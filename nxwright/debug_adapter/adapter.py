@@ -35,9 +35,9 @@ TFT file holding it; without one, the installed Nextion Editor's
 (testing/pinyin_table.py). Its `serialPort`, {"name":
 "COM4", "baud": 115200}, connects the screen's serial line to that port
 (serial_port.py). Its `gpioInputs`, {"pio2": 0}, gives the GPIO inputs'
-starting levels (testing/gpio_pins.py). Its `waveGenerator` names the
-settings file of the waveform generator that starts with it
-(testing/wave_generators.py). Custom requests carry
+starting levels (testing/gpio_pins.py). Its `signalGenerators` names the
+settings file of the signal generators that start with it
+(testing/signal_generators.py). Custom requests carry
 what happens to the screen: "nxwright/press" at (x, y), "nxwright/move" to
 (x, y) while pressed, "nxwright/release", "nxwright/serial" with an
 instruction's text, "nxwright/startAgain", "nxwright/gpioInput",
@@ -46,16 +46,20 @@ setting several at the same moment, {"levels": {"pio2": 0, "pio5": 0}}; and
 the serial port's settings: "nxwright/serialPorts" answers with the
 computer's ports, the rates, and the port's state, and "nxwright/serialPort"
 connects the port `name` at `baud`, or disconnects it when `name` is empty.
-The waveform generator has its own custom requests: "nxwright/waveforms"
-answers with the waveforms it can feed, each with its page, its name, and
-its number of channels; "nxwright/startGenerator" starts it with
-`settings`, the generator's JSON form, replacing any generator running;
-"nxwright/changeGenerator" gives the running generator new `settings`;
-"nxwright/stopGenerator" stops it; and "nxwright/generator" answers with
-the running generator's settings, `generator`, or null. These requests
-change nothing on the screen, so they are answered the same way as a
-look: once the simulation's thread has taken them, or at once while the
-debugger holds the thread stopped.
+The signal generators have their own custom requests:
+  - "nxwright/waveforms" answers with the waveforms a generator can feed,
+    each with its page, its name, and its number of channels;
+  - "nxwright/startGenerator" starts a generator with `settings`, the
+    generator's JSON form, beside those running, and answers with its
+    `number`;
+  - "nxwright/changeGenerator" gives the running generator `number` new
+    `settings`;
+  - "nxwright/stopGenerator" stops the generator `number`;
+  - "nxwright/generators" answers with the running generators, in
+    `generators`, each as its `number` and its `settings`.
+The generators' requests run none of the app's code themselves, so they are
+answered the same way as a look: once the simulation's thread has taken
+them, or at once while the debugger holds the thread stopped.
 
 A real screen can be connected beside the simulation, on a port of its own
 called the screen port. These requests act on it:
@@ -91,9 +95,9 @@ connected, it is refused unless also `allowed`, which the extension gives
 once the user agreed, since what the app sends then reaches a device. An
 agent's press or move is refused too when the screen cannot take it, as
 a second press while one is held (looks.touch_refusal). If `agent` is
-given, a start, change, or stop of the waveform generator is refused the
+given, a start, change, or stop of a signal generator is refused the
 same way while a serial port is connected, because the screen's answers to
-the generator's points reach the device too. An agent never
+a generator's points reach the device too. An agent never
 reaches the real screen. A "nxwright/serial" from an agent is refused if
 its `to` includes the screen, and the log an agent reads leaves out the
 screen's lines. An agent also looks at what the simulation holds (testing/looks.py):
@@ -149,8 +153,8 @@ from nxwright.testing.pinyin_table import installed_pinyin_table, read_pinyin_ta
 from nxwright.testing.sd_cards import card_folder
 from nxwright.testing.simulation import read_eeprom_file
 from nxwright.testing.simulation_log import END, log_format, shown, shown_instruction
-from nxwright.testing.wave_generators import (generator_dict, generator_settings,
-                                              read_generator_file)
+from nxwright.testing.signal_generators import (generator_dict, generator_settings,
+                                                read_generators_file)
 from nxwright.testing.preview import Previews
 from nxwright.testing.recording import PythonPlace, Recorder, recording
 
@@ -235,7 +239,7 @@ class DebugAdapter:
                           "nxwright/values": self._values, "nxwright/log": self._log,
                           "nxwright/screen": self._screen,
                           "nxwright/waveforms": self._waveforms,
-                          "nxwright/generator": self._generator,
+                          "nxwright/generators": self._generators,
                           "nxwright/startGenerator": self._start_generator,
                           "nxwright/changeGenerator": self._change_generator,
                           "nxwright/stopGenerator": self._stop_generator}
@@ -331,8 +335,8 @@ class DebugAdapter:
         else the installed Nextion Editor's, if found. Its GPIO inputs start
         at the levels `gpioInputs` gives, as {"pio2": 0} (gpio_pins.py).
         `defines` gives app.toml's defines new values, as {"LIMIT": 40}.
-        `waveGenerator` names a settings file (wave_generators.py), whose
-        waveform generator starts with the simulation; a file that cannot be
+        `signalGenerators` names a settings file (signal_generators.py),
+        whose generators start with the simulation; a file that cannot be
         read or used stops the launch."""
         source_folder = Path(arguments["sourceFolder"])
         defines = {}
@@ -356,7 +360,7 @@ class DebugAdapter:
         inputs = arguments.get("gpioInputs")
         if inputs is not None:
             levels_by_name(inputs)
-        generator = _launch_generator(arguments.get("waveGenerator"))
+        generators = _launch_generators(arguments.get("signalGenerators"))
         # Last of the checks, as a missing file is made here.
         eeprom, eeprom_file = b"", None
         if arguments.get("eeprom"):
@@ -377,7 +381,7 @@ class DebugAdapter:
                                     arguments.get("values"), eeprom, self._live_news,
                                     self._simulation_sends, cards, log_formats,
                                     eeprom_file=eeprom_file, pinyin_table=pinyin_table,
-                                    inputs=inputs, defines=defines, generator=generator)
+                                    inputs=inputs, defines=defines, generators=generators)
         # Connected before the app starts, so that what it sends first goes
         # out. Either way the side bar hears the port's state.
         if port is not None:
@@ -842,37 +846,38 @@ class DebugAdapter:
             {"page": name.page, "waveform": name.waveform, "channels": channels}
             for name, channels in simulation.waveforms()]})
 
-    def _generator(self, arguments: dict):
-        """The settings of the waveform generator running, as a settings
-        file gives them (wave_generators.py), or None."""
-        def running(simulation):
-            settings = simulation.generator()
-            return {"generator": None if settings is None else generator_dict(settings)}
-        return self._look(running)
+    def _generators(self, arguments: dict):
+        """The generators running, in the order they started: each one's
+        `number`, and its `settings` in the form a settings file uses
+        (signal_generators.py)."""
+        return self._look(lambda simulation: {"generators": [
+            {"number": number, "settings": generator_dict(settings)}
+            for number, settings in simulation.generators().items()]})
 
     def _start_generator(self, arguments: dict):
-        """Starts the waveform generator with `settings`, a generator as a
-        settings file gives it, in place of one running."""
+        """Starts a generator beside those running, with `settings` in the
+        form a settings file uses for one generator. Answers with the
+        generator's `number`."""
         settings = generator_settings(arguments.get("settings"), "settings")
-
-        def start(simulation):
-            simulation.start_generator(settings)
-            return {}
-        return self._change_outside(arguments, start)
+        return self._change_outside(
+            arguments, lambda simulation: {"number": simulation.start_generator(settings)})
 
     def _change_generator(self, arguments: dict):
-        """Gives the waveform generator running new `settings`."""
+        """Gives the running generator `number` new `settings`."""
+        number = _generator_number(arguments)
         settings = generator_settings(arguments.get("settings"), "settings")
 
         def change(simulation):
-            simulation.change_generator(settings)
+            simulation.change_generator(number, settings)
             return {}
         return self._change_outside(arguments, change)
 
     def _stop_generator(self, arguments: dict):
-        """Stops the waveform generator."""
+        """Stops the generator `number`."""
+        number = _generator_number(arguments)
+
         def stop(simulation):
-            simulation.stop_generator()
+            simulation.stop_generator(number)
             return {}
         return self._change_outside(arguments, stop)
 
@@ -883,8 +888,8 @@ class DebugAdapter:
 
     def _change_outside(self, arguments: dict, change):
         """Has the simulation's thread answer with `change(simulation)`,
-        which changes what is outside the screen, such as its waveform
-        generator (LiveSimulation.change_outside). If `change` raises
+        which changes what is outside the screen, such as its signal
+        generators (LiveSimulation.change_outside). If `change` raises
         NxwrightError, that error is the reply's error, and the simulation
         goes on. An agent's change (`agent`) is refused while a serial port is
         connected, unless the user `allowed` the agent, the same way as an
@@ -1455,16 +1460,27 @@ def _port_settings(settings) -> tuple:
     return settings["name"], settings.get("baud")
 
 
-def _launch_generator(file):
-    """Returns the GeneratorSettings of the settings file a launch's
-    `waveGenerator` names, or None when it names none. Raises NxwrightError,
-    which stops the launch, for anything but a path, or a file that cannot
-    be read or used (wave_generators.read_generator_file)."""
+def _launch_generators(file) -> tuple:
+    """Returns the settings of each generator in `file`, the launch
+    configuration's `signalGenerators`, or an empty tuple when the launch
+    configuration has none. Raises NxwrightError, which stops the launch, if
+    `file` is not a path, or if the file cannot be read or used
+    (signal_generators.read_generators_file)."""
     if file is None:
-        return None
+        return ()
     if not isinstance(file, str):
-        raise NxwrightError("waveGenerator must be a settings file's path")
-    return read_generator_file(Path(file))
+        raise NxwrightError("signalGenerators must be a settings file's path")
+    return read_generators_file(Path(file))
+
+
+def _generator_number(arguments: dict) -> int:
+    """Returns the generator's number a request gives as `number`. Raises
+    NxwrightError for anything but a whole number."""
+    number = arguments.get("number")
+    if not isinstance(number, int) or isinstance(number, bool):
+        raise NxwrightError("invalid generator number: %r. Give the number that starting "
+                            "the generator returned" % (number,))
+    return number
 
 
 def serve(input_stream, output_stream) -> int:

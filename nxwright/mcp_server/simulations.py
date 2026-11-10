@@ -61,16 +61,16 @@ class DrivenSimulation(ABC):
         """Starts the app again, as a screen switched off and on."""
 
     @abstractmethod
-    def start_generator(self, settings: dict):
-        """Starts the waveform generator with `settings`, a generator as a
-        settings file gives it (testing/wave_generators.py), in place of one
-        running. Its points arrive as time passes. Raises NxwrightError for
-        settings that cannot be used."""
+    def start_generator(self, settings: dict) -> int:
+        """Starts a signal generator with `settings`, a generator as a
+        settings file gives it (testing/signal_generators.py), beside those
+        running. Returns its number. Its points arrive as time passes.
+        Raises NxwrightError for settings that cannot be used."""
 
     @abstractmethod
-    def stop_generator(self):
-        """Stops the waveform generator. Raises NxwrightError when none
-        runs."""
+    def stop_generator(self, number: int):
+        """Stops the signal generator `number`. Raises NxwrightError when it
+        does not run."""
 
     @abstractmethod
     def stop(self):
@@ -98,9 +98,10 @@ class DrivenSimulation(ABC):
         Raises NxwrightError for a name that code does not know."""
 
     @abstractmethod
-    def generator(self):
-        """Returns the settings of the waveform generator running, as a
-        settings file gives them, or None."""
+    def generators(self) -> list:
+        """Returns the running signal generators, in the order they
+        started. Each is a dict of its `number` and its `settings`, in the
+        form a settings file uses."""
 
     @abstractmethod
     def log(self, after: int = 0) -> list:

@@ -5,7 +5,7 @@
 //    drawn, it says how far the app's start has come, as its pages compile;
 //  - the Simulator section of nxwright's side bar (media/simulator-controls.mjs).
 //    While a simulation runs, it has pause, resume, start again, the log, the
-//    button opening the waveform generator panel (waveGenerators.ts), a
+//    button opening the Signal generator panel (signalGenerators.ts), a
 //    field for what the serial line brings the screen, and the MCU port the
 //    line is connected to. It also has a port for a real screen beside the
 //    simulation. The field can send that screen instructions too, a button
@@ -37,7 +37,7 @@ import { Simulation, simulationsOf } from "./launchConfiguration";
 import { isPageFile, Pages, tomlOf } from "./pages";
 import { appName } from "./projectName";
 import { SimulatorSettings, withSimulatorSettings } from "./simulatorSettings";
-import { WaveGeneratorPanel } from "./waveGenerators";
+import { SignalGeneratorPanel } from "./signalGenerators";
 import { PictureFile, pictureSources, webviewPage, ZOOM_STYLES } from "./webviewPage";
 
 // The side bar's Simulator section, as package.json declares it.
@@ -121,13 +121,13 @@ export class Simulator implements vscode.WebviewViewProvider {
   private agentStarts = new Map<string, { started: (session: vscode.DebugSession) => void;
                                           allowed: boolean }>();
 
-  // The waveform generator panel of the simulation running.
-  private readonly generatorPanel: WaveGeneratorPanel;
+  // The Signal generator panel of the simulation running.
+  private readonly generatorPanel: SignalGeneratorPanel;
 
   constructor(private readonly context: vscode.ExtensionContext,
               private readonly project: CurrentProject,
               private readonly pages: Pages) {
-    this.generatorPanel = new WaveGeneratorPanel(context.extensionUri);
+    this.generatorPanel = new SignalGeneratorPanel(context.extensionUri);
   }
 
   register(): vscode.Disposable[] {
@@ -306,8 +306,8 @@ export class Simulator implements vscode.WebviewViewProvider {
     // The news of other sessions not announced yet will never show.
     const news = this.unannouncedNews.get(session);
     this.unannouncedNews.clear();
-    // The previous simulation's generator ended with that simulation, so its
-    // panel closes.
+    // The previous simulation's generators ended with that simulation, so
+    // their panel closes.
     this.generatorPanel.close();
     this.session = session;
     this.lastDrawing = news?.drawing;
@@ -647,7 +647,7 @@ export class Simulator implements vscode.WebviewViewProvider {
   <button data-command="startAgain">Start again</button>
   <button data-command="show">Show the screen</button>
   <button data-command="log">Open the log</button>
-  <button data-command="generator">Waveform generator</button>
+  <button data-command="generator">Signal generator</button>
 </div>
 <form id="serial">
   <label for="instruction">Serial input</label>

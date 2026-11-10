@@ -1,8 +1,8 @@
 // The agent channel, VS Code's side. With the setting
 // nxwright.agents.allowControl on, a local connection through which a
 // program on the same computer, such as `nxwright mcp`, starts a simulation
-// in this window and drives it: presses, typed instructions, the waveform
-// generator, and looks at what the screen shows. Its rules, apart from VS
+// in this window and drives it: presses, typed instructions, the signal
+// generators, and looks at what the screen shows. Its rules, apart from VS
 // Code, are agentChannel.ts's.
 //
 // The channel listens on this computer's own address, 127.0.0.1, on a port
@@ -58,7 +58,7 @@ const ACTIONS: Record<string, string> = {
 };
 const LOOKS: Record<string, string> = {
   screen: "nxwright/screen", components: "nxwright/components", values: "nxwright/values",
-  log: "nxwright/log", generator: "nxwright/generator",
+  log: "nxwright/log", generators: "nxwright/generators",
 };
 
 // The channel while it is open: its port, its token, and its file.
@@ -353,9 +353,11 @@ export class AgentChannel implements ChannelHost {
       pause: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
     }, ask);
     this.simulator.agentActed(session);
-    await session.customRequest(ACTIONS[method], { ...actionArguments(method, params),
-                                                   handled: true, agent: true, allowed });
-    return {};
+    const answered = await session.customRequest(
+      ACTIONS[method], { ...actionArguments(method, params), handled: true, agent: true, allowed });
+    // Starting a generator returns the number the simulation gave it, which
+    // the agent needs to stop it.
+    return method === "startGenerator" ? { number: answered?.number } : {};
   }
 
   // Asks the user `question`, in a dialog that must be answered. Cancel is no.
@@ -379,6 +381,8 @@ function actionArguments(method: string, params: Record<string, unknown>): Recor
       return { levels: params.levels };
     case "startGenerator":
       return { settings: params.settings };
+    case "stopGenerator":
+      return { number: params.number };
     default:
       return {};
   }

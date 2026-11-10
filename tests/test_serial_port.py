@@ -379,23 +379,24 @@ class SerialPortSessionTest(LiveTestCase):
         self.page("second", [table("chart", "waveform", x=0, y=0, w=50, h=50, ch=1)])
         self.launch(page="second", serialPort={"name": "COM4", "baud": 115200})
         self.wait_for("nxwright/drawing")
-        settings = {"waveforms": [{"page": "second", "waveform": "chart"}],
+        settings = {"kind": "waveform", "waveforms": [{"page": "second", "waveform": "chart"}],
                     "channels": [{"channel": 0}]}
         refused = self.reply_to(self.request_later("nxwright/startGenerator", settings=settings,
                                                    agent=True))
         self.assertFalse(refused["success"])
         self.assertIn("COM4", refused["message"])
-        self.assertIsNone(self.adapter._live.simulation.generator())
+        self.assertEqual(self.adapter._live.simulation.generators(), {})
         allowed = self.reply_to(self.request_later("nxwright/startGenerator", settings=settings,
                                                    agent=True, allowed=True))
         self.assertTrue(allowed["success"])
         # The user's own start, from the panel, is not asked about.
         own = self.reply_to(self.request_later("nxwright/startGenerator", settings=settings))
         self.assertTrue(own["success"])
-        stopped = self.reply_to(self.request_later("nxwright/stopGenerator", agent=True))
+        stopped = self.reply_to(self.request_later("nxwright/stopGenerator", number=1,
+                                                   agent=True))
         self.assertFalse(stopped["success"])
         self.assertIn("COM4", stopped["message"])
-        self.assertIsNotNone(self.adapter._live.simulation.generator())
+        self.assertEqual(list(self.adapter._live.simulation.generators()), [1, 2])
 
     def test_disconnecting_the_session_closes_the_port(self):
         self.launch(serialPort={"name": "COM4", "baud": 115200})

@@ -15,7 +15,7 @@ import unittest
 
 from nxwright import NxwrightError
 from nxwright.mcp_server.server import GUIDE_FILE, about_text, docs_folder, mcp_server
-from nxwright.testing.wave_generators import generator_settings, generator_to_json
+from nxwright.testing.signal_generators import generator_settings, generators_to_json
 from tests.test_simulation import SimulationTestCase, table
 
 APP = Path(__file__).resolve().parent / "fixtures" / "mcp" / "app"
@@ -87,7 +87,7 @@ class McpServerTest(unittest.TestCase):
         listed = self.agent.request({"jsonrpc": "2.0", "id": 100, "method": "tools/list"})
         tools = {tool["name"]: tool for tool in listed["result"]["tools"]}
         self.assertEqual(sorted(tools), [
-            "about", "components", "generator", "list_simulations", "log", "move", "press",
+            "about", "components", "generators", "list_simulations", "log", "move", "press",
             "release", "screen", "send", "set_input", "set_inputs", "start_again",
             "start_generator", "start_simulation", "stop_generator", "stop_simulation",
             "tap", "values", "wait"])
@@ -359,7 +359,7 @@ class McpServerTest(unittest.TestCase):
 
 
 class GeneratorToolsTest(SimulationTestCase):
-    """The waveform generator's tools, on a headless simulation of an app
+    """The signal generators' tools, on a headless simulation of an app
     whose page0 has a waveform of two channels, "chart"."""
 
     def setUp(self):
@@ -372,48 +372,78 @@ class GeneratorToolsTest(SimulationTestCase):
         self.agent = _Agent(mcp_server(Path(pictures.name)))
         self.simulation = self.agent.data("start_simulation",
                                           source_folder=str(self.root))["simulation"]
-        self.feeding = {"waveforms": [{"page": "page0", "waveform": "chart"}], "interval": 20,
+        self.feeding = {"kind": "waveform",
+                        "waveforms": [{"page": "page0", "waveform": "chart"}], "interval": 20,
                         "channels": [{"channel": 0}]}
 
     def log_lines(self) -> list:
         return [entry["line"] for entry in self.agent.data("log", simulation=self.simulation)]
 
-    def running(self):
-        return self.agent.data("generator", simulation=self.simulation)["generator"]
+    def running(self) -> list:
+        return self.agent.data("generators", simulation=self.simulation)["generators"]
+
+    def start(self, **given) -> list:
+        """Starts generators with the tool, and returns their numbers."""
+        return self.agent.data("start_generator", simulation=self.simulation,
+                               **given)["numbers"]
+
+    def write_file(self, *generators) -> Path:
+        file = self.root.parent / "signals.json"
+        file.write_text(generators_to_json(generator_settings(given, "test")
+                                           for given in generators), encoding="utf-8")
+        return file
 
     def test_the_generator_sends_points_as_time_passes(self):
         self.agent.text("send", simulation=self.simulation, instruction="bkcmd=3")
-        self.assertIsNone(self.running())
-        self.assertEqual(self.agent.text("start_generator", simulation=self.simulation,
-                                         settings=self.feeding), "Started.")
-        self.assertEqual(self.running(), self.feeding)
+        self.assertEqual(self.running(), [])
+        self.assertEqual(self.start(settings=self.feeding), [1])
+        self.assertEqual(self.running(), [{"number": 1, "settings": self.feeding}])
         before = len(self.log_lines())
         self.agent.text("wait", simulation=self.simulation, milliseconds=60)
         # The screen answers each of the three points, as bkcmd asks.
         self.assertEqual(self.log_lines()[before:], ["SIM SEND: 01 ff ff ff"] * 3)
-        self.assertEqual(self.agent.text("stop_generator", simulation=self.simulation),
-                         "Stopped.")
-        self.assertIsNone(self.running())
-        self.assertIn("the waveform generator stops", self.log_lines())
+        self.assertEqual(self.agent.text("stop_generator", simulation=self.simulation,
+                                         number=1), "Stopped.")
+        self.assertEqual(self.running(), [])
+        self.assertIn("waveform generator 1 stops", self.log_lines())
 
-    def test_a_file_starts_its_generator_in_place_of_the_one_running(self):
-        self.agent.text("start_generator", simulation=self.simulation, settings=self.feeding)
-        file = self.root.parent / "waves.json"
+    def test_a_start_adds_a_generator_beside_those_running(self):
         other = dict(self.feeding, channels=[{"channel": 1, "shape": "square"}])
-        file.write_text(generator_to_json(generator_settings(other, "test")), encoding="utf-8")
-        self.assertEqual(self.agent.text("start_generator", simulation=self.simulation,
-                                         file=str(file)), "Started.")
-        self.assertEqual(self.running(), other)
+        self.assertEqual(self.start(settings=self.feeding), [1])
+        self.assertEqual(self.start(settings=other), [2])
+        self.assertEqual(self.running(), [{"number": 1, "settings": self.feeding},
+                                          {"number": 2, "settings": other}])
+        self.agent.text("stop_generator", simulation=self.simulation, number=1)
+        self.assertEqual(self.running(), [{"number": 2, "settings": other}])
+
+    def test_a_file_starts_all_of_its_generators(self):
+        other = dict(self.feeding, channels=[{"channel": 1, "shape": "square"}])
+        self.assertEqual(self.start(file=str(self.write_file(self.feeding, other))), [1, 2])
+        self.assertEqual([entry["settings"] for entry in self.running()],
+                         [self.feeding, other])
+
+    def test_a_file_starts_none_of_its_generators_when_the_app_refuses_one(self):
+        self.start(settings=self.feeding)
+        lacking = dict(self.feeding, waveforms=[{"page": "second", "waveform": "chart"}])
+        file = self.write_file(self.feeding, lacking)
+        self.assertIn("the page second has no waveform chart",
+                      self.agent.refusal("start_generator", simulation=self.simulation,
+                                         file=str(file)))
+        # The one that ran before is the only one running.
+        self.assertEqual(self.running(), [{"number": 1, "settings": self.feeding}])
 
     def test_what_cannot_start_or_stop_is_refused(self):
-        self.assertIn("no waveform generator is running",
-                      self.agent.refusal("stop_generator", simulation=self.simulation))
-        self.agent.text("start_generator", simulation=self.simulation, settings=self.feeding)
+        self.assertIn("generator 1 is not running",
+                      self.agent.refusal("stop_generator", simulation=self.simulation, number=1))
+        self.start(settings=self.feeding)
         for arguments, refusal in (
                 ({}, "give the generator's settings, or its file: one of the two"),
                 ({"settings": self.feeding, "file": "waves.json"}, "one of the two"),
                 ({"settings": dict(self.feeding, shape="saw")},
                  "settings: shape 'saw' is not a shape"),
+                ({"settings": {name: value for name, value in self.feeding.items()
+                               if name != "kind"}},
+                 "settings: a generator must give its kind"),
                 ({"settings": dict(self.feeding,
                                    waveforms=[{"page": "second", "waveform": "chart"}])},
                  "the page second has no waveform chart"),
@@ -422,7 +452,7 @@ class GeneratorToolsTest(SimulationTestCase):
                 self.assertIn(refusal, self.agent.refusal("start_generator",
                                                           simulation=self.simulation, **arguments))
         # A start that is refused leaves the generator running as it was.
-        self.assertEqual(self.running(), self.feeding)
+        self.assertEqual(self.running(), [{"number": 1, "settings": self.feeding}])
 
 
 class McpCommandTest(unittest.TestCase):

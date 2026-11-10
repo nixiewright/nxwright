@@ -1,17 +1,20 @@
-"""The waveform generator stands in for a device on the serial line that
-sends points to a simulation's waveforms. A simulation (simulation.py) runs
-one generator at most.
+"""A signal generator stands in for a device on the serial line that
+sends values to a simulation, following a wave. A simulation
+(simulation.py) can run any number of generators, and each generator's kind
+decides what it sends. A settings file lists one or more generators in
+JSON, such as:
 
-A generator feeds one or more waveforms, each named by its page and its
-name. For each channel it feeds, it sends one point per interval, in the
-shape its settings give. A channel uses the generator's settings, except
-the ones it sets itself. A settings file contains one generator, in JSON:
+    {"nxwrightSignals": 1,
+     "generators": [{"kind": "waveform",
+                     "waveforms": [{"page": "day", "waveform": "chart"}],
+                     "interval": 20, "shape": "sine", "maximum": 200,
+                     "channels": [{"channel": 0},
+                                  {"channel": 1, "shape": "square"}]}]}
 
-    {"nxwrightWaves": 1,
-     "generator": {"waveforms": [{"page": "day", "waveform": "chart"}],
-                   "interval": 20, "shape": "sine", "maximum": 200,
-                   "channels": [{"channel": 0},
-                                {"channel": 1, "shape": "square"}]}}
+A waveform generator, whose kind is "waveform", sends points to one or more
+waveforms, each named by its page and its name. It sends one point per
+interval on each of its channels, in the shape of the channel's wave. A
+channel uses the generator's settings, except the ones it sets itself.
 
 The shapes, at a position in their cycle from 0 up to 1:
   - "sine": from the minimum up to the maximum and back;
@@ -52,9 +55,13 @@ from nxwright import NxwrightError
 # The version of the settings' JSON form.
 FORMAT_VERSION = 1
 # The key that holds the version, and tells a settings file apart, and the
-# key that holds the generator.
-_FORMAT_KEY = "nxwrightWaves"
-_GENERATOR_KEY = "generator"
+# key that holds the generators.
+_FORMAT_KEY = "nxwrightSignals"
+_GENERATORS_KEY = "generators"
+# The key that holds a generator's kind, and the kind that sends points to
+# waveforms.
+_KIND_KEY = "kind"
+WAVEFORM = "waveform"
 
 SHAPES = ("sine", "square", "triangle", "sawtooth", "inverted-sawtooth", "pulse", "random",
           "custom")
@@ -99,12 +106,13 @@ class ChannelSettings:
 
 
 @dataclass(frozen=True)
-class GeneratorSettings:
-    """A generator's settings: the waveforms it feeds, its channels, and
-    the settings its channels share (`shared`)."""
+class WaveformGeneratorSettings:
+    """A waveform generator's settings: the waveforms it feeds, its
+    channels, and the settings its channels share (`shared`)."""
     waveforms: tuple
     channels: tuple
     shared: dict = field(default_factory=dict)
+    kind = WAVEFORM
 
     def wave(self, channel: ChannelSettings) -> Wave:
         """Returns the wave of `channel`, one of the generator's: its own
@@ -177,11 +185,11 @@ class ChannelRun:
         self.settings, self.wave = settings, wave
 
 
-class GeneratorRun:
-    """A running generator: its settings, its random numbers, and its
-    channels."""
+class WaveformGeneratorRun:
+    """A running waveform generator: its settings, its random numbers, and
+    its channels."""
 
-    def __init__(self, settings: GeneratorSettings, now: int):
+    def __init__(self, settings: WaveformGeneratorSettings, now: int):
         self.settings = settings
         self.random = random.Random(_SEED)
         self.channels = [ChannelRun(channel, settings.wave(channel),
@@ -205,7 +213,7 @@ class GeneratorRun:
                 channel.due = now + channel.wave.interval
         return points
 
-    def change(self, settings: GeneratorSettings, now: int):
+    def change(self, settings: WaveformGeneratorSettings, now: int):
         """Takes new settings while running. A channel kept keeps its place
         in its wave (ChannelRun.change); a new channel starts its wave, its
         first point one interval from `now`. The random numbers go on."""
@@ -228,43 +236,51 @@ class GeneratorRun:
             channel.due += by
 
 
-def generator_from_json(text: str, source: str) -> GeneratorSettings:
-    """Returns the GeneratorSettings of a settings file's text. `source`
-    names the file in errors. Raises NxwrightError for text that holds no
-    settings, or a setting that cannot be used, naming its place."""
+def generators_from_json(text: str, source: str) -> tuple:
+    """Returns the settings of each generator in `text`, a settings file's
+    text, in the file's order. Raises NxwrightError if the text is not a
+    settings file, or if a setting cannot be used. The error starts with
+    `source`, the file's name, and gives the setting's place."""
     try:
         data = json.loads(text)
     except json.JSONDecodeError as error:
         raise NxwrightError("%s: not JSON: %s" % (source, error)) from None
     if not isinstance(data, dict) or _FORMAT_KEY not in data:
-        raise NxwrightError("%s: not a waveform generator's file" % source)
+        raise NxwrightError("%s: not a signal generator settings file" % source)
     if data[_FORMAT_KEY] != FORMAT_VERSION:
         raise NxwrightError("%s: %s %r is not a version nxwright reads; it reads %d"
                             % (source, _FORMAT_KEY, data[_FORMAT_KEY], FORMAT_VERSION))
-    return generator_settings(data.get(_GENERATOR_KEY), "%s: %s" % (source, _GENERATOR_KEY))
+    generators = data.get(_GENERATORS_KEY)
+    if not isinstance(generators, list) or not generators:
+        raise NxwrightError("%s: %s must list one generator or more" % (source, _GENERATORS_KEY))
+    return tuple(generator_settings(given, "%s: %s[%d]" % (source, _GENERATORS_KEY, number))
+                 for number, given in enumerate(generators))
 
 
-def read_generator_file(path: Path) -> GeneratorSettings:
-    """Returns the GeneratorSettings of the settings file `path`. Raises
-    NxwrightError for a file that cannot be read or used."""
+def read_generators_file(path: Path) -> tuple:
+    """Returns the settings of each generator of the settings file `path`.
+    Raises NxwrightError for a file that cannot be read or used."""
     try:
         text = Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
-        raise NxwrightError("the waveform generator's file %s cannot be read: %s"
+        raise NxwrightError("the signal generator settings file %s cannot be read: %s"
                             % (path, getattr(error, "strerror", None) or error)) from None
-    return generator_from_json(text, str(path))
+    return generators_from_json(text, str(path))
 
 
-def generator_to_json(settings: GeneratorSettings) -> str:
-    """Returns the text of a settings file holding `settings`, which
-    generator_from_json reads back the same."""
-    return json.dumps({_FORMAT_KEY: FORMAT_VERSION, _GENERATOR_KEY: generator_dict(settings)},
+def generators_to_json(generators) -> str:
+    """Returns the text of a settings file that contains `generators`, the
+    settings of each generator. generators_from_json reads the text back to
+    the same settings."""
+    return json.dumps({_FORMAT_KEY: FORMAT_VERSION,
+                       _GENERATORS_KEY: [generator_dict(settings) for settings in generators]},
                       indent=2) + "\n"
 
 
-def generator_dict(settings: GeneratorSettings) -> dict:
-    """Returns a generator's settings as their JSON form gives them."""
-    given = {"waveforms": [{"page": name.page, "waveform": name.waveform}
+def generator_dict(settings: WaveformGeneratorSettings) -> dict:
+    """Returns a generator's settings in the form a settings file uses."""
+    given = {_KIND_KEY: settings.kind,
+             "waveforms": [{"page": name.page, "waveform": name.waveform}
                            for name in settings.waveforms]}
     given.update(_json_settings(settings.shared))
     given["channels"] = [dict({"channel": channel.channel}, **_json_settings(channel.own))
@@ -272,13 +288,32 @@ def generator_dict(settings: GeneratorSettings) -> dict:
     return given
 
 
-def generator_settings(given, where: str) -> GeneratorSettings:
-    """Returns the GeneratorSettings of `given`, a generator's JSON form.
-    Raises NxwrightError for a setting that cannot be used, `where` and
-    its place in `given` naming it."""
+def generator_settings(given, where: str) -> WaveformGeneratorSettings:
+    """Returns the settings of `given`, a generator's JSON form. Raises
+    NxwrightError for a kind this version of nxwright does not know, or for
+    a setting that cannot be used. The error starts with `where`, followed
+    by the setting's place in `given`."""
     if not isinstance(given, dict):
         raise NxwrightError("%s: a generator must be a JSON object" % where)
-    _refuse_unknown(given, set(WAVE_DEFAULTS) | {"waveforms", "channels"}, where)
+    if given.get(_KIND_KEY) != WAVEFORM:
+        raise NxwrightError("%s: %s" % (where, _kind_refusal(given)))
+    return _waveform_generator_settings(given, where)
+
+
+def _kind_refusal(given: dict) -> str:
+    """Returns why the kind of `given`, a generator's JSON form, cannot be
+    used: it is missing, or this version of nxwright does not know it."""
+    if _KIND_KEY not in given:
+        return 'a generator must give its kind, as "%s": "%s"' % (_KIND_KEY, WAVEFORM)
+    # A later version of nxwright may know more kinds. The refusal gives
+    # the kind, so that the user can tell a file from a later version apart
+    # from a damaged one.
+    return "%s %r is not a kind of generator this version of nxwright knows. It knows %s" % (
+        _KIND_KEY, given[_KIND_KEY], WAVEFORM)
+
+
+def _waveform_generator_settings(given: dict, where: str) -> WaveformGeneratorSettings:
+    _refuse_unknown(given, set(WAVE_DEFAULTS) | {_KIND_KEY, "waveforms", "channels"}, where)
     waveforms = given.get("waveforms")
     if not isinstance(waveforms, list) or not waveforms:
         raise NxwrightError("%s: waveforms must list one waveform or more" % where)
@@ -290,7 +325,7 @@ def generator_settings(given, where: str) -> GeneratorSettings:
     channels = given.get("channels")
     if not isinstance(channels, list) or not channels:
         raise NxwrightError("%s: channels must list one channel or more" % where)
-    settings = GeneratorSettings(names, tuple(
+    settings = WaveformGeneratorSettings(names, tuple(
         _channel_settings(channel, "%s.channels[%d]" % (where, number))
         for number, channel in enumerate(channels)), shared)
     numbers = [channel.channel for channel in settings.channels]

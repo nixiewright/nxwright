@@ -1,12 +1,12 @@
-// The waveform generator panel's own rules (media/wave-generators-model.mjs).
+// The Signal generator panel's own rules (media/signal-generators-model.mjs).
 // Run with `npm test`.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  channelCount, fileText, generatorOfSettings, newGenerator, NUMBER_SETTINGS, setSame,
-  settingsOf, settingsOfFileText, sketchLength, sketchValues, valuesOfCsv, valuesOfText,
-  WAVE_DEFAULTS,
-} from "../media/wave-generators-model.mjs";
+  channelCount, fileText, generatorOfSettings, generatorsOfRunning, isRunning, markStopped,
+  newGenerator, NUMBER_SETTINGS, setSame, settingsOf, settingsOfAll, settingsOfFileText,
+  sketchLength, sketchValues, valuesOfCsv, valuesOfText, WAVE_DEFAULTS,
+} from "../media/signal-generators-model.mjs";
 
 const OFFERED = [
   { page: "day", waveform: "chart", channels: 2 },
@@ -19,8 +19,9 @@ const { values: noValues, ...SENT_DEFAULTS } = WAVE_DEFAULTS;
 test("a new generator sends a sine wave on channel 0 of the app's first waveform", () => {
   const generator = newGenerator(OFFERED);
   assert.equal(generator.same, true);
-  assert.equal(generator.running, false);
+  assert.equal(isRunning(generator), false);
   assert.deepEqual(settingsOf(generator, OFFERED), { settings: {
+    kind: "waveform",
     waveforms: [{ page: "day", waveform: "chart" }],
     ...SENT_DEFAULTS,
     channels: [{ channel: 0 }],
@@ -42,6 +43,7 @@ test("the same wave on every channel is given once", () => {
   // A channel's own wave is not sent while every channel sends the same.
   generator.channels[1].wave.shape = "pulse";
   assert.deepEqual(settingsOf(generator, OFFERED).settings, {
+    kind: "waveform",
     waveforms: [{ page: "day", waveform: "chart" }],
     ...SENT_DEFAULTS, shape: "square",
     channels: [{ channel: 0 }, { channel: 1 }],
@@ -58,6 +60,7 @@ test("a wave for each channel gives each channel its whole wave", () => {
   generator.channels[1].wave.shape = "custom";
   generator.channels[1].wave.values = [4, 5];
   assert.deepEqual(settingsOf(generator, OFFERED).settings, {
+    kind: "waveform",
     waveforms: [{ page: "day", waveform: "chart" }],
     channels: [{ channel: 0, ...SENT_DEFAULTS, maximum: 200 },
                { channel: 1, ...SENT_DEFAULTS, maximum: 200, shape: "custom", values: [4, 5] }],
@@ -110,6 +113,7 @@ test("a generator without a waveform, or without a channel, says what it needs",
 
 test("a file whose channels change nothing is the same wave on every channel", () => {
   const settings = {
+    kind: "waveform",
     waveforms: [{ page: "home", waveform: "scope" }],
     interval: 20, shape: "custom", values: [1, 2, 3],
     channels: [{ channel: 0 }, { channel: 2 }],
@@ -118,8 +122,8 @@ test("a file whose channels change nothing is the same wave on every channel", (
   assert.equal(generator.same, true);
   assert.deepEqual(generator.channels.map((row) => row.on), [true, false, true, false]);
   assert.deepEqual(settingsOf(generator, OFFERED).settings, {
-    waveforms: settings.waveforms, ...SENT_DEFAULTS, interval: 20, shape: "custom",
-    values: [1, 2, 3], channels: settings.channels,
+    kind: "waveform", waveforms: settings.waveforms, ...SENT_DEFAULTS, interval: 20,
+    shape: "custom", values: [1, 2, 3], channels: settings.channels,
   });
 });
 
@@ -127,7 +131,7 @@ test("a file whose channel changes a setting is a wave for each channel", () => 
   // As a file written by hand may be: the generator's settings are the
   // ones its channels share, and a channel gives those it changes.
   const generator = generatorOfSettings({
-    waveforms: [{ page: "home", waveform: "scope" }], maximum: 200, duty: 80,
+    kind: "waveform", waveforms: [{ page: "home", waveform: "scope" }], maximum: 200, duty: 80,
     channels: [{ channel: 0 }, { channel: 1, shape: "pulse", duty: 10 }],
   });
   assert.equal(generator.same, false);
@@ -143,7 +147,7 @@ test("a file whose channel changes a setting is a wave for each channel", () => 
 
 test("a sketch follows the shapes the simulation sends", () => {
   // The same cycles as nxwright's own test of the shapes
-  // (tests/test_wave_generators.py), eight points to a cycle.
+  // (tests/test_signal_generators.py), eight points to a cycle.
   const wave = (shape, more = {}) => ({ ...WAVE_DEFAULTS, shape, period: 8, ...more });
   assert.deepEqual(sketchValues(wave("sine"), 8), [0, 15, 50, 85, 100, 85, 50, 15]);
   assert.deepEqual(sketchValues(wave("square"), 8), [100, 100, 100, 100, 0, 0, 0, 0]);
@@ -156,7 +160,7 @@ test("a sketch follows the shapes the simulation sends", () => {
 });
 
 test("a channel's sketch starts a quarter cycle after the channel before it", () => {
-  // As the simulation starts each channel (tests/test_wave_generators.py).
+  // As the simulation starts each channel (tests/test_signal_generators.py).
   const sine = { ...WAVE_DEFAULTS, period: 4 };
   assert.deepEqual([0, 1, 2, 3].map((channel) => sketchValues(sine, 2, channel)),
                    [[0, 50], [50, 100], [100, 50], [50, 0]]);
@@ -204,14 +208,57 @@ test("a CSV file gives the values of its first column of numbers", () => {
 });
 
 test("a settings file reads back what was written, and other files say why not", () => {
-  const settings = settingsOf(newGenerator(OFFERED), OFFERED).settings;
+  const second = newGenerator(OFFERED);
+  second.common.shape = "square";
+  const { settings } = settingsOfAll([newGenerator(OFFERED), second], OFFERED);
+  assert.deepEqual(settings.map((one) => one.shape), ["sine", "square"]);
   assert.deepEqual(settingsOfFileText(fileText(settings)), { settings });
-  assert.deepEqual(Object.keys(JSON.parse(fileText(settings))), ["nxwrightWaves", "generator"]);
+  assert.deepEqual(Object.keys(JSON.parse(fileText(settings))),
+                   ["nxwrightSignals", "generators"]);
   assert.deepEqual(settingsOfFileText("{"), { error: "The file is not JSON." });
-  assert.deepEqual(settingsOfFileText("[]"),
-                   { error: "The file is not a waveform generator's file." });
-  assert.match(settingsOfFileText('{"nxwrightWaves": 2, "generator": {}}').error,
-               /nxwrightWaves is 2, a version this extension does not read/);
-  assert.deepEqual(settingsOfFileText('{"nxwrightWaves": 1}'),
-                   { error: "The file has no generator." });
+  for (const text of ["[]", '{"nxwrightWaves": 1, "generator": {}}']) {
+    assert.deepEqual(settingsOfFileText(text),
+                     { error: "The file is not a signal generator settings file." });
+  }
+  assert.match(settingsOfFileText('{"nxwrightSignals": 2, "generators": [{}]}').error,
+               /nxwrightSignals is 2, a version this extension does not read/);
+  for (const text of ['{"nxwrightSignals": 1}', '{"nxwrightSignals": 1, "generators": []}']) {
+    assert.deepEqual(settingsOfFileText(text), { error: "The file has no generator." });
+  }
+  // A kind from a later version is reported with its name and its
+  // generator's place in the file.
+  const later = fileText([settings[0], { kind: "sequence" }]);
+  assert.deepEqual(settingsOfFileText(later), {
+    error: 'Generator 2 of the file is of a kind this extension does not know: "sequence".',
+  });
+  for (const lacking of [{ waveforms: [] }, 3, null]) {
+    assert.deepEqual(settingsOfFileText(fileText([lacking])),
+                     { error: 'Generator 1 in the file has no "kind".' });
+  }
+});
+
+test("saving says which generator lacks something", () => {
+  const lacking = newGenerator(OFFERED);
+  lacking.waveforms = [];
+  assert.deepEqual(settingsOfAll([newGenerator(OFFERED), lacking], OFFERED),
+                   { error: "Generator 2: Choose a waveform to send the points to." });
+  assert.deepEqual(settingsOfAll([], OFFERED), { settings: [] });
+});
+
+test("a panel opened while generators run shows them as running", () => {
+  const settings = settingsOf(newGenerator(OFFERED), OFFERED).settings;
+  const shown = generatorsOfRunning([{ number: 2, settings },
+                                     { number: 5, settings: { ...settings, shape: "pulse" } }]);
+  assert.deepEqual(shown.map((generator) => [generator.number, isRunning(generator),
+                                             generator.common.shape]),
+                   [[2, true, "sine"], [5, true, "pulse"]]);
+});
+
+test("a generator stopped from outside the panel is marked as stopped", () => {
+  const generators = [newGenerator(OFFERED), newGenerator(OFFERED), newGenerator(OFFERED)];
+  generators[0].number = 1;
+  generators[1].number = 2;
+  // The simulation runs 2, and 7, which the panel does not have.
+  markStopped(generators, [{ number: 2 }, { number: 7 }]);
+  assert.deepEqual(generators.map(isRunning), [false, true, false]);
 });
