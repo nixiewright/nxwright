@@ -108,12 +108,19 @@ class LiveSimulation:
     gives the settings (signal_generators.py) of each signal generator that
     starts with the simulation; if the app refuses one, such as for a
     waveform the app lacks, the start fails. `wall` is the clock on the wall
-    the simulation's time follows, a WallClock unless given."""
+    the simulation's time follows, a WallClock unless given.
+
+    `start_wait` is how long, in seconds, the app's first start waits for a
+    call to `allow_start`. The caller makes that call once the app may
+    start, such as when a program has connected to the serial line. If
+    `start_wait` passes first, the app starts anyway, and `notify` is called
+    with "wait_over" and the seconds waited. Work given to the thread during
+    the wait stays in the thread's queue until the app has started."""
 
     def __init__(self, source_folder, page=None, values=None, eeprom=b"", notify=None,
                  sending=None, cards=None, log_formats=None, wall: WallClock = None,
                  eeprom_file: Path = None, pinyin_table=None, inputs: dict = None,
-                 defines: dict = None, generators=()):
+                 defines: dict = None, generators=(), start_wait: float = 0):
         self.recorder = Recorder(keep=KEEP)
         self._defines = defines or {}
         self.timeline = Timeline(self.recorder)
@@ -122,6 +129,10 @@ class LiveSimulation:
         self._arguments = (source_folder, page, values, eeprom, sending, cards, log_formats,
                            eeprom_file, pinyin_table, inputs)
         self._generators = generators
+        self._start_wait = start_wait
+        # Whether allow_start was called, so that the app's first start no
+        # longer waits.
+        self._start_allowed = False
         self._notify = notify
         self._wall = wall if wall is not None else WallClock()
         self._condition = threading.Condition()
@@ -160,6 +171,12 @@ class LiveSimulation:
         if stop_on_entry:
             self._rule = lambda position: True
         self._thread.start()
+
+    def allow_start(self):
+        """Lets the app start, if its first start still waits (`start_wait`)."""
+        with self._condition:
+            self._start_allowed = True
+            self._condition.notify_all()
 
     @property
     def present(self) -> int:
@@ -260,6 +277,7 @@ class LiveSimulation:
         with self._condition:
             self._busy = True
         try:
+            self._wait_to_start()
             self.simulation = Simulation(source_folder, page, values, self.recorder, eeprom,
                                          sending=sending, leaving=self._page_leaving,
                                          cards=cards, log_formats=log_formats,
@@ -337,6 +355,27 @@ class LiveSimulation:
                         # Points still held back go once their pace allows.
                         wait = min(wait, WAVES_PACE)
                 self._wait(wait, True)
+
+    def _wait_to_start(self):
+        """Waits for `allow_start`, for up to `start_wait` seconds by the
+        clock on the wall. If that time passes first, calls `notify` with
+        "wait_over". Raises Ended if the session ends meanwhile."""
+        if self._start_wait <= 0:
+            return
+        deadline = self._wall.now() + self._start_wait
+        with self._condition:
+            while not self._start_allowed:
+                if self._ended:
+                    raise Ended
+                left = deadline - self._wall.now()
+                if left <= 0:
+                    break
+                # Waits in steps, because a single wait longer than
+                # threading.TIMEOUT_MAX seconds raises OverflowError.
+                self._wall.wait(self._condition, min(left, _LONGEST_WAIT))
+            allowed = self._start_allowed
+        if not allowed:
+            self._notify("wait_over", self._start_wait)
 
     def _skip_missed_ticks(self):
         """When the wall clock has already passed a timer's next run, as when

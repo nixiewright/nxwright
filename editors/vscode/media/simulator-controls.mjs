@@ -7,7 +7,8 @@
 //    serial line;
 //  - the MCU port, which the serial line is connected to: none, a serial
 //    port, a program that listens at a TCP address, or the port that listens
-//    for the project's MCU emulator (simulator-port-model.mjs);
+//    for the project's MCU emulator (simulator-port-model.mjs). While it
+//    listens for the emulator, a button starts the emulator again;
 //  - the screen port, for a real screen beside the simulation. The field
 //    can send that screen instructions too, and the MCU port can be joined
 //    to it in place of the simulator;
@@ -20,8 +21,8 @@ import { glyphButton } from "./glyph-button.mjs";
 import { pinRows } from "./gpio-pins-model.mjs";
 import { agentLine } from "./simulator-agent-model.mjs";
 import { bridgeControls } from "./simulator-bridge-model.mjs";
-import { NONE, besideList, connectionOf, entryOfState, portOptions, serialName, stateLine }
-  from "./simulator-port-model.mjs";
+import { NONE, besideList, connectionOf, entryOfState, portOptions, serialName,
+         startEmulatorShown, stateLine } from "./simulator-port-model.mjs";
 
 const vscode = acquireVsCodeApi();
 
@@ -117,6 +118,13 @@ let bridged = false;
 // While joined, whether the simulation "listens" or "answers" too, or null.
 let simulator = null;
 
+// The button that starts the MCU emulator again, and whether the extension
+// can start the emulator.
+const emulatorStarts = document.getElementById("emulator-starts");
+let canStartEmulator = false;
+document.getElementById("start-emulator").addEventListener("click", () =>
+  vscode.postMessage({ type: "startEmulator" }));
+
 // The MCU port, which the simulation's serial line is connected to. Its
 // list also has None and TCP, and Emulator if the project has an MCU
 // emulator. Choosing None posts "noPort".
@@ -127,8 +135,9 @@ const mcuPort = portControls({
   connectButton: document.getElementById("connect"),
   stateLine: document.getElementById("port-state"),
   connectType: "connect", disconnectType: "disconnect", noneType: "noPort",
-  shown: (connected) => {
+  shown: (connected, state) => {
     mcuConnected = connected;
+    emulatorStarts.hidden = !startEmulatorShown(state, canStartEmulator);
     showBridge();
   },
 });
@@ -206,6 +215,7 @@ window.addEventListener("message", (event) => {
   if (message.type === "ports") {
     bridged = message.bridged === true;
     simulator = message.simulator ?? null;
+    canStartEmulator = message.emulatorStarts === true;
     mcuPort.offer(message.ports, message.rates, message.state, message.emulator === true);
     // While Find is looking, leave its "Looking for a screen" note in place
     // until Find answers.
@@ -255,7 +265,7 @@ agentConnect.addEventListener("click", () => {
 // button, and the line saying its state (simulator-port-model.mjs). The
 // button posts `connectType` with the port chosen, or `disconnectType` while
 // connected. Each time the controls show a state, they call
-// `shown(connected)`.
+// `shown(connected, state)`.
 //
 // Given `addressField` and `noneType`, as for the MCU port, the list also
 // has None and TCP, and Emulator when it is offered. TCP shows the field,
@@ -349,7 +359,7 @@ function portControls({ portList, rateList, addressField, connectButton, stateLi
     line.classList.toggle("problem", words.problem);
     line.textContent = words.text;
     showBeside();
-    shown(connected);
+    shown(connected, state);
   }
 
   return {

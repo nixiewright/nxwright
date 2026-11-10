@@ -2,7 +2,7 @@
   "name": "nxwright-language",
   "displayName": "nxwright",
   "description": "Design, write, simulate, test, compile, and upload Nextion screen apps in VS Code.",
-  "version": "0.3.17",
+  "version": "0.3.18",
   "publisher": "nxwright",
   "icon": "images/icon.png",
   "license": "Apache-2.0",
@@ -1041,6 +1041,14 @@
                     "name": "COM4",
                     "baud": 115200
                   }
+                ]
+              },
+              "emulatorWait": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Optional: how many seconds the app waits for the project's MCU emulator to connect before the app starts, when the MCU port is Emulator. 0 starts the app at once. Without emulatorWait, that time is the wait of the [mcu] table in app.toml, or 10 seconds.",
+                "examples": [
+                  10
                 ]
               },
               "signalGenerators": {

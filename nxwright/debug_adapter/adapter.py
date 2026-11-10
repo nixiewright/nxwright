@@ -37,7 +37,11 @@ screen's serial line is connected to: {"name": "COM4", "baud": 115200} for
 that serial port (serial_port.py), {"tcp": "127.0.0.1:7000"} for the program
 listening at that address (tcp_port.py), "emulator" for the project's MCU
 emulator, which the adapter listens for (emulator_port.py), and "none" or
-null for nothing.
+null for nothing. With the emulator's port, the app's first start waits for
+an emulator to connect, so that the emulator receives what the app sends
+when it starts. The start waits up to `emulatorWait` seconds, or up to the
+`wait` of app.toml's [mcu] table when `emulatorWait` is not given
+(source/mcu_table.py).
 Its `gpioInputs`, {"pio2": 0}, gives the GPIO inputs'
 starting levels (testing/gpio_pins.py). Its `signalGenerators` names the
 settings file of the signal generators that start with it
@@ -152,6 +156,7 @@ from nxwright.debug_adapter.serial_port import (EMULATOR, RATES, REPLY_LENGTHS, 
 from nxwright.drawing.screen_pictures import ScreenPictures
 from nxwright.project.device_settings import TextCodec
 from nxwright.source.defines import LAUNCH_CONFIGURATION, launch_defines, overriding_defines
+from nxwright.source.mcu_table import emulator_wait, is_wait
 from nxwright.source.source_folder import read_app
 from nxwright.testing import looks
 from nxwright.testing.gpio_pins import checked_level, checked_levels, levels_by_name
@@ -342,6 +347,8 @@ class DebugAdapter:
         else the installed Nextion Editor's, if found. Its GPIO inputs start
         at the levels `gpioInputs` gives, as {"pio2": 0} (gpio_pins.py).
         `defines` gives app.toml's defines new values, as {"LIMIT": 40}.
+        With the emulator's port, the app's start waits for an emulator to
+        connect, for up to `emulatorWait` seconds (_emulator_wait).
         `signalGenerators` names a settings file (signal_generators.py),
         whose generators start with the simulation; a file that cannot be
         read or used stops the launch."""
@@ -354,6 +361,10 @@ class DebugAdapter:
             with overriding_defines(defines, LAUNCH_CONFIGURATION):
                 read_app(source_folder)
         port = _mcu_port_settings(arguments.get("serialPort"))
+        start_wait = 0
+        if port is not None and port[2] == EMULATOR:
+            with overriding_defines(defines, LAUNCH_CONFIGURATION):
+                start_wait = _emulator_wait(arguments.get("emulatorWait"), source_folder)
         # Checked before anything starts: a folder that will not do stops the
         # launch, saying why.
         cards = {card: card_folder(arguments[setting])
@@ -387,13 +398,18 @@ class DebugAdapter:
                                     arguments.get("values"), eeprom, self._live_news,
                                     self._simulation_sends, cards, log_formats,
                                     eeprom_file=eeprom_file, pinyin_table=pinyin_table,
-                                    inputs=inputs, defines=defines, generators=generators)
+                                    inputs=inputs, defines=defines, generators=generators,
+                                    start_wait=start_wait)
         # Connected before the app starts, so that what it sends first goes
         # out. Either way the side bar hears the port's state.
         if port is not None:
             self._link.connect(*port)
         else:
             self._event("nxwright/serialState", self._link.state())
+        if start_wait and self._link.state()["connected"]:
+            self._event("output", {"category": "console",
+                                   "output": "Waiting up to %s for the MCU emulator to connect "
+                                             "before the app starts.\n" % _seconds(start_wait)})
         self._timeline = self._live.timeline
         self._position = None
         self._launched = True
@@ -429,6 +445,10 @@ class DebugAdapter:
             self._event("stopped", event)
             for waiting in self._replies_waiting():
                 waiting.interrupt(body["reason"], body.get("error"))
+        elif kind == "wait_over":
+            self._event("output", {"category": "console",
+                                   "output": "No MCU emulator connected within %s, so the app "
+                                             "starts without one.\n" % _seconds(body)})
         elif kind == "starting":
             self._starting(body)
         elif kind == "drawing":
@@ -1154,6 +1174,11 @@ class DebugAdapter:
             self._event("nxwright/serialState", body)
             if not body["connected"] and self._bridge is not None:
                 self._bridge_ended("MCU port %s closed" % body["name"])
+            # The app's first start may be waiting for the emulator. It goes
+            # ahead once an emulator is connected, or once the port no longer
+            # listens for one, because no emulator can connect then.
+            if body["kind"] != EMULATOR or not body["connected"] or body["attached"]:
+                self._live.allow_start()
         elif kind == "log":
             self._log_output(body, "console")
 
@@ -1532,6 +1557,30 @@ def _mcu_port_settings(settings):
                             'at an address, "emulator" for the project\'s MCU emulator, or '
                             '"none"')
     return (*_port_settings(settings), SERIAL)
+
+
+def _emulator_wait(given, source_folder: Path) -> float:
+    """Returns how many seconds the app's start waits for the MCU emulator to
+    connect. `given` is the launch configuration's `emulatorWait`, or None
+    when the configuration has none. When `given` is None, the wait comes
+    from the [mcu] table of the folder's app.toml (source/mcu_table.py).
+    Raises NxwrightError if `given` is neither None nor a number of seconds,
+    0 or more."""
+    if given is not None:
+        if not is_wait(given):
+            raise NxwrightError("emulatorWait must be a number of seconds, 0 or more, such as 10")
+        return given
+    try:
+        mcu = read_app(source_folder).get("mcu", {})
+    except NxwrightError:
+        # The app's start reports a folder that cannot be read.
+        mcu = {}
+    return emulator_wait(mcu)
+
+
+def _seconds(count: float) -> str:
+    """Returns `count` seconds in words, such as "10 seconds" or "1 second"."""
+    return "%g %s" % (count, "second" if count == 1 else "seconds")
 
 
 def _port_settings(settings) -> tuple:

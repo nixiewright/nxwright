@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.12] - 2026-11-10
+
+- With the Emulator port, the app now waits for the MCU emulator to connect before it starts.
+- Added `wait` to the `[mcu]` table of `app.toml`, to set how long the app waits.
+
 ### [0.3.11] - 2026-11-10
 
 - A misspelled component or page name now gets a "Did you mean" hint and a quick fix.
@@ -161,6 +166,14 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.18] - 2026-11-10
+
+Needs nxwright 0.3.12 or later.
+
+- With the Python Debugger extension, the MCU emulator now starts with the simulation.
+- Added the button Start the emulator again to the Simulator section.
+- Added `emulatorWait` to launch configurations, to set how long the app waits for the MCU emulator.
 
 ### [0.3.17] - 2026-11-10
 

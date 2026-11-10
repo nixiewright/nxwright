@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { EMULATOR, NONE, TCP, besideList, connectionOf, entryOfState, portOptions, serialEntry,
-         serialName, stateLine } from "../media/simulator-port-model.mjs";
+         serialName, startEmulatorShown, stateLine } from "../media/simulator-port-model.mjs";
 
 test("the MCU port's list has None, the serial ports, then TCP", () => {
   assert.deepEqual(portOptions(["COM3", "COM4"], { kinds: true }), [
@@ -93,4 +93,17 @@ test("the emulator's port says whether an emulator is connected, and where it li
                      problem: false });
   assert.deepEqual(stateLine({ ...listening, connected: false, attached: false }),
                    { text: "Not connected.", problem: false });
+});
+
+test("the emulator can be started again while the port listens for it", () => {
+  const listening = { kind: "emulator", name: "127.0.0.1:49480", baud: null, connected: true,
+                      attached: true };
+  assert.equal(startEmulatorShown(listening, true), true);
+  assert.equal(startEmulatorShown({ ...listening, attached: false }, true), true);
+  // The button is hidden when the extension cannot start the emulator, when
+  // the port is not connected, or when it is another kind of port.
+  assert.equal(startEmulatorShown(listening, false), false);
+  assert.equal(startEmulatorShown({ ...listening, connected: false }, true), false);
+  assert.equal(startEmulatorShown({ kind: "tcp", name: "127.0.0.1:7000", baud: null,
+                                    connected: true }, true), false);
 });

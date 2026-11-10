@@ -4,13 +4,9 @@ seconds. That temperature follows the time of day, from 5 degrees before
 dawn to 15 degrees in the afternoon, and the app's simulated room cools or
 warms towards it.
 
-There are two ways to run the emulator:
-
-- While the simulator's MCU port is Emulator, the simulator shows the
-  address it listens at. Run the emulator with that address in the
-  environment variable NXWRIGHT_MCU.
-- Run the emulator with a port number, as in `python main.py 7000`, then
-  connect the simulator's MCU port over TCP to 127.0.0.1:7000.
+In VS Code, a simulation whose MCU port is Emulator starts this program. To
+start it yourself, run it with a port number, as in `python main.py 7000`,
+then connect the simulator's MCU port over TCP to 127.0.0.1:7000.
 """
 import math
 import sys

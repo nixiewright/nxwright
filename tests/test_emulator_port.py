@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from nxwright import mcu
+from nxwright.debug_adapter.adapter import _emulator_wait, _seconds
 from nxwright.debug_adapter.emulator_port import EmulatorPort
 from nxwright.debug_adapter.serial_port import EMULATOR, SerialLink
 from nxwright.language_server.file_texts import uri_of
@@ -197,7 +198,7 @@ class EmulatorPortSessionTest(LiveTestCase):
         return self.request("nxwright/serialPorts")["body"]["state"]
 
     def test_a_launch_with_the_emulators_port(self):
-        self.launch(serialPort="emulator")
+        self.launch(serialPort="emulator", emulatorWait=0)
         self.wait_for("nxwright/drawing")
         state = self.state()
         self.assertEqual((state["kind"], state["connected"], state["attached"], state["baud"]),
@@ -214,7 +215,7 @@ class EmulatorPortSessionTest(LiveTestCase):
                              for body in self.events("nxwright/serialState")])
 
     def test_the_app_keeps_running_while_the_emulator_is_started_again(self):
-        self.launch(serialPort="emulator")
+        self.launch(serialPort="emulator", emulatorWait=0)
         self.wait_for("nxwright/drawing")
         address = self.state()["name"]
         first = emulator_at(address)
@@ -240,7 +241,7 @@ class EmulatorPortSessionTest(LiveTestCase):
         self.assertFalse(self.state()["connected"])
 
     def test_an_agents_action_needs_the_users_go_while_the_port_listens(self):
-        self.launch(serialPort="emulator")
+        self.launch(serialPort="emulator", emulatorWait=0)
         self.wait_for("nxwright/drawing")
         refused = self.reply_to(self.request_later("nxwright/press", x=10, y=10, handled=True,
                                                    agent=True))
@@ -250,6 +251,124 @@ class EmulatorPortSessionTest(LiveTestCase):
         allowed = self.reply_to(self.request_later("nxwright/press", x=10, y=10, handled=True,
                                                    agent=True, allowed=True))
         self.assertTrue(allowed["success"])
+
+
+class EmulatorWaitTest(LiveTestCase):
+    """A simulation launched with the emulator's port: the app's start waits
+    for an emulator to connect. The app prints "ready" when it starts."""
+
+    def setUp(self):
+        super().setUp()
+        self.program('int count=0, ticks=0\nprints "ready",0\n\npage page0\n')
+
+    def console(self) -> str:
+        """Returns what the adapter wrote to the Debug Console about the
+        session, without the simulation's log."""
+        return "".join(body["output"] for body in self.events("output")
+                       if body.get("category") == "console")
+
+    def listening(self) -> str:
+        """Returns the address the emulator's port listens at."""
+        return self.wait_for("nxwright/serialState")["name"]
+
+    def assertNotStarted(self):
+        self.assertIsNone(self.adapter._live.simulation)
+        self.assertEqual(self.events("nxwright/starting"), [])
+
+    def test_the_app_starts_once_the_emulator_connects(self):
+        self.launch(serialPort="emulator", emulatorWait=_PATIENCE)
+        address = self.listening()
+        self.assertIn("Waiting up to %d seconds for the MCU emulator to connect before the app "
+                      "starts.\n" % _PATIENCE, self.console())
+        self.assertEqual((_seconds(1), _seconds(2.5)), ("1 second", "2.5 seconds"))
+        self.assertNotStarted()
+        line = emulator_at(address)
+        self.addCleanup(line.close)
+        # The emulator receives what the app sends when it starts.
+        self.assertEqual(line.read(5), b"ready")
+        self.wait_for("nxwright/drawing")
+        self.assertNotIn("No MCU emulator connected", self.console())
+
+    def test_the_app_starts_without_an_emulator_once_the_wait_is_over(self):
+        self.launch(serialPort="emulator", emulatorWait=0.2)
+        self.wait_for("nxwright/drawing")
+        self.assertIn("No MCU emulator connected within 0.2 seconds, so the app starts without "
+                      "one.\n", self.console())
+        # An emulator can still connect afterwards.
+        line = emulator_at(self.listening())
+        self.addCleanup(line.close)
+        line.write(b"count=3" + END)
+        wait_until(lambda: self.adapter._live.simulation.globals["count"] == 3)
+
+    def test_a_wait_of_zero_starts_the_app_at_once(self):
+        self.launch(serialPort="emulator", emulatorWait=0)
+        self.wait_for("nxwright/drawing")
+        self.assertNotIn("Waiting", self.console())
+        self.assertNotIn("No MCU emulator connected", self.console())
+
+    def test_the_projects_wait_is_used_when_the_launch_gives_none(self):
+        self.write("app.toml", self.text("app.toml")
+                   + '\n[mcu]\nemulator = "../mcu/main.py"\nwait = 0.2\n')
+        self.launch(serialPort="emulator")
+        self.wait_for("nxwright/drawing")
+        self.assertIn("No MCU emulator connected within 0.2 seconds", self.console())
+
+    def test_the_launchs_wait_replaces_the_projects(self):
+        self.write("app.toml", self.text("app.toml")
+                   + '\n[mcu]\nemulator = "../mcu/main.py"\nwait = %d\n' % _PATIENCE)
+        self.assertEqual(_emulator_wait(None, self.root), _PATIENCE)
+        self.assertEqual(_emulator_wait(0.5, self.root), 0.5)
+
+    def test_a_project_without_an_emulator_waits_ten_seconds(self):
+        self.assertEqual(_emulator_wait(None, self.root), 10)
+
+    def test_a_wait_that_is_not_a_number_of_seconds_stops_the_launch(self):
+        self.request("initialize")
+        for wait in ("soon", -1, True):
+            with self.subTest(wait=wait):
+                reply = self.request("launch", sourceFolder=str(self.root),
+                                     serialPort="emulator", emulatorWait=wait)
+                self.assertFalse(reply["success"])
+                self.assertEqual(reply["message"],
+                                 "emulatorWait must be a number of seconds, 0 or more, such as 10")
+
+    def test_a_launch_with_another_port_does_not_wait(self):
+        self.launch(emulatorWait=_PATIENCE)
+        self.wait_for("nxwright/drawing")
+        self.assertNotIn("Waiting", self.console())
+
+    def test_starting_again_does_not_wait(self):
+        self.launch(serialPort="emulator", emulatorWait=0.2)
+        self.wait_for("nxwright/drawing")
+        self.request("nxwright/startAgain")
+        self.wait_for("nxwright/drawing", 2)
+        self.assertEqual(self.console().count("No MCU emulator connected"), 1)
+
+    def test_a_port_that_stops_listening_ends_the_wait(self):
+        self.launch(serialPort="emulator", emulatorWait=_PATIENCE)
+        self.listening()
+        self.assertNotStarted()
+        self.request("nxwright/serialPort", name="")
+        self.wait_for("nxwright/drawing")
+        self.assertNotIn("No MCU emulator connected", self.console())
+
+    def test_an_action_asked_meanwhile_is_done_once_the_app_has_started(self):
+        self.launch(serialPort="emulator", emulatorWait=_PATIENCE)
+        address = self.listening()
+        press = self.request_later("nxwright/press", x=10, y=10, handled=True)
+        self.assertEqual(self.replies_to(press), [])
+        line = emulator_at(address)
+        self.addCleanup(line.close)
+        self.assertTrue(self.reply_to(press)["success"])
+        self.assertEqual(self.adapter._live.simulation.globals["count"], 11)
+
+    def test_ending_the_session_ends_the_wait(self):
+        self.launch(serialPort="emulator", emulatorWait=_PATIENCE)
+        self.listening()
+        self.request("disconnect")
+        self.adapter._live._thread.join(_PATIENCE)
+        self.assertFalse(self.adapter._live._thread.is_alive())
+        self.assertNotStarted()
 
 
 class EmulatorBridgeTest(ScreenPortTestCase):

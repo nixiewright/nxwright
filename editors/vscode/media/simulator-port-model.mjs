@@ -89,6 +89,13 @@ export function connectionOf(entry, baud, address) {
   return entry === TCP && trimmed ? { tcp: trimmed } : undefined;
 }
 
+// Returns whether the button that starts the MCU emulator again shows. It
+// shows while the port listens for the emulator, if the extension can start
+// the emulator (`canStart`).
+export function startEmulatorShown(state, canStart) {
+  return canStart === true && state.kind === EMULATOR && state.connected === true;
+}
+
 // Returns the line that shows the port's state, and whether the line reports
 // a problem. A connected port's line gives its rate, unless the port has
 // none, such as a program over TCP. The emulator's port is connected from

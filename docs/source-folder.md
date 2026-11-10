@@ -174,9 +174,11 @@ fonts = [
   ```
   [mcu]
   emulator = "../mcu/main.py"
+  wait = 10
   ```
 
   - `emulator` is the program's file, as a path from the source folder, with forward slashes.
+  - `wait`, which is optional, is how many seconds a simulation waits for the emulator to connect before the app starts. Without it, a simulation waits 10 seconds ([Started with the simulation](mcu-emulator.md#started-with-the-simulation)).
   - `nxwright new-emulator` writes the table ([commands.md](commands.md#new-emulator)). The build does not read it.
   - An older nxwright cannot read a folder that has this table.
 - An optional `[defines]` table, at the end of the file, declares defines: named values that a build can change without editing the folder.

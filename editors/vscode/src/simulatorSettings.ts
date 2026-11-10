@@ -7,6 +7,7 @@
 // that port. Kept apart from VS Code's API, so that Node's test runner can
 // check it (test/simulator-settings.test.mjs).
 import * as path from "path";
+import { isEmulatorPort } from "./emulatorSession";
 
 // The settings, as read from VS Code's configuration.
 export interface SimulatorSettings {
@@ -30,10 +31,12 @@ export type PortChoice =
 
 // What a simulation's MCU port depends on in its project: the port the user
 // last chose for the project, if any, and whether the project has an MCU
-// emulator.
+// emulator. `startsEmulator` is whether the extension can start that
+// emulator beside the simulation, which needs the Python debugger.
 export interface ProjectPorts {
   remembered?: PortChoice;
   hasEmulator: boolean;
+  startsEmulator?: boolean;
 }
 
 // What the user reads in place of a name for the emulator's port, as in
@@ -110,6 +113,11 @@ export function portChoiceKey(sourceFolder: string, platform: NodeJS.Platform,
 // the one that `project` and the settings give (defaultPort). Any other
 // configuration, such as a test's, which names no source folder, is
 // returned as it is.
+//
+// With the emulator's port, the app's start waits for the emulator to
+// connect. If the extension will not start the emulator, that wait would
+// only delay the app, so the configuration gets an `emulatorWait` of 0,
+// unless it gives its own.
 export function withSimulatorSettings(
     config: Record<string, unknown>, settings: SimulatorSettings,
     project: ProjectPorts = { hasEmulator: false }): Record<string, unknown> {
@@ -122,6 +130,10 @@ export function withSimulatorSettings(
     if (port !== undefined) {
       filled.serialPort = port;
     }
+  }
+  if (isEmulatorPort(filled.serialPort) && filled.emulatorWait === undefined
+      && !project.startsEmulator) {
+    filled.emulatorWait = 0;
   }
   for (const file of ["sdCard0", "sdCard1", "pinyinTable"] as const) {
     if (filled[file] === undefined && settings[file]) {

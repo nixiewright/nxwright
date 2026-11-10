@@ -109,6 +109,8 @@ Starting again picks up any changes to your files, and is otherwise a power cycl
 
 If your files no longer build, the debugger stops on the error, and the app keeps running as it was. Continue, fix the file, then start again.
 
+An MCU emulator stays connected while your app starts again. To restart the emulator, use "Start the emulator again" in the Simulator section ([Started with the simulation](mcu-emulator.md#started-with-the-simulation)).
+
 ## Debugging
 
 You can debug the app while it runs.
@@ -553,7 +555,8 @@ If your project has an MCU emulator ([mcu-emulator.md](mcu-emulator.md)), the si
 "serialPort": "emulator"
 ```
 
-- The Simulator section shows the address the simulator listens at. To start the emulator with that address, see [The simulator listens](mcu-emulator.md#the-simulator-listens).
+- If you have the Python Debugger extension, the simulation starts the emulator, and your app waits for the emulator to connect before it starts ([Started with the simulation](mcu-emulator.md#started-with-the-simulation)).
+- The Simulator section shows the address the simulator listens at, for an emulator you start yourself ([The simulator listens](mcu-emulator.md#the-simulator-listens)).
 - The port counts as connected while the simulator listens, so you can join it to a real screen before the emulator starts ([A real screen](#a-real-screen)). Stopping the emulator does not end the join.
 
 ### The port a simulation starts with

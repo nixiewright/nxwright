@@ -2,6 +2,7 @@
 // (src/simulatorSettings.ts, compiled to out/ before the tests run).
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { emulatorStep } from "../out/emulatorSession.js";
 import { defaultPort, portChoiceKey, withSimulatorSettings } from "../out/simulatorSettings.js";
 
 const settings = {
@@ -127,4 +128,45 @@ test("a project's choice is kept under one key, however its folder is written", 
   // A launch configuration may write the folder from ${workspaceFolder}.
   assert.equal(portChoiceKey("${workspaceFolder}/app", "win32", "C:\\Dev\\thermostat"),
                portChoiceKey("C:\\Dev\\thermostat\\app", "win32"));
+});
+
+test("the app does not wait for an emulator that the extension will not start", () => {
+  const config = { type: "nxwright", sourceFolder: "app", serialPort: "emulator" };
+  // The project has no emulator, or the Python debugger is missing.
+  assert.equal(withSimulatorSettings(config, settings).emulatorWait, 0);
+  assert.equal(withSimulatorSettings(config, settings, { hasEmulator: true }).emulatorWait, 0);
+  assert.equal(withSimulatorSettings({ ...config, serialPort: { emulator: true } }, settings)
+    .emulatorWait, 0);
+  // The emulator's port may come from the project, not from the configuration.
+  const empty = { ...settings, serialPort: "" };
+  assert.equal(withSimulatorSettings({ sourceFolder: "app" }, empty, { hasEmulator: true })
+    .emulatorWait, 0);
+  // The configuration's own wait stays.
+  assert.equal(withSimulatorSettings({ ...config, emulatorWait: 30 }, settings).emulatorWait, 30);
+});
+
+test("the app's wait is left to the project when the extension starts the emulator", () => {
+  const starts = { hasEmulator: true, startsEmulator: true };
+  const config = { type: "nxwright", sourceFolder: "app", serialPort: "emulator" };
+  assert.equal("emulatorWait" in withSimulatorSettings(config, settings, starts), false);
+  assert.equal(withSimulatorSettings({ ...config, emulatorWait: 0 }, settings, starts)
+    .emulatorWait, 0);
+});
+
+test("a simulation an agent starts without a port starts no emulator", () => {
+  // The agent channel gives such a simulation a serialPort of null.
+  const starts = { hasEmulator: true, startsEmulator: true };
+  const empty = { ...settings, serialPort: "" };
+  const filled = withSimulatorSettings({ sourceFolder: "app", serialPort: null }, empty, starts);
+  assert.equal(filled.serialPort, null);
+  assert.equal("emulatorWait" in filled, false);
+  // The adapter then reports a port that is not connected.
+  assert.equal(emulatorStep({ kind: "serial", name: null, baud: 9600, connected: false },
+                            undefined), "keep");
+});
+
+test("a simulation with another port gets no wait for the emulator", () => {
+  assert.equal("emulatorWait" in withSimulatorSettings({ sourceFolder: "app" }, settings), false);
+  assert.equal("emulatorWait" in withSimulatorSettings(
+    { sourceFolder: "app", serialPort: "none" }, settings, { hasEmulator: true }), false);
 });

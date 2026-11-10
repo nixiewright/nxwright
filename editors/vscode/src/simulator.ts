@@ -10,7 +10,8 @@
 //    line is connected to: none, a serial port, a program that listens at
 //    an address over TCP, or the port that listens for the project's MCU
 //    emulator. The port chosen there is remembered for the project
-//    (simulatorSettings.ts). The section also has a port for a real
+//    (simulatorSettings.ts). While the port listens for the emulator, a
+//    button starts the emulator again. The section also has a port for a real
 //    screen beside the simulation. The field can send that screen
 //    instructions too, a button starts it again, and the MCU port can be
 //    joined to it, in place of the simulator or beside it. While no simulation runs,
@@ -26,7 +27,11 @@
 //    section has a line saying that an agent drives the simulation. While
 //    no port is connected, that line has a button that connects the port a
 //    simulation of the project would start with
-//    (media/simulator-agent-model.mjs).
+//    (media/simulator-agent-model.mjs);
+//  - the project's MCU emulator, started beside the simulation while the
+//    MCU port listens for it. The emulator runs through the Python
+//    debugger, in a session that is a child of the simulation's
+//    (emulatorSession.ts).
 // The adapter sends the start's progress, each drawing, the points of the
 // page's waveforms when they alone changed, and the ports' states as custom
 // events, and takes presses, typed instructions, starting again, and the
@@ -40,6 +45,8 @@ import * as vscode from "vscode";
 import { isInside, sourceFolderOf } from "./activeFile";
 import { AgentAnswer } from "./agentChannel";
 import { CurrentProject, NO_PROJECT_ERROR } from "./currentProject";
+import { ADDRESS_VARIABLE, emulatorConfiguration, emulatorStep, listeningAddress,
+         PYTHON_DEBUGGER_EXTENSION } from "./emulatorSession";
 import { Simulation, simulationsOf } from "./launchConfiguration";
 import { isPageFile, Pages, tomlOf } from "./pages";
 import { appName } from "./projectName";
@@ -56,6 +63,9 @@ const SIMULATING = "nxwright.simulating";
 // The commands the section's buttons run while no simulation runs.
 const IDLE_COMMANDS = new Set(["nxwright.simulate", "nxwright.simulatePage",
                                "nxwright.addLaunchConfiguration"]);
+// How long to wait for an emulator's session to end before another starts,
+// in milliseconds.
+const EMULATOR_END_WAIT = 5000;
 
 // A drawing as the adapter sends it (nxwright/drawing/page_drawing.py), with
 // the page shown, its `dim`, and whether the screen sleeps.
@@ -142,6 +152,18 @@ export class Simulator implements vscode.WebviewViewProvider {
   // whether the user allowed the agent as it started.
   private agentStarts = new Map<string, { started: (session: vscode.DebugSession) => void;
                                           allowed: boolean }>();
+
+  // The sessions that run MCU emulators, each by its simulation's session.
+  private emulators = new Map<vscode.DebugSession, vscode.DebugSession>();
+  // For the simulation running, the address at which the MCU port listened
+  // when the emulator was last started. Undefined if the emulator was not
+  // started, or was stopped since (emulatorStep).
+  private emulatorStartedFor: string | undefined;
+  // The starts and stops of emulators still to do. They are done one after
+  // the other, so that an emulator has ended before the next one starts.
+  private emulatorWork: Promise<void> = Promise.resolve();
+  // Whether the user was told that the emulator needs the Python debugger.
+  private toldNoDebugger = false;
 
   // The Signal generator panel of the simulation running.
   private readonly generatorPanel: SignalGeneratorPanel;
@@ -245,7 +267,8 @@ export class Simulator implements vscode.WebviewViewProvider {
   }
 
   // Returns the MCU port the user last chose in the section for the project
-  // in `sourceFolder`, and whether that project has an MCU emulator. The port
+  // in `sourceFolder`, whether that project has an MCU emulator, and whether
+  // the extension can start it. The port
   // is undefined if the user has not chosen yet. Choosing None counts as a
   // choice. `sourceFolder` comes from a launch configuration, so it may
   // contain ${workspaceFolder}, which stands for the workspace folder
@@ -262,6 +285,7 @@ export class Simulator implements vscode.WebviewViewProvider {
       remembered: this.context.workspaceState.get<PortChoice>(
         portChoiceKey(sourceFolder, process.platform, workspaceFolder)),
       hasEmulator: emulator !== undefined,
+      startsEmulator: emulator !== undefined && hasPythonDebugger(),
     };
   }
 
@@ -361,6 +385,12 @@ export class Simulator implements vscode.WebviewViewProvider {
   }
 
   private started(session: vscode.DebugSession): void {
+    const simulation = session.parentSession;
+    if (simulation && isSimulation(simulation)
+        && session.configuration.env?.[ADDRESS_VARIABLE] !== undefined) {
+      this.emulators.set(simulation, session);
+      return;
+    }
     if (!isSimulation(session)) {
       return;
     }
@@ -377,6 +407,8 @@ export class Simulator implements vscode.WebviewViewProvider {
     this.lastStarting = news?.starting;
     this.lastPins = news?.pins;
     this.portState = news?.port;
+    this.emulatorStartedFor = undefined;
+    this.followEmulatorPort();
     const agentStart = this.agentStarts.get(session.configuration.agentStart);
     this.agentDriven = agentStart !== undefined;
     this.answer = agentStart?.allowed ? "yes" : undefined;
@@ -402,10 +434,21 @@ export class Simulator implements vscode.WebviewViewProvider {
   }
 
   private ended(session: vscode.DebugSession): void {
+    for (const [simulation, emulator] of this.emulators) {
+      if (session === emulator) {
+        this.emulators.delete(simulation);
+      } else if (session === simulation) {
+        // An emulator ends by itself when its simulation closes the
+        // connection, but not while it is stopped at a breakpoint.
+        this.emulators.delete(simulation);
+        void endSession(emulator);
+      }
+    }
     if (session !== this.session) {
       return;
     }
     this.session = undefined;
+    this.emulatorStartedFor = undefined;
     this.lastPins = undefined;
     this.portState = undefined;
     this.agentDriven = false;
@@ -449,6 +492,7 @@ export class Simulator implements vscode.WebviewViewProvider {
       this.showWaves();
     } else if (event.event === "nxwright/serialState") {
       this.portState = event.body as PortState;
+      this.followEmulatorPort();
       void this.showAgent();
       // The adapter sends one at launch, so the section learns of the ports
       // once the simulation can answer; and the ports may have changed.
@@ -530,7 +574,9 @@ export class Simulator implements vscode.WebviewViewProvider {
 
   // Gives the side bar's section the computer's ports, the rates, and the
   // states of the MCU port and of the screen port. Also says whether the
-  // project has an MCU emulator, so that the section can list Emulator.
+  // project has an MCU emulator, so that the section can list Emulator, and
+  // whether the extension can start it, so that the section can offer to
+  // start it again.
   private async offerPorts(): Promise<void> {
     const session = this.session;
     if (!this.controls || !session) {
@@ -540,8 +586,10 @@ export class Simulator implements vscode.WebviewViewProvider {
       const offer = await session.customRequest("nxwright/serialPorts");
       const emulator = await this.project.emulatorOf(
         vscode.Uri.file(session.configuration.sourceFolder));
-      void this.controls?.webview.postMessage({ type: "ports", ...offer,
-                                                emulator: emulator !== undefined });
+      void this.controls?.webview.postMessage({
+        type: "ports", ...offer, emulator: emulator !== undefined,
+        emulatorStarts: emulator !== undefined && hasPythonDebugger(),
+      });
     } catch {
       // The session ended meanwhile.
     }
@@ -584,6 +632,92 @@ export class Simulator implements vscode.WebviewViewProvider {
     } catch {
       // The session ended meanwhile.
     }
+  }
+
+  // Starts or stops the emulator's session to match the MCU port's state
+  // (emulatorStep).
+  private followEmulatorPort(): void {
+    const session = this.session;
+    if (!session || emulatorStep(this.portState, this.emulatorStartedFor) === "keep") {
+      return;
+    }
+    this.restartEmulator(session);
+  }
+
+  // Ends the emulator's session of the simulation `session`, if it has one.
+  // Then, if the MCU port listens for the emulator, starts the emulator for
+  // the address the port listens at.
+  private restartEmulator(session: vscode.DebugSession): void {
+    const address = listeningAddress(this.portState);
+    this.emulatorStartedFor = address;
+    this.emulatorWork = this.emulatorWork.then(async () => {
+      await this.stopEmulator(session);
+      if (address !== undefined) {
+        await this.startEmulator(session, address);
+      }
+    }).catch(() => undefined);
+  }
+
+  // Starts the project's MCU emulator beside the simulation `session`.
+  // `address` is where the simulation listens for the emulator, and goes
+  // into the emulator's environment. The emulator is debugged only if the
+  // simulation is debugged. Nothing starts if the project has no emulator,
+  // or if the port stopped listening at `address` meanwhile. Without the
+  // Python debugger, nothing starts either, and the user is told why once.
+  private async startEmulator(session: vscode.DebugSession, address: string): Promise<void> {
+    const sourceFolder = vscode.Uri.file(session.configuration.sourceFolder);
+    const file = await this.project.emulatorOf(sourceFolder);
+    if (file === undefined || session !== this.session
+        || listeningAddress(this.portState) !== address) {
+      return;
+    }
+    if (!hasPythonDebugger()) {
+      if (!this.toldNoDebugger) {
+        this.toldNoDebugger = true;
+        void vscode.window.showWarningMessage(
+          "nxwright: Cannot start the MCU emulator because the Python Debugger extension " +
+          "is not installed. Please install it, or start the emulator yourself with " +
+          `${ADDRESS_VARIABLE} set to the address that the Simulator section shows.`);
+      }
+      return;
+    }
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(sourceFolder);
+    const existing = workspaceFolder
+      ? vscode.workspace.getConfiguration("launch", workspaceFolder.uri)
+          .get<unknown[]>("configurations") ?? []
+      : [];
+    const configuration = emulatorConfiguration(
+      file, address, existing, workspaceFolder?.uri.fsPath, process.platform);
+    // Ending the emulator's session must not end the simulation, so the
+    // parent does not manage the child's lifecycle.
+    await vscode.debug.startDebugging(
+      workspaceFolder, configuration as vscode.DebugConfiguration,
+      { parentSession: session, noDebug: session.configuration.noDebug === true });
+  }
+
+  // Ends the emulator's session of the simulation `session`, if the
+  // simulation has one. Waits for that session to end, so that the emulator
+  // has left the port.
+  private async stopEmulator(session: vscode.DebugSession): Promise<void> {
+    const emulator = this.emulators.get(session);
+    if (!emulator) {
+      return;
+    }
+    const ended = new Promise<void>((resolve) => {
+      const done = () => {
+        listening.dispose();
+        clearTimeout(limit);
+        resolve();
+      };
+      const listening = vscode.debug.onDidTerminateDebugSession((terminated) => {
+        if (terminated === emulator) {
+          done();
+        }
+      });
+      const limit = setTimeout(done, EMULATOR_END_WAIT);
+    });
+    await endSession(emulator);
+    await ended;
   }
 
   // Starts the real screen again, then the simulation, each with `rest`.
@@ -771,6 +905,9 @@ export class Simulator implements vscode.WebviewViewProvider {
     <button id="connect">Connect</button>
   </div>
   <div id="port-state" class="port-state"></div>
+  <div id="emulator-starts" class="buttons" hidden>
+    <button id="start-emulator">Start the emulator again</button>
+  </div>
   <div id="bridge-row" class="row" hidden>
     <label for="bridge" class="inline">Goes to</label>
     <select id="bridge">
@@ -851,6 +988,10 @@ export class Simulator implements vscode.WebviewViewProvider {
         void this.chooseScreenPort("nxwright/screenPort", { name: "" });
       } else if (message.type === "findScreen" && message.name) {
         void this.chooseScreenPort("nxwright/findScreen", { name: message.name });
+      } else if (message.type === "startEmulator") {
+        if (this.session) {
+          this.restartEmulator(this.session);
+        }
       } else if (message.type === "startScreen") {
         void this.session?.customRequest("nxwright/startScreenAgain");
       } else if (message.type === "startBoth") {
@@ -895,6 +1036,8 @@ const STYLES = `
   .port-state.problem { color: var(--vscode-errorForeground); }
   #destinations { width: 100%; gap: 12px; }
   #destinations[hidden], #screen-starts[hidden], #bridge-row[hidden] { display: none; }
+  #emulator-starts { margin: 6px 0 0; }
+  #emulator-starts[hidden] { display: none; }
   #rate[hidden], #address[hidden] { display: none; }
   #bridge-row { margin-top: 4px; }
   label.inline { width: auto; }
@@ -941,6 +1084,22 @@ const BRIDGE_CHOICES: Record<string, { on: boolean; simulator?: string }> = {
 // Whether a debugging session is a simulation: nxwright's, naming a source folder.
 function isSimulation(session: vscode.DebugSession): boolean {
   return session.type === "nxwright" && !!session.configuration.sourceFolder;
+}
+
+// Asks VS Code to end `session`. A session that has ended already is left
+// as it is.
+async function endSession(session: vscode.DebugSession): Promise<void> {
+  try {
+    await vscode.debug.stopDebugging(session);
+  } catch {
+    // The session ended meanwhile.
+  }
+}
+
+// Whether the Python Debugger extension is installed. nxwright's extension
+// needs it to start a project's MCU emulator.
+function hasPythonDebugger(): boolean {
+  return vscode.extensions.getExtension(PYTHON_DEBUGGER_EXTENSION) !== undefined;
 }
 
 // The name of the page whose file is `toml`, pages/<name>.page.toml.

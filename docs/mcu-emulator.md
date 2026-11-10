@@ -50,11 +50,22 @@ The line has the members of pyserial's `Serial` that an emulator needs, so code 
 
 The emulator needs nxwright installed in the Python environment that runs it, and nothing else, because `nxwright.mcu` uses only Python's standard library.
 
-The simulator and the emulator can find each other in two ways. If the simulator listens, you can stop the emulator and start it again while your app keeps running. If the emulator listens, its address stays the same from one simulation to the next, but you must start it before each simulation.
+### Started with the simulation
+
+In VS Code, a simulation whose MCU port is Emulator starts the project's emulator. A project that has an emulator starts its simulations with that port, unless you chose another port for the project earlier, or set one in the Simulator settings ([The port a simulation starts with](simulator.md#the-port-a-simulation-starts-with)).
+
+- VS Code needs the Python Debugger extension to start the emulator, and runs it with the Python interpreter selected in VS Code.
+- When you debug the simulation, the emulator is debugged too, so breakpoints work in its code.
+- Your app waits up to 10 seconds for the emulator to connect before the app starts, so that the emulator receives the start-up code and "ready". You can change that time with `wait` in the `[mcu]` table of `app.toml` ([app.toml](source-folder.md#apptoml)), or with a launch configuration's `emulatorWait`.
+- "Start the emulator again", in the Simulator section, restarts the emulator while your app keeps running. "Start again" restarts your app alone, and the emulator then receives the start-up code and "ready" again.
+- If you stop the emulator, the simulation keeps running.
+- To give the emulator its own interpreter, arguments, or environment variables, add a launch configuration of the Python Debugger whose `program` is the emulator's file. VS Code then starts the emulator with that configuration.
 
 ### The simulator listens
 
-1. Start the simulation. A project that has an emulator starts its simulations with the Emulator port, and the Simulator section of nxwright's side bar shows the address the simulator listens at, such as `127.0.0.1:53124`. If you chose another port for the project earlier, or set one in the Simulator settings, the simulation starts with that port ([The port a simulation starts with](simulator.md#the-port-a-simulation-starts-with)). To see the address, choose Emulator in the MCU port list and connect.
+Without the Python Debugger extension, VS Code does not start the emulator, and your app starts without waiting for one. The simulator still listens for an emulator that you start yourself.
+
+1. Start the simulation with the Emulator port. The Simulator section of nxwright's side bar shows the address the simulator listens at, such as `127.0.0.1:53124`.
 2. Start the emulator with that address in the environment variable `NXWRIGHT_MCU`. `mcu.open` then connects to the simulator, whatever `listen` is.
 
    ```
@@ -66,9 +77,11 @@ The simulator and the emulator can find each other in two ways. If the simulator
    ```
 
 - The simulator keeps listening at the same address until the simulation ends, or until you choose another MCU port, so you can stop the emulator and start it again while your app keeps running. The next simulation listens at a new address.
-- One emulator is connected at a time. What your app sends while none is connected is lost.
+- One emulator is connected at a time. What your app sends while none is connected is lost. If your app started before the emulator connected, the emulator has missed the start-up code and "ready". Use "Start again" in the Simulator section to make your app send them again.
 
 ### The emulator listens
+
+The emulator can also listen at an address of its own, which stays the same from one simulation to the next.
 
 1. Start the emulator with a port number, as in `python mcu/main.py 7000`. It then waits for the simulator to connect.
 2. Start the simulation.

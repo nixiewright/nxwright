@@ -16,10 +16,9 @@ _FIRST_EMULATOR = '''\
 """This app's MCU emulator. It emulates the microcontroller at the other end
 of the screen's serial line while the app runs in nxwright's simulator.
 
-To run it, put the address the simulator listens at in the environment
-variable NXWRIGHT_MCU. The simulator shows that address while its MCU port
-is Emulator. Or run it with a port number, as in `python main.py 7000`, then
-connect the simulator's MCU port over TCP to 127.0.0.1:7000.
+In VS Code, a simulation whose MCU port is Emulator starts this program. To
+start it yourself, run it with a port number, as in `python main.py 7000`,
+then connect the simulator's MCU port over TCP to 127.0.0.1:7000.
 """
 import sys
 

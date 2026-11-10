@@ -12,6 +12,7 @@ from pathlib import Path
 from nxwright import NxwrightError
 from nxwright.cli import main
 from nxwright.source.emulator_adding import DEFAULT_EMULATOR, add_emulator
+from nxwright.source.mcu_table import emulator_wait
 from nxwright.source.project_files import build
 from nxwright.source.source_folder import add_page, app_text_in, parse_app, read_app
 from tests.test_folder_check import FolderTestCase
@@ -53,6 +54,26 @@ class McuTableTest(FolderTestCase):
                 self.assertRefused(table, words)
                 self.write("app.toml", original)
 
+    def test_the_wait_for_the_emulator_is_ten_seconds_unless_given(self):
+        self.with_table('emulator = "../mcu/main.py"\n')
+        self.assertEqual(emulator_wait(read_app(self.root)["mcu"]), 10)
+        self.assertEqual(emulator_wait({}), 10)
+        for written, wait in (("30", 30), ("0", 0), ("2.5", 2.5), ("1e12", 1e12)):
+            with self.subTest(wait=written):
+                self.write("app.toml", self.text("app.toml") + "wait = %s\n" % written)
+                mcu = read_app(self.root)["mcu"]
+                self.assertEqual(mcu, {"emulator": "../mcu/main.py", "wait": wait})
+                self.assertEqual(emulator_wait(mcu), wait)
+                self.write("app.toml", self.text("app.toml").replace("wait = %s\n" % written, ""))
+
+    def test_the_wait_must_be_a_number_of_seconds(self):
+        words = "wait in [mcu] must be a number of seconds, 0 or more, such as 10"
+        for wait in ("-1", '"10"', "true", "inf", "nan"):
+            with self.subTest(wait=wait):
+                original = self.text("app.toml")
+                self.assertRefused('emulator = "../mcu/main.py"\nwait = %s\n' % wait, words)
+                self.write("app.toml", original)
+
     def test_mcu_must_be_a_table(self):
         self.write("app.toml", 'mcu = "../mcu/main.py"\n' + self.text("app.toml"))
         with self.assertRaises(NxwrightError) as raised:
@@ -60,11 +81,11 @@ class McuTableTest(FolderTestCase):
         self.assertEqual(str(raised.exception), "app.toml: mcu must be a table, as in [mcu]")
 
     def test_a_command_that_rewrites_app_toml_keeps_the_table(self):
-        self.with_table('emulator = "../mcu/main.py"\n')
+        self.with_table('emulator = "../mcu/main.py"\nwait = 30\n')
         add_page(self.root, "settings")
         app = read_app(self.root)
         self.assertEqual(app["pages"][-1], "settings")
-        self.assertEqual(app["mcu"], {"emulator": "../mcu/main.py"})
+        self.assertEqual(app["mcu"], {"emulator": "../mcu/main.py", "wait": 30})
 
     def test_the_table_is_written_before_the_defines(self):
         self.write("app.toml", self.text("app.toml") + "\n[defines]\nLIMIT = 30\n")

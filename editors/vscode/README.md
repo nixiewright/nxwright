@@ -88,7 +88,7 @@ The simulator can be started on the whole application, like your screen would, o
 You can also:
 
 - Connect the simulation to a device on a real serial port, or to a program over TCP.
-- Add an MCU emulator, a Python program that emulates the microcontroller for the screen ([Writing an MCU emulator](https://github.com/nixiewright/nxwright/blob/main/docs/mcu-emulator.md)).
+- Add an MCU emulator, a Python program that emulates the microcontroller for the screen ([Writing an MCU emulator](https://github.com/nixiewright/nxwright/blob/main/docs/mcu-emulator.md)). If you have the Python Debugger extension, the emulator starts with the simulation, and you can debug it too.
 - Send the screen an instruction from the Simulator section, as if it came from the serial line.
 - Connect a real screen beside the simulation, and send both the same instructions to compare them.
 - Let the program on the serial port talk to the real screen in place of the simulation, or to both at once, and watch what passes between them.
@@ -163,6 +163,7 @@ A launch configuration of type `nxwright` simulates the source folder given by `
 | `defines` | Other values for `app.toml`'s defines, such as `{"LIMIT": 40}`. |
 | `eeprom` | A file that keeps the EEPROM's contents between simulations. It is created if missing. Without it, the EEPROM starts empty every time. |
 | `serialPort` | What the screen's serial line is connected to: `{"name": "COM4", "baud": 115200}` for a serial port, `{"tcp": "127.0.0.1:7000"}` for a program that listens at that address, `"emulator"` for the project's MCU emulator, or `"none"` for no port. |
+| `emulatorWait` | How many seconds the app waits for the project's MCU emulator to connect before the app starts, when the MCU port is Emulator. Without `emulatorWait`, that time is the `wait` in the `[mcu]` table of `app.toml`, or 10 seconds. |
 | `gpioInputs` | The levels the GPIO inputs start at, such as `{"pio2": 0}`. Without it, every input reads 1, like a pull-up input with nothing driving it. |
 | `signalGenerators` | The full path of a file saved from the Signal generator panel. The generators in that file start with the simulation. |
 | `sdCard0`, `sdCard1` | The full paths of folders on your computer to use as the screen's SD cards. Without them, each card is kept in memory. |
