@@ -7,19 +7,25 @@
 //    While a simulation runs, it has pause, resume, start again, the log, the
 //    button opening the Signal generator panel (signalGenerators.ts), a
 //    field for what the serial line brings the screen, and the MCU port the
-//    line is connected to. It also has a port for a real screen beside the
-//    simulation. The field can send that screen instructions too, a button
-//    starts it again, and the MCU port can be joined to it, in place of the
-//    simulator or beside it. While none runs, it can simulate the current project with
-//    the Simulator settings, from program.nx or from the page shown, run
-//    each launch configuration that simulates it, and create one;
+//    line is connected to: none, a serial port, or a program that listens at
+//    an address, over TCP. The port chosen there is remembered for the
+//    project (simulatorSettings.ts). The section also has a port for a real
+//    screen beside the simulation. The field can send that screen
+//    instructions too, a button starts it again, and the MCU port can be
+//    joined to it, in place of the simulator or beside it. While no simulation runs,
+//    the section can simulate the current project with the MCU port last
+//    chosen for that project and the Simulator settings, from program.nx or
+//    from the page shown, run each launch configuration that simulates the
+//    project, and create one;
 //  - the button "Simulate this page" above a page file's text and its
 //    preview, which simulates the app from that page while none runs;
-//  - for the agent channel (agentChannelServer.ts), starting a simulation
-//    an agent asks for, the serial port's state and what the user answered
-//    of the agent acting with it, and the section's line saying that an
-//    agent drives the simulation, with a button connecting the Simulator
-//    settings' port while none is (media/simulator-agent-model.mjs).
+//  - for the agent channel (agentChannelServer.ts): starting a simulation
+//    an agent asks for, the MCU port's state, and what the user answered
+//    when asked whether the agent may act while a port is connected. The
+//    section has a line saying that an agent drives the simulation. While
+//    no port is connected, that line has a button that connects the port a
+//    simulation of the project would start with
+//    (media/simulator-agent-model.mjs).
 // The adapter sends the start's progress, each drawing, the points of the
 // page's waveforms when they alone changed, and the ports' states as custom
 // events, and takes presses, typed instructions, starting again, and the
@@ -36,7 +42,8 @@ import { CurrentProject, NO_PROJECT_ERROR } from "./currentProject";
 import { Simulation, simulationsOf } from "./launchConfiguration";
 import { isPageFile, Pages, tomlOf } from "./pages";
 import { appName } from "./projectName";
-import { SimulatorSettings, withSimulatorSettings } from "./simulatorSettings";
+import { DefaultPort, defaultPort, PortChoice, portChoiceKey, SimulatorSettings,
+         withSimulatorSettings } from "./simulatorSettings";
 import { SignalGeneratorPanel } from "./signalGenerators";
 import { PictureFile, pictureSources, webviewPage, ZOOM_STYLES } from "./webviewPage";
 
@@ -65,12 +72,19 @@ interface StartProgress {
   page: string | null;
 }
 
-// The serial port's state, as the adapter sends it (serial_port.py).
+// The MCU port's state, as the adapter sends it (serial_port.py). The port
+// is a serial port, or a program over TCP. For a program over TCP, `name`
+// is the program's address, and `baud` is null.
 export interface PortState {
+  kind: "serial" | "tcp";
   name: string | null;
-  baud: number;
+  baud: number | null;
   connected: boolean;
 }
+
+// The MCU port the side bar's section asks to connect: a serial port at a
+// rate, or the program listening at an address.
+type PortToConnect = { name: string; baud: number } | { tcp: string };
 
 // A GPIO pin, as the adapter sends it: its cfgpio mode, the component a
 // bound pin presses, and what it reads.
@@ -160,10 +174,12 @@ export class Simulator implements vscode.WebviewViewProvider {
       }),
       // The simulator's settings fill in what a simulation's configuration
       // leaves out, before VS Code replaces its variables, such as
-      // ${workspaceFolder}, in theirs too.
+      // ${workspaceFolder}, in theirs too. The MCU port last chosen for the
+      // project comes before the settings' port.
       vscode.debug.registerDebugConfigurationProvider("nxwright", {
         resolveDebugConfiguration: (folder, config) => withSimulatorSettings(
-          config, simulatorSettings(folder)) as vscode.DebugConfiguration,
+          config, simulatorSettings(folder),
+          this.rememberedPort(config.sourceFolder, folder)) as vscode.DebugConfiguration,
       }),
     ];
   }
@@ -209,10 +225,40 @@ export class Simulator implements vscode.WebviewViewProvider {
     }
   }
 
-  // The serial port the Simulator settings name for a simulation of the
-  // source folder `folder`, or "" for none.
-  settingsPortOf(folder: vscode.Uri): string {
-    return simulatorSettings(vscode.workspace.getWorkspaceFolder(folder)).serialPort;
+  // The MCU port that a simulation of the source folder `folder` takes when
+  // its launch configuration gives none: the port last chosen for the
+  // project in the section, or else the Simulator settings' port
+  // (simulatorSettings.ts).
+  defaultPortOf(folder: vscode.Uri): DefaultPort {
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(folder);
+    return defaultPort(simulatorSettings(workspaceFolder),
+                       this.rememberedPort(folder.fsPath, workspaceFolder));
+  }
+
+  // Returns the MCU port the user last chose in the section for the project
+  // in `sourceFolder`, or undefined if the user has not chosen yet. Choosing
+  // None counts as a choice. `sourceFolder` comes from a launch
+  // configuration, so it may contain ${workspaceFolder}, which stands for the
+  // workspace folder `folder`.
+  private rememberedPort(sourceFolder: unknown,
+                         folder: vscode.WorkspaceFolder | undefined): PortChoice | undefined {
+    if (typeof sourceFolder !== "string" || !sourceFolder) {
+      return undefined;
+    }
+    return this.context.workspaceState.get<PortChoice>(
+      portChoiceKey(sourceFolder, process.platform, folder?.uri.fsPath));
+  }
+
+  // Remembers `choice` as the MCU port of the project being simulated. Then
+  // updates the section's line about the agent, whose button offers that
+  // port (showAgent).
+  private async rememberPort(choice: PortChoice): Promise<void> {
+    const sourceFolder = this.session?.configuration.sourceFolder;
+    if (typeof sourceFolder === "string" && sourceFolder) {
+      await this.context.workspaceState.update(
+        portChoiceKey(sourceFolder, process.platform), choice);
+      this.showAgent();
+    }
   }
 
   // Starts a simulation for the agent channel, of the source folder
@@ -403,14 +449,17 @@ export class Simulator implements vscode.WebviewViewProvider {
   }
 
   // Tells the side bar's section whether an agent drives the simulation
-  // running, with the serial port the Simulator settings name for it and
-  // its rate, which the section offers to connect while none is.
+  // running, and which MCU port a simulation of its project would start with
+  // (defaultPortOf). While no port is connected, the section offers to
+  // connect that port. The port is null when such a simulation would start
+  // without one.
   private showAgent(): void {
     const session = this.session;
-    const settings = session ? simulatorSettings(session.workspaceFolder) : undefined;
+    const port = session
+      ? this.defaultPortOf(vscode.Uri.file(session.configuration.sourceFolder)) : undefined;
     void this.controls?.webview.postMessage({
       type: "agent", driven: session !== undefined && this.agentDriven,
-      port: settings?.serialPort ?? "", baud: settings?.serialBaud ?? 9600,
+      port: port?.shown ? { shown: port.shown, connection: port.serialPort } : null,
       connected: this.portState?.connected === true,
     });
   }
@@ -467,15 +516,36 @@ export class Simulator implements vscode.WebviewViewProvider {
     }
   }
 
-  // Connects the port `name` at `baud`, or disconnects when `name` is empty.
-  // A port the user connects while an agent drives the simulation, which
-  // the section shows, allows the agent to act on it.
-  private async choosePort(name: string, baud?: number): Promise<void> {
-    if (name && this.agentDriven) {
+  // Connects the MCU port `port`, and remembers it for the project. If an
+  // agent is driving the simulation, connecting also counts as the user's
+  // permission for the agent to act on it, because the section shows the
+  // user that an agent is driving.
+  private async connectPort(port: PortToConnect): Promise<void> {
+    if (this.agentDriven) {
       this.answer = "yes";
     }
+    await this.rememberPort("tcp" in port ? { kind: "tcp", address: port.tcp }
+      : { kind: "serial", name: port.name, baud: port.baud });
+    await this.requestPort(port);
+  }
+
+  // Disconnects the MCU port. The port remembered for the project stays.
+  private async disconnectPort(): Promise<void> {
+    await this.requestPort({ name: "" });
+  }
+
+  // Remembers that the project's simulations take no MCU port, and
+  // disconnects the one connected.
+  private async chooseNoPort(): Promise<void> {
+    await this.rememberPort({ kind: "none" });
+    await this.requestPort({ name: "" });
+  }
+
+  // Asks the adapter to connect the MCU port `port`, or, given an empty
+  // name, to disconnect it. Then shows the port's state.
+  private async requestPort(port: PortToConnect | { name: "" }): Promise<void> {
     try {
-      const answer = await this.session?.customRequest("nxwright/serialPort", { name, baud });
+      const answer = await this.session?.customRequest("nxwright/serialPort", port);
       if (answer) {
         void this.controls?.webview.postMessage({ type: "portState", state: answer.state });
       }
@@ -661,8 +731,11 @@ export class Simulator implements vscode.WebviewViewProvider {
 <div id="port-group" class="port-group">
   <label for="port">MCU port</label>
   <div class="row">
-    <select id="port" title="The serial port of the program the screen talks to"></select>
+    <select id="port"
+            title="What the screen talks to: a serial port, or a program at an address"></select>
     <select id="rate" title="Its rate, in bits per second"></select>
+    <input id="address" placeholder="127.0.0.1:7000" autocomplete="off" hidden
+           title="The address the program listens at: a host and a port number">
     <button id="connect">Connect</button>
   </div>
   <div id="port-state" class="port-state"></div>
@@ -729,10 +802,14 @@ export class Simulator implements vscode.WebviewViewProvider {
         void this.session?.customRequest("nxwright/serial", {
           text: message.text, ...(Array.isArray(message.to) ? { to: message.to } : {}),
         });
+      } else if (message.type === "connect" && typeof message.tcp === "string" && message.tcp) {
+        void this.connectPort({ tcp: message.tcp });
       } else if (message.type === "connect" && message.name) {
-        void this.choosePort(message.name, message.baud);
+        void this.connectPort({ name: message.name, baud: message.baud });
       } else if (message.type === "disconnect") {
-        void this.choosePort("");
+        void this.disconnectPort();
+      } else if (message.type === "noPort") {
+        void this.chooseNoPort();
       } else if (message.type === "connectScreen" && message.name) {
         void this.chooseScreenPort("nxwright/screenPort", { name: message.name,
                                                           baud: message.baud });
@@ -784,6 +861,7 @@ const STYLES = `
   .port-state.problem { color: var(--vscode-errorForeground); }
   #destinations { width: 100%; gap: 12px; }
   #destinations[hidden], #screen-starts[hidden], #bridge-row[hidden] { display: none; }
+  #rate[hidden], #address[hidden] { display: none; }
   #bridge-row { margin-top: 4px; }
   label.inline { width: auto; }
   label.check { width: auto; display: flex; gap: 4px; align-items: center; }

@@ -87,7 +87,7 @@ The simulator can be started on the whole application, like your screen would, o
 
 You can also:
 
-- Connect the simulation to a real serial port, to talk to a program on the other end.
+- Connect the simulation to a device on a real serial port, or to a program over TCP.
 - Send the screen an instruction from the Simulator section, as if it came from the serial line.
 - Connect a real screen beside the simulation, and send both the same instructions to compare them.
 - Let the program on the serial port talk to the real screen in place of the simulation, or to both at once, and watch what passes between them.
@@ -160,7 +160,7 @@ A launch configuration of type `nxwright` simulates the source folder given by `
 | `values` | With `page`, the values to start with, such as `{"t0.txt": "Hello"}`. |
 | `defines` | Other values for `app.toml`'s defines, such as `{"LIMIT": 40}`. |
 | `eeprom` | A file that keeps the EEPROM's contents between simulations. It is created if missing. Without it, the EEPROM starts empty every time. |
-| `serialPort` | The serial port connected to the screen's serial line, such as `{"name": "COM4", "baud": 115200}`. |
+| `serialPort` | What the screen's serial line is connected to: a serial port, such as `{"name": "COM4", "baud": 115200}`, a program that listens at an address, such as `{"tcp": "127.0.0.1:7000"}`, or `"none"`. |
 | `gpioInputs` | The levels the GPIO inputs start at, such as `{"pio2": 0}`. Without it, every input reads 1, like a pull-up input with nothing driving it. |
 | `signalGenerators` | The full path of a file saved from the Signal generator panel. The generators in that file start with the simulation. |
 | `sdCard0`, `sdCard1` | The full paths of folders on your computer to use as the screen's SD cards. Without them, each card is kept in memory. |
@@ -168,7 +168,7 @@ A launch configuration of type `nxwright` simulates the source folder given by `
 | `pinyinTable` | The screen's pinyin table, for Chinese input: the Nextion Editor's `input.bin`, or a TFT file. Without it, the installed Nextion Editor's table is used, if one is found. |
 | `stopOnEntry` | Stops at the first line that runs. |
 
-If a configuration leaves out a parameter that also exists in the Simulator settings, the setting's value is used (see [Settings](#settings)).
+If a configuration leaves out a parameter that also exists in the Simulator settings, the setting's value is used (see [Settings](#settings)). If it leaves out `serialPort` and you have chosen a port for the project in the Simulator section, that port is used instead of the setting.
 
 ### The page preview's keys and mouse
 
@@ -236,14 +236,14 @@ You can change these in VS Code's Settings, where they are grouped by category.
   - `nxwright.checks.replace`: when Replace gives a resource a new name, it replaces nothing if the project still uses the old name.
   - `nxwright.checks.addComponent` and `nxwright.checks.paste`: adding a component or pasting changes nothing if the page would no longer build.
 - The Simulator settings, used when a launch configuration doesn't set its own value:
-  - `nxwright.simulator.serialPort` and `nxwright.simulator.serialBaud`: the serial port, such as `COM4`, and its speed. Leave the port empty for none.
+  - `nxwright.simulator.serialPort` and `nxwright.simulator.serialBaud`: the serial port, such as `COM4`, and its rate. Leave the port empty for none. Once you choose a port for a project in the Simulator section, that project's simulations start with that port instead.
   - `nxwright.simulator.sdCard0` and `nxwright.simulator.sdCard1`: the full paths of the folders to use as SD cards. Leave one empty to keep that card in memory.
   - `nxwright.simulator.logReceived` and `nxwright.simulator.logSent`: how the log shows what the screen receives and sends: `text`, `hex`, or `both`. By default, what the screen receives is shown as text, and what it sends in hexadecimal.
   - `nxwright.simulator.pinyinTable`: the full path of the screen's pinyin table, for Chinese input: the Nextion Editor's `input.bin`, or a TFT file. Leave it empty to use the installed Nextion Editor's table, if one is found.
 - The Agents settings, which you can set only in your user settings, never in a workspace's:
   - `nxwright.agents.allowControl`: lets an AI agent start and drive this window's simulator through `nxwright mcp`. It is off by default. Only a program that can read a file belonging to your user account can connect.
-  - `nxwright.agents.startWithoutSerialPort`: makes every simulation that an agent launches start without a serial port. It is on by default. If you turn it off, the simulation uses the port from the Simulator settings, and you are asked first unless `nxwright.agents.askBeforeSerialActions` is off.
-  - `nxwright.agents.askBeforeSerialActions`: asks you before an agent acts on a simulation whose serial port is connected, since what the app sends then reaches the device on that port. It is on by default. Your answer lasts until the simulation ends. If a simulation that an agent is driving has no serial port, a button in the Simulator section connects the port set in the Simulator settings. You won't be asked before the agent acts on that simulation, because connecting the port counts as your permission.
+  - `nxwright.agents.startWithoutSerialPort`: makes every simulation that an agent launches start without a serial port. It is on by default. If you turn it off, the simulation uses the port your own simulations of the project start with, and you are asked first unless `nxwright.agents.askBeforeSerialActions` is off.
+  - `nxwright.agents.askBeforeSerialActions`: asks you before an agent acts on a simulation whose serial port is connected, since what the app sends then reaches the device on that port. It is on by default. Your answer lasts until the simulation ends. You won't be asked if you connect a port yourself from the Simulator section while the agent drives the simulation, because that counts as your permission.
 
 ## Running nxwright from a VS Code task
 

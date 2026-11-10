@@ -129,8 +129,8 @@ class SerialLinkTest(unittest.TestCase):
         self.link.connect("COM5", 9600)
         first, second = self.ports.opened
         self.assertTrue(first.closed)
-        self.assertEqual(self.link.state(), {"name": "COM5", "baud": 9600, "connected": True,
-                                             "problem": None})
+        self.assertEqual(self.link.state(), {"kind": "serial", "name": "COM5", "baud": 9600,
+                                             "connected": True, "problem": None})
         self.link.disconnect()
         self.assertTrue(second.closed)
         self.assertFalse(self.link.state()["connected"])
@@ -141,8 +141,8 @@ class SerialLinkTest(unittest.TestCase):
     def test_a_port_that_cannot_open(self):
         self.ports.refusal = "Access is denied."
         self.link.connect("COM4", 115200)
-        self.assertEqual(self.link.state(), {"name": "COM4", "baud": 115200, "connected": False,
-                                             "problem": "Access is denied."})
+        self.assertEqual(self.link.state(), {"kind": "serial", "name": "COM4", "baud": 115200,
+                                             "connected": False, "problem": "Access is denied."})
         self.assertIn(("log", "MCU port COM4 could not open: Access is denied."), self.news)
         self.assertIn(("state", self.link.state()), self.news)
 
@@ -192,13 +192,14 @@ class SerialLinkTest(unittest.TestCase):
             return 115200
         self.link.find_and_connect("COM7", find_rate)
         self.assertEqual(asked, [("COM7", True)])
-        self.assertEqual(self.link.state(), {"name": "COM7", "baud": 115200, "connected": True,
-                                             "problem": None})
+        self.assertEqual(self.link.state(), {"kind": "serial", "name": "COM7", "baud": 115200,
+                                             "connected": True, "problem": None})
         self.assertEqual(self.ports.opened[1].rate, 115200)
 
     def test_no_rate_found_leaves_the_port_closed(self):
         self.link.find_and_connect("COM7", lambda name: None)
-        self.assertEqual(self.link.state(), {"name": "COM7", "baud": 9600, "connected": False,
+        self.assertEqual(self.link.state(), {"kind": "serial", "name": "COM7", "baud": 9600,
+                                             "connected": False,
                                              "problem": "no screen answered at any rate"})
         self.assertEqual(self.logged(),
                          ["MCU port COM7 found no screen at any rate"])
@@ -327,8 +328,8 @@ class SerialPortSessionTest(LiveTestCase):
         self.assertEqual(offered["ports"], port_names())
         self.assertFalse(offered["state"]["connected"])
         answer = self.request("nxwright/serialPort", name="COM4", baud=57600)["body"]
-        self.assertEqual(answer["state"], {"name": "COM4", "baud": 57600, "connected": True,
-                                           "problem": None})
+        self.assertEqual(answer["state"], {"kind": "serial", "name": "COM4", "baud": 57600,
+                                           "connected": True, "problem": None})
         self.assertTrue(self.wait_for("nxwright/serialState", 2)["connected"])
         self.request("nxwright/serialPort", name="")
         self.assertTrue(self.ports.opened[0].closed)
@@ -517,8 +518,9 @@ class ScreenPortSessionTest(ScreenPortTestCase):
     def test_finding_the_screen_connects_at_the_rate_it_answers_at(self):
         with mock.patch.object(adapter_module, "screen_rate", return_value=115200):
             reply = self.reply_later("nxwright/findScreen", name="COM7")
-        self.assertEqual(reply["body"]["state"], {"name": "COM7", "baud": 115200,
-                                                  "connected": True, "problem": None})
+        self.assertEqual(reply["body"]["state"], {"kind": "serial", "name": "COM7",
+                                                  "baud": 115200, "connected": True,
+                                                  "problem": None})
         self.assertEqual(self.ports.opened[-1].rate, 115200)
 
     def test_finding_no_screen(self):

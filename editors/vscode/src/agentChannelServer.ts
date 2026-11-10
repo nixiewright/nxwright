@@ -13,14 +13,16 @@
 // What the app sends on its serial line reaches a device when a port is
 // connected, so:
 //  - a simulation the channel starts has no serial port, unless the
-//    setting nxwright.agents.startWithoutSerialPort is off. Then the user is
-//    asked first, before the app runs, when the Simulator settings name a
-//    port and nxwright.agents.askBeforeSerialActions is on;
+//    setting nxwright.agents.startWithoutSerialPort is off. With that
+//    setting off, the simulation takes the port last chosen for the project
+//    in the Simulator section, or else the Simulator settings' port. If the
+//    simulation takes a port and nxwright.agents.askBeforeSerialActions is
+//    on, the user is asked before the app runs;
 //  - an agent's first action on a simulation whose port is connected makes
-//    VS Code ask the user, with that setting on. The answer holds until the
-//    simulation ends, and the debug adapter refuses an agent's action while
-//    a port is connected unless the extension says the user allowed it
-//    (nxwright/debug_adapter/adapter.py).
+//    VS Code ask the user, if nxwright.agents.askBeforeSerialActions is on.
+//    The answer lasts until the simulation ends. The debug adapter refuses
+//    an agent's action while a port is connected, unless the extension says
+//    the user allowed it (nxwright/debug_adapter/adapter.py).
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as net from "net";
@@ -260,11 +262,11 @@ export class AgentChannel implements ChannelHost {
     return running.session;
   }
 
-  // Starts a simulation of the source folder `sourceFolder`, from
-  // program.nx, or, given `page`, from that page: with no serial port, or
-  // with the Simulator settings' port once the user allowed it, as this
-  // file's opening comment says. Answers once the app has started, with the
-  // page shown, if any.
+  // Starts a simulation of the source folder `sourceFolder`, from program.nx,
+  // or from `page` if given. The simulation starts with no serial port, or,
+  // if the user allowed it, with the port the folder's simulations take by
+  // default (Simulator.defaultPortOf). This file's opening comment gives the
+  // rules. Answers once the app has started, with the page shown, if any.
   private async start(params: Record<string, unknown>): Promise<unknown> {
     const { sourceFolder, page } = params;
     if (typeof sourceFolder !== "string" || !path.isAbsolute(sourceFolder)
@@ -309,15 +311,21 @@ export class AgentChannel implements ChannelHost {
     const settings = vscode.workspace.getConfiguration(SETTINGS);
     let withPort = !settings.get<boolean>("startWithoutSerialPort", true);
     let allowed = false;
-    const port = withPort ? this.simulator.settingsPortOf(folder) : "";
-    if (port) {
+    // The port the simulation would take: the one last chosen for the
+    // project in the Simulator section, or else the Simulator settings'.
+    const port = withPort ? this.simulator.defaultPortOf(folder) : undefined;
+    if (port?.shown) {
       // The app may send at once, as program.nx runs: the user answers first.
+      const from = port.chosen ? "which you last chose in the Simulator section"
+        : "which is set in the Simulator settings";
       allowed = !settings.get<boolean>("askBeforeSerialActions", true)
-        || await this.userAllows(`An agent asks to start a simulation of ${real}, its serial `
-                                 + `line connected to ${port}, as the Simulator settings say. `
-                                 + "What the app sends will reach the device there. Allow the "
-                                 + "agent to drive the simulation with the port connected? "
-                                 + "Without, it starts with no port.");
+        || await this.userAllows("An agent is requesting to start a simulation for the "
+                                 + `nxwright application in ${real} with its serial line `
+                                 + `connected to ${port.shown}, ${from}. `
+                                 + "What the application sends will reach the device or the "
+                                 + "program on the other end of that connection. Allow the "
+                                 + "agent to drive the simulation with the port connected? If "
+                                 + "you cancel, the simulation will start disconnected.");
       withPort = allowed;
     }
     // The user may have started one while the question waited.

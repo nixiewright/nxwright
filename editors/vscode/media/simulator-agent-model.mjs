@@ -1,16 +1,23 @@
 // The Simulator section's line saying that an agent drives the simulation
 // (simulator-controls.mjs), shown while the simulation running was started
 // through the agent channel, or an agent has acted on it
-// (src/agentChannelServer.ts). While no serial port is connected, a button
-// connects the one the Simulator settings name. Connecting it, with the agent
-// in view, allows the agent to act on the simulation with the port.
+// (src/agentChannelServer.ts). A simulation an agent starts has no MCU port.
+// So while none is connected, a button connects the port that a simulation
+// of the project would start with: the one last chosen for it in the
+// section, or else the Simulator settings' port. The line tells the user
+// that an agent drives the simulation, so connecting the port from it counts
+// as the user's permission for the agent to act with the port connected.
 
-// Returns what the line shows, from what the extension sends: whether an
-// agent drives the simulation (`driven`), the Simulator settings' port and
-// rate (`port`, "" for none, and `baud`), and whether a port is connected.
-// `shown` is whether the line shows; `note`, its words; `button`, when
-// given, the button's label and the port it connects.
-export function agentLine({ driven, port, baud, connected }) {
+// Returns what the line shows, from what the extension sends:
+//  - `driven`: whether an agent drives the simulation;
+//  - `port`: the port the button connects, or null for none. Its `shown`
+//    is the text that shows the port, such as "COM4" or "127.0.0.1:7000".
+//    Its `connection` is what connects the port: { name, baud } for a
+//    serial port, or { tcp } for a program at an address;
+//  - `connected`: whether a port is connected.
+// In the result, `shown` is whether the line shows, and `note` is its
+// text. `button`, when given, has the button's label and its connection.
+export function agentLine({ driven, port, connected }) {
   if (!driven) {
     return { shown: false };
   }
@@ -20,7 +27,8 @@ export function agentLine({ driven, port, baud, connected }) {
   }
   if (!port) {
     return { shown: true, button: undefined,
-             note: `${note} To connect a serial port, choose one in the list below.` };
+             note: `${note} To connect an MCU port, choose one in the list below.` };
   }
-  return { shown: true, note, button: { label: `Connect ${port}`, name: port, baud } };
+  return { shown: true, note,
+           button: { label: `Connect ${port.shown}`, connection: port.connection } };
 }

@@ -32,9 +32,11 @@ on. Its `sdCard0` and `sdCard1` name folders of the computer standing for
 the screen's SD cards (testing/sd_cards.py). Its `pinyinTable` names the
 screen's pinyin table, which the app's pinyin commands read: input.bin, or a
 TFT file holding it; without one, the installed Nextion Editor's
-(testing/pinyin_table.py). Its `serialPort`, {"name":
-"COM4", "baud": 115200}, connects the screen's serial line to that port
-(serial_port.py). Its `gpioInputs`, {"pio2": 0}, gives the GPIO inputs'
+(testing/pinyin_table.py). Its `serialPort` gives what the
+screen's serial line is connected to: {"name": "COM4", "baud": 115200} for
+that serial port (serial_port.py), {"tcp": "127.0.0.1:7000"} for the program
+listening at that address (tcp_port.py), and "none" or null for nothing.
+Its `gpioInputs`, {"pio2": 0}, gives the GPIO inputs'
 starting levels (testing/gpio_pins.py). Its `signalGenerators` names the
 settings file of the signal generators that start with it
 (testing/signal_generators.py). Custom requests carry
@@ -45,7 +47,8 @@ setting a GPIO pin's level, {"pin": 2, "level": 0}, and "nxwright/gpioInputs",
 setting several at the same moment, {"levels": {"pio2": 0, "pio5": 0}}; and
 the serial port's settings: "nxwright/serialPorts" answers with the
 computer's ports, the rates, and the port's state, and "nxwright/serialPort"
-connects the port `name` at `baud`, or disconnects it when `name` is empty.
+connects the port `name` at `baud`, or the program listening at the address
+`tcp`, or disconnects the port when `name` is empty.
 The signal generators have their own custom requests:
   - "nxwright/waveforms" answers with the waveforms a generator can feed,
     each with its page, its name, and its number of channels;
@@ -140,7 +143,8 @@ from nxwright.debug_adapter.live import LiveSimulation
 from nxwright.debug_adapter.python_steps import PythonTracer
 from nxwright.debug_adapter.replay import Timeline, path_key
 from nxwright.debug_adapter.bridge import Bridge
-from nxwright.debug_adapter.serial_port import (RATES, REPLY_LENGTHS, LoggedPieces, SerialLink,
+from nxwright.debug_adapter.serial_port import (RATES, REPLY_LENGTHS, SERIAL, TCP,
+                                                LoggedPieces, SerialLink,
                                                 port_names, screen_rate)
 from nxwright.drawing.screen_pictures import ScreenPictures
 from nxwright.project.device_settings import TextCodec
@@ -325,8 +329,8 @@ class DebugAdapter:
     def _launch_simulation(self, arguments: dict) -> dict:
         """Prepares a simulation of the app of `sourceFolder`, from program.nx
         or from `page` with `values`, its EEPROM kept in the file `eeprom`,
-        made when missing (simulation.read_eeprom_file), its
-        serial line on the port `serialPort` names, its SD cards `sd0/` and
+        made when missing (simulation.read_eeprom_file), its serial line on
+        the port `serialPort` gives (_mcu_port_settings), its SD cards `sd0/` and
         `sd1/` the folders `sdCard0` and `sdCard1` name, if any, and its log
         showing what the screen receives and sends as `logReceived` and
         `logSent` say: text, hex, or both. Its pinyin table is the one
@@ -345,9 +349,7 @@ class DebugAdapter:
             # of the wrong type, stops the launch rather than the simulation.
             with overriding_defines(defines, LAUNCH_CONFIGURATION):
                 read_app(source_folder)
-        port = arguments.get("serialPort")
-        if port is not None:
-            port = _port_settings(port)
+        port = _mcu_port_settings(arguments.get("serialPort"))
         # Checked before anything starts: a folder that will not do stops the
         # launch, saying why.
         cards = {card: card_folder(arguments[setting])
@@ -940,12 +942,13 @@ class DebugAdapter:
                 "screen": self._screen_link.state(), **self._bridge_state()}
 
     def _serial_port(self, arguments: dict) -> dict:
-        """Connects the port `name` at `baud`, or disconnects when `name` is
-        empty. Answers with the port's state."""
+        """Connects the MCU port: the serial port `name` at `baud`, or the
+        program listening at the address `tcp`. Disconnects it when `name` is
+        empty and no `tcp` is given. Answers with the port's state."""
         self._simulation_only()
-        if arguments.get("name"):
+        if arguments.get("name") or arguments.get("tcp"):
             self._refuse_while_joined()
-            self._link.connect(*_port_settings(arguments))
+            self._link.connect(*_mcu_port_settings(arguments))
         else:
             self._link.disconnect()
         return {"state": self._link.state()}
@@ -1230,6 +1233,10 @@ def _agent_refusal(link, agent: bool, allowed: bool):
     runs, so that a port connected while the act waited counts."""
     state = link.state()
     if agent and not allowed and state["connected"]:
+        if state["kind"] == TCP:
+            return ("the MCU port is connected to the program at %s, so what the app sends "
+                    "reaches that program, and the user has not allowed an agent to act on "
+                    "this simulation" % state["name"])
         return ("the serial port %s is connected, so what the app sends reaches a device, and "
                 "the user has not allowed an agent to act on this simulation" % state["name"])
     return None
@@ -1448,6 +1455,28 @@ def _destinations(to) -> set:
         raise NxwrightError('`to` must be ["simulator"], ["screen"], or ["simulator", '
                             '"screen"], not %r' % (to,))
     return set(to)
+
+
+def _mcu_port_settings(settings):
+    """Returns the (name, rate, kind) of the MCU port that `settings` gives,
+    or None when `settings` is None or "none", which give no port. A serial
+    port is {"name": "COM4", "baud": 115200}, the rate optional. A program
+    that listens over TCP is {"tcp": "127.0.0.1:7000"}: its name is its
+    address, and it has no rate. Raises NxwrightError for anything else. The
+    form of the address is not checked here. A badly written address stops
+    the port from opening later, and the log then gives the reason."""
+    if settings is None or settings == "none":
+        return None
+    if isinstance(settings, dict) and isinstance(settings.get("tcp"), str):
+        if "name" in settings or "baud" in settings:
+            raise NxwrightError("the MCU port is either a serial port, with a name, or a "
+                                "program over TCP, with an address, not both")
+        return settings["tcp"], None, TCP
+    if not isinstance(settings, dict) or "tcp" in settings:
+        raise NxwrightError('the MCU port is given as {"name": "COM4", "baud": 115200} for a '
+                            'serial port, {"tcp": "127.0.0.1:7000"} for a program that listens '
+                            'at an address, or "none"')
+    return (*_port_settings(settings), SERIAL)
 
 
 def _port_settings(settings) -> tuple:

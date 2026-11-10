@@ -2,7 +2,7 @@
   "name": "nxwright-language",
   "displayName": "nxwright",
   "description": "Design, write, simulate, test, compile, and upload Nextion screen apps in VS Code.",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "publisher": "nxwright",
   "icon": "images/icon.png",
   "license": "Apache-2.0",
@@ -92,7 +92,7 @@
           "nxwright.simulator.serialPort": {
             "type": "string",
             "default": "",
-            "markdownDescription": "The serial port a simulation's serial line is connected to, such as `COM4`, when its launch configuration gives no `serialPort`. Empty for none."
+            "markdownDescription": "The serial port a simulation's serial line is connected to, such as `COM4`. Leave it empty for none. This setting is used only when the simulation's launch configuration gives no `serialPort`, and you have not chosen an MCU port for the project in the Simulator section."
           },
           "nxwright.simulator.serialBaud": {
             "type": "integer",
@@ -174,7 +174,7 @@
             "type": "boolean",
             "default": true,
             "scope": "application",
-            "markdownDescription": "A simulation an agent starts has no serial port, whatever the Simulator settings say. Turned off, it takes the Simulator settings' port, and you are asked first if `#nxwright.agents.askBeforeSerialActions#` is on."
+            "markdownDescription": "A simulation an agent starts has no serial port, even if your own simulations of the project start with one. If you turn this setting off, the agent's simulation starts with the same port as your own simulations of the project, and you are asked first if `#nxwright.agents.askBeforeSerialActions#` is on."
           },
           "nxwright.agents.askBeforeSerialActions": {
             "type": "boolean",
@@ -985,21 +985,51 @@
                 "description": "Optional: the file that keeps the EEPROM, as the Nextion Editor keeps its eeprom.bin: the simulation starts from it, and each write the app makes reaches it. Made when missing. Without it, the EEPROM starts empty and lasts for the simulation alone."
               },
               "serialPort": {
-                "type": "object",
-                "description": "Optional: the serial port the screen's serial line is connected to.",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "description": "The port's name, such as COM4."
+                "description": "Optional: what the screen's serial line is connected to. A serial port is {\"name\": \"COM4\", \"baud\": 115200}, a program that listens at an address is {\"tcp\": \"127.0.0.1:7000\"}, and \"none\" is no port.",
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "The serial port's name, such as COM4."
+                      },
+                      "baud": {
+                        "type": "integer",
+                        "description": "Its rate, in bits per second. 9600, the screen's rate at power-on, when not given.",
+                        "default": 9600
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false
                   },
-                  "baud": {
-                    "type": "integer",
-                    "description": "Its rate, in bits per second. 9600, the screen's rate at power-on, when not given.",
-                    "default": 9600
+                  {
+                    "type": "object",
+                    "properties": {
+                      "tcp": {
+                        "type": "string",
+                        "description": "The address the program listens at: a host and a port number, such as 127.0.0.1:7000."
+                      }
+                    },
+                    "required": [
+                      "tcp"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "enum": [
+                      "none"
+                    ],
+                    "description": "No port, whatever port you chose in the Simulator section or set in the Simulator settings."
                   }
-                },
-                "required": [
-                  "name"
+                ],
+                "examples": [
+                  {
+                    "name": "COM4",
+                    "baud": 115200
+                  }
                 ]
               },
               "signalGenerators": {

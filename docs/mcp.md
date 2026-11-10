@@ -84,9 +84,9 @@ A few things to know about simulations in VS Code:
 
 ### When the serial port reaches a device
 
-A simulation in VS Code can be connected to a real serial port, and what the app sends then reaches the device on that port. By default, an agent can't reach that device without your permission:
+A simulation in VS Code can be connected to a real serial port, or to a program over TCP, and what the app sends then reaches the device on that port, or that program. By default, an agent can't reach either without your permission:
 
-- A simulation the agent starts has no serial port, whatever the Simulator settings are. To have it use the port from those settings, turn off `nxwright.agents.startWithoutSerialPort`. VS Code then asks you before the app starts, unless `nxwright.agents.askBeforeSerialActions` is off.
+- A simulation the agent starts has no serial port, even if your own simulations of the project start with one. To have it use that port ([The port a simulation starts with](simulator.md#the-port-a-simulation-starts-with)), turn off `nxwright.agents.startWithoutSerialPort`. VS Code then asks you before the app starts, unless `nxwright.agents.askBeforeSerialActions` is off.
 - Before an agent's first action on a simulation whose port is connected, VS Code asks you whether the agent may drive it. Your answer stands until the simulation ends.
 - If you connect a port from the Simulator section while an agent drives the simulation, VS Code treats that as your permission, and will not ask you.
 - Reading what the screen shows, values, and the log never needs your permission.

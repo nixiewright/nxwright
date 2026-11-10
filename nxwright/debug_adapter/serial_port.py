@@ -12,6 +12,10 @@ does the same for a running simulation (live.py):
   - the bytes the screen sends go to the port, in order (Simulation's
     `sending`).
 
+A SerialLink can also connect the simulation's serial line to a program
+that listens at an address, over TCP (tcp_port.py). Such a connection has
+no rate.
+
 A second SerialLink connects a real screen beside the simulation, on a port
 of its own called the screen port. Instructions typed in the Simulator section can go to the
 screen, and LoggedPieces cuts what the screen sends into replies for the
@@ -29,8 +33,15 @@ import time
 import serial
 from serial.tools import list_ports
 
+from nxwright.debug_adapter.tcp_port import TcpPort
 from nxwright.testing.simulation_log import END, hex_bytes
 from nxwright.tft.upload import RATES_TRIED, find_screen
+
+# The kinds of port a SerialLink connects. SERIAL is a serial port of the
+# computer, given by its name and a rate. TCP is a connection to a program
+# that listens at an address. It has no rate.
+SERIAL = "serial"
+TCP = "tcp"
 
 # The rates the screen's `baud` takes, as the vendor lists them.
 RATES = [2400, 4800, 9600, 19200, 31250, 38400, 57600, 115200, 230400, 250000, 256000,
@@ -150,50 +161,63 @@ def _opening_words(error: Exception) -> str:
 
 
 class SerialLink:
-    """Joins a serial port to what takes its bytes, through:
+    """Joins a port to what takes its bytes, through:
       - `received(data)`, called on the port's reading thread with each
         piece of bytes as it arrives;
       - `notify(kind, body)`, called from any thread: "state", with the
         port's state as `state` returns it, when it changes; and "log", with
         a line saying what became of the port.
     `label` names the port in those lines, such as "MCU port". `send` writes
-    to the port. `open_port(name, rate)` opens a port, a SerialPort unless
-    given."""
+    to the port. `open_port(name, rate)` opens a serial port, and
+    `open_tcp(address)` opens a connection over TCP. By default, they are
+    SerialPort and TcpPort."""
 
-    def __init__(self, received, notify, label: str, open_port=SerialPort):
+    def __init__(self, received, notify, label: str, open_port=SerialPort, open_tcp=TcpPort):
         self._received = received
         self._notify = notify
         self._label = label
         self._open_port = open_port
+        self._open_tcp = open_tcp
         self._lock = threading.Lock()
         self._connection = None      # the port connected, if any
+        self._kind = SERIAL
         self._name = None
-        self._rate = DEFAULT_RATE
+        self._rate = DEFAULT_RATE    # None for a port without a rate
         self._problem = None         # why the port last chosen is not connected
 
     def state(self) -> dict:
+        """Returns the state of the port last chosen, with these keys:
+          - `kind`: SERIAL or TCP;
+          - `name`: the port's name, or a TCP port's address;
+          - `baud`: the port's rate, or None for a TCP port;
+          - `connected`: whether the port is connected;
+          - `problem`: why the port is not connected, or None."""
         with self._lock:
-            return {"name": self._name, "baud": self._rate,
+            return {"kind": self._kind, "name": self._name, "baud": self._rate,
                     "connected": self._connection is not None, "problem": self._problem}
 
-    def connect(self, name: str, rate: int = None):
-        """Connects the port `name` at `rate`, in place of the one connected.
-        A port that cannot open leaves none connected, and says why."""
+    def connect(self, name: str, rate: int = None, kind: str = SERIAL):
+        """Connects the port `name`, in place of the one connected. If `kind`
+        is SERIAL, `name` is a serial port's name, and the port opens at
+        `rate`. If `kind` is TCP, `name` is the address of a listening
+        program, and `rate` is not used. If the port cannot open, none is
+        left connected, and the log and the port's state give the reason."""
         self.disconnect(quietly=True)
-        rate = rate or DEFAULT_RATE
+        rate = (rate or DEFAULT_RATE) if kind == SERIAL else None
         try:
-            port = self._open_port(name, rate)
+            port = self._open_port(name, rate) if kind == SERIAL else self._open_tcp(name)
         except OSError as error:
-            self._failed(name, rate, _words(error), "could not open: %s" % _words(error))
+            self._failed(name, rate, _words(error), "could not open: %s" % _words(error), kind)
             return
         connection = _Connection(port)
         with self._lock:
             self._connection = connection
-            self._name, self._rate, self._problem = name, rate, None
+            self._kind, self._name, self._rate, self._problem = kind, name, rate, None
         connection.thread = threading.Thread(target=self._read, args=(connection,),
                                              name="serial port", daemon=True)
         connection.thread.start()
-        self._tell("%s %s connected at %d bits per second" % (self._label, name, rate))
+        at_rate = "" if rate is None else " at %d bits per second" % rate
+        self._tell("%s %s connected%s" % (self._label, name, at_rate))
 
     def find_and_connect(self, name: str, find_rate):
         """Connects the port `name` at the rate that `find_rate(name)`
@@ -214,11 +238,12 @@ class SerialLink:
             return
         self.connect(name, rate)
 
-    def _failed(self, name: str, rate: int, problem: str, words: str):
-        """Records that the port `name` is not connected because of
-        `problem`, and logs `words` after the port's label and name."""
+    def _failed(self, name: str, rate: int, problem: str, words: str, kind: str = SERIAL):
+        """Records that the port `name`, of the kind `kind`, is not connected
+        because of `problem`, and logs `words` after the port's label and
+        name."""
         with self._lock:
-            self._name, self._rate, self._problem = name, rate, problem
+            self._kind, self._name, self._rate, self._problem = kind, name, rate, problem
         self._tell("%s %s %s" % (self._label, name, words))
 
     def disconnect(self, quietly: bool = False):
@@ -285,11 +310,16 @@ class SerialLink:
 
     def set_rate(self, rate: int):
         """Changes the rate of the port connected, once what was written has
-        gone out. Returns a line for the log when it could not, or None."""
+        gone out. Returns a line for the log when it could not, or None. A
+        port without a rate, such as a TCP port, stays as it is, and nothing
+        is logged."""
         with self._lock:
             connection = self._connection
+            has_rate = self._rate is not None
         if connection is None:
             return "%s is not connected" % self._label
+        if not has_rate:
+            return None
         with connection.writing:
             try:
                 connection.port.set_rate(rate)

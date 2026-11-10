@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nxwright"
-version = "0.3.3"
+version = "0.3.4"
 description = "A toolchain for Nextion screens: text source, the nxwright language, tests, and compiling and uploading TFT files."
 readme = "README.md"
 license = "Apache-2.0 AND OFL-1.1"

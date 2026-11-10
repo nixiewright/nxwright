@@ -2,7 +2,7 @@
 // (src/simulatorSettings.ts, compiled to out/ before the tests run).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { withSimulatorSettings } from "../out/simulatorSettings.js";
+import { defaultPort, portChoiceKey, withSimulatorSettings } from "../out/simulatorSettings.js";
 
 const settings = {
   serialPort: "COM4", serialBaud: 115200, sdCard0: "${workspaceFolder}/card", sdCard1: "",
@@ -41,4 +41,57 @@ test("the pinyin table's setting fills in what the configuration leaves out", ()
 test("a test's configuration is left as it is", () => {
   const config = { type: "nxwright", testFolder: "tests", test: "test_x.Case.test_y" };
   assert.equal(withSimulatorSettings(config, settings), config);
+});
+
+test("the port last chosen for the project comes before the settings' port", () => {
+  const config = { type: "nxwright", sourceFolder: "app" };
+  assert.deepEqual(
+    withSimulatorSettings(config, settings, { kind: "serial", name: "COM7", baud: 9600 })
+      .serialPort,
+    { name: "COM7", baud: 9600 });
+  assert.deepEqual(
+    withSimulatorSettings(config, settings, { kind: "tcp", address: "127.0.0.1:7000" })
+      .serialPort,
+    { tcp: "127.0.0.1:7000" });
+  // None chosen: the settings' port is not connected.
+  assert.equal(withSimulatorSettings(config, settings, { kind: "none" }).serialPort, "none");
+});
+
+test("the configuration's own port comes before the port last chosen", () => {
+  const chosen = { kind: "tcp", address: "127.0.0.1:7000" };
+  const own = { sourceFolder: "app", serialPort: { name: "COM9", baud: 9600 } };
+  assert.deepEqual(withSimulatorSettings(own, settings, chosen).serialPort,
+                   { name: "COM9", baud: 9600 });
+  // An agent's simulation started without a port gives null.
+  assert.equal(withSimulatorSettings({ sourceFolder: "app", serialPort: null }, settings, chosen)
+    .serialPort, null);
+  assert.equal(withSimulatorSettings({ sourceFolder: "app", serialPort: "none" }, settings,
+                                     chosen).serialPort, "none");
+});
+
+test("the port a simulation takes without one of its own, in words", () => {
+  const empty = { ...settings, serialPort: "" };
+  assert.deepEqual(defaultPort(settings),
+                   { serialPort: { name: "COM4", baud: 115200 }, shown: "COM4", chosen: false });
+  assert.deepEqual(defaultPort(empty), { serialPort: undefined, shown: "", chosen: false });
+  assert.deepEqual(defaultPort(settings, { kind: "tcp", address: "127.0.0.1:7000" }),
+                   { serialPort: { tcp: "127.0.0.1:7000" }, shown: "127.0.0.1:7000",
+                     chosen: true });
+  // None chosen: no port, so nothing to ask the user about.
+  assert.deepEqual(defaultPort(settings, { kind: "none" }),
+                   { serialPort: "none", shown: "", chosen: true });
+});
+
+test("a project's choice is kept under one key, however its folder is written", () => {
+  assert.equal(portChoiceKey("C:\\Dev\\Thermostat\\app", "win32"),
+               portChoiceKey("c:/dev/thermostat/app", "win32"));
+  assert.notEqual(portChoiceKey("C:\\Dev\\thermostat\\app", "win32"),
+                  portChoiceKey("C:\\Dev\\other\\app", "win32"));
+  assert.notEqual(portChoiceKey("/home/dev/App", "linux"),
+                  portChoiceKey("/home/dev/app", "linux"));
+  assert.equal(portChoiceKey("/home/dev/thermostat/../thermostat/app", "linux"),
+               portChoiceKey("/home/dev/thermostat/app", "linux"));
+  // A launch configuration may write the folder from ${workspaceFolder}.
+  assert.equal(portChoiceKey("${workspaceFolder}/app", "win32", "C:\\Dev\\thermostat"),
+               portChoiceKey("C:\\Dev\\thermostat\\app", "win32"));
 });

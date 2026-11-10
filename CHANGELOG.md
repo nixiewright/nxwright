@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.4] - 2026-11-10
+
+- The simulator's serial line can now connect to a program that listens on a TCP port.
+
 ### [0.3.3] - 2026-11-10
 
 - Added conditions to the simulator's value generators, which send instructions when the value crosses a level.
@@ -126,6 +130,13 @@ nxwright now takes your app all the way to the screen, on Windows, Linux, and ma
 First public release.
 
 ## VS Code extension
+
+### [0.3.16] - 2026-11-10
+
+Needs nxwright 0.3.4 or later.
+
+- Added TCP and None to the Simulator section's MCU port list.
+- The MCU port chosen in the Simulator section is now remembered for each project.
 
 ### [0.3.15] - 2026-11-10
 

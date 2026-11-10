@@ -15,7 +15,7 @@ The same two actions are also available as the commands "nxwright: Simulate the 
 
 An AI agent can also run your app through `nxwright mcp`, on its own or in this simulator ([Letting an agent drive your app](mcp.md)).
 
-To keep a setup, such as the page to start on, a serial port, or SD card folders, save it as a launch configuration of type `nxwright`. The Simulator section shows a button for each one. For the parameters, see [A simulation's launch configuration](../editors/vscode/README.md#a-simulations-launch-configuration). If a configuration leaves out a parameter that also exists in the extension's settings, the setting's value is used ([Settings](../editors/vscode/README.md#settings)).
+To keep a setup, such as the page to start on, a serial port, or SD card folders, save it as a launch configuration of type `nxwright`. The Simulator section shows a button for each one. For the parameters, see [A simulation's launch configuration](../editors/vscode/README.md#a-simulations-launch-configuration). If a configuration leaves out a parameter that also exists in the extension's settings, the setting's value is used ([Settings](../editors/vscode/README.md#settings)). If a configuration leaves out `serialPort` and you have chosen a port for the project in the Simulator section, that port is used instead of the setting ([The port a simulation starts with](#the-port-a-simulation-starts-with)).
 
 ### Starting on a page
 
@@ -514,7 +514,7 @@ printh 00 00 00 ff ff ff 88 ff ff ff
 
 ### A serial port
 
-A serial port of your computer can carry the screen's serial line, like the "User MCU input" mode of the Nextion Editor's simulator. Give it with a launch configuration's `serialPort`, or connect it from the Simulator section while the simulation runs.
+A serial port of your computer can carry the screen's serial line, like the "User MCU input" mode of the Nextion Editor's simulator. The Simulator section and the log call it the MCU port, because a microcontroller (MCU) is usually at its other end. Give the port with a launch configuration's `serialPort`, or connect it from the Simulator section while the simulation runs.
 
 ```json
 "serialPort": {"name": "COM4", "baud": 115200}
@@ -529,9 +529,31 @@ On Linux, a port has a name such as `/dev/ttyUSB0`.
 - When the screen starts again, for example with `rest`, it drops what it has received but not yet run.
 - While the simulation is paused, instructions that arrive wait, and do not count against the screen's serial buffer ([Holding instructions](#holding-instructions)).
 - You can connect the simulator to a program on the same computer by using a virtual pair of ports. On Windows, com0com creates one. On Linux or macOS, `socat -d -d pty,raw,echo=0 pty,raw,echo=0` creates one, and prints the two ports' names.
-- The Simulator section and the log call this port the MCU port, because a microcontroller (MCU) is usually at its other end.
 - When a port cannot open, or is lost, the log shows the reason. The simulation keeps running without the port.
 - When the port does not take what the simulator sends in time, for example because nothing reads the other end, the simulator drops the rest of the write and logs it, so that the simulation does not freeze.
+
+### A program over TCP
+
+The screen's serial line can also go to a program over TCP, so a program on your computer needs neither a serial port nor a virtual pair of ports. The program listens at an address, and the simulator connects to it. Give the address with a launch configuration's `serialPort`, or choose TCP in the MCU port list of the Simulator section and enter the address.
+
+```json
+"serialPort": {"tcp": "127.0.0.1:7000"}
+```
+
+- The address is a host and a port number. The host can be another computer, but the bytes are not encrypted.
+- The program must be listening when the simulator connects. If the connection cannot open, or the program closes it, the log shows the reason and the simulation keeps running. You can connect again from the Simulator section.
+- A TCP connection has no rate, so setting the system variable `baud` or `bauds` does not affect it.
+- You can join a TCP connection to a real screen, the same way as a serial port ([A real screen](#a-real-screen)).
+
+### The port a simulation starts with
+
+The port you connect from the MCU port list of the Simulator section is remembered for the project, and the project's next simulations start with it. Choosing None is remembered too, but disconnecting is not, so the next simulation starts with the same port again.
+
+A simulation takes its port from the first of these that is set:
+
+1. The `serialPort` of its launch configuration. `"serialPort": "none"` starts the simulation without a port.
+2. The port you last chose in the Simulator section for the project.
+3. The serial port of the Simulator settings.
 
 ### Typing an instruction
 
