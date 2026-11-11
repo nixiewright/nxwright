@@ -59,7 +59,7 @@ In VS Code, a simulation whose MCU port is Emulator starts the project's emulato
 - Your app waits up to 10 seconds for the emulator to connect before the app starts, so that the emulator receives the start-up code and "ready". You can change that time with `wait` in the `[mcu]` table of `app.toml` ([app.toml](source-folder.md#apptoml)), or with a launch configuration's `emulatorWait`.
 - "Start the emulator again", in the Simulator section, restarts the emulator while your app keeps running. "Start again" restarts your app alone, and the emulator then receives the start-up code and "ready" again.
 - If you stop the emulator, the simulation keeps running.
-- To give the emulator its own interpreter, arguments, or environment variables, add a launch configuration of the Python Debugger whose `program` is the emulator's file. VS Code then starts the emulator with that configuration.
+- To give the emulator its own interpreter, arguments, or environment variables, edit the Python Debugger launch configuration whose `program` is the emulator's file, because VS Code starts the emulator with that configuration. The command Add a launch configuration can write it for you.
 
 ### The simulator listens
 

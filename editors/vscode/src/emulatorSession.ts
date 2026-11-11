@@ -9,7 +9,7 @@ import * as path from "path";
 // The extension that has the Python debugger, and the type of its launch
 // configurations.
 export const PYTHON_DEBUGGER_EXTENSION = "ms-python.debugpy";
-const PYTHON_DEBUGGER_TYPE = "debugpy";
+export const PYTHON_DEBUGGER_TYPE = "debugpy";
 // The environment variable that gives an emulator the address to connect to
 // (nxwright/mcu.py).
 export const ADDRESS_VARIABLE = "NXWRIGHT_MCU";
@@ -30,33 +30,20 @@ export interface EmulatorConfiguration {
 //
 // `existing` lists the launch configurations of the workspace folder
 // `workspaceFolder`. If one of them launches the Python debugger with the
-// emulator's file as its `program`, the emulator runs with that
-// configuration, so that the user can give the emulator an interpreter,
-// arguments, or environment of their own. The `program` may contain
-// ${workspaceFolder}. Without a configuration of the user's, the emulator
-// runs in a terminal, from its own folder, with the interpreter the Python
-// debugger picks.
+// emulator's file as its `program` (ownEmulatorConfiguration), the emulator
+// runs with that configuration, so that the user can give the emulator an
+// interpreter, arguments, or environment of their own. Otherwise, the
+// emulator runs in a terminal, from its own folder, with the interpreter
+// the Python debugger picks.
 export function emulatorConfiguration(
     file: string, address: string, existing: unknown[], workspaceFolder: string | undefined,
     platform: NodeJS.Platform): EmulatorConfiguration {
-  const paths = platform === "win32" ? path.win32 : path.posix;
-  // On Windows, paths that differ only in letter case are one file.
-  const key = (name: string) => {
-    const resolved = paths.resolve(workspaceFolder ?? "", name);
-    return platform === "win32" ? resolved.toLowerCase() : resolved;
-  };
-  const own = existing.find((entry): entry is EmulatorConfiguration => {
-    if (typeof entry !== "object" || entry === null) {
-      return false;
-    }
-    const { type, request, program } = entry as Record<string, unknown>;
-    return type === PYTHON_DEBUGGER_TYPE && request === "launch" && typeof program === "string"
-      && key(program.split("${workspaceFolder}").join(workspaceFolder ?? "")) === key(file);
-  });
+  const own = ownEmulatorConfiguration(file, existing, workspaceFolder, platform);
   if (own) {
     const env = typeof own.env === "object" && own.env !== null ? own.env : {};
     return { ...own, env: { ...env, [ADDRESS_VARIABLE]: address } };
   }
+  const paths = platform === "win32" ? path.win32 : path.posix;
   return {
     type: PYTHON_DEBUGGER_TYPE,
     request: "launch",
@@ -66,6 +53,29 @@ export function emulatorConfiguration(
     console: "integratedTerminal",
     env: { [ADDRESS_VARIABLE]: address },
   };
+}
+
+// Returns the first of the launch configurations `existing` that launches
+// the Python debugger with the emulator's file, `file`, as its `program`, or
+// undefined if none does. The `program` may contain ${workspaceFolder},
+// which stands for `workspaceFolder`.
+export function ownEmulatorConfiguration(
+    file: string, existing: unknown[], workspaceFolder: string | undefined,
+    platform: NodeJS.Platform): EmulatorConfiguration | undefined {
+  const paths = platform === "win32" ? path.win32 : path.posix;
+  // On Windows, paths that differ only in letter case are one file.
+  const key = (name: string) => {
+    const resolved = paths.resolve(workspaceFolder ?? "", name);
+    return platform === "win32" ? resolved.toLowerCase() : resolved;
+  };
+  return existing.find((entry): entry is EmulatorConfiguration => {
+    if (typeof entry !== "object" || entry === null) {
+      return false;
+    }
+    const { type, request, program } = entry as Record<string, unknown>;
+    return type === PYTHON_DEBUGGER_TYPE && request === "launch" && typeof program === "string"
+      && key(program.split("${workspaceFolder}").join(workspaceFolder ?? "")) === key(file);
+  });
 }
 
 // The part of the MCU port's state that decides what happens to the

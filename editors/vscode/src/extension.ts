@@ -23,7 +23,8 @@ import { PictureView } from "./pictureView";
 import { animationArguments, MediaQuestions, pictureArguments, sdPictureArguments,
   soundArguments, videoArguments } from "./mediaCommands";
 import { findNxwright, NxwrightSearch, programOnPath, runsCleanly } from "./nxwrightCommand";
-import { declaredLaunchParameters, simulationEntry, simulationEntryEdits, simulationEntryText }
+import { declaredLaunchParameters, emulatorEntry, emulatorEntryText, simulationEntry,
+         simulationEntryEdits, simulationEntryText }
   from "./launchConfiguration";
 import { MediaActions } from "./mediaActions";
 import { MediaView } from "./mediaView";
@@ -39,7 +40,7 @@ import { ProjectView } from "./projectView";
 import { ChosenPython } from "./pythonExtension";
 import { ServerKeeper } from "./serverKeeper";
 import { ComponentsView, PropertiesView } from "./sideBar";
-import { Simulator } from "./simulator";
+import { hasPythonDebugger, Simulator } from "./simulator";
 import { startTests } from "./tests";
 import { registerTftCommands } from "./tftCommands";
 import { projectFileMayBeReplaced, rememberProjectFile, settingsArguments } from "./tftFiles";
@@ -759,11 +760,21 @@ async function addMcuEmulator(): Promise<void> {
   }
 }
 
-// Adds to the launch.json of the current project's workspace folder a launch
-// configuration simulating its app, with every other parameter a simulation
-// takes commented out, each with its description (launchConfiguration.ts),
-// unless one simulates it already, then opens launch.json. The file is
-// edited as text, so that its comments stay, in one edit undo takes back.
+// Adds a launch configuration that simulates the current project's app to
+// the launch.json of its workspace folder, then opens the file. The other
+// parameters a simulation takes are written commented out, each with its
+// description (launchConfiguration.ts).
+//
+// For a project that has an MCU emulator, the simulation's MCU port is the
+// one that listens for the emulator, and the command also adds a
+// configuration of the Python debugger that runs the emulator.
+//
+// The command skips the simulation's configuration when an existing one
+// simulates the app already, and the emulator's when an existing one runs
+// the emulator already.
+//
+// The file is edited as text, so that its comments stay, and in a single
+// edit, so that one undo takes everything back.
 async function addLaunchConfiguration(context: vscode.ExtensionContext): Promise<void> {
   const folder = await activeSourceFolder();
   if (!folder) {
@@ -782,10 +793,18 @@ async function addLaunchConfiguration(context: vscode.ExtensionContext): Promise
   const offered = vscode.workspace.getConfiguration("launch", workspaceFolder.uri)
     .get<unknown[]>("configurations") ?? [];
   const name = await currentProject?.nameOf(folder) ?? path.basename(folder.fsPath);
+  const emulator = await currentProject?.emulatorOf(folder);
   const entry = simulationEntry(offered, workspaceFolder.uri.fsPath, folder.fsPath,
-                                process.platform, name);
+                                process.platform, name, emulator !== undefined);
+  // The emulator's configuration is added only if the Python Debugger
+  // extension is installed. Without that extension, VS Code does not know
+  // the configuration's type, and nothing starts the emulator with a
+  // simulation.
+  const ofEmulator = emulator !== undefined && hasPythonDebugger()
+    ? emulatorEntry(offered, workspaceFolder.uri.fsPath, emulator, process.platform, name)
+    : undefined;
   const file = vscode.Uri.joinPath(workspaceFolder.uri, ".vscode", "launch.json");
-  if (!entry) {
+  if (!entry && !ofEmulator) {
     void vscode.window.showInformationMessage(
       `nxwright: launch.json simulates ${folder.fsPath} already.`);
     await vscode.window.showTextDocument(file);
@@ -795,8 +814,9 @@ async function addLaunchConfiguration(context: vscode.ExtensionContext): Promise
     path.join(context.extensionPath, "package.json"));
   const exists = await vscode.workspace.fs.stat(file).then(() => true, () => false);
   const document = exists ? await vscode.workspace.openTextDocument(file) : undefined;
-  const edits = simulationEntryEdits(document?.getText() ?? "",
-                                     simulationEntryText(entry, declared));
+  const texts = [...(entry ? [simulationEntryText(entry, declared)] : []),
+                 ...(ofEmulator ? [emulatorEntryText(ofEmulator)] : [])];
+  const edits = simulationEntryEdits(document?.getText() ?? "", texts.join(",\n"));
   if (!edits) {
     void vscode.window.showErrorMessage(
       `nxwright: ${file.fsPath} holds no object of launch configurations to add one to.`);
@@ -822,8 +842,10 @@ async function addLaunchConfiguration(context: vscode.ExtensionContext): Promise
   if (!unsaved) {
     await (await vscode.workspace.openTextDocument(file)).save();
   }
+  const names = [entry, ofEmulator].flatMap((added) => added ? [`"${added.name}"`] : []);
   void vscode.window.showInformationMessage(
-    `nxwright: added the launch configuration "${entry.name}".`);
+    names.length === 1 ? `nxwright: added the launch configuration ${names[0]}.`
+      : `nxwright: added the launch configurations ${names.join(" and ")}.`);
   await vscode.window.showTextDocument(file);
 }
 

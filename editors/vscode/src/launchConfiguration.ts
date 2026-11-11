@@ -1,17 +1,35 @@
-// The launch configuration that simulates a source folder's app, as the
-// command "Add a launch configuration" adds it to its workspace folder's
-// launch.json. Kept apart from VS Code, which test/ tests.
+// The launch configurations that the command "Add a launch configuration"
+// adds to a workspace folder's launch.json. One simulates a source folder's
+// app. For a project that has an MCU emulator, the command also adds a
+// configuration of the Python debugger that runs the emulator. This file is
+// kept apart from VS Code's API, so that Node's test runner can check it
+// (test/launch-configuration.test.mjs).
 import { applyEdits, createScanner, Edit, findNodeAtLocation, modify, parseTree, SyntaxKind }
   from "jsonc-parser";
 import { readFile } from "fs/promises";
 import * as path from "path";
+import { ADDRESS_VARIABLE, ownEmulatorConfiguration, PYTHON_DEBUGGER_TYPE }
+  from "./emulatorSession";
 
-// A launch configuration of type nxwright naming the source folder it simulates.
+// A launch configuration of type nxwright, with the source folder it
+// simulates. For a project that has an MCU emulator, the configuration's
+// `serialPort` is "emulator", the MCU port that listens for the emulator.
 export interface SimulationEntry {
   type: "nxwright";
   request: "launch";
   name: string;
   sourceFolder: string;
+  serialPort?: "emulator";
+}
+
+// A launch configuration of the Python debugger that runs a project's MCU
+// emulator.
+export interface EmulatorEntry {
+  type: string;
+  request: "launch";
+  name: string;
+  program: string;
+  console: "integratedTerminal";
 }
 
 // A launch configuration that simulates a source folder, with its name, as
@@ -31,26 +49,70 @@ export function simulationsOf(existing: unknown[], workspaceFolder: string,
     typeof (entry as { name?: unknown }).name === "string" && (entry as Simulation).name !== "");
 }
 
-// Returns the entry simulating `sourceFolder`, which lies in `workspaceFolder`,
-// named after the app `name`, the folder's own by default, to add to the
-// workspace folder's launch configurations `existing`; or
-// undefined when one of them simulates that folder already. Its folder is
-// written from ${workspaceFolder}, with forward slashes, so that it holds on
-// other computers.
+// Returns the entry that simulates `sourceFolder`, for the command to add
+// to the launch configurations of the workspace folder `workspaceFolder`.
+// `existing` lists those configurations. If one of them simulates the
+// source folder already, the function returns undefined.
+//
+// The entry is named after the app, `name`, or after the source folder when
+// `name` is not given. Its `sourceFolder` starts with ${workspaceFolder},
+// so that the entry works on other computers (fromWorkspaceFolder). When
+// the project has an MCU emulator (`hasEmulator`), the entry's `serialPort`
+// is "emulator", the MCU port that listens for the emulator.
 export function simulationEntry(existing: unknown[], workspaceFolder: string,
                                 sourceFolder: string, platform: NodeJS.Platform,
-                                name?: string): SimulationEntry | undefined {
+                                name?: string, hasEmulator = false): SimulationEntry | undefined {
   if (existing.some((entry) => simulates(entry, workspaceFolder, sourceFolder, platform))) {
     return undefined;
   }
   const paths = platform === "win32" ? path.win32 : path.posix;
-  const relative = paths.relative(workspaceFolder, sourceFolder).split(paths.sep).join("/");
   return {
     type: "nxwright",
     request: "launch",
     name: `Simulate ${name ?? paths.basename(sourceFolder)}`,
-    sourceFolder: relative === "" ? "${workspaceFolder}" : `\${workspaceFolder}/${relative}`,
+    sourceFolder: fromWorkspaceFolder(workspaceFolder, sourceFolder, platform),
+    ...(hasEmulator ? { serialPort: "emulator" as const } : {}),
   };
+}
+
+// Returns the entry that runs the MCU emulator whose file is `emulatorFile`,
+// for the command to add to the workspace folder's launch configurations.
+// The extension uses this entry when it starts the emulator beside a
+// simulation, so the user can edit the entry to give the emulator its own
+// interpreter, arguments, or environment.
+//
+// `existing` lists the workspace folder's configurations. If one of them
+// runs `emulatorFile` with the Python debugger already
+// (ownEmulatorConfiguration), the function returns undefined. The entry is
+// named after the app, `name`.
+export function emulatorEntry(existing: unknown[], workspaceFolder: string,
+                              emulatorFile: string, platform: NodeJS.Platform,
+                              name: string): EmulatorEntry | undefined {
+  if (ownEmulatorConfiguration(emulatorFile, existing, workspaceFolder, platform)) {
+    return undefined;
+  }
+  return {
+    type: PYTHON_DEBUGGER_TYPE,
+    request: "launch",
+    name: `MCU emulator of ${name}`,
+    program: fromWorkspaceFolder(workspaceFolder, emulatorFile, platform),
+    console: "integratedTerminal",
+  };
+}
+
+// Returns `target` as a path that starts with ${workspaceFolder} and uses
+// forward slashes, so that it works on other computers. A path on a
+// different drive from `workspaceFolder` cannot start that way, and is
+// returned unchanged.
+function fromWorkspaceFolder(workspaceFolder: string, target: string,
+                             platform: NodeJS.Platform): string {
+  const paths = platform === "win32" ? path.win32 : path.posix;
+  const relative = paths.relative(workspaceFolder, target);
+  if (paths.isAbsolute(relative)) {
+    return target;
+  }
+  const written = relative.split(paths.sep).join("/");
+  return written === "" ? "${workspaceFolder}" : `\${workspaceFolder}/${written}`;
 }
 
 // Whether `entry`, a launch configuration, simulates `sourceFolder`: one of
@@ -130,6 +192,28 @@ export function simulationEntryText(entry: SimulationEntry,
   return lines.join("\n");
 }
 
+// Returns the text that Add a launch configuration writes for `entry`, a
+// launch configuration that runs a project's MCU emulator. The text is a
+// comment that explains when the configuration is used, then the entry's
+// keys. Each line of a key ends with a comma, the same way as in a
+// simulation's entry (simulationEntryText).
+export function emulatorEntryText(entry: EmulatorEntry): string {
+  const lines = [
+    "{",
+    "  // Runs the project's MCU emulator.",
+    "  // nxwright starts this configuration with the simulation, and sets " +
+      `${ADDRESS_VARIABLE} to the simulator's address.`,
+    "  // Edit the configuration to change the emulator's interpreter, arguments, or " +
+      "environment variables.",
+    "  // If you start it on its own, the emulator has no simulator to connect to.",
+  ];
+  for (const [key, value] of Object.entries(entry)) {
+    lines.push(`  "${key}": ${JSON.stringify(value)},`);
+  }
+  lines.push("}");
+  return lines.join("\n");
+}
+
 // A parameter's choices, quoted, as 'text', 'hex' or 'both'.
 function choices(values: unknown[]): string {
   const quoted = values.map((value) => `'${String(value)}'`);
@@ -178,16 +262,21 @@ function written(value: unknown): string {
   return JSON.stringify(value);
 }
 
-// Returns the edits that add the entry `entryText` to the launch.json whose
-// text is `text`, last in its configurations, keeping the rest as it is,
-// comments included. After the last entry, a comma is added unless one
-// follows it already; the entry then goes after the end of that line, so
-// that a comment ending the line stays with the entry it is about. An empty
-// file becomes a launch.json holding the entry; one without configurations
-// gets them first, through jsonc-parser's modify, and is then written whole.
-// The entry is indented as the file is, with tabs in a file indented so.
-// Returns undefined for a file whose top level is no object, such as one
-// holding only comments, which nothing is added to.
+// Returns the edits that add `entryText` at the end of the configurations
+// of the launch.json whose text is `text`. `entryText` is one entry, or
+// several joined by a comma and a line break. The rest of the file stays as
+// it is, comments included.
+//
+// If the file's last configuration has no comma after it, the edits add
+// one. The new text then starts on the next line, so that a comment ending
+// that line stays with the configuration it is about. The new text is
+// indented the same way as the file, with tabs if the file uses tabs.
+//
+// An empty file becomes a launch.json whose only configurations are the new
+// ones. A file without configurations first gets an empty list of them,
+// through jsonc-parser's modify, and is then written whole. If the file's
+// top level is not an object, such as a file with only comments, the
+// function returns undefined and nothing is added.
 export function simulationEntryEdits(text: string, entryText: string): Edit[] | undefined {
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
   if (text.trim() === "") {

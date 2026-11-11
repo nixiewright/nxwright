@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { applyEdits, parse } from "jsonc-parser";
 import { fileURLToPath } from "node:url";
-import { declaredLaunchParameters, simulationEntry, simulationEntryEdits, simulationEntryText,
+import { declaredLaunchParameters, emulatorEntry, emulatorEntryText, simulationEntry,
+  simulationEntryEdits, simulationEntryText,
   simulationsOf } from "../out/launchConfiguration.js";
 
 const WORKSPACE = "C:\\work";
@@ -217,4 +218,69 @@ test("an empty list in a file indented with tabs gets the entry indented with ta
   const { result } = placed('{\n\t"configurations": []\n}');
   assert.ok(result.includes('[\n\t\t{\n\t\t\t"type": "nxwright",'), result);
   assert.equal(/\n\t* +\S/.test(result), false, result);
+});
+
+const EMULATOR = "C:\\work\\screens\\mcu\\main.py";
+
+test("a project with an MCU emulator gets the emulator's port, and one without does not", () => {
+  assert.deepEqual(simulationEntry([], WORKSPACE, FOLDER, "win32", "Thermostat", true), {
+    type: "nxwright", request: "launch", name: "Simulate Thermostat",
+    sourceFolder: "${workspaceFolder}/screens/app", serialPort: "emulator",
+  });
+  assert.equal("serialPort" in simulationEntry([], WORKSPACE, FOLDER, "win32", "Thermostat"),
+               false);
+});
+
+test("the port the entry gives is not listed again among the commented parameters", () => {
+  const declared = { serialPort: { type: "object", description: "The serial port." },
+                     page: { type: "string", description: "The page to start on." } };
+  const text = simulationEntryText(
+    simulationEntry([], WORKSPACE, FOLDER, "win32", "Thermostat", true), declared);
+  assert.equal(text.split("\n").filter((line) => line.includes('"serialPort"')).join(),
+               '  "serialPort": "emulator",');
+  assert.ok(text.includes('  // "page": "",'));
+});
+
+test("the emulator gets a configuration of the Python debugger, its file under ${workspaceFolder}", () => {
+  assert.deepEqual(emulatorEntry([], WORKSPACE, EMULATOR, "win32", "Thermostat"), {
+    type: "debugpy", request: "launch", name: "MCU emulator of Thermostat",
+    program: "${workspaceFolder}/screens/mcu/main.py", console: "integratedTerminal",
+  });
+});
+
+test("the path of an emulator outside the workspace folder starts with ${workspaceFolder}, and one on another drive is written in full", () => {
+  assert.equal(emulatorEntry([], FOLDER, EMULATOR, "win32", "Thermostat").program,
+               "${workspaceFolder}/../mcu/main.py");
+  assert.equal(emulatorEntry([], WORKSPACE, "D:\\mcu\\main.py", "win32", "Thermostat").program,
+               "D:\\mcu\\main.py");
+});
+
+test("no configuration is added for an emulator that a Python debugger configuration runs already", () => {
+  const own = { type: "debugpy", request: "launch", name: "Mine",
+                program: "${workspaceFolder}/screens/mcu/main.py" };
+  assert.equal(emulatorEntry([own], WORKSPACE, EMULATOR, "win32", "Thermostat"), undefined);
+  assert.notEqual(emulatorEntry([{ ...own, program: "${workspaceFolder}/tool.py" }], WORKSPACE,
+                                EMULATOR, "win32", "Thermostat"), undefined);
+});
+
+test("the emulator's entry is JSON with a comment, and reads back as the entry", () => {
+  const entry = emulatorEntry([], WORKSPACE, EMULATOR, "win32", 'Kitchen "clock"');
+  const text = emulatorEntryText(entry);
+  assert.ok(text.split("\n")[1].startsWith("  // Runs the project's MCU emulator."));
+  assert.deepEqual(parse(text, [], { allowTrailingComma: true }), entry);
+});
+
+test("the simulation's entry and the emulator's are added together, in that order", () => {
+  const texts = [
+    simulationEntryText(simulationEntry([], WORKSPACE, FOLDER, "win32", "Thermostat", true), {}),
+    emulatorEntryText(emulatorEntry([], WORKSPACE, EMULATOR, "win32", "Thermostat")),
+  ].join(",\n");
+  for (const before of ["", '{\n  "version": "0.2.0",\n  "configurations": [\n    {\n' +
+                             '      "type": "node",\n      "name": "Server"\n    }\n  ]\n}\n']) {
+    const after = applyEdits(before, simulationEntryEdits(before, texts));
+    const names = parse(after, [], { allowTrailingComma: true }).configurations
+      .map((entry) => entry.name);
+    assert.deepEqual(names.slice(-2), ["Simulate Thermostat", "MCU emulator of Thermostat"]);
+    assert.equal(names.length, before === "" ? 2 : 3);
+  }
 });

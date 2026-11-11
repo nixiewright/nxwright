@@ -1098,7 +1098,7 @@ async function endSession(session: vscode.DebugSession): Promise<void> {
 
 // Whether the Python Debugger extension is installed. nxwright's extension
 // needs it to start a project's MCU emulator.
-function hasPythonDebugger(): boolean {
+export function hasPythonDebugger(): boolean {
   return vscode.extensions.getExtension(PYTHON_DEBUGGER_EXTENSION) !== undefined;
 }
 

@@ -167,6 +167,10 @@ First public release.
 
 ## VS Code extension
 
+### [0.3.19] - 2026-11-11
+
+- The command Add a launch configuration now also adds one for the project's MCU emulator.
+
 ### [0.3.18] - 2026-11-10
 
 Needs nxwright 0.3.12 or later.

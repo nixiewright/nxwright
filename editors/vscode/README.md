@@ -149,7 +149,7 @@ All commands are in the command palette, under "nxwright:". Most of them do what
 | Add an animation | Makes an animation from pictures, or from a GmovMaker file. |
 | Add a video | Makes a video from a video file or from pictures. |
 | Write pictures for the SD card | Writes picture files that the screen can show from an SD card. |
-| Add a launch configuration | Adds a configuration to `launch.json` that simulates the project, with every parameter listed and commented out. |
+| Add a launch configuration | Adds a configuration to `launch.json` that simulates the project, with its other parameters listed and commented out. For a project that has an MCU emulator, the command also adds a Python Debugger configuration that runs the emulator. |
 | Add an MCU emulator | Writes a first Python program that emulates the microcontroller for the screen, and records its path in `app.toml`. |
 
 ### A simulation's launch configuration
