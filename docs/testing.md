@@ -91,7 +91,7 @@ nxwright uses the page file for two things:
 | `"serial buffer"` | The bytes of the buffer of protocol reparse mode, which `u[]`, `usize`, `ucopy`, and `udelete` read and change. To start with bytes in it, give them in the run's values, with `recmod` set to 1 ([Protocol reparse mode](screen-code.md#protocol-reparse-mode-u-usize-ucopy-and-udelete)). |
 | `"waveform"` | The points `add` put on a waveform, and the channels `cle` cleared, in order: `("add", id, channel, value)` and `("cle", id, channel)`. |
 | `"painted"` | What drawing commands painted, in order. Each entry is the command and its computed arguments, such as `("fill", 0, 0, 50, 50, 63488)`. |
-| `"file contents"` | The files on the SD card, as `{path: bytes}`. You may give them. Without them, the card starts empty. |
+| `"file contents"` | The files on the SD card and in `ram/`, as `{path: bytes}`. You may give them. Without them, the card and `ram/` start empty. |
 | `"existing"` | Paths that `findfile` and `finddir` find, besides the files of `"file contents"`. You give it. |
 | `"open file <name>"` | The file that the file stream `<name>` has open. |
 | `"file commands"` | The commands that changed files, in order. |

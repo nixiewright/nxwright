@@ -716,7 +716,8 @@ The screen's SD cards can be folders of your computer. A launch configuration's 
 - `sd0/presets/a.cfg` is then the file `presets/a.cfg` in the folder.
 - The app's file commands act on the folder's files, for real. What they change stays after the simulation, even if you step back or start again.
 - To start each simulation with the same files, replace the folder with a saved copy before each launch, with a `preLaunchTask`. See [The EEPROM](#the-eeprom) for an example of how to do this for a single file.
-- A card given no folder, a `ram/` file, and a path on no card are kept in memory, as in a test.
+- If a card has no folder, its files are kept in memory, the same way as in a test. So are files whose path is not on a card.
+- A file whose path starts with `ram/` is kept in memory too, in the space your project sets aside for `ram/` files ([Files in `ram/`](#files-in-ram)).
 
 ### External pictures
 
@@ -749,12 +750,39 @@ An ignored command sends one of these error codes ([Return codes](#return-codes)
 - 0x06 for a `refile` of a file that does not exist, onto one that does, or into a missing folder;
 - 0x06 for every ignored `redir`;
 - 0x06 for an `rdfile` of a file that does not exist, or of bytes past its end;
-- 0x06 for a `twfile` to a path on neither `sd0/` nor `sd1/`, as in `ram/`, of a size of 0 or below, or into a folder that does not exist;
+- 0x06 for a `twfile` to a path that is neither on a card nor in `ram/`, of a size of 0 or below, or into a folder that does not exist;
 - 0x1A for a `twfile` whose size is not a number;
 - 0x01 for a `delfile` or `deldir` of what does not exist;
 - 0x01 for the other commands above that are ignored to keep your files safe, such as a path that leaves the card's folder, or a `deldir` of a full folder. A screen deletes a full folder, and answers 0x01 too.
 
 What is ignored goes to the log, and, in a test, to `"file errors"` ([testing.md](testing.md)).
+
+### Files in `ram/`
+
+A file whose path starts with `ram/`, such as `ram/0.jpg`, is kept in the screen's memory. The simulator keeps it in memory too, so it is lost when the simulation starts again.
+
+Your project must set space aside for these files, with `memory_file_storage_size` in `app.toml` ([source-folder.md](source-folder.md#apptoml)). If it sets none, the screen does not create any file in `ram/`.
+
+```toml
+memory_file_storage_size = 4096
+```
+
+The files share that space. Each file uses 268 bytes on top of its own size, and 16 bytes of the space are never available. With 4096 bytes set aside, a single file can be 3812 bytes at most. `delfile` frees the space that the deleted file used.
+
+The file commands follow these rules in `ram/`:
+
+- `ram/` has no folders.
+- `newfile` on a file that exists keeps the file if its size is the same. If the size differs, `newfile` replaces the file with one of the new size, all zero bytes. If the new size does not fit, `newfile` still deletes the old file, and does not create a new one.
+- `twfile` needs room for the new file beside every file in `ram/`, including the one it will replace.
+- `refile` renames a file within `ram/`.
+
+The screen ignores these commands, and sends 0x06:
+
+- a `newfile` or a `twfile` of a file that does not fit, or of a file in a folder, such as `ram/logs/a.bin`;
+- every `newdir`;
+- a `refile` of a file that does not exist, onto a name that exists, or to a path outside `ram/`.
+
+These rules follow what the Nextion Editor's simulator does, and have not been checked on a real screen.
 
 ## Known differences
 

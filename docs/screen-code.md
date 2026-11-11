@@ -308,6 +308,7 @@ The file commands act on the SD card's files: `findfile`, `finddir`, `newfile`, 
 
 - In a test, the card's files are in the values `"file contents"` and `"existing"` ([What a test can check](testing.md#what-a-test-can-check)).
 - In the simulator, a card may be a folder of your computer ([The SD cards](simulator.md#the-sd-cards)).
+- A file whose path starts with `ram/` is kept in the screen's memory ([Files in `ram/`](simulator.md#files-in-ram)).
 - What the commands change is recorded in `"file commands"`.
 - What the screen ignores is recorded in `"file errors"`.
 
@@ -316,6 +317,7 @@ The file commands act on the SD card's files: `findfile`, `finddir`, `newfile`, 
 - `newfile` makes a file of the size it is given, all zero bytes.
 - If the size is not a number, `newfile` does not create a file, and answers 0x1B, on any card.
 - If the size is below 0, `newfile` does not create a file, and answers 0x06, an invalid file operation.
+- If a file in `ram/`, the screen's memory, does not fit in the space your project sets aside, `newfile` does not create it, and answers 0x06 ([Files in `ram/`](simulator.md#files-in-ram)).
 
 ### `rdfile`
 
@@ -331,8 +333,9 @@ The file commands act on the SD card's files: `findfile`, `finddir`, `newfile`, 
 
 These cases do not start a transfer, and each is recorded in `"file errors"`:
 
-- A path on neither `sd0/` nor `sd1/`, as in `ram/`, or a size of 0 or below, answers 0x06, an invalid file operation.
-- A size that is not a number answers 0x1A.
+- If the path is neither on a card nor in `ram/`, or the size is 0 or below, `twfile` answers 0x06, an invalid file operation.
+- If the file is in `ram/` and does not fit in the space your project sets aside, `twfile` answers 0x06 too ([Files in `ram/`](simulator.md#files-in-ram)).
+- If the size is not a number, `twfile` answers 0x1A.
 
 ### File streams
 

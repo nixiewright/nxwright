@@ -63,7 +63,8 @@ from nxwright.testing.list_working import (COMBO_BOX_CHOICES, FILE_BROWSER_LISTI
 from nxwright.testing.modbus_crc import CRC_OFF, crc_after, crc_start
 from nxwright.testing.pinyin_table import pinyin_table_of
 from nxwright.testing.recording import TrackedValues
-from nxwright.testing.sd_cards import INVALID_FILE_OPERATION, CardRefusal
+from nxwright.testing import ram_files
+from nxwright.testing.sd_cards import CARDS, INVALID_FILE_OPERATION, CardRefusal
 from nxwright.testing.serial_buffer import (BUFFER_BYTE, buffer_read, copied_into_number,
                                             copied_into_text, deleted)
 from nxwright.testing.serial_line import ADDRESSES
@@ -348,25 +349,36 @@ class EditorMachine:
         in one keeps at most that many bytes, as on the screen.
         It is taken out of `values` when the machine starts, since the code
         neither reads nor changes it.
-      - "file contents": {path: bytes} of the files the file streams read and
-        write, `newfile` and `delfile` change, and data records keep their
-        records in (data_files.py); given by the caller or empty.
-        A file holds its bytes as the SD card does: `newfile` makes one of the
-        size it is given, all zero bytes.
+      - "file contents": the machine's files, as {path: bytes}, given by
+        the caller or empty. They are the files that file streams read
+        and write, that `newfile` and `delfile` change, and where data
+        records keep their records (data_files.py). `newfile` makes a
+        file of the size it is given, all zero bytes. Files in ram/, the
+        screen's memory, are in the same dict, and use the space the
+        project sets aside for them (ram_files.py).
       - "serial buffer": the bytes of the buffer of protocol reparse mode,
         which `u[]`, `usize`, `ucopy`, and `udelete` read and change
         (serial_buffer.py); given by the caller, with `recmod` 1, or empty.
-      - "file errors": the commands the screen refused, as (command, path),
-        in order: a read or write that would go past the end of the file, or
-        of a file stream with no file open, its path None; a `newfile` whose
-        size is not a number, or is below 0; a `twfile` refused before its
-        transfer (_twfile), or whose file a simulation could not write after
-        it (Simulation._write_transferred_file); a data record's method that
-        could not be done (_data_record); and, as ("open", path), a data
-        record's `path` set to a file another holds (_open_named_file). The
-        Editor's simulator answered the first nothing, changing nothing, the
-        `newfile` 0x1B, or 0x06 for a size below 0, making no file, and the
-        `path` 0x06.
+      - "file errors": the file commands the screen ignored, in order, as
+        (command, path):
+          - a read or write that would go past the end of the file, or on
+            a file stream with no file open, whose entry has None for its
+            path. The Nextion Editor's simulator sent no answer to these,
+            and changed nothing.
+          - a `newfile` whose size is not a number, or is below 0. The
+            screen does not create a file, and answers 0x1B for the first
+            and 0x06 for the second.
+          - a `twfile` the screen rejected before its transfer (_twfile),
+            or whose file a simulation could not write after the transfer
+            (Simulation._write_transferred_file).
+          - a `newfile`, `refile`, or `newdir` on a ram/ path that the
+            screen cannot carry out. The screen answers 0x06
+            (_ram_command).
+          - a data record's method that could not be carried out
+            (_data_record).
+          - a data record's `path` set to a file that another data record
+            keeps open, recorded as ("open", path). The screen answers
+            0x06 (_open_named_file).
       - "file commands": the commands that changed files, a data record's
         methods among them, and a file browser's `up()`, in order.
       - "data files held": the files the data records hold
@@ -426,13 +438,18 @@ class EditorMachine:
     machine reads them for a component's type (_type_of), for the working,
     and for a data record's methods and file, but code reading a field
     `values` lacks still stops the run.
+
+    `memory_file_storage_size` is the number of bytes the project sets
+    aside for the files in ram/, the screen's memory (ram_files.py). If it
+    is 0, the screen does not create any file in ram/.
     """
 
     def __init__(self, values: dict, events: dict = None, page: str = None,
                  encoding: str = DEFAULT_ENCODING, recorder=None, places: dict = None,
                  screen=None, cards=None, macros: dict = None, components: list = None,
                  resources=None, series: str = None, pinyin_table=None,
-                 folder_resources=None, page_values: dict = None):
+                 folder_resources=None, page_values: dict = None,
+                 memory_file_storage_size: int = 0):
         # Recorded, the values note what changes, for the recorder to compare.
         self.values = TrackedValues(values) if recorder is not None else dict(values)
         self.resources = resources
@@ -446,6 +463,7 @@ class EditorMachine:
         self.screen = screen
         self.cards = cards
         self.series = series
+        self.memory_file_storage_size = memory_file_storage_size
         self.pinyin_table = pinyin_table_of(pinyin_table)
         self.page_values = page_values or {}
         self.list_working = None if folder_resources is None \
@@ -924,24 +942,41 @@ class EditorMachine:
             self.screen.take_transparent_data(word, numbers)
 
     def _twfile(self, arguments: list):
-        """Runs `twfile <path>,<size>`, whose file's bytes come next on the
-        serial line, as `addt`'s do. As the Nextion Editor's simulator did,
-        the screen refuses, answering 0x06, a path on neither sd0/ nor
-        sd1/, as in ram/; a size of 0 or below; and, on a card given a
-        folder, a folder the card lacks. It refuses a size that is no
-        number, answering 0x1A. A path the card's folder refuses so as to
-        harm nothing, as one leaving it, answers its own code (_on_folder).
-        Each refusal is recorded with the file errors, and starts no
-        transfer. Otherwise the screen takes the bytes, and writes the file
-        once they are in (Simulation.take_transparent_data). Without a
-        screen, as in a test, the command is recorded with the other
-        commands, and writes nothing."""
+        """Runs `twfile <path>,<size>`. The file's bytes come next on the
+        serial line, the same way as the bytes of `addt`.
+
+        In the cases below, the screen ignores the command and does not
+        start a transfer, and the machine records the command in "file
+        errors". The cases follow the Nextion Editor's simulator. The
+        screen answers:
+          - 0x1A if the size is not a number;
+          - 0x06 if the size is 0 or below;
+          - 0x06 if the path is neither on a card (sd0/ or sd1/) nor in
+            ram/;
+          - 0x06 if the path is in ram/, and has a folder in it or the
+            file does not fit in the space the project sets aside
+            (ram_files.py);
+          - 0x06 if the card is a folder of the computer and the path's
+            folder does not exist in it;
+          - the code _on_folder gives if the card's folder rejects the
+            path to keep the user's files safe, such as a path that
+            leaves the folder.
+
+        Otherwise the simulation takes the bytes, and writes the file
+        once they have all arrived (Simulation.take_transparent_data).
+        Without a simulation, as in a test, the machine records the
+        command in "other commands", and no file is written."""
         path, size = self._operand(arguments[0]), self._chain(arguments[1])
         code = None
         if not isinstance(size, int):
             code = _INVALID_VARIABLE
-        elif not (isinstance(path, str) and path.lower().startswith(("sd0/", "sd1/"))) \
-                or size <= 0:
+        elif size <= 0:
+            code = INVALID_FILE_OPERATION
+        elif ram_files.is_ram_path(path):
+            if not ram_files.takes_transfer(self.values.get("file contents", {}), path, size,
+                                            self.memory_file_storage_size):
+                code = INVALID_FILE_OPERATION
+        elif not (isinstance(path, str) and path.lower().startswith(CARDS)):
             code = INVALID_FILE_OPERATION
         elif self._on_card(path):
             has_folder = self._on_folder("twfile", path,
@@ -1253,12 +1288,14 @@ class EditorMachine:
 
     def _path_command(self, word: str, arguments: list, contents: dict):
         """Runs `word`, one of newfile, newdir, delfile, deldir, refile, and
-        redir, on its `arguments`, and records it in "file commands". On a
-        card given a folder, the folder does it. On the card in memory,
-        newfile adds a file of its size, all zero bytes, to `contents`,
-        "file contents", and delfile removes one. A newfile whose size is
-        no number, or below 0, makes no file, and is recorded with the file
-        errors."""
+        redir, on its `arguments`, and records it in "file commands". If
+        the path is on a card that was given a folder, the command acts on
+        that folder's files. On the card in memory, newfile adds a file of
+        its size, all zero bytes, to `contents`, which is "file contents",
+        and delfile removes one. A newfile whose size is not a number, or
+        is below 0, does not create a file, and is recorded in "file
+        errors" instead. A newfile, refile, or newdir on a ram/ path
+        follows the rules of the screen's memory instead (_ram_command)."""
         # newfile's size may be arithmetic, as the Editor's simulator ran it.
         paths = [self._chain(argument) if word == "newfile" and place == 1
                  else self._operand(argument)
@@ -1272,6 +1309,9 @@ class EditorMachine:
             # simulator answered -1 and -100.
             self._record("file errors", ("newfile", paths[0]))
             self._refused(INVALID_FILE_OPERATION)
+            return
+        if word in ("newfile", "refile", "newdir") and ram_files.is_ram_path(paths[0]):
+            self._ram_command(word, paths, contents)
             return
         self._record("file commands", (word, *paths))
         if self._on_card(paths[0]):
@@ -1287,6 +1327,27 @@ class EditorMachine:
             contents.setdefault(paths[0], bytes(paths[1]))
         if word == "delfile":
             contents.pop(paths[0], None)
+
+    def _ram_command(self, word: str, paths: list, contents: dict):
+        """Runs `word`, a newfile, refile, or newdir whose first path is in
+        ram/. `paths` are the command's arguments, and `contents` is "file
+        contents", which the command changes. The screen's memory has no
+        folders, and only accepts files that fit in the space the project
+        sets aside (ram_files.py). A command the screen accepts is recorded
+        in "file commands". If the screen ignores the command, it is
+        recorded in "file errors", and the screen answers 0x06."""
+        if word == "newfile":
+            taken = ram_files.new_file(contents, paths[0], paths[1],
+                                       self.memory_file_storage_size)
+        elif word == "refile":
+            taken = ram_files.rename_file(contents, paths[0], paths[1])
+        else:
+            taken = False       # newdir: the screen's memory has no folders
+        if taken:
+            self._record("file commands", (word, *paths))
+        else:
+            self._record("file errors", (word, paths[0]))
+            self._refused(INVALID_FILE_OPERATION)
 
     def _drawing_command(self, line: str) -> bool:
         """Runs `line` when it is a drawing command, and returns whether it

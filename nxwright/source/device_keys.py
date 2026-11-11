@@ -48,6 +48,15 @@ def screen_model(app: dict):
     return None if settings is None else settings.model
 
 
+def memory_file_storage_size(app: dict) -> int:
+    """Returns the number of bytes that `app`, the keys of an app.toml,
+    sets aside for the files the screen keeps in its memory, or 0 if `app`
+    has no screen settings. The settings are read with settings_from_keys,
+    which raises NxwrightError for a key that is missing or wrong."""
+    settings = settings_from_keys(app)
+    return 0 if settings is None else settings.memory_file_storage_size
+
+
 def settings_from_keys(app: dict):
     """Returns the DeviceSettings that `app`, the keys of an app.toml, holds,
     or None when it holds none. Raises NxwrightError naming the first key

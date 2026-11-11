@@ -1,13 +1,14 @@
 """A simulation's SD cards as folders of the computer.
 
-The screen has two SD cards, `sd0/` and `sd1/`. The Editor's simulator keeps
-each as a folder of its own, `sdcard0` and `sdcard1` in its settings folder,
-so that the app's files are real files. A simulation can be given any
-folder for each (`FolderCards`). `sd0/presets/a.cfg` is then the file
+The screen has two SD cards, `sd0/` and `sd1/`. The Nextion Editor's
+simulator keeps each as a folder of its own, `sdcard0` and `sdcard1` in its
+settings folder, so that the app's files are real files. A simulation can
+be given any folder for each (`FolderCards`). `sd0/presets/a.cfg` is then the file
 `presets/a.cfg` in the folder given for `sd0/`. A path on a card given no
-folder, a `ram/` file, and a path on no card stay in the test machine's
-memory, as without folders (editor_machine.py, "existing" and "file
-contents").
+folder, and a path on no card, stay in the test machine's memory, the same
+way as when no folders are given (editor_machine.py, "existing" and "file
+contents"). So does a `ram/` file, which the screen keeps in its own
+memory, in the space the project sets aside (ram_files.py).
 
 The folders are the user's own, so nothing the app does may harm what lies
 outside them, or the folders themselves. Each path is checked to lie

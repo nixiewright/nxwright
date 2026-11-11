@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.13] - 2026-11-11
+
+- Files in `ram/` now need `memory_file_storage_size` in `app.toml`, in the simulator and in tests.
+- `twfile` can now write a file in `ram/`.
+
 ### [0.3.12] - 2026-11-10
 
 - With the Emulator port, the app now waits for the MCU emulator to connect before it starts.

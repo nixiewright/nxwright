@@ -160,7 +160,7 @@ fonts = [
   | Key | The Nextion Editor's setting | Value |
   | --- | --- | --- |
   | `one_time_update` | "One time update of TFT files". Intelligent and Edge series only. | `true` or `false` (the default) |
-  | `memory_file_storage_size` | "Memory file storage size". Intelligent and Edge series only. | bytes, 0 by default |
+  | `memory_file_storage_size` | "Memory file storage size". The space that files in `ram/` share ([Files in `ram/`](simulator.md#files-in-ram)). Intelligent and Edge series only. | bytes, 0 by default |
   | `ignore_library_resources` | "Ignore library resources at compile time" | `true` or `false` (the default) |
   | `ignore_image_resources` | "Ignore image resources at compile time" | `true` or `false` (the default) |
   | `password_hash` | The hash of the project's password | the hash that `nxwright password-hash` prints ([commands.md](commands.md#password-hash)), so that the password itself stays out of the folder |

@@ -32,7 +32,7 @@ from nxwright.project.device_settings import DEFAULT_ENCODING, TextCodec
 from nxwright.project.editor_limits import lacked_attributes
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.source import source_folder as folders
-from nxwright.source.device_keys import screen_model
+from nxwright.source.device_keys import memory_file_storage_size, screen_model
 from nxwright.source.macros_source import (MACROS_PATH, callable_macros, compiled_macros,
                                            read_macros_text)
 from nxwright.source.nx_files import event_blocks, read_page_files
@@ -201,7 +201,8 @@ class SourceFolderRunner:
                                 pinyin_table=self.pinyin_table,
                                 folder_resources=FolderResources(self.source_folder, tables.app,
                                                                  self._decoded_fonts),
-                                page_values=compiled.page_values)
+                                page_values=compiled.page_values,
+                                memory_file_storage_size=memory_file_storage_size(tables.app))
         # The page as it opened, then the values the test gives again, which
         # win, written as they are, not worked again.
         machine.open_page()

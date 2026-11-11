@@ -16,6 +16,7 @@ from nxwright.project.pictures import read_picture, write_png
 from nxwright.source.page_source import Component
 from nxwright.testing.sd_cards import CardRefusal, FolderCards, card_folder, inside
 from nxwright.testing.simulation import Simulation
+from tests.test_folder_check import edited_app
 from tests.test_live_debugging import LiveTestCase
 from tests.test_simulation import DONE, N_IS_0, READY, SimulationTestCase, placed, table
 
@@ -128,6 +129,9 @@ class FileCommandsTest(SimulationTestCase):
         self.card = Path(self._card.name).resolve()
         self.addCleanup(self._card.cleanup)
         self.program("page page0\n")
+        # Space for the file the page's code makes in ram/, the screen's memory.
+        self.write("app.toml", edited_app(self.text("app.toml"),
+                                          lambda app: app.update(memory_file_storage_size=4096)))
         self.page("page0", [placed("go", "button", 0, 0), placed("t", "text", 0, 100, txt="",
                                                                 txt_maxl=20),
                             table("found", "variable"), table("file", "file-stream")], """\

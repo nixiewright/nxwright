@@ -193,7 +193,8 @@ from nxwright.project.media_files import FROM_CARD, animation_frames, sound_fram
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.page_header import SYSTEM_PAGES
 from nxwright.source import source_folder as folders
-from nxwright.source.device_keys import screen_model, settings_from_keys
+from nxwright.source.device_keys import (memory_file_storage_size, screen_model,
+                                         settings_from_keys)
 from nxwright.source.page_source import Component
 from nxwright.testing.card_files import (DATA_FILES_HELD, DATA_RECORDS_GIVEN_A_PATH,
                                          DATA_RECORDS_SHUT_OUT, component_attributes,
@@ -553,6 +554,8 @@ class Simulation:
         # The screen's series, whose lacked commands and system variables a
         # typed instruction is refused for.
         self._series = starting.series
+        # The bytes the project sets aside for the files in ram/.
+        self._memory_file_storage_size = memory_file_storage_size(self.app)
         self.pages = starting.pages
         self.encoding = starting.encoding
         self._lists = ListWorking(self._folder_resources, self.cards, self.encoding)
@@ -2325,7 +2328,8 @@ class Simulation:
                              cards=self.cards, macros=self.macros, components=self._ids(page),
                              resources=self._resources, series=self._series,
                              pinyin_table=self.pinyin_table,
-                             folder_resources=self._folder_resources)
+                             folder_resources=self._folder_resources,
+                             memory_file_storage_size=self._memory_file_storage_size)
 
     def _after_code(self, answer=None):
         """What follows code the screen ran, an event's or a typed line's, its
@@ -2395,11 +2399,12 @@ class Simulation:
             self._wave(("add", component_id, channel, byte), values)
 
     def _write_transferred_file(self, path: str, data: bytes):
-        """Writes `data` as the SD card's file `path`, for `twfile`: made when
-        it is missing, then written, so that a file of that name is
-        replaced. What the card's folder or the disk refuses, as a path that
-        names a folder, writes nothing, and is recorded with the file
-        errors. The screen has answered FD FF FF FF by then."""
+        """Writes `data` to the file `path`, on an SD card or in ram/, for
+        `twfile`. The file is created if it is missing, and an existing file
+        of that name is replaced. If the card's folder or the disk rejects
+        the write, for example because `path` is a folder, nothing is
+        written, and the failure is recorded in "file errors". By then the
+        screen has already answered FD FF FF FF."""
         try:
             write_card_file(self.cards, path, data, self.globals)
         except (CardRefusal, OSError):
