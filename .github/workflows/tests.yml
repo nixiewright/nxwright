@@ -130,9 +130,10 @@ jobs:
   # NSPanel-Easy builds its display files with nxwright, and commits them.
   # This job builds them again with this checkout's nxwright, using
   # tools/nspanel_easy.py, and fails when a file differs from the committed
-  # one. The job follows NSPanel-Easy's default branch, so a failure can come
-  # from a change in NSPanel-Easy as well as from a change in what nxwright
-  # writes.
+  # one. NSPanel-Easy builds with an nxwright it pins, so a failure means that
+  # the two versions of nxwright write different files. It can also mean that
+  # NSPanel-Easy changed the steps of its build that tools/nspanel_easy.py
+  # repeats, such as where it keeps its fonts.
   nspanel-easy:
     runs-on: ubuntu-latest
     steps:
