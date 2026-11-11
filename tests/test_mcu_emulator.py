@@ -3,7 +3,6 @@ and add_emulator and `nxwright new-emulator`, which write a first program
 (source/emulator_adding.py)."""
 import contextlib
 import io
-import socket
 import subprocess
 import sys
 import tomllib
@@ -16,7 +15,7 @@ from nxwright.source.mcu_table import emulator_wait
 from nxwright.source.project_files import build
 from nxwright.source.source_folder import add_page, app_text_in, parse_app, read_app
 from tests.test_folder_check import FolderTestCase
-from tests.test_mcu_library import _PATIENCE, free_port
+from tests.test_mcu_library import _PATIENCE, connected_to, free_port
 
 END = b"\xff\xff\xff"
 
@@ -176,8 +175,7 @@ class FirstEmulatorTest(FolderTestCase):
         self.addCleanup(program.kill)
         self.assertEqual(program.stdout.readline(),
                          "Waiting for the simulator on 127.0.0.1:%d\n" % port)
-        simulation = socket.create_connection(("127.0.0.1", port), timeout=_PATIENCE)
-        with simulation:
+        with connected_to(port) as simulation:
             # The screen's start-up code and "ready", then a touch event.
             simulation.sendall(b"\x00\x00\x00" + END + b"\x88" + END + b"\x65\x00\x02\x01" + END)
         _, errors = program.communicate(timeout=_PATIENCE)

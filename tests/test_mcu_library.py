@@ -24,6 +24,23 @@ def free_port() -> int:
         return listening.getsockname()[1]
 
 
+def connected_to(port: int) -> socket.socket:
+    """Returns a connection to the program that listens on `port` of this
+    computer, trying again for up to _PATIENCE seconds while the connection
+    is refused. The first attempt can come before the program listens,
+    because a test connects right after starting the program, and an emulator
+    prints that it is waiting for the simulator just before it starts to
+    listen."""
+    deadline = time.monotonic() + _PATIENCE
+    while True:
+        try:
+            return socket.create_connection(("127.0.0.1", port), timeout=_PATIENCE)
+        except ConnectionRefusedError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
+
+
 class LineTestCase(unittest.TestCase):
     """A Line, with the simulation's end of its connection in `simulation`."""
 
@@ -43,6 +60,29 @@ class LineTestCase(unittest.TestCase):
         while len(data) < count:
             data += self.simulation.recv(count - len(data))
         return data
+
+
+class ConnectedToTest(unittest.TestCase):
+    """connected_to, which the tests of emulators connect with."""
+
+    def test_it_waits_for_a_program_that_does_not_listen_yet(self):
+        # Linux refuses a connection at once if nothing listens on the port
+        # yet, so a single attempt to connect would fail.
+        port = free_port()
+        accepted = []
+
+        def listen_late():
+            time.sleep(0.3)
+            with socket.create_server(("127.0.0.1", port)) as listening:
+                listening.settimeout(_PATIENCE)
+                accepted.append(listening.accept()[0])
+
+        program = threading.Thread(target=listen_late)
+        program.start()
+        with connected_to(port):
+            program.join(_PATIENCE)
+        self.assertEqual(len(accepted), 1)
+        accepted[0].close()
 
 
 class OpenTest(unittest.TestCase):
@@ -71,16 +111,9 @@ class OpenTest(unittest.TestCase):
             os.environ.pop(mcu.ADDRESS_VARIABLE, None)
             waiting = threading.Thread(target=lambda: opened.append(mcu.open(listen=port)))
             waiting.start()
-            simulation = None
-            deadline = time.monotonic() + _PATIENCE
-            while simulation is None and time.monotonic() < deadline:
-                try:
-                    simulation = socket.create_connection(("127.0.0.1", port), timeout=1)
-                except OSError:
-                    time.sleep(0.01)
+            simulation = connected_to(port)
+            self.addCleanup(simulation.close)
             waiting.join(_PATIENCE)
-        self.assertIsNotNone(simulation)
-        self.addCleanup(simulation.close)
         line = opened[0]
         self.addCleanup(line.close)
         self.assertEqual(line.write(b"page 1" + END), 9)

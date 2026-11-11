@@ -5,6 +5,7 @@ import re
 import socket
 import subprocess
 import sys
+import time
 import unittest
 from pathlib import Path
 
@@ -15,6 +16,21 @@ EMULATOR = Path(__file__).resolve().parent.parent / "mcu" / "main.py"
 OUTDOOR_UNKNOWN = 100000
 # How long the test waits for the emulator, in seconds.
 PATIENCE = 10
+
+
+def connected_to(port: int) -> socket.socket:
+    """Returns a connection to the emulator that listens on `port` of this
+    computer, trying again for up to PATIENCE seconds while the connection is
+    refused. The emulator prints that it is waiting for the simulator just
+    before it starts to listen, so the first attempt can come too early."""
+    deadline = time.monotonic() + PATIENCE
+    while True:
+        try:
+            return socket.create_connection(("127.0.0.1", port), timeout=PATIENCE)
+        except ConnectionRefusedError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
 
 
 def emulator():
@@ -65,7 +81,7 @@ class EmulatorTest(unittest.TestCase):
         self.addCleanup(program.kill)
         self.assertEqual(program.stdout.readline(),
                          "Waiting for the simulator on 127.0.0.1:%d\n" % port)
-        with socket.create_connection(("127.0.0.1", port), timeout=PATIENCE) as simulator:
+        with connected_to(port) as simulator:
             sent = b""
             while not sent.endswith(b"\xff\xff\xff"):
                 sent += simulator.recv(64)
