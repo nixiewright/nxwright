@@ -1,13 +1,36 @@
-"""How tools/nspanel_easy.py puts back the fonts that an NSPanel-Easy source
-folder lists in its fonts.sha256 file."""
+"""How tools/nspanel_easy.py reads its arguments, and how it puts back the
+fonts that an NSPanel-Easy source folder lists in its fonts.sha256 file."""
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
 
-from tools.nspanel_easy import restore_fonts
+from tools.nspanel_easy import parse_arguments, restore_fonts
 
 FONT = b"a font's bytes"
 FONT_SHA256 = "62942d35702e5af800b2efdf24485b8124e8f68d26572be96b73f6e7a33a208e"
+
+
+class ArgumentsTest(unittest.TestCase):
+
+    def test_a_folder_is_taken_as_the_clone_to_check(self):
+        arguments = parse_arguments(["NSPanel-Easy"])
+        self.assertEqual(arguments.checkout, Path("NSPanel-Easy"))
+        self.assertFalse(arguments.clone)
+
+    def test_clone_needs_no_folder(self):
+        arguments = parse_arguments(["--clone"])
+        self.assertIsNone(arguments.checkout)
+        self.assertTrue(arguments.clone)
+
+    def test_a_folder_and_clone_together_are_rejected(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            parse_arguments(["NSPanel-Easy", "--clone"])
+
+    def test_neither_a_folder_nor_clone_is_rejected(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            parse_arguments([])
 
 
 class RestoreFontsTest(unittest.TestCase):

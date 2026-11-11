@@ -11,9 +11,14 @@ Run the script from nxwright's folder, and pass it a clone of NSPanel-Easy:
 
     python -m tools.nspanel_easy <NSPanel-Easy folder>
 
-The script exits with 1 when a compile fails or a file differs. For each
-difference, it prints the output of `nxwright diff` for a project file, or of
-`nxwright tft-compare` for a TFT file.
+Or let the script clone NSPanel-Easy's main branch from GitHub into a
+temporary folder:
+
+    python -m tools.nspanel_easy --clone
+
+The script exits with 1 when the clone or a compile fails, or when a file
+differs. For each difference, it prints the output of `nxwright diff` for a
+project file, or of `nxwright tft-compare` for a TFT file.
 
 NSPanel-Easy builds with its own script, hmi/dev/scripts/hmi_build.sh, which
 installs the version of nxwright that NSPanel-Easy picks. This script repeats
@@ -36,17 +41,47 @@ import tempfile
 from pathlib import Path
 
 
+NSPANEL_EASY = "https://github.com/edwardtfn/NSPanel-Easy"
+
+
 def main() -> int:
+    arguments = parse_arguments(sys.argv[1:])
+    # Without this, the lines printed here could appear after the output of
+    # the nxwright commands that follow them.
+    sys.stdout.reconfigure(line_buffering=True)
+    if not arguments.clone:
+        return check_checkout(arguments.checkout.resolve())
+    with tempfile.TemporaryDirectory() as clone_name:
+        clone = Path(clone_name) / "NSPanel-Easy"
+        print("Cloning %s" % NSPANEL_EASY)
+        if subprocess.run(["git", "clone", "--depth", "1", "--quiet", NSPANEL_EASY, str(clone)],
+                          stdin=subprocess.DEVNULL).returncode != 0:
+            print("Could not clone %s." % NSPANEL_EASY, file=sys.stderr)
+            return 1
+        return check_checkout(clone)
+
+
+def parse_arguments(arguments: list[str]) -> argparse.Namespace:
+    """Reads the command line `arguments`, which give either the folder of an
+    NSPanel-Easy clone or --clone. Raises SystemExit, after printing the
+    usage, when both or neither are given."""
     parser = argparse.ArgumentParser(
         description="Build NSPanel-Easy's source folders with this checkout's "
                     "nxwright, and compare the results with the files NSPanel-Easy "
                     "commits.")
-    parser.add_argument("checkout", type=Path, help="a clone of NSPanel-Easy")
-    hmi = parser.parse_args().checkout.resolve() / "hmi"
-    # Without this, the lines printed here could appear after the output of
-    # the nxwright commands that follow them.
-    sys.stdout.reconfigure(line_buffering=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("checkout", type=Path, nargs="?", help="a clone of NSPanel-Easy")
+    source.add_argument("--clone", action="store_true",
+                        help="clone NSPanel-Easy from GitHub into a temporary folder, "
+                             "and check that clone")
+    return parser.parse_args(arguments)
 
+
+def check_checkout(checkout: Path) -> int:
+    """Builds the source folders of the NSPanel-Easy clone `checkout`, and
+    compares the results with the files NSPanel-Easy commits. Returns the
+    script's exit code: 0 when every file matches, 1 otherwise."""
+    hmi = checkout / "hmi"
     sources = sorted(folder for folder in (hmi / "src").iterdir()
                      if (folder / "app.toml").is_file())
     if not sources:
