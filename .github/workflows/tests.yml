@@ -126,3 +126,27 @@ jobs:
       - name: The tests inside VS Code
         if: runner.os != 'Linux'
         run: npm run test:host
+
+  # NSPanel-Easy builds its display files with nxwright, and commits them.
+  # This job builds them again with this checkout's nxwright, using
+  # tools/nspanel_easy.py, and fails when a file differs from the committed
+  # one. The job follows NSPanel-Easy's default branch, so a failure can come
+  # from a change in NSPanel-Easy as well as from a change in what nxwright
+  # writes.
+  nspanel-easy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: NSPanel-Easy's source and display files
+        uses: actions/checkout@v4
+        with:
+          repository: edwardtfn/NSPanel-Easy
+          path: nspanel-easy
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: nxwright's dependencies, from pyproject.toml
+        run: python -m pip install .
+      - name: Build NSPanel-Easy's display files again, and compare them with the committed ones
+        run: python -m tools.nspanel_easy nspanel-easy

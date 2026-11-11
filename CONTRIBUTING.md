@@ -48,6 +48,7 @@ Bug reports, fixes, and documentation are welcome. For a larger change, open an 
   - `test/`: the tests Node runs. `test/host/` has those that need VS Code itself.
 - `examples/thermostat/`: a demo built with nxwright, with its own tests.
 - `tools/readme.py`: the script that writes the README's examples.
+- `tools/nspanel_easy.py`: the script that checks that nxwright still builds the display files of [NSPanel-Easy](https://github.com/edwardtfn/NSPanel-Easy) byte for byte, by comparing them with the ones NSPanel-Easy commits.
 - `tools/editor/`: the tool that drives the Nextion Editor.
 - `tools/screen/`: the probe that checks nxwright's rules for `ram/` files on a real screen ([tools/screen/README.md](tools/screen/README.md)).
 - `tools/tft/`: the scripts that compare nxwright's TFT files with the Nextion Editor's, and write the fixtures in `tests/tft/fixtures/` ([tools/tft/README.md](tools/tft/README.md)).
