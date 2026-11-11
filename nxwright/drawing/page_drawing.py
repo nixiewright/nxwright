@@ -157,22 +157,23 @@ whole number of pixels is cut toward zero, across and down, as the
 Editor's simulator drew them (tests/fixtures/drawing-assumptions/). It is
 drawn in progress_bar_drawing.py.
 
-An external picture shows a file of the screen's SD card, `path`: a PNG,
-a JPEG, or PictureBox's .xi file (project/media_files.py, read_card_picture).
-When the drawing's resources find that file, as a simulation's do on a card
-given a folder, its picture shape is marked "card", and carries the
-screen's rotation. The Editor's simulator showed each kind of file in its
-own colours, rather than the screen's 16 bits, and with its transparency.
-The screen draws
-the file's pixels as they are stored, so a file for a turned screen is
-stored turned: the webview turns the stored pixels back by the screen's
-rotation, so that such a file shows upright, as the user sees it. The
-turned picture's top left corner is at the component's, and the component
-cuts it at its right and bottom. The Editor's simulator showed each kind of
-file so at 90, 180, and 270 degrees, whatever rotation a .xi file was made
-for: one stored upright then shows turned
-(tests/fixtures/drawing-assumptions/turned/). Otherwise nothing is drawn;
-so the preview, which has no card, draws none.
+An external picture shows the file at its `path`, on an SD card or in ram/:
+a PNG, a JPEG, or PictureBox's .xi file (project/media_files.py,
+read_card_picture). A simulation's resources find that file in the folder
+given to its card, or among the files the simulation keeps in memory. If
+they find it, the external picture's picture shape is marked "card", and
+carries the screen's rotation. If they do not, nothing is drawn. The preview
+has no cards and no files in memory, so it never draws an external picture's
+file. The Nextion Editor's simulator showed each kind of file in its own
+colours, rather than the screen's 16 bits, and with its transparency. The
+screen draws the file's pixels as they are stored, so a file for a turned
+screen is stored turned. The webview turns the stored pixels back by the
+screen's rotation, so that such a file shows upright, as the user sees it.
+The turned picture's top left corner is at the component's, and the
+component cuts it at its right and bottom. The Nextion Editor's simulator
+showed each kind of file this way at 90, 180, and 270 degrees, whatever
+rotation a .xi file was made for, so a file stored upright shows turned
+(tests/fixtures/drawing-assumptions/turned/).
 
 A file browser draws its background and its border as a text does, then
 the entries a simulation lists (the preview, which has no SD card, lists
@@ -400,8 +401,8 @@ class DrawingResources:
         nxwright cannot decode has too, or None when it cannot be read (by
         default: the decoded font's, or None);
       - card_picture(path): the name under which a picture shape shows the
-        file an external picture's `path` names on an SD card, or None when
-        there is none such (by default: there are no cards);
+        file an external picture's `path` names on an SD card or in ram/,
+        or None when there is none such (by default: there are no cards);
       - frames(kind, id): the media_files.Frames of the folder's animation or
         video `id`, `kind` being ANIMATION or VIDEO (resource_names.py), or
         None when there is none such (by default: there are none); raises

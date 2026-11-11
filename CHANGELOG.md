@@ -4,6 +4,12 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.18] - 2026-11-12
+
+- An external picture now shows a picture file in `ram/`, or on an SD card that has no folder.
+- An external picture whose file is missing now answers 0x06.
+- The simulator's log now shows when an external picture's file is missing, or is not a picture.
+
 ### [0.3.17] - 2026-11-11
 
 - A data record whose file is missing on an SD card now shows "File Lost:" and the file's path.

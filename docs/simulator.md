@@ -725,12 +725,13 @@ The screen's SD cards can be folders of your computer. A launch configuration's 
 
 ### External pictures
 
-External pictures show their images from the card: a PNG, a JPEG, or PictureBox's `.xi` file ([format.md, Pictures for the SD card](format.md#pictures-for-the-sd-card)).
+An external picture shows the picture file at its `path`: a PNG, a JPEG, or PictureBox's `.xi` file ([format.md, Pictures for the SD card](format.md#pictures-for-the-sd-card)). The file can be in `ram/`, or on a card, whether or not the card has a folder.
 
-- They show in their own colours, and with their transparency.
+- The file shows in its own colours, and with its transparency.
 - The screen draws a picture's file the way it is stored, so on a screen that the app's `rotation` rotates, the file must be stored rotated to show upright. `nxwright sd-picture --rotation` writes such a `.xi` file. A PNG or a JPEG you saved upright shows rotated.
 - The picture starts at the component's top left corner. As much of it shows as the component has room for.
-- A picture whose file is missing shows nothing.
+
+If the file is missing, or is not a picture, the external picture shows nothing. The log gives the file's path and the reason. For a missing file, the screen also sends 0x06 when the page opens and when code sets the `path`, unless `vis` has hidden the external picture. The screen does not send an error code for a file that is not a picture.
 
 ### What the file commands do
 
@@ -833,6 +834,7 @@ The simulator does not model:
 - The real-time clock starts at your computer's time when you launch a simulation. The Nextion Editor's simulator keeps a time that code set, from one run to the next.
 - Some SD card commands do less, to keep your files safe ([What the file commands do](#what-the-file-commands-do)).
 - A data record's `delete` with a count below 0 changes nothing. The Nextion Editor's simulator adds records instead, as many as the count says.
+- An external picture whose file is not a picture shows nothing ([External pictures](#external-pictures)). The Nextion Editor's simulator draws a marker of its own in the component.
 
 ### Not compared yet
 

@@ -605,8 +605,10 @@ on back.down:
 
 
 class ExternalPictureTest(unittest.TestCase):
-    """An external picture shows the file its `path` names on a card given
-    a folder; anything else draws nothing, as for a missing file."""
+    """An external picture shows the file at its `path` on a card given a
+    folder. These tests keep no files in memory, so any other path draws
+    nothing, the same as a missing file. test_external_picture_files.py
+    covers files kept in memory."""
 
     def setUp(self):
         folder = tempfile.TemporaryDirectory()

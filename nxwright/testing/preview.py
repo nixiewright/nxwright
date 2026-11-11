@@ -12,6 +12,7 @@ pictures, and what each component painted are kept between drawings. A font
 or a size is kept until its file changes, and a painting until something it
 depends on changes (drawing/kept_paintings.py).
 """
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -32,7 +33,8 @@ from nxwright.source.source_folder import (folder_byte_reader, folder_reader, is
                                            picture_file, picture_file_size, played_file,
                                            read_page_components)
 from nxwright.source.svg_pictures import drawn_svg_picture, prepared_svg_picture
-from nxwright.testing.sd_cards import CardRefusal
+from nxwright.testing.ram_files import is_ram_path
+from nxwright.testing.sd_cards import CARDS, CardRefusal
 
 # A page's own files: pages/<name>.page.toml and pages/<name>.nx.
 _PAGE_FILE = re.compile(r"pages/([^/]+)\.(?:page\.toml|nx)")
@@ -41,11 +43,14 @@ _TURNING_ORIENTATIONS = range(2, 9)
 
 
 class Previews:
-    """Draws pages. Between drawings it keeps what it read from pictures and
-    fonts, until their file changes, and what each component painted in the
-    latest drawing of its page, until something that painting depends on
-    changes. It also keeps what a webview loads each SVG picture from, until
-    a file the picture reads or a define changes."""
+    """Draws pages. Between drawings it keeps:
+      - what it read from pictures and fonts, until their file changes;
+      - what each component painted in the latest drawing of its page,
+        until something that painting depends on changes;
+      - what a webview loads each SVG picture from, until a file the
+        picture reads or a define changes;
+      - the name and the parts (_picture_parts) of each picture file that
+        a simulation keeps in memory, until the file's bytes change."""
 
     def __init__(self):
         # {(full path, the reading's module, its name): ((modification time,
@@ -56,6 +61,9 @@ class Previews:
         # {an SVG picture's file: (the defines it was drawn with, {each file
         # it read or looked for: its file_stamp}, what svg_picture returned)}
         self._svg_pictures = {}
+        # {the path of a picture file kept in memory: (its bytes, its name
+        # in a drawing, what _picture_parts gave for it)} (memory_picture)
+        self._memory_versions = {}
 
     def drawing(self, root: Path, path: str, read):
         """Returns the drawing of the page whose file is `path`, within the
@@ -90,17 +98,23 @@ class Previews:
     def drawing_of(self, root: Path, app: dict, components: list, painted=(),
                    spacing: tuple = (0, 0), hidden=(), waves: dict = None,
                    pressed: str = None, listings: dict = None,
-                   select_moves: dict = None, cards=None, scrolled: dict = None) -> dict:
+                   select_moves: dict = None, cards=None, scrolled: dict = None,
+                   memory_files: dict = None) -> dict:
         """Returns the drawing of `components`, as a simulation has them,
         with what drawing commands `painted` (page_drawing.py), and the
         files of its pictures under "pictureFiles". `app` is the source
-        folder's app.toml; `hidden`, the components `vis` hid; `waves`, the
-        points of its waveforms; `pressed`, the component held down;
-        `listings`, the entries of its file browsers; `select_moves`, how far
-        a press has moved a select's lines; `cards`, its SD cards given
-        folders (testing/sd_cards.py), whose files external pictures show;
-        `scrolled`, where its scrolling texts have moved their texts."""
-        resources = _FolderResources(root, app, self, cards)
+        folder's app.toml. The other arguments give the simulation's state:
+          - hidden: the components `vis` hid;
+          - waves: the points of the waveforms;
+          - pressed: the component held down;
+          - listings: the entries of the file browsers;
+          - select_moves: how far a press has moved a select's lines;
+          - cards: the SD cards given folders (testing/sd_cards.py), whose
+            files external pictures show;
+          - scrolled: where the scrolling texts have moved their texts;
+          - memory_files: the files kept in memory, {path: bytes}. External
+            pictures show these files too."""
+        resources = _FolderResources(root, app, self, cards, memory_files)
         drawing = draw_page(components, resources, painted, spacing, hidden, waves, pressed,
                             listings, select_moves, scrolled,
                             self._paintings.setdefault(root, KeptPaintings()))
@@ -122,7 +136,8 @@ class Previews:
         drawing = self.drawing_of(simulation.source_folder, simulation.app, inputs.components,
                                   inputs.painted, inputs.spacing, inputs.hidden, inputs.waves,
                                   inputs.pressed, inputs.listings, inputs.select_moves,
-                                  simulation.cards, inputs.scrolled)
+                                  simulation.cards, inputs.scrolled,
+                                  simulation.globals.get("file contents"))
         drawing.update({"page": inputs.page, "dim": simulation.globals.get("dim", 100),
                         "asleep": simulation.asleep, "start": simulation.starts,
                         "entry": inputs.entry})
@@ -161,6 +176,27 @@ class Previews:
         if isinstance(kept[1], NxwrightError):
             raise kept[1]
         return kept[1]
+
+    def memory_picture(self, path: str, data: bytes) -> tuple:
+        """Returns (name, parts) for the picture file `data` that a
+        simulation keeps in memory at `path`. `name` is what picture shapes
+        call the picture: the path and a digest of the bytes, so that new
+        bytes get a new name. `parts` is what _picture_parts gives for the
+        bytes, or the NxwrightError it raised.
+
+        Both are worked out once for each version of the file. The bytes of
+        a file kept in memory are never changed in place, so the same bytes
+        object at the same path is the same version."""
+        kept = self._memory_versions.get(path)
+        if kept is None or kept[0] is not data:
+            name = "memory:%s#%s" % (path, hashlib.blake2b(data, digest_size=8).hexdigest())
+            try:
+                parts = _picture_parts(data)
+            except NxwrightError as error:
+                parts = error
+            kept = (data, name, parts)
+            self._memory_versions[path] = kept
+        return kept[1], kept[2]
 
     def svg_picture(self, root: Path, path: Path, defines: dict) -> dict:
         """Returns what a webview needs to show the SVG picture at `path`, a
@@ -214,15 +250,19 @@ def page_of_file(path: str):
 
 
 class _FolderResources(DrawingResources):
-    """The pictures, fonts, animations, and videos of a source folder, as
-    page_drawing needs them, and the files of a simulation's SD cards given
-    folders, `cards`. Each instance serves a single drawing, during which it
-    looks up what each number or name stands for, and the state of each file,
-    only once. While recording (DrawingResources.start_recording), it notes
-    what a painting reads in a _Reads."""
+    """The pictures, fonts, animations, and videos of a source folder, for
+    page_drawing. For a simulation, the resources also cover the files in
+    the folders given to its SD cards, `cards`, and the files that the
+    simulation keeps in memory, `memory_files`, {path: bytes}. Each instance
+    serves a single drawing, during which it looks up what each number or
+    name stands for, and the state of each file, only once. While recording
+    (DrawingResources.start_recording), it notes what a painting reads in a
+    _Reads."""
 
-    def __init__(self, root: Path, app: dict, previews: Previews, cards=None):
+    def __init__(self, root: Path, app: dict, previews: Previews, cards=None,
+                 memory_files: dict = None):
         self.root, self.app, self.previews, self.cards = root, app, previews, cards
+        self.memory_files = memory_files or {}
         self.encoding = app.get("encoding", DrawingResources.encoding)
         self.rotation = app.get("rotation", DrawingResources.rotation)
         try:
@@ -234,6 +274,10 @@ class _FolderResources(DrawingResources):
         # them. That name is the file's full path, so it cannot be the name
         # of a picture of the folder.
         self._card_files = {}
+        # The picture files kept in memory that the drawing shows: {the name
+        # its shapes give the file (Previews.memory_picture): (its bytes, what
+        # _picture_parts gives for them)}.
+        self._memory_pictures = {}
         # {(finding function, its arguments): what it found}, and {file: its
         # file_stamp}, for this drawing.
         self._found, self._stamps = {}, {}
@@ -254,6 +298,7 @@ class _FolderResources(DrawingResources):
 
     def record_again(self, reads):
         self._card_files.update(reads.card_files)
+        self._memory_pictures.update(reads.memory_pictures)
 
     def _resolved(self, find, *arguments):
         """Returns find(self, *arguments), which is what a number or a name
@@ -284,14 +329,16 @@ class _FolderResources(DrawingResources):
         return self.previews.kept(file, read, stamp)
 
     def card_picture(self, path: str):
-        """Returns the name under which picture shapes show the file that
-        `path` names on a card given a folder, and remembers the file for
-        picture_file. The file is found through the cards' own checks.
+        """Returns the name under which picture shapes show the file at
+        `path`, and remembers the file for picture_file. If the card was
+        given a folder, the file is the one in that folder, found through
+        the cards' own checks. Otherwise it is the file kept in memory at
+        `path`, on a card or in ram/ (_memory_picture).
         Returns None, so that nothing is drawn, when there is no such file,
         or when it is a PictureBox picture file (.xi) that cannot be read."""
         local = self._resolved(_FolderResources._card_file, path)
         if local is None:
-            return None
+            return self._memory_picture(path)
         try:
             self._kept(local, _card_picture_parts)
         except NxwrightError:
@@ -300,6 +347,35 @@ class _FolderResources(DrawingResources):
         if self._reads is not None:
             self._reads.card_files[str(local)] = local
         return str(local)
+
+    def _memory_picture(self, path: str):
+        """Returns the name under which picture shapes show the picture
+        file kept in memory at `path`, and remembers its bytes for
+        picture_file. Returns None when there is no such file, or when it
+        is a PictureBox picture file (.xi) that cannot be read."""
+        name = self._resolved(_FolderResources._memory_name, path)
+        if name is None:
+            return None
+        data = self.memory_files[path]
+        parts = self.previews.memory_picture(path, data)[1]
+        if isinstance(parts, NxwrightError):
+            return None
+        self._memory_pictures[name] = (data, parts)
+        if self._reads is not None:
+            self._reads.memory_pictures[name] = (data, parts)
+        return name
+
+    def _memory_name(self, path: str):
+        """The name of the picture file kept in memory at `path`
+        (Previews.memory_picture), or None when no file is kept in memory at
+        `path`. Only a path on an SD card or in ram/ can have a file in
+        memory, and a card given a folder keeps its files in that folder
+        instead."""
+        data = self.memory_files.get(path)
+        if not isinstance(data, bytes) or not (path.startswith(CARDS) or is_ram_path(path)) \
+                or (self.cards is not None and self.cards.owns(path)):
+            return None
+        return self.previews.memory_picture(path, data)[0]
 
     def card_frames(self, path: str):
         """The frames of the video file `path` names on a card given a
@@ -343,15 +419,32 @@ class _FolderResources(DrawingResources):
         return pictures[picture_id] if picture_id < len(pictures) else None
 
     def picture_file(self, name: str) -> dict:
-        """What the webview loads the picture `name` from: "path", its file;
-        or, for a card's picture file of PictureBox's (.xi), "data", its JPEG
-        picture's data URL, and "mask", a PNG data URL of its transparency,
-        when it has some (_card_picture_parts); or, for a project's picture
-        whose file asks to be turned, "data", its pixels as they are stored
-        (_unturned_picture); or, for an SVG picture, "data", the PNG picture
-        drawn from it (Previews.svg_picture). And "version", the file's
-        modification time: the webview keeps pictures by their address, and
-        the version gives a changed file a new one."""
+        """Returns what the webview loads the picture `name` from: a dict with
+        "path", the picture's file, or with "data", a data URL, in these
+        cases:
+          - a PictureBox picture file (.xi) on a card: "data" is its JPEG
+            picture, and "mask" is a PNG data URL of its transparency, when
+            it has some (_card_picture_parts);
+          - a project's picture whose file asks to be turned: "data" is its
+            pixels as they are stored (_unturned_picture);
+          - an SVG picture: "data" is the PNG picture drawn from it
+            (Previews.svg_picture);
+          - a picture file kept in memory (_memory_picture): always "data",
+            because it has no file on the computer.
+        The dict also has "version", the file's modification time. The
+        webview keeps pictures by their address, and the version gives a
+        changed file a new address. The "version" of a picture file kept in
+        memory is its name, which changes with its bytes."""
+        if name in self._memory_pictures:
+            data, parts = self._memory_pictures[name]
+            found = {"version": name}
+            if parts is None:
+                found["data"] = data_url(data, _media_type(data))
+            else:
+                found["data"] = parts[0]
+                if parts[1] is not None:
+                    found["mask"] = parts[1]
+            return found
         path = self.picture_path(name)
         if name not in self._card_files and is_svg_picture(path.name):
             return self.previews.svg_picture(self.root, path, self.app["defines"])
@@ -420,10 +513,14 @@ class _Reads:
       - resolved: {(finding function, its arguments): what it found};
       - files: {file: its file_stamp, or None when missing};
       - card_files: {name: file}, the card files its picture shapes show,
-        by the name the shapes give them."""
+        by the name the shapes give them;
+      - memory_pictures: {name: (bytes, parts)}, the picture files kept in
+        memory that its picture shapes show, by the name the shapes give
+        them."""
 
     def __init__(self):
         self.resolved, self.files, self.card_files = {}, {}, {}
+        self.memory_pictures = {}
 
 
 def file_stamp(file: Path):
@@ -437,13 +534,27 @@ def file_stamp(file: Path):
 
 
 def _card_picture_parts(file: Path):
-    """Returns (its JPEG picture, its mask or None), both as data URLs, of a
-    card's picture file of PictureBox's (media_files.read_card_picture): the
-    mask a PNG picture of the JPEG's size, white, as transparent as the file
-    keeps each pixel. None for a file of another kind, such as a PNG or a
-    JPEG, which the webview loads as it is. Raises NxwrightError for a .xi
-    file that cannot be read."""
-    data = file.read_bytes()
+    """Returns what _picture_parts gives for the bytes of `file`, a picture
+    file on a card given a folder."""
+    return _picture_parts(file.read_bytes())
+
+
+def _media_type(data: bytes) -> str:
+    """Returns the media type to put in a data URL for the picture file
+    `data`: a JPEG's if the file starts with a JPEG's first two bytes, and a
+    PNG's for any other file."""
+    return "image/jpeg" if data.startswith(b"\xff\xd8") else "image/png"
+
+
+def _picture_parts(data: bytes):
+    """Returns what the webview needs to show `data`, the bytes of a picture
+    file. For one of PictureBox's picture files (.xi,
+    media_files.read_card_picture), that is (the JPEG picture, the mask),
+    both as data URLs. The mask is a white PNG picture of the JPEG's size,
+    as transparent at each pixel as the file makes that pixel, or None when
+    the file has no transparency. Returns None for a file of another kind,
+    such as a PNG or a JPEG, which the webview loads as it is. Raises
+    NxwrightError for a .xi file that cannot be read."""
     if not is_card_picture(data):
         return None
     picture = read_card_picture(data)

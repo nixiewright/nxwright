@@ -189,9 +189,11 @@ from nxwright.language.resource_names import ANIMATION, LISTS, SOUND, VIDEO, Res
 from nxwright.project.device_settings import TextCodec
 from nxwright.project.editor_language import SERIES_LACKED_VARIABLES
 from nxwright.project.editor_limits import screen_holds
-from nxwright.project.media_files import FROM_CARD, animation_frames, sound_frames, video_frames
+from nxwright.project.media_files import (FROM_CARD, animation_frames, is_card_picture,
+                                          read_card_picture, sound_frames, video_frames)
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.page_header import SYSTEM_PAGES
+from nxwright.project.pictures import read_picture
 from nxwright.source import source_folder as folders
 from nxwright.source.device_keys import (memory_file_storage_size, screen_model,
                                          settings_from_keys)
@@ -217,7 +219,8 @@ from nxwright.testing.opening_effects import OpeningEffects
 from nxwright.testing.pinyin_table import pinyin_table_of
 from nxwright.testing.recording import Place, TrackedValues
 from nxwright.testing.scrolling_texts import ScrollingText
-from nxwright.testing.sd_cards import INVALID_FILE_OPERATION, CardRefusal, FolderCards
+from nxwright.testing.ram_files import is_ram_path
+from nxwright.testing.sd_cards import CARDS, INVALID_FILE_OPERATION, CardRefusal, FolderCards
 from nxwright.testing.serial_line import (ADDRESSES, BUFFER, DROPPED, INSTRUCTION, NOT_ADDRESSED,
                                           REPARSE_END, SERIAL_BUFFER_SIZE, SerialLine,
                                           Transfer)
@@ -676,6 +679,7 @@ class Simulation:
                 # Drawn once its load event ends, as after a page change.
                 self.globals["painted"] = []
                 self._start_opening(self.fields[page])
+                self._check_picture_files(self.globals)
             if not returned:
                 self._run_event(page, (page, "loadend"))
         # Start values, which no code stored, may give `recmod` and `addr`.
@@ -1706,6 +1710,7 @@ class Simulation:
         self._slides_wait = self._kept_drawing is not None
         if not self._slides_wait:
             self._start_opening(machine.values)
+        self._check_picture_files(machine.values)
         # A load event that a return ended leaves out loadend.
         if (new, "loadend") in code and not returned:
             machine.run(code[(new, "loadend")], places.get((new, "loadend")))
@@ -1793,6 +1798,13 @@ class Simulation:
                 self._schedule(timer, machine.values)
         if head in self._clocked:
             self._clocked[head].changed(name[len(head) + 1:], machine.values, self.clock)
+        if self.page is not None and name == "%s.path" % head and not self.loading and \
+                self._kinds[self.page].get(head) == "external-picture" and \
+                self._switched("vis", head):
+            # A `path` set while the page's load event runs is not checked
+            # here. _check_picture_files checks it after the event, with the
+            # page's other external pictures.
+            self._check_picture_file(head, value, machine.values)
         if head is not None and self.page is not None and name[len(head) + 1:] in _LIST_MOVED:
             self._worked(head, name[len(head) + 1:], machine.values)
 
@@ -2753,6 +2765,40 @@ class Simulation:
             return b""
         return data
 
+    def _check_picture_files(self, card_values: dict):
+        """Checks the file of each external picture on the page shown, unless
+        `vis` has hidden the external picture (_check_picture_file). The
+        simulation calls this after the page's load event, because that is
+        when the Nextion Editor's simulator answered 0x06 for a missing file.
+        It did not answer for an external picture that the load event had
+        hidden."""
+        fields = self._fields_now()
+        for name in self._of_kind(self.page, "external-picture"):
+            if self._switched("vis", name):
+                self._check_picture_file(name, fields.get(name + ".path", ""), card_values)
+
+    def _check_picture_file(self, component: str, path, card_values: dict):
+        """Checks `path`, the file that the external picture `component` shows,
+        and writes to the log what stops the picture from showing.
+        `card_values` contains the files kept in memory.
+
+        If the file is missing, the simulation answers 0x06 when `bkcmd` is 2
+        or 3. It does not answer for a file that is not a picture. An empty
+        `path`, or one that is neither on a card nor in ram/, is not checked.
+        The Nextion Editor's simulator behaved the same way in each of these
+        cases."""
+        if not isinstance(path, str) or not (path.startswith(CARDS) or is_ram_path(path)):
+            return
+        try:
+            data = read_card_file(self.cards, path, card_values)
+        except (CardRefusal, OSError):
+            data = None
+        if data is None:
+            self._write_log("%s cannot show %s: there is no such file" % (component, path))
+            self._return_code(INVALID_FILE_OPERATION, False)
+        elif not _is_picture(data):
+            self._write_log("%s cannot show %s: the file is not a picture" % (component, path))
+
     def _loader(self, component: str, kind: str):
         """Returns the loader of what the player `component` plays, as
         MediaPlayer takes it: the animation, video, or sound (`kind`) its
@@ -2970,6 +3016,20 @@ def _series_has_gpio(series: str) -> bool:
     """Returns whether a screen of `series` has GPIO pins: every series but
     the Basic does, and so does a screen of no known model, None."""
     return series is None or PIN_NAMES[0] not in SERIES_LACKED_VARIABLES[series]
+
+
+def _is_picture(data: bytes) -> bool:
+    """Returns whether nxwright can read `data`, a file's bytes, as one of
+    the kinds of picture that an external picture can show: a PNG, a JPEG,
+    or PictureBox's .xi file."""
+    try:
+        if is_card_picture(data):
+            read_card_picture(data)
+        else:
+            read_picture(data)
+    except (NxwrightError, OSError, ValueError):
+        return False
+    return True
 
 
 def _owner(key: str) -> str:
