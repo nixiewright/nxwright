@@ -31,16 +31,21 @@ line at the right of the last column (table_layout). A scroll bar's thumb
 shows by `left`, at the right of the records, as a sliding text's does
 (ComponentPainter.scroll_thumb).
 
-The page preview has no SD card, so it draws the titles and lines alone; a
-simulation gives the records, read from the data file
-(testing/data_files.py). A record that could not open its file, as another
-record holds it, or 8 others are open, a simulation lists as UNOPENED: it
-is drawn black inside its border, with "Cannot open file:" and its path in
-white, as the Editor's simulator drew it
-(tests/fixtures/data-record/unopened.png). A record of
-no `path` is drawn alike with "File Lost:", in the page preview too, as
-the Editor's simulator and page view drew it
-(tests/fixtures/data-record/file-lost.png).
+The page preview has no SD card, so it draws only the titles and the grid
+lines. A simulation supplies the records, read from the data file
+(testing/data_files.py). In three cases the table shows a message in place
+of its records, in white on black inside the border:
+
+- A simulation lists a data record as UNOPENED when the data record could
+  not open its file, because another data record holds the file or other
+  data records hold 8 files already. The table shows "Cannot open file:"
+  and the path (tests/fixtures/data-record/unopened.png).
+- A data record whose `path` is empty shows "File Lost:"
+  (tests/fixtures/data-record/file-lost.png). The Nextion Editor shows the
+  same message in its page view, so the page preview draws it too.
+- A simulation lists a data record as FILE_LOST when its file in ram/ is
+  missing. The table shows "File Lost:" and the file's path
+  (tests/fixtures/data-record/ram-file-lost.png).
 """
 from dataclasses import dataclass
 
@@ -57,6 +62,10 @@ NEWEST_FIRST = 0
 # What a simulation lists for a data record that could not open its file,
 # as another record holds it, or 8 others are open, in place of its records.
 UNOPENED = object()
+# What a simulation lists for a data record whose file in ram/ is missing.
+# The record did not create the file, because the file did not fit in the
+# space the project sets aside, or because the record's `mode` is 0.
+FILE_LOST = object()
 # The colours of such a record's message, in RGB565.
 _BLACK, _WHITE = 0, 0xFFFF
 
@@ -163,6 +172,11 @@ def paint_data_record(painter):
     if painter.listing is UNOPENED:
         _paint_unopened(painter, font, inside,
                         "Cannot open file:\r\n%s" % painter.values.get("path", ""))
+        painter.border()
+        return
+    if painter.listing is FILE_LOST:
+        _paint_unopened(painter, font, inside,
+                        "File Lost:\r\n%s" % painter.values.get("path", ""))
         painter.border()
         return
     if not value(values, "path"):

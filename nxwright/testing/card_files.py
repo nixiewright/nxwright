@@ -15,6 +15,7 @@ import os
 
 from nxwright.drawing.data_record_drawing import table_layout
 from nxwright.drawing.page_drawing import inside_box
+from nxwright.testing import ram_files
 from nxwright.testing.data_files import data_file_for
 from nxwright.testing.sd_cards import CardRefusal
 
@@ -55,6 +56,47 @@ def write_card_file(cards, path: str, content: bytes, card_values: dict):
         cards.write(path, content)
     else:
         card_values.setdefault("file contents", {})[path] = content
+
+
+def why_not_made(path: str, attributes: dict, card_values: dict, space: int) -> str | None:
+    """Returns why the data record with `attributes` cannot create its
+    missing data file at `path`, or None if it can. The result is a reason
+    only for a path in ram/, where the screen creates a file only if the
+    file fits in `space`, the bytes the project sets aside for ram/ files
+    (ram_files.py). The result is also None when there is nothing to
+    create, because the file exists or the record's `mode` is not 1.
+    `card_values` contains the files kept in memory."""
+    files = card_values.get("file contents", {})
+    if not ram_files.is_ram_path(path) or path in files:
+        return None
+    new_file = data_file_for(attributes, None)
+    if new_file is None:
+        return None
+    return ram_files.why_no_new_file(files, path, len(new_file.to_bytes()), space)
+
+
+def data_file_at(path: str, attributes: dict, found, card_values: dict, space: int):
+    """Returns the data file of the data record with `attributes`. `found`
+    is the bytes of the record's file at `path`, or None if the file is
+    missing. Returns None if the record has no data file
+    (data_files.data_file_for), or if the file is missing from ram/ and
+    the record cannot create it (why_not_made)."""
+    if found is None and why_not_made(path, attributes, card_values, space) is not None:
+        return None
+    return data_file_for(attributes, found)
+
+
+def has_lost_ram_file(attributes: dict, card_values: dict, holder: tuple) -> bool:
+    """Returns whether the data record `holder`, (page, data record), with
+    `attributes`, shows "File Lost:" and its path. The record shows the
+    message when its `path` is in ram/ and the file is missing. A record
+    whose `mode` is 1 creates a missing file when it opens the file, so the
+    file can only be missing if it did not fit. A record that has not
+    opened a file yet (opens_no_file) shows its titles."""
+    path = attributes.get("path", "")
+    return (ram_files.is_ram_path(path)
+            and path not in card_values.get("file contents", {})
+            and not opens_no_file(attributes, card_values, holder))
 
 
 def held_file_key(cards, path: str) -> str:
@@ -144,52 +186,73 @@ def opens_no_file(attributes: dict, card_values: dict, holder: tuple) -> bool:
 
 
 def open_data_record(record: str, values, card_values: dict, cards, holder: tuple,
-                     codec) -> tuple:
-    """Opens the data record `record`'s data file as its page opens, and
-    sets its `qty`, `txt`, `maxval_y`, and `maxval_x` in `values`, where its
-    attributes are, from the file (data_record_values). A missing file is
-    made when `mode` is 1. One the folder will not give is left as it is,
-    and the table shows no records. The record, `holder`, (page, data
-    record), holds the file it opened; a file it may not open
-    (opening_refusal) it does not, and is shut out of it. One that opens no
-    file (opens_no_file) shows no records, and holds none. `card_values`
-    hold the card in memory and the holdings, `cards` the cards given
-    folders. Returns (whether it was shut out, notes of what could not be
-    opened, read, or made)."""
+                     codec, space: int) -> tuple:
+    """Opens the data file of the data record `record` when its page opens,
+    and sets the record's `qty`, `txt`, `maxval_y`, and `maxval_x` in
+    `values` from the file (data_record_values). `values` contains the
+    record's attributes. `holder` is the record as (page, data record).
+    `card_values` contains the card kept in memory and which record holds
+    which file. `cards` is the cards given folders.
+
+    - If the record opens the file, it holds the file from then on.
+    - If the file is missing and `mode` is 1, the record creates it first.
+    - If the file is missing from ram/ and does not fit in `space`, the
+      bytes the project sets aside for ram/ files, the record does not
+      create it (why_not_made), and the table shows no records.
+    - If the file cannot be read from the card's folder, it is left as it
+      is, and the table shows no records.
+    - If the record may not open the file (opening_refusal), it is shut
+      out of the file, and does not hold it.
+    - If the record opens no file yet (opens_no_file), it shows no
+      records, and does not hold a file.
+
+    Returns (how many times the screen answers 0x06, notes of what could
+    not be opened, read, or created). The Nextion Editor's simulator
+    answered twice for a record shut out of its file, and once for a record
+    that could not create its file in ram/."""
     attributes = component_attributes(record, values)
-    data_file, notes = None, []
+    data_file, notes, unmade = None, [], False
     if not opens_no_file(attributes, card_values, holder):
-        data_file, notes = _open_file(record, attributes, card_values, cards, holder)
+        data_file, notes, unmade = _open_file(record, attributes, card_values, cards, holder,
+                                              space)
     for attribute, value in data_record_values(record, values, data_file, codec).items():
         values["%s.%s" % (record, attribute)] = value
-    return holder in card_values.get(DATA_RECORDS_SHUT_OUT, {}), notes
+    if holder in card_values.get(DATA_RECORDS_SHUT_OUT, {}):
+        return 2, notes
+    return (1 if unmade else 0), notes
 
 
-def _open_file(record: str, attributes: dict, card_values: dict, cards, holder: tuple) -> tuple:
+def _open_file(record: str, attributes: dict, card_values: dict, cards, holder: tuple,
+               space: int) -> tuple:
     """Opens the file of the data record `record`, of `attributes`, for
-    open_data_record. Returns (the data file, or None, notes)."""
+    open_data_record. Returns (the data file or None, the notes, whether
+    the record could not create its file in ram/)."""
     path = attributes.get("path", "")
     data_file, notes = None, []
     refusal = opening_refusal(cards, path, card_values, holder)
     if refusal:
         shut_out(card_values, holder)
         notes.append("%s cannot open %s: %s" % (record, path, refusal))
-        return data_file, notes
+        return data_file, notes, False
     let_in(card_values, holder)
     try:
         found = read_card_file(cards, path, card_values)
     except (CardRefusal, OSError) as error:
         notes.append("%s cannot read %s: %s" % (record, path, error))
-    else:
-        data_file = data_file_for(attributes, found)
-        if found is None and data_file is not None:
-            try:
-                write_card_file(cards, path, data_file.to_bytes(), card_values)
-            except (CardRefusal, OSError) as error:
-                notes.append("%s cannot make %s: %s" % (record, path, error))
+        return data_file, notes, False
+    reason = why_not_made(path, attributes, card_values, space) if found is None else None
+    if reason is not None:
+        notes.append("%s cannot make %s: %s" % (record, path, reason))
+        return data_file, notes, True
+    data_file = data_file_for(attributes, found)
+    if found is None and data_file is not None:
+        try:
+            write_card_file(cards, path, data_file.to_bytes(), card_values)
+        except (CardRefusal, OSError) as error:
+            notes.append("%s cannot make %s: %s" % (record, path, error))
     if data_file is not None:
         hold_file(cards, path, card_values, holder)
-    return data_file, notes
+    return data_file, notes, False
 
 
 def is_shut_out(cards, path: str, card_values: dict, holder: tuple) -> bool:

@@ -112,3 +112,8 @@ log = "ad-1 au1 ad1 au1 cd-1 cu2 "
 # opened, in the folder's font NotoSans24, which nxwright draws from Noto
 # Sans as a new folder's. unopened.png: d0 opened the file, empty; d1 and d2
 # could not, as d0 held it, and showed "Cannot open file:" and the path.
+
+# ram-file-lost.page.toml: d0, whose data file does not fit in `ram/`, in a
+# project that sets no space aside for `ram/` files, in the folder's font
+# NotoSans24. ram-file-lost.png: once code set its `path` to `ram/d.data`,
+# d0 showed "File Lost:" and the path in white on black.

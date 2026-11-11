@@ -53,10 +53,21 @@ class TestMachineTest(unittest.TestCase):
         self.assertEqual(values["file commands"], [("redir", "a/", "b/")])
         self.assertNotIn("file errors", values)
 
+    def test_a_cards_name_in_upper_case_is_on_no_card(self):
+        lines = ['newfile "SD0/a.bin",8', 'delfile "SD0/a.bin"', 'refile "SD0/a.bin","SD0/b.bin"',
+                 'newdir "SD0/d/"', 'deldir "SD0/d/"', 'deldir "SD0"', 'twfile "SD1/t.txt",5']
+        values = run(lines, {"SD0/a.bin": b"kept"})
+        self.assertEqual(values["file contents"], {"SD0/a.bin": b"kept"})
+        self.assertEqual(values["file errors"],
+                         [("newfile", "SD0/a.bin"), ("delfile", "SD0/a.bin"),
+                          ("refile", "SD0/a.bin"), ("newdir", "SD0/d/"), ("deldir", "SD0/d/"),
+                          ("deldir", "SD0"), ("twfile", "SD1/t.txt")])
+        self.assertEqual(values.get("file commands", []), [])
+
     def test_commands_still_work_on_a_card_given_no_folder(self):
-        # The card's name may be in upper or lower case, and `sd0` alone is
-        # the card.
-        for card in ("sd0/", "sd1/", "SD0/"):
+        # The last command is given `sd0` alone, without the slash, which is
+        # the card itself.
+        for card in ("sd0/", "sd1/"):
             with self.subTest(card=card):
                 lines = ['newfile "%sa.bin",3' % card, 'newfile "%sb.bin",2' % card,
                          'delfile "%sb.bin"' % card, 'refile "%sa.bin","%sc.bin"' % (card, card),
@@ -91,7 +102,8 @@ class SimulationTest(SimulationTestCase):
 
     def file_lines(self, simulation: Simulation) -> list:
         """The log's lines about file commands."""
-        return [line for _, line in simulation.log if line.startswith(("SD card:", "ram/:"))]
+        return [line for _, line in simulation.log
+                if line.startswith(("SD card:", "ram/:", "File:"))]
 
     def test_each_of_the_five_commands_answers_06(self):
         simulation = self.simulation()
@@ -106,7 +118,7 @@ class SimulationTest(SimulationTestCase):
         simulation = self.simulation()
         self.typed(simulation, *LINES, 'twfile "r.txt",5')
         self.assertEqual(self.file_lines(simulation), [
-            "SD card: %s of %s refused: %s" % (command, path, NOT_ON_A_CARD)
+            "File: %s of %s refused: %s" % (command, path, NOT_ON_A_CARD)
             for command, path in ERRORS + [("twfile", "r.txt")]])
         self.assertEqual(NOT_ON_A_CARD, "the path does not start with sd0/, sd1/, or ram/")
 
@@ -114,7 +126,28 @@ class SimulationTest(SimulationTestCase):
         simulation = self.simulation()
         self.typed(simulation, 'newfile "y.bin","abc"')
         self.assertEqual(self.sent, [b"\x1b\xff\xff\xff"])
-        self.assertEqual(self.file_lines(simulation), ["SD card: newfile of y.bin refused"])
+        self.assertEqual(self.file_lines(simulation), ["File: newfile of y.bin refused"])
+
+    def test_a_cards_name_in_upper_case_leaves_the_cards_folder_alone(self):
+        # The stand-in for a user's folder is the temporary folder of setUp.
+        (self.card / "a.bin").write_bytes(b"kept")
+        simulation = self.simulation(cards={"sd0/": self.card})
+        self.typed(simulation, 'newfile "SD0/n.bin",8', 'delfile "SD0/a.bin"',
+                   'refile "SD0/a.bin","SD0/b.bin"', 'newdir "SD0/d/"', 'deldir "SD0/d/"',
+                   'twfile "SD0/t.txt",5')
+        self.assertEqual(self.sent, [REFUSED] * 6)
+        self.assertEqual([path.name for path in self.card.iterdir()], ["a.bin"])
+        self.assertEqual((self.card / "a.bin").read_bytes(), b"kept")
+        self.assertEqual(self.file_lines(simulation)[0],
+                         "File: newfile of SD0/n.bin refused: " + NOT_ON_A_CARD)
+
+    def test_a_cards_file_is_not_found_by_the_cards_name_in_upper_case(self):
+        (self.card / "a.bin").write_bytes(b"kept")
+        simulation = self.simulation(cards={"sd0/": self.card})
+        self.typed(simulation, "found.val=5", 'findfile "sd0/a.bin",found.val')
+        self.assertEqual(simulation.values()["found.val"], 1)
+        self.typed(simulation, 'findfile "SD0/a.bin",found.val')
+        self.assertEqual(simulation.values()["found.val"], 0)
 
     def test_beside_a_card_given_a_folder(self):
         # Nothing is created in the card's folder, and paths on the card still work.

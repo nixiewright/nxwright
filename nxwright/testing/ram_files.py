@@ -7,14 +7,17 @@ is set aside, the screen does not create any `ram/` file.
 
 The test machine keeps `ram/` files with its other files, in the dict
 "file contents" (editor_machine.py). The functions here apply newfile,
-twfile, and refile to a `ram/` path in that dict. Each returns None if
-the screen accepts the command, and otherwise the reason the screen
-ignores it, worded for the simulator's log. When the screen ignores a
+twfile, and refile to a `ram/` path in that dict, and check whether a data
+record can create its data file in `ram/`. Each returns None if the screen
+accepts the command or can create the file, and the reason otherwise,
+worded for the simulator's log. When the screen ignores a
 command, it answers 0x06, an invalid file operation, and the dict stays
 as it was unless the function's docstring describes a change.
 
 Every rule here follows what the Nextion Editor's simulator did for a
-screen of the Intelligent series. No real screen was probed.
+screen of the Intelligent series. No real screen has been checked yet.
+The probe in tools/screen/, in nxwright's repository, runs the checks on
+one.
 """
 
 # How the path of a file in the screen's memory starts. The Nextion
@@ -77,10 +80,13 @@ def _why_no_room(size: int, files: dict, space: int) -> str | None:
             "for ram/ files" % (most, space))
 
 
-def why_no_transfer(files: dict, path: str, size: int, space: int) -> str | None:
-    """Returns why `twfile` does not start a transfer of `size` bytes to
-    the `ram/` path `path`, or None if it starts one. The new file must
-    fit beside every file in `ram/`, including the one it will replace."""
+def why_no_new_file(files: dict, path: str, size: int, space: int) -> str | None:
+    """Returns why the screen cannot create a new file of `size` bytes at
+    the `ram/` path `path`, or None if it can. The new file must fit
+    beside every file already in `ram/`. The machine calls this before a
+    data record creates its data file, and for a `twfile` before its
+    transfer starts. The file that the `twfile` will replace still exists
+    then, so the new file must fit beside it."""
     if not _names_a_file(path):
         return NO_FOLDERS
     return _why_no_room(size, files, space)

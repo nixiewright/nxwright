@@ -306,12 +306,12 @@ In tests and the simulator, only `pa_q` and `pa_txt` run ([Chinese input](#chine
 
 The file commands act on the SD card's files: `findfile`, `finddir`, `newfile`, `delfile`, `newdir`, `deldir`, `refile`, `redir`, `rdfile`, `twfile`, file streams, a file browser's `up()`, and a data record's methods.
 
+- A path on an SD card starts with `sd0/` or `sd1/`, in lower case.
 - In a test, the card's files are in the values `"file contents"` and `"existing"` ([What a test can check](testing.md#what-a-test-can-check)).
 - In the simulator, a card may be a folder of your computer ([The SD cards](simulator.md#the-sd-cards)).
 - A file whose path starts with `ram/` is kept in the screen's memory ([Files in `ram/`](simulator.md#files-in-ram)).
-- If a path such as `x.bin` is neither on a card (`sd0/` or `sd1/`) nor in `ram/`, then `newfile`, `delfile`, `refile`, `newdir`, and `deldir` do not change anything, and answer 0x06.
-- What the commands change is recorded in `"file commands"`.
-- What the screen ignores is recorded in `"file errors"`.
+- If a path such as `x.bin` or `SD0/a.bin` is neither on a card nor in `ram/`, then `newfile`, `delfile`, `refile`, `newdir`, and `deldir` do not change anything, and answer 0x06.
+- What the commands change is recorded in `"file commands"`, and what the screen ignores in `"file errors"`.
 
 ### `newfile`
 
@@ -356,7 +356,7 @@ A data record's methods change its data file, `path`: `insert("a^b^c")`, `delete
 
 - Records are numbered from the oldest, which is 0.
 - A method's text can come from a variable, such as `insert(t0.txt)`.
-- If the file doesn't exist and `mode` is 1, the method creates it first.
+- If the file doesn't exist and `mode` is 1, the method creates it first. Code setting the data record's `path` creates a missing file too.
 - The first data record to open a file keeps it, until code changes that record's `path`.
   - Another data record with the same file does not open it, and that record's methods have no effect and are not reported. Once the file is free, the record's next method opens it.
   - Code setting a data record's `path` to a file another one keeps answers 0x06. This is recorded in `"file errors"` as `("open", path)`.
@@ -374,6 +374,7 @@ These are ignored, and recorded:
 - a record number past the last record;
 - a `delete(n, count)` whose `count` is 0 or below, or more than the records from `n` on (for a count below 0, see [Different from the Nextion Editor's simulator](simulator.md#different-from-the-nextion-editors-simulator));
 - a missing file, with `mode` 0;
+- a file in `ram/` that the data record cannot create, because the file does not fit in the space your project sets aside ([Files in `ram/`](simulator.md#files-in-ram));
 - a file in the card's folder that cannot be read or written. If nxwright could not read a file, it never creates a new file over it.
 
 After a call:

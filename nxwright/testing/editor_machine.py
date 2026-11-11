@@ -52,11 +52,11 @@ from nxwright.project.zi_font import counted_characters
 from nxwright.source.page_source import reference_kind
 from nxwright.testing.card_files import (DATA_FILES_HELD, DATA_RECORDS_GIVEN_A_PATH,
                                          DATA_RECORDS_SHUT_OUT, component_attributes,
-                                         data_record_values, given_a_path, hold_file,
-                                         is_shut_out, let_go_of_files, let_in,
+                                         data_file_at, data_record_values, given_a_path,
+                                         hold_file, is_shut_out, let_go_of_files, let_in,
                                          open_data_record, opening_refusal, opens_no_file,
-                                         read_card_file, shut_out, write_card_file)
-from nxwright.testing.data_files import data_file_for
+                                         read_card_file, shut_out, why_not_made,
+                                         write_card_file)
 from nxwright.testing.gpio_pins import PIN_NAMES
 from nxwright.testing.list_working import (COMBO_BOX_CHOICES, FILE_BROWSER_LISTINGS, UNSETTLED,
                                            ListWorking)
@@ -388,8 +388,9 @@ class EditorMachine:
           - a data record's method that could not be carried out
             (_data_record).
           - a data record's `path` set to a file that another data record
-            keeps open, recorded as ("open", path). The screen answers
-            0x06 (_open_named_file).
+            keeps open, or to a missing file in ram/ that does not fit
+            there, recorded as ("open", path). The screen answers 0x06
+            (_open_named_file).
       - "file commands": the commands that changed files, a data record's
         methods among them, and a file browser's `up()`, in order.
       - "data files held": the files the data records hold
@@ -963,8 +964,8 @@ class EditorMachine:
         screen answers:
           - 0x1A if the size is not a number;
           - 0x06 if the size is 0 or below;
-          - 0x06 if the path is neither on a card (sd0/ or sd1/) nor in
-            ram/;
+          - 0x06 if the path is neither on a card (sd0/ or sd1/, in lower
+            case) nor in ram/;
           - 0x06 if the path is in ram/, and has a folder in it or the
             file does not fit in the space the project sets aside
             (ram_files.py);
@@ -990,11 +991,11 @@ class EditorMachine:
         elif size <= 0:
             code = INVALID_FILE_OPERATION
         elif ram_files.is_ram_path(path):
-            reason = ram_files.why_no_transfer(self.values.get("file contents", {}), path, size,
+            reason = ram_files.why_no_new_file(self.values.get("file contents", {}), path, size,
                                                self.memory_file_storage_size)
             if reason is not None:
                 code = INVALID_FILE_OPERATION
-        elif not (isinstance(path, str) and path.lower().startswith(CARDS)):
+        elif not (isinstance(path, str) and path.startswith(CARDS)):
             code, reason = INVALID_FILE_OPERATION, NOT_ON_A_CARD
         elif self._on_card(path):
             has_folder = self._on_folder("twfile", path,
@@ -1503,9 +1504,10 @@ class EditorMachine:
         "file contents"; a missing one is made first when `mode` is 1. What
         cannot be done is recorded with the file errors, changing nothing: a
         number where a text goes, which the Editor compiles and the screen
-        ignores, a missing file with `mode` 0, a damaged one, one the folder
-        will not give or take, a record longer than `lenth` bytes, or a
-        number past the last record. A record that opens no file, its `init`
+        ignores, a missing file with `mode` 0, a missing file in ram/ that
+        does not fit there, a damaged one, one the folder will not give or
+        take, a record longer than `lenth` bytes, or a number past the last
+        record. A record that opens no file, its `init`
         being 1 (_opens_no_file), changes nothing, the call counting as
         done. Afterwards `qty` counts the records, and `txt` holds the
         chosen one's text (`val`), or nothing when `val` names none."""
@@ -1561,10 +1563,19 @@ class EditorMachine:
         self._show_record(record, data_file)
 
     def _data_file(self, record: str):
-        """The data file of the data record `record`, on a card's folder or in
-        "file contents", made anew when it is missing and `mode` is 1; None
-        when it is missing otherwise, damaged, or one the folder will not
-        give."""
+        """Returns the data file of the data record `record`, read from a
+        card's folder or from "file contents". If the file is missing and
+        `mode` is 1, the result is a new data file. Returns None if the
+        file is missing and `mode` is not 1, if the file is damaged or
+        cannot be read from the card's folder, or if it is missing from
+        ram/ and does not fit there (card_files.why_not_made)."""
+        return self._found_data_file(record)[0]
+
+    def _found_data_file(self, record: str) -> tuple:
+        """Returns (data file, is new) for the data record `record`. See
+        _data_file for what the data file is. The data file is new if the
+        record's file was missing, and the caller still has to write a new
+        data file."""
         attributes = component_attributes(record, self._layered())
         path = attributes.get("path", "")
         found = self._on_folder("read", path,
@@ -1572,8 +1583,10 @@ class EditorMachine:
                                 refused=False)
         # Unread is not missing: a file made anew would be written over it.
         if found is False:
-            return None
-        return data_file_for(attributes, found)
+            return None, False
+        data_file = data_file_at(path, attributes, found, self.values,
+                                 self.memory_file_storage_size)
+        return data_file, found is None and data_file is not None
 
     def _choose_record(self, record: str, number) -> bool:
         """Code sets the data record `record`'s `val` to `number`: its `txt`
@@ -1627,10 +1640,19 @@ class EditorMachine:
         return self._data_file(record)
 
     def _open_named_file(self, record: str):
-        """Code set the data record `record`'s `path`: it lets go of the file
-        it held, and opens the one its path names, which it then holds. When
-        it may not open that (_opening_refused), it opens nothing, is shut
-        out of it, and answers 0x06."""
+        """Runs after code sets the `path` of the data record `record`. The
+        record lets go of the file it held, opens the file at its new path,
+        and holds that file. If the record may not open the file
+        (_opening_refused), it opens nothing, it is shut out of the file,
+        and the screen answers 0x06.
+
+        If the file is missing and `mode` is 1, the record writes it at
+        once. In the Nextion Editor's simulator, `findfile` found the file
+        before any method ran. The record does not create a missing file in
+        ram/ that does not fit there (card_files.why_not_made). In that case
+        the record opens nothing, the screen answers 0x06, and
+        ("open", path) is recorded in "file errors" with the reason for the
+        simulator's log."""
         holder = self._holder(record)
         given_a_path(self.values, holder)
         let_go_of_files(self.values, holder)
@@ -1642,7 +1664,20 @@ class EditorMachine:
             self._show_record(record, None)
             return
         let_in(self.values, holder)
-        data_file = self._data_file(record)
+        data_file, new = self._found_data_file(record)
+        if new:
+            content = data_file.to_bytes()
+            # A file the folder will not take is not opened.
+            if self._on_folder("open", path,
+                               lambda: write_card_file(self.cards, path, content, self.values),
+                               refused=True):
+                data_file = None
+        elif data_file is None:
+            reason = why_not_made(path, component_attributes(record, self._layered()),
+                                  self.values, self.memory_file_storage_size)
+            if reason is not None:
+                self._record("file errors", ("open", path), reason)
+                self._refused(INVALID_FILE_OPERATION)
         if data_file is not None:
             hold_file(self.cards, path, self.values, holder)
         self._show_record(record, data_file)
@@ -2009,7 +2044,7 @@ class EditorMachine:
             kind = TYPE_NAMES.get(self._type_of(name))
             if kind == "data-record":
                 open_data_record(name, layered, self.values, self.cards, self._holder(name),
-                                 self._codec)
+                                 self._codec, self.memory_file_storage_size)
             self.list_working.opened(self.page, name, kind, layered, self.values)
 
     def _operand(self, text: str):

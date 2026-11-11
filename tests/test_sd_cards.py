@@ -95,6 +95,18 @@ class GuardTest(unittest.TestCase):
                     self.cards._deletable(path)
         self.assertTrue(self.root.is_dir())
 
+    def test_a_path_on_none_of_the_cards_is_refused(self):
+        # A card's name in upper case, a card given no folder, and no card.
+        for path in ("SD0/a.cfg", "SD0", "sd1/a.cfg", "x.bin"):
+            with self.subTest(path=path):
+                self.assertFalse(self.cards.owns(path))
+                # These three methods only work out where a path lies, so the test
+                # deletes nothing even if a path is not refused.
+                for act in (self.cards.local, self.cards.find_file, self.cards._deletable):
+                    with self.assertRaises(CardRefusal):
+                        act(path)
+        self.assertTrue(self.root.is_dir())
+
     def test_a_full_folder_is_not_deleted(self):
         # The stand-in: a folder this test made, with a file in it.
         (self.root / "full").mkdir()

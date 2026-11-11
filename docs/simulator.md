@@ -100,7 +100,7 @@ The log, in the Debug Console, lists what reached outside the screen, with the s
 
 - what it sent on the serial line;
 - each EEPROM and GPIO access, with its value;
-- the file commands, on the SD cards and in `ram/`;
+- the file commands;
 - the commands that the simulator records but does not run ([screen-code.md](screen-code.md#commands-recorded-but-not-run)).
 
 ## Starting again
@@ -310,6 +310,7 @@ A sliding text lays out its lines the same way as a text, from the top inside th
 ### File browsers
 
 - A file browser lists its folder, `dir`, when its page opens, and whenever code sets `dir`.
+- If `dir` is in `ram/`, the file browser has no entries, even when `ram/` has files.
 - `up()` goes to the folder above and lists it, but goes no higher than the card's own folder.
 - The file browser lists the folders first, unless `psta` is 0, and then the files its `filter` lets through. Each group is in alphabetical order, ignoring capitals.
 - `qty` counts the entries.
@@ -333,7 +334,7 @@ A sliding text lays out its lines the same way as a text, from the top inside th
 
 ### Data records
 
-- When its page opens, a data record reads its data file. If the file doesn't exist and `mode` is 1, the data record creates it.
+- A data record reads its data file when its page opens, and whenever code sets its `path`. If the file doesn't exist and `mode` is 1, the data record creates it.
 - When `order` is 0, the newest record is at the top of the table.
 - The data record's methods change the file, and the table follows ([Data records](screen-code.md#data-records)).
 - Code setting `val_y` scrolls the records, up to 32 pixels past `maxval_y`, and up to 32 pixels above their top, which leaves an empty band under the titles.
@@ -353,7 +354,7 @@ Only one data record can use a data file at a time. When two data records give t
 
 Data records keep at most 8 files at once, across pages. A data record that finds 8 kept by others cannot open its own, the same as when another data record keeps it. A data record that keeps a file can still change its `path`, because it lets the old file go first.
 
-A data record whose `path` is empty shows "File Lost:". It does not keep a file, so it does not shut out any other data record, and it does not send an error code.
+A data record whose `path` is empty shows "File Lost:". It does not keep a file, so it does not shut out any other data record, and it does not send an error code. A data record also shows "File Lost:", followed by the path, when its file in `ram/` is missing ([Files in `ram/`](#files-in-ram)).
 
 A data record whose `init` is 1 does not open the file its page file gives:
 
@@ -713,12 +714,12 @@ The levels stay when the app starts again, because they belong to what is wired 
 
 The screen's SD cards can be folders of your computer. A launch configuration's `sdCard0` gives one for `sd0/`, and `sdCard1` one for `sd1/`, each by its full path. A drive's root folder is rejected. The Nextion Editor's simulator keeps its own cards in `sdcard0` and `sdcard1`, in its settings folder.
 
-- `sd0/presets/a.cfg` is then the file `presets/a.cfg` in the folder.
+- `sd0/presets/a.cfg` is the file `presets/a.cfg` in the folder given for `sd0/`.
 - The app's file commands act on the folder's files, for real. What they change stays after the simulation, even if you step back or start again.
 - To start each simulation with the same files, replace the folder with a saved copy before each launch, with a `preLaunchTask`. See [The EEPROM](#the-eeprom) for an example of how to do this for a single file.
 - If a card has no folder, its files are kept in memory, the same way as in a test.
 - A file whose path starts with `ram/` is kept in memory too, in the space your project sets aside for `ram/` files ([Files in `ram/`](#files-in-ram)).
-- The screen does not create, delete, or rename anything on a path such as `x.bin`, which is neither on a card nor in `ram/`.
+- The screen does not create, delete, or rename anything on a path such as `x.bin`, which is neither on a card nor in `ram/`. `sd0/` and `sd1/` must be in lower case, so `SD0/a.bin` is not on a card either.
 
 ### External pictures
 
@@ -747,15 +748,17 @@ Other commands act on the folder like this:
 
 An ignored command sends one of these error codes ([Return codes](#return-codes)):
 
-- 0x06 for a `newfile` into a folder that does not exist, or of a size below 0;
-- 0x06 for a `refile` of a file that does not exist, onto one that does, or into a missing folder;
-- 0x06 for every ignored `redir`;
-- 0x06 for a `newfile`, `delfile`, `refile`, `newdir`, or `deldir` on a path that is neither on a card nor in `ram/`;
-- 0x06 for an `rdfile` of a file that does not exist, or of bytes past its end;
-- 0x06 for a `twfile` to a path that is neither on a card nor in `ram/`, of a size of 0 or below, or into a folder that does not exist;
+- 0x06 for:
+  - a `newfile`, `delfile`, `refile`, `newdir`, `deldir`, or `twfile` on a path that is neither on a card nor in `ram/`;
+  - a `newfile` into a folder that does not exist, or of a size below 0;
+  - a `twfile` into a folder that does not exist, or of a size of 0 or below;
+  - a `refile` of a file that does not exist, onto one that does, or into a missing folder;
+  - every ignored `redir`;
+  - an `rdfile` of a file that does not exist, or of bytes past its end;
+- 0x1B for a `newfile` whose size is not a number;
 - 0x1A for a `twfile` whose size is not a number;
 - 0x01 for a `delfile` or `deldir` of what does not exist;
-- 0x01 for the other commands above that are ignored to keep your files safe, such as a path that leaves the card's folder, or a `deldir` of a full folder. A screen deletes a full folder, and answers 0x01 too.
+- 0x01 for the other commands above that are ignored to keep your files safe, such as a command whose path leaves the card's folder, or a `deldir` of a full folder. A screen deletes a full folder, and answers 0x01 too.
 
 What is ignored goes to the log, and, in a test, to `"file errors"` ([testing.md](testing.md)).
 
@@ -778,11 +781,16 @@ The file commands follow these rules in `ram/`:
 - `twfile` needs room for the new file beside every file in `ram/`, including the one it will replace.
 - `refile` renames a file within `ram/`.
 
-The screen ignores these commands, and sends 0x06. The log gives the reason for each one:
+The screen ignores each of the following in `ram/`, and sends 0x06. The log gives the reason:
 
 - a `newfile` or a `twfile` of a file that does not fit, or of a file in a folder, such as `ram/logs/a.bin`;
 - every `newdir`;
 - a `refile` of a file that does not exist, onto a name that exists, or to a path outside `ram/`.
+
+If a data record's file in `ram/` is missing, the data record shows "File Lost:" and the file's path. There are two ways for the file to be missing:
+
+- The file did not fit in the space left, so the data record could not create it. The screen sends 0x06 when the page opens and when code sets the data record's `path`, and the log gives the reason. The data record's `qty` is 0, and its methods do not change anything, and do not send an error code.
+- `mode` is 0, so the data record does not create the file. The screen does not send an error code.
 
 These rules follow what the Nextion Editor's simulator does, and have not been checked on a real screen.
 

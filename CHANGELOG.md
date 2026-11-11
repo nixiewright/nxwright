@@ -4,6 +4,13 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.16] - 2026-11-11
+
+- `sd0/` and `sd1/` must now be in lower case, matching the behavior of screens.
+- A data record now creates its data file in `ram/` only if the file fits there.
+- A data record with no file in `ram/` now shows "File Lost:" and the file's path.
+- Setting a data record's `path` now creates a missing data file at once, if `mode` is 1.
+
 ### [0.3.15] - 2026-11-11
 
 - `newfile`, `delfile`, `refile`, `newdir`, and `deldir` now need a path on an SD card or in `ram/`.

@@ -5,18 +5,28 @@ test machine (editor_machine.py) works them after each store, and as a
 test's page opens (EditorMachine.open_page); the simulation (simulation.py)
 as a page opens and on a touch; so a test and the simulator work them alike.
 
-- A file browser lists its folder, `dir`, as its page opens and when code
-  sets `dir`: its folders, unless `psta` is 0, then the files its `filter`
-  lets through, each in alphabetical order, capitals ignored. `qty` counts
-  them, nothing is selected (`val` -1, `txt` empty), and it is scrolled to
-  its top, as far as `maxval_y` lets its entries scroll, which its icons'
-  size and its font's height give. Its `val` picks an entry, whose name
-  `txt` gives, a folder's ending with "/"; its `val_y` scrolls it up to 32
-  pixels past `maxval_y`, as a sliding text's does: the Editor gave 32 for
-  60 to a browser whose entries all fit, and 110 for 500 to one of
-  `maxval_y` 78. `up()` goes to the folder above, no higher than its card's
-  own, and lists it. A listing code asks for leaves `maxval_y` to the next
-  settle point, and its `val_y` then goes no further than `maxval_y`.
+- A file browser lists its folder, `dir`, when its page opens and when
+  code sets `dir`.
+  - The listing has the folders first, unless `psta` is 0, then the files
+    that match `filter`. Each group is in alphabetical order, ignoring
+    capitals. A browser whose `dir` is in ram/ has no entries, whatever
+    files ram/ has.
+  - Each listing sets `qty` to the number of entries, clears the selection
+    (`val` -1, `txt` empty), and scrolls to the top. It also works out
+    `maxval_y`, how far the entries scroll, from the icons' size and the
+    font's height.
+  - Code setting `val` picks an entry, and `txt` gives its name. A folder's
+    name ends with "/".
+  - Code setting `val_y` scrolls the entries up to 32 pixels past
+    `maxval_y`, the same limit as a sliding text's. In the Nextion Editor's
+    simulator, a browser whose entries all fit read back 32 after code set
+    60, and a browser whose `maxval_y` is 78 read back 110 after code set
+    500.
+  - `up()` goes to the folder above and lists it, but goes no higher than
+    the card's own folder.
+  - When code sets `dir` or runs `up()`, `maxval_y` takes its new value
+    only at the next settle point (defined below), and `val_y` then goes
+    no further than `maxval_y`.
 - A select's `val` picks a line of its `path`, whose text `txt` gives; the
   machine refuses a `val` past its last line, or below 0.
 - A sliding text's new `txt` or `font` works out its `maxval_y` from its
@@ -50,6 +60,7 @@ from nxwright.drawing.page_drawing import inside_box
 from nxwright.drawing.sliding_text_drawing import (ABOVE_BY_CODE, FURTHER_BY_CODE, SlidingLayout,
                                                    sliding_layout)
 from nxwright.drawing.text_pictures import path_lines
+from nxwright.testing.ram_files import is_ram_path
 from nxwright.testing.sd_cards import CardRefusal
 
 # The records of what stays between stores, among the machine's values.
@@ -241,15 +252,20 @@ class ListWorking:
         values[component + ".maxval_y"] = self.sliding_layout(component, values).most
 
     def _entries(self, folder: str, records: dict) -> set:
-        """The names in a folder: of a card given a folder of the computer,
-        or else of the card in memory, its files and the paths in
-        "existing", a folder's ending with "/"."""
+        """Returns the names of the entries in `folder`. On a card given a
+        folder of the computer, they are that folder's entries. On the card
+        in memory, they come from "file contents" and from the paths in
+        "existing". A folder's name ends with "/". A folder in ram/ has no
+        entries, because the Nextion Editor's simulator listed none for
+        ram/ even when `findfile` found a file in ram/."""
         if self.cards is not None and self.cards.owns(folder):
             try:
                 return set(self.cards.entries(folder))
             except (CardRefusal, OSError):
                 return set()
         folder = folder if folder.endswith("/") else folder + "/"
+        if is_ram_path(folder):
+            return set()
         names = set()
         for path in [*records.get("existing", ()), *records.get("file contents", {})]:
             if isinstance(path, str) and path.startswith(folder) and path != folder:

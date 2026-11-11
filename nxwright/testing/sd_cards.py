@@ -1,10 +1,11 @@
 """A simulation's SD cards as folders of the computer.
 
-The screen has two SD cards, `sd0/` and `sd1/`. The Nextion Editor's
-simulator keeps each as a folder of its own, `sdcard0` and `sdcard1` in its
-settings folder, so that the app's files are real files. A simulation can
-be given any folder for each (`FolderCards`). `sd0/presets/a.cfg` is then
-the file `presets/a.cfg` in the folder given for `sd0/`.
+The screen has two SD cards. A path on one starts with `sd0/` or `sd1/`,
+in lower case. The Nextion Editor's simulator keeps each card as a folder
+of its own, `sdcard0` and `sdcard1` in its settings folder, so that the
+app's files are real files. A simulation can be given any folder for each
+(`FolderCards`). `sd0/presets/a.cfg` is then the file `presets/a.cfg` in
+the folder given for `sd0/`.
 
 Other paths never reach a folder. A path on a card given no folder stays in
 the test machine's memory, the same way as when no folders are given
@@ -37,12 +38,12 @@ INVALID_FILE_OPERATION = 0x06
 
 def card_of(path: str):
     """Returns the card a path is on, "sd0/" or "sd1/", or None for a path
-    on neither. Only the start of the path decides. The card's name may be
-    in upper or lower case, and `sd0` alone, without the slash, is the card
-    itself."""
-    lowered = path.lower()
+    on neither. A path is on a card if it starts with the card's name, in
+    lower case. `sd0` alone, without the slash, is the card itself.
+    `SD0/a.bin` is on no card, because the Nextion Editor's simulator
+    answered `newfile "SD0/a.bin",8` with 0x06."""
     return next((card for card in CARDS
-                 if lowered.startswith(card) or lowered == card[:-1]), None)
+                 if path.startswith(card) or path == card[:-1]), None)
 
 
 class CardRefusal(Exception):
@@ -90,9 +91,12 @@ def inside(root: Path, relative: str) -> Path:
 
 
 class FolderCards:
-    """The cards given folders: {card ("sd0/"), its folder}. `owns(path)`
-    says whether a path is on one of them; the other methods act on such a
-    path, raising CardRefusal where they would harm."""
+    """The cards that were given folders. `folders` is {card: its folder},
+    with each card written "sd0/" or "sd1/". `owns(path)` returns whether
+    a path is on one of these cards. The other methods act on a path on
+    one of these cards, and raise CardRefusal where they would do harm. A
+    path on none of these cards raises CardRefusal too, so that it never
+    reaches a folder."""
 
     def __init__(self, folders: dict):
         self.folders = {card: card_folder(str(folder)) for card, folder in folders.items()
@@ -106,13 +110,15 @@ class FolderCards:
         return card if card in self.folders else None
 
     def local(self, path: str) -> Path:
-        """Returns where a path on a card lies on the computer."""
-        card = self._card_of(path)
+        """Returns where a path on a card lies on the computer. Raises
+        CardRefusal if the path is not on a card that has a folder."""
+        card = self._card_of(path) if isinstance(path, str) else None
+        if card is None:
+            raise CardRefusal("%s is not on a card that has a folder" % (path,))
         return inside(self.folders[card], path[len(card):])
 
     def is_root(self, path: str) -> bool:
-        card = self._card_of(path)
-        return self.local(path) == self.folders[card]
+        return self.local(path) == self.folders[self._card_of(path)]
 
     # What the app's file commands do.
 

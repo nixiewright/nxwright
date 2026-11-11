@@ -4,6 +4,7 @@ vendor documents them."""
 from nxwright import NxwrightError
 from nxwright.project.device_settings import TextCodec
 from nxwright.testing.ram_files import is_ram_path
+from nxwright.testing.sd_cards import card_of
 
 
 # The three bytes that end what the screen sends.
@@ -149,8 +150,17 @@ def _gpio_line(entry: tuple, encoding: str) -> str:
 def _file_line(entry: tuple, said: str) -> str:
     """Returns the log's line about a file command. The line starts with
     where the entry's path is: `ram/` for a file in the screen's memory,
-    and `SD card` for any other path."""
-    return "%s: %s" % ("ram/" if is_ram_path(entry[1]) else "SD card", said)
+    `SD card` for a path on a card, and `File` for any other path. An
+    entry has no path when a file stream reads or writes with no file
+    open, and its line starts with `File` too."""
+    path = entry[1]
+    if is_ram_path(path):
+        where = "ram/"
+    elif isinstance(path, str) and card_of(path) is not None:
+        where = "SD card"
+    else:
+        where = "File"
+    return "%s: %s" % (where, said)
 
 
 # The records of what reached outside the screen, each with how to log an

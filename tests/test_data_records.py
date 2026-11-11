@@ -11,7 +11,8 @@ import unittest
 from unittest import mock
 
 from nxwright import NxwrightError
-from nxwright.drawing.data_record_drawing import UNOPENED, record_at, table_layout
+from nxwright.drawing.data_record_drawing import (FILE_LOST, UNOPENED, record_at,
+                                                  table_layout)
 from nxwright.drawing.page_drawing import draw_page, inside_box
 from nxwright.drawing.screen_pictures import paint_drawing
 from nxwright.project.font_drawing import draw_font_block
@@ -324,8 +325,8 @@ class SharedFileTest(unittest.TestCase):
                          (2, {}))
 
     def test_two_spellings_of_one_file_on_a_card_given_a_folder(self):
-        # The card's name in capitals is the same card, and so the same file.
-        self.values["d1.path"] = "SD0/" + self.path[len("sd0/"):]
+        # A path through "." is the same file.
+        self.values["d1.path"] = "sd0/./" + self.path[len("sd0/"):]
         with tempfile.TemporaryDirectory() as folder:
             machine = EditorMachine(self.values, cards=FolderCards({"sd0/": folder}))
             machine.run(['d0.insert("a^1^x")', 'd1.insert("b^2^y")'])
@@ -459,6 +460,12 @@ class EditorDataRecordTest(unittest.TestCase):
         for listings in ({"d0": [], "d1": []}, {}):
             self.assert_drawn_alike("file-lost", "file-lost.png", listings,
                                     resources=NotoSans24())
+
+    def test_a_record_with_no_file_in_ram(self):
+        # ram-file-lost.png: d0, whose data file did not fit in `ram/`, showed
+        # "File Lost:" and its path in white on black.
+        self.assert_drawn_alike("ram-file-lost", "ram-file-lost.png", {"d0": FILE_LOST},
+                                resources=NotoSans24())
 
     def test_the_orders_and_the_chosen_record(self):
         three = records_of("three.data")

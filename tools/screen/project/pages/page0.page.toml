@@ -1,0 +1,68 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+
+[[component]]
+name = "t0"
+type = "text"
+x = 0
+y = 0
+w = 300
+h = 30
+txt = "nxwright's probe of ram/"
+txt_maxl = 30
+
+[[component]]
+name = "fs0"
+type = "file-stream"
+
+[[component]]
+name = "d0"
+type = "data-record"
+x = 0
+y = 40
+w = 300
+h = 200
+init = 1
+path = "sd0/nxprobe-d0.data"
+lenth = 16
+maxval = 10
+dir = "a^b"
+mode = 1
+
+[[component]]
+name = "d1"
+type = "data-record"
+x = 0
+y = 250
+w = 300
+h = 200
+init = 1
+path = "sd0/nxprobe-d1.data"
+lenth = 63
+maxval = 1000
+dir = "a^b"
+mode = 1
+
+[[component]]
+name = "f0"
+type = "file-browser"
+x = 320
+y = 40
+w = 300
+h = 300
+dir = "sd0/"
+psta = 0
+
+[[component]]
+name = "p0"
+type = "external-picture"
+x = 640
+y = 40
+w = 120
+h = 120
+path = ""

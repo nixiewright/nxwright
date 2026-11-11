@@ -1,0 +1,21 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 800
+h = 480
+
+[[component]]
+name = "d0"
+type = "data-record"
+x = 0
+y = 40
+w = 300
+h = 200
+init = 1
+path = "ram/d.data"
+lenth = 16
+maxval = 10
+dir = "a^b"
+mode = 1

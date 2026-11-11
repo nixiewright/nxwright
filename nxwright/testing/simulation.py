@@ -176,7 +176,7 @@ import struct
 import tomli_w
 
 from nxwright import NxwrightError
-from nxwright.drawing.data_record_drawing import UNOPENED, record_at
+from nxwright.drawing.data_record_drawing import FILE_LOST, UNOPENED, record_at
 from nxwright.drawing.media_drawing import played_animation
 from nxwright.drawing.page_drawing import inside_box
 from nxwright.drawing.select_drawing import SELECT_DEFAULTS
@@ -198,10 +198,10 @@ from nxwright.source.device_keys import (memory_file_storage_size, screen_model,
 from nxwright.source.page_source import Component
 from nxwright.testing.card_files import (DATA_FILES_HELD, DATA_RECORDS_GIVEN_A_PATH,
                                          DATA_RECORDS_SHUT_OUT, component_attributes,
-                                         data_record_values, is_shut_out, open_data_record,
-                                         opens_no_file, read_card_file, write_card_file)
+                                         data_file_at, data_record_values, has_lost_ram_file,
+                                         is_shut_out, open_data_record, opens_no_file,
+                                         read_card_file, write_card_file)
 from nxwright.testing.combo_boxes import ComboBoxes
-from nxwright.testing.data_files import data_file_for
 from nxwright.testing.editor_machine import (EEPROM_SIZE, PINYIN_COMMANDS, RECORD_STARTS, RECORDS,
                                              CompileRefusal, EditorMachine, RefusedCode,
                                              UnknownComponentId, own_page_prefix)
@@ -1977,10 +1977,12 @@ class Simulation:
         self.changes += 1
 
     def listings(self) -> dict:
-        """Returns the entries each file browser of the page shown lists,
-        {browser: [names, a folder's ending with "/"]}, and the records each
-        data record shows, {data record: [texts, the oldest first]}, as
-        page_drawing.draw_page takes them."""
+        """Returns what each file browser and each data record of the page
+        shown lists, in the form page_drawing.draw_page takes:
+        {browser: [entry names, a folder's ending with "/"]} and
+        {data record: [record texts, the oldest first]}. A data record that
+        shows a message in place of its records is listed as UNOPENED or
+        FILE_LOST (data_record_drawing.py)."""
         found = {browser: list(entries) for (page, browser), entries
                  in self.globals[FILE_BROWSER_LISTINGS].items() if page == self.page}
         if self.page is not None:
@@ -1989,6 +1991,9 @@ class Simulation:
             for name in self._of_kind(self.page, "data-record"):
                 if self._is_shut_out(name, fields, self.globals):
                     found[name] = UNOPENED
+                elif has_lost_ram_file(component_attributes(name, fields), self.globals,
+                                       (self.page, name)):
+                    found[name] = FILE_LOST
                 else:
                     data_file = self._data_file(name, fields, self.globals)
                     found[name] = [codec.decode_keeping_bytes(record)
@@ -2801,7 +2806,7 @@ class Simulation:
 
     def _data_file(self, record: str, values: dict, card_values: dict):
         """The data file of the data record `record`, from its attributes in
-        `values` (data_files.data_file_for); None when the folder will not
+        `values` (card_files.data_file_at); None when the folder will not
         give it, when `record` opens no file, its `init` being 1
         (card_files.opens_no_file), or when it is shut out of it
         (_is_shut_out). `card_values` hold the card in memory."""
@@ -2811,28 +2816,25 @@ class Simulation:
             return None
         path = attributes.get("path", "")
         try:
-            return data_file_for(attributes, read_card_file(self.cards, path, card_values))
+            return data_file_at(path, attributes,
+                                read_card_file(self.cards, path, card_values), card_values,
+                                self._memory_file_storage_size)
         except (CardRefusal, OSError):
             return None
 
     def _open_data_record(self, record: str, values: dict):
-        """As its page opens, a data record reads its data file, whose
-        `qty`, `txt`, `maxval_y`, and `maxval_x` follow from it
-        (card_files.data_record_values). A missing file is made, when
-        `mode` is 1. One the folder will not give is left as it is, and the
-        table shows no records: `qty` 0, `val` -1, and `txt` empty. What
-        cannot be read or made is logged. The record holds the file it opened.
-        A file it may not open, as another record holds it, or 8 others are
-        open (card_files.opening_refusal), it does not open: it shows a
-        message instead of its table, and answers 0x06 twice, as `bkcmd`
-        asks."""
-        shut, notes = open_data_record(record, values, self.globals, self.cards,
-                                       (self.page, record), TextCodec(self.encoding))
+        """Opens the data file of the data record `record` when its page opens,
+        with card_files.open_data_record, which gives the rules. Writes each
+        note of what could not be opened, read, or created to the log, and
+        sends 0x06 as many times as open_data_record returns, when `bkcmd`
+        is 2 or 3."""
+        refusals, notes = open_data_record(record, values, self.globals, self.cards,
+                                           (self.page, record), TextCodec(self.encoding),
+                                           self._memory_file_storage_size)
         for note in notes:
             self._write_log(note)
-        if shut:
-            for _ in range(2):
-                self._return_code(INVALID_FILE_OPERATION, False)
+        for _ in range(refusals):
+            self._return_code(INVALID_FILE_OPERATION, False)
 
     def _is_shut_out(self, record: str, values: dict, card_values: dict) -> bool:
         """Whether the data record `record` of the page shown is shut out of
