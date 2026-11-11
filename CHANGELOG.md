@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.15] - 2026-11-11
+
+- `newfile`, `delfile`, `refile`, `newdir`, and `deldir` now need a path on an SD card or in `ram/`.
+- The simulator's log now gives the reason when a file command is ignored in `ram/`.
+
 ### [0.3.14] - 2026-11-11
 
 - Added `nxwright.testing.run_with_emulator`, for a test to run an app with its MCU emulator.

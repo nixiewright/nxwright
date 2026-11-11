@@ -100,7 +100,7 @@ The log, in the Debug Console, lists what reached outside the screen, with the s
 
 - what it sent on the serial line;
 - each EEPROM and GPIO access, with its value;
-- the SD card's commands;
+- the file commands, on the SD cards and in `ram/`;
 - the commands that the simulator records but does not run ([screen-code.md](screen-code.md#commands-recorded-but-not-run)).
 
 ## Starting again
@@ -716,8 +716,9 @@ The screen's SD cards can be folders of your computer. A launch configuration's 
 - `sd0/presets/a.cfg` is then the file `presets/a.cfg` in the folder.
 - The app's file commands act on the folder's files, for real. What they change stays after the simulation, even if you step back or start again.
 - To start each simulation with the same files, replace the folder with a saved copy before each launch, with a `preLaunchTask`. See [The EEPROM](#the-eeprom) for an example of how to do this for a single file.
-- If a card has no folder, its files are kept in memory, the same way as in a test. So are files whose path is not on a card.
+- If a card has no folder, its files are kept in memory, the same way as in a test.
 - A file whose path starts with `ram/` is kept in memory too, in the space your project sets aside for `ram/` files ([Files in `ram/`](#files-in-ram)).
+- The screen does not create, delete, or rename anything on a path such as `x.bin`, which is neither on a card nor in `ram/`.
 
 ### External pictures
 
@@ -749,6 +750,7 @@ An ignored command sends one of these error codes ([Return codes](#return-codes)
 - 0x06 for a `newfile` into a folder that does not exist, or of a size below 0;
 - 0x06 for a `refile` of a file that does not exist, onto one that does, or into a missing folder;
 - 0x06 for every ignored `redir`;
+- 0x06 for a `newfile`, `delfile`, `refile`, `newdir`, or `deldir` on a path that is neither on a card nor in `ram/`;
 - 0x06 for an `rdfile` of a file that does not exist, or of bytes past its end;
 - 0x06 for a `twfile` to a path that is neither on a card nor in `ram/`, of a size of 0 or below, or into a folder that does not exist;
 - 0x1A for a `twfile` whose size is not a number;
@@ -776,7 +778,7 @@ The file commands follow these rules in `ram/`:
 - `twfile` needs room for the new file beside every file in `ram/`, including the one it will replace.
 - `refile` renames a file within `ram/`.
 
-The screen ignores these commands, and sends 0x06:
+The screen ignores these commands, and sends 0x06. The log gives the reason for each one:
 
 - a `newfile` or a `twfile` of a file that does not fit, or of a file in a folder, such as `ram/logs/a.bin`;
 - every `newdir`;

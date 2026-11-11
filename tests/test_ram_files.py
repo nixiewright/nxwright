@@ -6,7 +6,7 @@ import unittest
 
 from nxwright.testing import SourceFolderRunner
 from nxwright.testing.editor_machine import EditorMachine
-from nxwright.testing.ram_files import fits, is_ram_path
+from nxwright.testing.ram_files import NO_FOLDERS, NO_SPACE, fits, is_ram_path
 from nxwright.testing.simulation import Simulation
 from tests.test_folder_check import edited_app
 from tests.test_simulation import DONE, READY, SimulationTestCase, placed, table
@@ -249,6 +249,97 @@ on go.down:
         self.typed(simulation, 'twfile "ram/w.txt",3813')
         self.assertEqual(self.sent, [REFUSED])
         self.assertEqual(simulation.values()["file errors"], [("twfile", "ram/w.txt")])
+
+
+class LogTest(SimulationTestCase):
+    """The simulator's log gives the reason the screen ignored a command
+    on a `ram/` path, and starts each line about a `ram/` file with
+    `ram/:`."""
+
+    def setUp(self):
+        super().setUp()
+        self.program("page page0\n")
+        self.page("page0", [placed("go", "button", 0, 0)], "")
+
+    def logged(self, lines: list, space: int = 4096, files: dict = None) -> tuple:
+        """Types `lines` into a simulation whose project sets `space` bytes
+        aside, and which starts with `files`. Returns the log's lines about
+        file commands, and the simulation's "file errors"."""
+        self.write("app.toml", edited_app(self.text("app.toml"),
+                                          lambda app: app.update(memory_file_storage_size=space)))
+        simulation = Simulation(self.root, values={"file contents": dict(files or {})})
+        for line in lines:
+            simulation.serial_received(line.encode() + b"\xff\xff\xff")
+        return ([line for _, line in simulation.log if line.startswith(("SD card:", "ram/:"))],
+                simulation.values().get("file errors", []))
+
+    def test_no_space_set_aside(self):
+        lines, errors = self.logged(['newfile "ram/a.bin",8', 'twfile "ram/a.bin",8'], space=0)
+        self.assertEqual(lines, ["ram/: newfile of ram/a.bin refused: " + NO_SPACE,
+                                 "ram/: twfile of ram/a.bin refused: " + NO_SPACE])
+        self.assertIn("memory_file_storage_size in app.toml", NO_SPACE)
+        # The entries are the same as without a reason.
+        self.assertEqual(errors, [("newfile", "ram/a.bin"), ("twfile", "ram/a.bin")])
+
+    def test_a_file_that_does_not_fit(self):
+        lines, _ = self.logged(['newfile "ram/a.bin",3813', 'twfile "ram/a.bin",3813'])
+        for line, command in zip(lines, ("newfile", "twfile"), strict=True):
+            self.assertEqual(line, "ram/: %s of ram/a.bin refused: the file does not fit. A new "
+                             "file can have at most 3812 of the 4096 bytes set aside for ram/ "
+                             "files" % command)
+
+    def test_the_room_is_worked_out_once_the_old_file_is_removed(self):
+        files = {"ram/a.bin": bytes(100), "ram/b.bin": bytes(1000)}
+        lines, _ = self.logged(['newfile "ram/a.bin",5000'], files=files)
+        self.assertIn("at most 2544 of the 4096 bytes", lines[0])
+        # twfile keeps the file it will replace until its bytes have arrived.
+        lines, _ = self.logged(['twfile "ram/a.bin",5000'], files=files)
+        self.assertIn("at most 2176 of the 4096 bytes", lines[0])
+
+    def test_no_room_for_any_file(self):
+        lines, _ = self.logged(['newfile "ram/a.bin",0'], space=200)
+        self.assertEqual(lines, ["ram/: newfile of ram/a.bin refused: no new file fits in the "
+                                 "200 bytes set aside for ram/ files"])
+
+    def test_folders(self):
+        lines, _ = self.logged(['newdir "ram/d/"', 'newfile "ram/d/a.bin",8',
+                                'twfile "ram/d/x.bin",5', 'refile "ram/a.bin","ram/d/a.bin"'],
+                               files={"ram/a.bin": b"a"})
+        self.assertEqual(lines, ["ram/: %s of %s refused: %s" % (command, path, NO_FOLDERS)
+                                 for command, path in (("newdir", "ram/d/"),
+                                                       ("newfile", "ram/d/a.bin"),
+                                                       ("twfile", "ram/d/x.bin"))]
+                         # The line shows refile's old path, so the reason gives the new one.
+                         + ["ram/: refile of ram/a.bin refused: ram/d/a.bin is in a folder, and "
+                            "ram/ has no folders"])
+        self.assertEqual(NO_FOLDERS, "ram/ has no folders")
+
+    def test_each_cause_of_an_ignored_refile(self):
+        lines, _ = self.logged(['refile "ram/no.bin","ram/c.bin"', 'refile "ram/a.bin","ram/b.bin"',
+                                'refile "ram/a.bin","sd0/a.bin"'],
+                               files={"ram/a.bin": b"a", "ram/b.bin": b"b"})
+        self.assertEqual(lines, [
+            "ram/: refile of ram/no.bin refused: ram/no.bin does not exist",
+            "ram/: refile of ram/a.bin refused: ram/b.bin exists already",
+            "ram/: refile of ram/a.bin refused: sd0/a.bin is not in ram/"])
+
+    def test_a_twfile_ignored_for_its_size_has_no_reason(self):
+        lines, _ = self.logged(['twfile "ram/a.bin",0'])
+        self.assertEqual(lines, ["ram/: twfile of ram/a.bin refused"])
+
+    def test_commands_the_screen_takes(self):
+        self.write("app.toml", edited_app(self.text("app.toml"),
+                                          lambda app: app.update(memory_file_storage_size=4096)))
+        simulation = Simulation(self.root)
+        for data in (b'newfile "ram/a.bin",8', b'refile "ram/a.bin","ram/b.bin"',
+                     b'delfile "ram/b.bin"', b'newfile "sd0/a.bin",8', b'twfile "ram/w.txt",5'):
+            simulation.serial_received(data + b"\xff\xff\xff")
+        simulation.serial_received(b"hello")
+        self.assertEqual(
+            [line for _, line in simulation.log if line.startswith(("SD card:", "ram/:"))],
+            ["ram/: newfile ram/a.bin 8", "ram/: refile ram/a.bin ram/b.bin",
+             "ram/: delfile ram/b.bin", "SD card: newfile sd0/a.bin 8",
+             "ram/: twfile ram/w.txt 5"])
 
 
 class RunnerTest(SimulationTestCase):

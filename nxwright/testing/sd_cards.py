@@ -3,12 +3,16 @@
 The screen has two SD cards, `sd0/` and `sd1/`. The Nextion Editor's
 simulator keeps each as a folder of its own, `sdcard0` and `sdcard1` in its
 settings folder, so that the app's files are real files. A simulation can
-be given any folder for each (`FolderCards`). `sd0/presets/a.cfg` is then the file
-`presets/a.cfg` in the folder given for `sd0/`. A path on a card given no
-folder, and a path on no card, stay in the test machine's memory, the same
-way as when no folders are given (editor_machine.py, "existing" and "file
-contents"). So does a `ram/` file, which the screen keeps in its own
-memory, in the space the project sets aside (ram_files.py).
+be given any folder for each (`FolderCards`). `sd0/presets/a.cfg` is then
+the file `presets/a.cfg` in the folder given for `sd0/`.
+
+Other paths never reach a folder. A path on a card given no folder stays in
+the test machine's memory, the same way as when no folders are given
+(editor_machine.py, "existing" and "file contents"). So does a `ram/` file,
+which the screen keeps in its own memory, in the space the project sets
+aside (ram_files.py). On a path such as `x.bin`, which is neither on a card
+nor in `ram/`, the screen does not create, delete, or rename anything
+(editor_machine.py, _path_command).
 
 The folders are the user's own, so nothing the app does may harm what lies
 outside them, or the folders themselves. Each path is checked to lie
@@ -29,6 +33,16 @@ CARDS = ("sd0/", "sd1/")
 # The return code the screen gives a file command it refuses: an invalid
 # file operation, as the Editor's simulator answered.
 INVALID_FILE_OPERATION = 0x06
+
+
+def card_of(path: str):
+    """Returns the card a path is on, "sd0/" or "sd1/", or None for a path
+    on neither. Only the start of the path decides. The card's name may be
+    in upper or lower case, and `sd0` alone, without the slash, is the card
+    itself."""
+    lowered = path.lower()
+    return next((card for card in CARDS
+                 if lowered.startswith(card) or lowered == card[:-1]), None)
 
 
 class CardRefusal(Exception):
@@ -88,9 +102,8 @@ class FolderCards:
         return isinstance(path, str) and self._card_of(path) is not None
 
     def _card_of(self, path: str):
-        lowered = path.lower()
-        return next((card for card in self.folders
-                     if lowered.startswith(card) or lowered == card[:-1]), None)
+        card = card_of(path)
+        return card if card in self.folders else None
 
     def local(self, path: str) -> Path:
         """Returns where a path on a card lies on the computer."""

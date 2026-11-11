@@ -64,7 +64,7 @@ from nxwright.testing.modbus_crc import CRC_OFF, crc_after, crc_start
 from nxwright.testing.pinyin_table import pinyin_table_of
 from nxwright.testing.recording import TrackedValues
 from nxwright.testing import ram_files
-from nxwright.testing.sd_cards import CARDS, INVALID_FILE_OPERATION, CardRefusal
+from nxwright.testing.sd_cards import CARDS, INVALID_FILE_OPERATION, CardRefusal, card_of
 from nxwright.testing.serial_buffer import (BUFFER_BYTE, buffer_read, copied_into_number,
                                             copied_into_text, deleted)
 from nxwright.testing.serial_line import ADDRESSES
@@ -126,6 +126,14 @@ _LACKED_ANSWERS = {LACKED_INSTRUCTION: 0x00, LACKED_VARIABLE: 0x1A}
 # words the Editor's compile refuses it with (first_word_refusal), as the
 # Editor's simulator answered `zork 1`, and `CLS 1` and `movelayer 1`.
 _NO_COMMAND_ANSWERS = {INVALID_COMMAND: 0x00, INVALID_VARIABLES: 0x1A}
+
+# The file commands the screen ignores on a path that is neither on an SD
+# card nor in ram/, such as `x.bin`. The Nextion Editor's simulator
+# answered each with 0x06.
+_IGNORED_ON_NO_CARD = ("newfile", "delfile", "refile", "newdir", "deldir")
+# Why the screen ignored a file command on a path of that kind, worded for
+# the log of nxwright's simulator.
+NOT_ON_A_CARD = "the path does not start with sd0/, sd1/, or ram/"
 
 # The start of the values holding each file stream's open file, such as
 # "open file fs0". An app may have several streams, named as it likes.
@@ -374,6 +382,9 @@ class EditorMachine:
           - a `newfile`, `refile`, or `newdir` on a ram/ path that the
             screen cannot carry out. The screen answers 0x06
             (_ram_command).
+          - a `newfile`, `delfile`, `refile`, `newdir`, or `deldir` on a
+            path that is neither on an SD card nor in ram/, such as
+            `x.bin`. The screen answers 0x06 (_path_command).
           - a data record's method that could not be carried out
             (_data_record).
           - a data record's `path` set to a file that another data record
@@ -409,9 +420,10 @@ class EditorMachine:
     command, once it is recorded; `screen.stored(name, value, machine,
     before)` after each value the code stores, such as `delay` or `sleep`,
     `before` being what the name held, or None; and
-    `screen.recorded(record, entry, machine)` after each entry added to a
-    record of what reached outside the screen, such as "sent", or to
-    "waveform"; `screen.released(component, machine)` after a `click`'s
+    `screen.recorded(record, entry, machine, reason)` after each entry
+    added to a record of what reached outside the screen, such as "sent",
+    or to "waveform", `reason` being why the screen ignored a file command,
+    or None; `screen.released(component, machine)` after a `click`'s
     Touch Release event; `screen.drawing_stopped(stopped, machine)` at a
     `ref_stop` (True) and a `ref_star` (False); `screen.answer_typed_now()`
     before the event a typed `click` runs, which the screen answers first;
@@ -962,22 +974,28 @@ class EditorMachine:
             path to keep the user's files safe, such as a path that
             leaves the folder.
 
-        Otherwise the simulation takes the bytes, and writes the file
-        once they have all arrived (Simulation.take_transparent_data).
-        Without a simulation, as in a test, the machine records the
-        command in "other commands", and no file is written."""
+        If the size is a number above 0, the reason goes to the simulator's
+        log for a path in ram/, and for one that is neither on a card nor
+        in ram/.
+
+        If the screen accepts the command, the simulation takes the bytes,
+        and writes the file once they have all arrived
+        (Simulation.take_transparent_data). Without a simulation, as in a
+        test, the machine records the command in "other commands", and no
+        file is written."""
         path, size = self._operand(arguments[0]), self._chain(arguments[1])
-        code = None
+        code = reason = None
         if not isinstance(size, int):
             code = _INVALID_VARIABLE
         elif size <= 0:
             code = INVALID_FILE_OPERATION
         elif ram_files.is_ram_path(path):
-            if not ram_files.takes_transfer(self.values.get("file contents", {}), path, size,
-                                            self.memory_file_storage_size):
+            reason = ram_files.why_no_transfer(self.values.get("file contents", {}), path, size,
+                                               self.memory_file_storage_size)
+            if reason is not None:
                 code = INVALID_FILE_OPERATION
         elif not (isinstance(path, str) and path.lower().startswith(CARDS)):
-            code = INVALID_FILE_OPERATION
+            code, reason = INVALID_FILE_OPERATION, NOT_ON_A_CARD
         elif self._on_card(path):
             has_folder = self._on_folder("twfile", path,
                                          lambda: self.cards.local(path).parent.is_dir())
@@ -986,7 +1004,7 @@ class EditorMachine:
             if not has_folder:
                 code = INVALID_FILE_OPERATION
         if code is not None:
-            self._record("file errors", ("twfile", path))
+            self._record("file errors", ("twfile", path), reason)
             self._refused(code)
         elif self.screen is None:
             self._record("other commands", tuple(["twfile"] + arguments))
@@ -1288,14 +1306,23 @@ class EditorMachine:
 
     def _path_command(self, word: str, arguments: list, contents: dict):
         """Runs `word`, one of newfile, newdir, delfile, deldir, refile, and
-        redir, on its `arguments`, and records it in "file commands". If
-        the path is on a card that was given a folder, the command acts on
-        that folder's files. On the card in memory, newfile adds a file of
-        its size, all zero bytes, to `contents`, which is "file contents",
-        and delfile removes one. A newfile whose size is not a number, or
-        is below 0, does not create a file, and is recorded in "file
-        errors" instead. A newfile, refile, or newdir on a ram/ path
-        follows the rules of the screen's memory instead (_ram_command)."""
+        redir, on its `arguments`, and records it in "file commands". What
+        the command does depends on where its first path is:
+          - On a card that was given a folder, the command acts on that
+            folder's files.
+          - In ram/, a newfile, refile, or newdir follows the rules of the
+            screen's memory (_ram_command).
+          - On a path that is neither on an SD card nor in ram/, such as
+            `x.bin` (_on_no_card), the screen ignores newfile, delfile,
+            refile, newdir, and deldir. The command does not change
+            anything, the machine records it in "file errors" instead, and
+            the screen answers 0x06.
+          - In every other case, the files are in `contents`, which is
+            "file contents". newfile adds a file of its size, all zero
+            bytes, and delfile removes one.
+
+        A newfile whose size is not a number, or is below 0, does not create
+        a file, and is recorded in "file errors" instead."""
         # newfile's size may be arithmetic, as the Editor's simulator ran it.
         paths = [self._chain(argument) if word == "newfile" and place == 1
                  else self._operand(argument)
@@ -1312,6 +1339,10 @@ class EditorMachine:
             return
         if word in ("newfile", "refile", "newdir") and ram_files.is_ram_path(paths[0]):
             self._ram_command(word, paths, contents)
+            return
+        if word in _IGNORED_ON_NO_CARD and _on_no_card(paths[0]):
+            self._record("file errors", (word, paths[0]), NOT_ON_A_CARD)
+            self._refused(INVALID_FILE_OPERATION)
             return
         self._record("file commands", (word, *paths))
         if self._on_card(paths[0]):
@@ -1335,18 +1366,19 @@ class EditorMachine:
         folders, and only accepts files that fit in the space the project
         sets aside (ram_files.py). A command the screen accepts is recorded
         in "file commands". If the screen ignores the command, it is
-        recorded in "file errors", and the screen answers 0x06."""
+        recorded in "file errors", the reason goes to the simulator's log,
+        and the screen answers 0x06."""
         if word == "newfile":
-            taken = ram_files.new_file(contents, paths[0], paths[1],
-                                       self.memory_file_storage_size)
+            reason = ram_files.new_file(contents, paths[0], paths[1],
+                                        self.memory_file_storage_size)
         elif word == "refile":
-            taken = ram_files.rename_file(contents, paths[0], paths[1])
+            reason = ram_files.rename_file(contents, paths[0], paths[1])
         else:
-            taken = False       # newdir: the screen's memory has no folders
-        if taken:
+            reason = ram_files.NO_FOLDERS       # newdir
+        if reason is None:
             self._record("file commands", (word, *paths))
         else:
-            self._record("file errors", (word, paths[0]))
+            self._record("file errors", (word, paths[0]), reason)
             self._refused(INVALID_FILE_OPERATION)
 
     def _drawing_command(self, line: str) -> bool:
@@ -1449,15 +1481,17 @@ class EditorMachine:
             return False
         return True
 
-    def _record(self, record: str, entry):
+    def _record(self, record: str, entry, reason: str = None):
         """Adds `entry` to the list `record` of what reached outside the
         screen, and tells the simulation's screen, if any. `record` is one of
         RECORDS, which the debugger and the simulation read to tell records
-        from the app's own values."""
+        from the app's own values. `reason`, why the screen ignored a file
+        command, goes to the simulation's screen too, for the simulator's
+        log, and is not kept with the entry."""
         assert record in RECORDS, "%r is not among RECORDS" % record
         self.values.setdefault(record, []).append(entry)
         if self.screen is not None:
-            self.screen.recorded(record, entry, self)
+            self.screen.recorded(record, entry, self, reason)
 
     def _data_record(self, record: str, method: str, arguments: list):
         """Runs the method of the data record `record` on its data file,
@@ -2234,6 +2268,15 @@ def _kept_by(object_type, attribute: str):
     if type_name is None or type_name == "page":
         return None
     return describe(type_name, attribute)
+
+
+def _on_no_card(path) -> bool:
+    """Whether `path`, the path a file command was given, is neither on an
+    SD card nor in ram/, the screen's memory. Only the start of the path
+    decides, so a path on `sd0/` is on a card whether or not the simulation
+    gave that card a folder."""
+    return not (isinstance(path, str)
+                and (ram_files.is_ram_path(path) or card_of(path) is not None))
 
 
 def _is_data_record(component: str, values: dict) -> bool:

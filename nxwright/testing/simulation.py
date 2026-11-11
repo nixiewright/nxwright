@@ -2465,10 +2465,12 @@ class Simulation:
             self._mark_moved(moves.moved)
             self.changes += 1
 
-    def recorded(self, record: str, entry, machine: EditorMachine):
-        """Logs what reached outside the screen, as the machine records it,
+    def recorded(self, record: str, entry, machine: EditorMachine, reason: str = None):
+        """Logs what reached outside the screen when the machine records it,
         and keeps the points of the page's waveforms. Code's `com_stop` and
-        `com_star` hold and resume the serial line (_take_serial)."""
+        `com_star` hold and resume the serial line (_take_serial). If the
+        machine gives `reason`, why the screen ignored a file command, the
+        log's line for the entry ends with that reason."""
         serial_line = record == "other commands" and entry in _SERIAL_LINE
         # A move is logged as the screen takes it (move_given).
         moved = record == "other commands" and entry[0] == "move"
@@ -2479,8 +2481,9 @@ class Simulation:
             self._said_no_pinyin_table = True
             self._write_log(_NO_PINYIN_TABLE % entry[0])
         if describe is not None and not serial_line and not moved:
-            self._write_log(describe(entry, self.encoding, self.log_formats["sent"])
-                            if record in SENT else describe(entry, self.encoding))
+            line = (describe(entry, self.encoding, self.log_formats["sent"])
+                    if record in SENT else describe(entry, self.encoding))
+            self._write_log(line if reason is None else "%s: %s" % (line, reason))
         if record in SENT and self.sending is not None:
             try:
                 data = SENT[record](entry, self.encoding)

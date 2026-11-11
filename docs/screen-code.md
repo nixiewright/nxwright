@@ -309,13 +309,14 @@ The file commands act on the SD card's files: `findfile`, `finddir`, `newfile`, 
 - In a test, the card's files are in the values `"file contents"` and `"existing"` ([What a test can check](testing.md#what-a-test-can-check)).
 - In the simulator, a card may be a folder of your computer ([The SD cards](simulator.md#the-sd-cards)).
 - A file whose path starts with `ram/` is kept in the screen's memory ([Files in `ram/`](simulator.md#files-in-ram)).
+- If a path such as `x.bin` is neither on a card (`sd0/` or `sd1/`) nor in `ram/`, then `newfile`, `delfile`, `refile`, `newdir`, and `deldir` do not change anything, and answer 0x06.
 - What the commands change is recorded in `"file commands"`.
 - What the screen ignores is recorded in `"file errors"`.
 
 ### `newfile`
 
 - `newfile` makes a file of the size it is given, all zero bytes.
-- If the size is not a number, `newfile` does not create a file, and answers 0x1B, on any card.
+- If the size is not a number, `newfile` does not create a file, and answers 0x1B, whatever its path.
 - If the size is below 0, `newfile` does not create a file, and answers 0x06, an invalid file operation.
 - If a file in `ram/`, the screen's memory, does not fit in the space your project sets aside, `newfile` does not create it, and answers 0x06 ([Files in `ram/`](simulator.md#files-in-ram)).
 

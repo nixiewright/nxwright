@@ -3,6 +3,7 @@ reached outside the screen reads, with the bytes the screen sends as the
 vendor documents them."""
 from nxwright import NxwrightError
 from nxwright.project.device_settings import TextCodec
+from nxwright.testing.ram_files import is_ram_path
 
 
 # The three bytes that end what the screen sends.
@@ -145,15 +146,25 @@ def _gpio_line(entry: tuple, encoding: str) -> str:
     return "GPIO: %s %s %r" % (name, "set to" if kind == "write" else "read as", value)
 
 
+def _file_line(entry: tuple, said: str) -> str:
+    """Returns the log's line about a file command. The line starts with
+    where the entry's path is: `ram/` for a file in the screen's memory,
+    and `SD card` for any other path."""
+    return "%s: %s" % ("ram/" if is_ram_path(entry[1]) else "SD card", said)
+
+
 # The records of what reached outside the screen, each with how to log an
-# entry. Those of SENT also take the form the log shows what is sent in.
+# entry. For a record in SENT, the function is also given the form in
+# which the log shows what is sent.
+# For a file command the screen ignored, the simulation adds the reason to
+# the line, if the machine gave one (Simulation.recorded).
 LOGGED = {
     "sent": _sent_line,
     "replies": _reply_line,
     "eeprom accesses": _eeprom_line,
     "gpio": _gpio_line,
-    "file commands": lambda entry, encoding: "SD card: %s" % " ".join(map(str, entry)),
-    "file errors": lambda entry, encoding: "SD card: %s of %s refused" % entry,
+    "file commands": lambda entry, encoding: _file_line(entry, " ".join(map(str, entry))),
+    "file errors": lambda entry, encoding: _file_line(entry, "%s of %s refused" % entry),
     "component errors": lambda entry, encoding: "%s %s: no component has that ID" % entry,
     "refusals": lambda entry, encoding: "%s refused, answering %02x" % (entry[1], entry[0]),
     "other commands": lambda entry, encoding: "not simulated: %s" % " ".join(map(str, entry)),
