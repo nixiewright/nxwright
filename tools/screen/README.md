@@ -25,7 +25,7 @@ Run each command from nxwright's folder.
    python run.py upload <folder>/probe.tft --port COM5
    ```
 
-3. Run the probe, with the screen's port. It asks you three questions about what the screen shows.
+3. Run the probe, with the screen's port. It asks you four questions about what the screen shows.
 
    ```
    python -m tools.screen.ram_probe COM5

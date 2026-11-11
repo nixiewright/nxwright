@@ -19,12 +19,14 @@ and on an SD card, at 90, 180, and 270 degrees
 An animation whose `from` is 1 has no `vid`, and plays the project's
 first animation, as the Editor's simulator played it (played_animation).
 
-A video whose `from` is 1 plays the file its `path` names on an SD card.
-It is drawn when the file can be read, from a card given a folder
-(resources.card_frames), and otherwise not, as an external picture is not.
-A `vid` of 65535, none, draws nothing; one the folder has no animation or
-video of, or a file whose frames cannot be read, is outlined with a note
-saying why.
+A video whose `from` is 1 plays the file at its `path`, on an SD card or in
+ram/. In a simulation, resources.card_frames finds the file in the folder
+given to the card, or among the files the simulation keeps in memory. If
+the file is not found, nothing is drawn for the video.
+
+A `vid` of 65535 means none, so nothing is drawn. The component is
+outlined, with a note saying why, if its `vid` is not the ID of one of the
+folder's animations or videos, or if the frames of its file cannot be read.
 """
 from nxwright import NxwrightError
 from nxwright.language.resource_names import ANIMATION, NOUNS, VIDEO

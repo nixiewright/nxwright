@@ -161,6 +161,21 @@ CHECKS = (
           ('twfile "ram/p.png",%d' % len(PICTURE), PICTURE, 'p0.path="ram/p.png"'),
           question="Does the screen show a red square at its top right?",
           then=('p0.path=""', 'delfile "ram/p.png"')),
+    Check("An external picture whose file is missing answers 0x06, in ram/ and on the SD card",
+          ('p0.path="ram/none.png"', 'p0.path="sd0/nxprobe-none.png"'),
+          IGNORED + IGNORED,
+          then=('p0.path=""',)),
+    Check("An external picture whose file is not a picture does not send an error "
+          "code",
+          ('newfile "ram/bad.png",8', 'p0.path="ram/bad.png"'),
+          b"",
+          question="Does the screen show anything at its top right, such as an error "
+                   "message?",
+          then=('p0.path=""', 'delfile "ram/bad.png"')),
+    Check("rdfile and delfile are ignored on a file that a data record keeps",
+          ('d0.path="ram/k.data"', 'rdfile "ram/k.data",0,0,0', 'delfile "ram/k.data"',
+           'findfile "ram/k.data",sys0', "get sys0", 'd0.path=""', 'delfile "ram/k.data"'),
+          IGNORED + IGNORED + number(1)),
 )
 
 # The checks for the same project built with no space set aside.

@@ -383,15 +383,15 @@ Animations, videos, and sounds start playing when their page opens.
 A video's or a sound's `from` sets where its file comes from:
 
 - 0, the default: from the project. `vid` gives the video or the sound, by its ID.
-- 1: from an SD card. `path` gives the file, such as `sd0/1.wav`.
+- 1: from an SD card or from `ram/`. `path` gives the file, such as `sd0/1.wav`.
 
-With `from` 1:
+When `from` is 1:
 
-- When the card's folder does not have that file, nothing plays, and the component sends the error code 0x06 ([Return codes](#return-codes)) when its page opens and when code sets its `path`.
-- When a card has no folder, the simulator keeps the card in memory, the same way the file commands do. A file missing from that card answers 0x06 too.
-- With an empty `path`, nothing plays, and the component does not send an error code.
+- The file can be on a card that has no folder ([The SD cards](#the-sd-cards)).
+- If the file is missing, nothing plays, and the component sends the error code 0x06 ([Return codes](#return-codes)) when its page opens and when code sets its `path`.
+- If `path` is empty, nothing plays, and the component does not send an error code.
 
-Unlike a video or a sound, an animation cannot play a file from the SD card. It always plays from the project.
+An animation always plays from the project, and cannot play a file.
 
 ### Waveforms
 

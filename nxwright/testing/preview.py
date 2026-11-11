@@ -49,8 +49,9 @@ class Previews:
         until something that painting depends on changes;
       - what a webview loads each SVG picture from, until a file the
         picture reads or a define changes;
-      - the name and the parts (_picture_parts) of each picture file that
-        a simulation keeps in memory, until the file's bytes change."""
+      - for each picture or video file that a simulation keeps in memory,
+        its name in a drawing and what was read from it, until its bytes
+        change."""
 
     def __init__(self):
         # {(full path, the reading's module, its name): ((modification time,
@@ -61,8 +62,9 @@ class Previews:
         # {an SVG picture's file: (the defines it was drawn with, {each file
         # it read or looked for: its file_stamp}, what svg_picture returned)}
         self._svg_pictures = {}
-        # {the path of a picture file kept in memory: (its bytes, its name
-        # in a drawing, what _picture_parts gave for it)} (memory_picture)
+        # {the path of a file kept in memory: (its bytes, its name in a
+        # drawing, {a reading function: what it read from the bytes, or the
+        # NxwrightError it raised})} (memory_name, memory_read)
         self._memory_versions = {}
 
     def drawing(self, root: Path, path: str, read):
@@ -113,7 +115,7 @@ class Previews:
             files external pictures show;
           - scrolled: where the scrolling texts have moved their texts;
           - memory_files: the files kept in memory, {path: bytes}. External
-            pictures show these files too."""
+            pictures and videos show these files too."""
         resources = _FolderResources(root, app, self, cards, memory_files)
         drawing = draw_page(components, resources, painted, spacing, hidden, waves, pressed,
                             listings, select_moves, scrolled,
@@ -177,26 +179,45 @@ class Previews:
             raise kept[1]
         return kept[1]
 
-    def memory_picture(self, path: str, data: bytes) -> tuple:
-        """Returns (name, parts) for the picture file `data` that a
-        simulation keeps in memory at `path`. `name` is what picture shapes
-        call the picture: the path and a digest of the bytes, so that new
-        bytes get a new name. `parts` is what _picture_parts gives for the
-        bytes, or the NxwrightError it raised.
+    def memory_name(self, path: str, data: bytes) -> str:
+        """Returns the name a drawing gives the file `data` that a
+        simulation keeps in memory at `path`: the path and a digest of the
+        bytes, so that new bytes get a new name.
 
-        Both are worked out once for each version of the file. The bytes of
-        a file kept in memory are never changed in place, so the same bytes
-        object at the same path is the same version."""
+        The bytes of a file kept in memory are never changed in place, so
+        the same bytes object at the same path is the same version of the
+        file. The digest is worked out once for each version."""
+        return self._memory_version(path, data)[1]
+
+    def memory_read(self, path: str, data: bytes, read):
+        """Returns read(data) for the file `data` that a simulation keeps in
+        memory at `path`, or what `read` returned before for the same
+        version of the file (memory_name). An NxwrightError that `read`
+        raises is kept and raised again. A file read two ways is kept once
+        for each way. The ways are told apart by the `read` function
+        itself, so pass the same function each time, such as video_frames,
+        and not a lambda."""
+        readings = self._memory_version(path, data)[2]
+        if read not in readings:
+            try:
+                readings[read] = read(data)
+            except NxwrightError as error:
+                readings[read] = error
+        if isinstance(readings[read], NxwrightError):
+            raise readings[read]
+        return readings[read]
+
+    def _memory_version(self, path: str, data: bytes) -> tuple:
+        """Returns what is kept for the file `data` at `path`: (the bytes,
+        the file's name, its readings). When `data` is not the bytes object
+        kept for `path`, the file has a new version, which gets a new name
+        and no readings."""
         kept = self._memory_versions.get(path)
         if kept is None or kept[0] is not data:
             name = "memory:%s#%s" % (path, hashlib.blake2b(data, digest_size=8).hexdigest())
-            try:
-                parts = _picture_parts(data)
-            except NxwrightError as error:
-                parts = error
-            kept = (data, name, parts)
+            kept = (data, name, {})
             self._memory_versions[path] = kept
-        return kept[1], kept[2]
+        return kept
 
     def svg_picture(self, root: Path, path: Path, defines: dict) -> dict:
         """Returns what a webview needs to show the SVG picture at `path`, a
@@ -275,7 +296,7 @@ class _FolderResources(DrawingResources):
         # of a picture of the folder.
         self._card_files = {}
         # The picture files kept in memory that the drawing shows: {the name
-        # its shapes give the file (Previews.memory_picture): (its bytes, what
+        # its shapes give the file (Previews.memory_name): (its bytes, what
         # _picture_parts gives for them)}.
         self._memory_pictures = {}
         # {(finding function, its arguments): what it found}, and {file: its
@@ -329,11 +350,11 @@ class _FolderResources(DrawingResources):
         return self.previews.kept(file, read, stamp)
 
     def card_picture(self, path: str):
-        """Returns the name under which picture shapes show the file at
-        `path`, and remembers the file for picture_file. If the card was
-        given a folder, the file is the one in that folder, found through
-        the cards' own checks. Otherwise it is the file kept in memory at
-        `path`, on a card or in ram/ (_memory_picture).
+        """Returns the name that picture shapes give the file at `path`,
+        and remembers the file for picture_file. If `path` is on a card
+        that was given a folder, the file is the one in that folder.
+        Otherwise it is the file kept in memory at `path`, on a card or in
+        ram/ (_memory_picture).
         Returns None, so that nothing is drawn, when there is no such file,
         or when it is a PictureBox picture file (.xi) that cannot be read."""
         local = self._resolved(_FolderResources._card_file, path)
@@ -357,8 +378,9 @@ class _FolderResources(DrawingResources):
         if name is None:
             return None
         data = self.memory_files[path]
-        parts = self.previews.memory_picture(path, data)[1]
-        if isinstance(parts, NxwrightError):
+        try:
+            parts = self.previews.memory_read(path, data, _picture_parts)
+        except NxwrightError:
             return None
         self._memory_pictures[name] = (data, parts)
         if self._reads is not None:
@@ -366,8 +388,8 @@ class _FolderResources(DrawingResources):
         return name
 
     def _memory_name(self, path: str):
-        """The name of the picture file kept in memory at `path`
-        (Previews.memory_picture), or None when no file is kept in memory at
+        """The name of the file kept in memory at `path`
+        (Previews.memory_name), or None when no file is kept in memory at
         `path`. Only a path on an SD card or in ram/ can have a file in
         memory, and a card given a folder keeps its files in that folder
         instead."""
@@ -375,14 +397,20 @@ class _FolderResources(DrawingResources):
         if not isinstance(data, bytes) or not (path.startswith(CARDS) or is_ram_path(path)) \
                 or (self.cards is not None and self.cards.owns(path)):
             return None
-        return self.previews.memory_picture(path, data)[0]
+        return self.previews.memory_name(path, data)
 
     def card_frames(self, path: str):
-        """The frames of the video file `path` names on a card given a
-        folder, or None for none such."""
+        """Returns the frames of the video file at `path`, or None when
+        there is no such file. If `path` is on a card that was given a
+        folder, the file is the one in that folder. Otherwise it is the
+        file kept in memory at `path`, on a card or in ram/. Raises
+        NxwrightError for a file that is not a video."""
         local = self._resolved(_FolderResources._card_file, path)
-        return None if local is None else self._kept(
-            local, lambda file: video_frames(file.read_bytes()))
+        if local is not None:
+            return self._kept(local, lambda file: video_frames(file.read_bytes()))
+        if self._resolved(_FolderResources._memory_name, path) is None:
+            return None
+        return self.previews.memory_read(path, self.memory_files[path], video_frames)
 
     def _card_file(self, path: str):
         """The file of the computer that `path` names on a card given a

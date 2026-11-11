@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.19] - 2026-11-12
+
+- The simulator now shows a video's frames when its file is in `ram/` or on an SD card with no folder.
+
 ### [0.3.18] - 2026-11-12
 
 - An external picture now shows a picture file in `ram/`, or on an SD card that has no folder.

@@ -400,16 +400,16 @@ class DrawingResources:
       - font_height(id): its height in pixels, from its header, which a font
         nxwright cannot decode has too, or None when it cannot be read (by
         default: the decoded font's, or None);
-      - card_picture(path): the name under which a picture shape shows the
-        file an external picture's `path` names on an SD card or in ram/,
-        or None when there is none such (by default: there are no cards);
+      - card_picture(path): the name that a picture shape gives an external
+        picture's file at `path`, on an SD card or in ram/, or None when
+        there is no such file (by default, always None);
       - frames(kind, id): the media_files.Frames of the folder's animation or
         video `id`, `kind` being ANIMATION or VIDEO (resource_names.py), or
         None when there is none such (by default: there are none); raises
         NxwrightError when its file cannot be read;
-      - card_frames(path): the Frames of the video file `path` names on an
-        SD card, or None when there is none such (by default: there are no
-        cards); raises NxwrightError when it cannot be read;
+      - card_frames(path): the Frames of the video file at `path`, on an SD
+        card or in ram/, or None when there is no such file (by default,
+        always None); raises NxwrightError when the file cannot be read;
       - encoding: the project's character encoding;
       - rotation: the screen's rotation, in degrees;
       - opaque_pictures: whether the screen stores the folder's pictures
