@@ -357,9 +357,10 @@ A data record's methods change its data file, `path`: `insert("a^b^c")`, `delete
 - Records are numbered from the oldest, which is 0.
 - A method's text can come from a variable, such as `insert(t0.txt)`.
 - If the file doesn't exist and `mode` is 1, the method creates it first. Code setting the data record's `path` creates a missing file too.
-- The first data record to open a file keeps it, until code changes that record's `path`.
-  - Another data record with the same file does not open it, and that record's methods have no effect and are not reported. Once the file is free, the record's next method opens it.
-  - Code setting a data record's `path` to a file another one keeps answers 0x06. This is recorded in `"file errors"` as `("open", path)`.
+- The first data record to open a file keeps it, until code changes that data record's `path`.
+  - A second data record with the same file does not open it, so its methods have no effect, and are not reported. Once the file is free, the second data record's next method opens it.
+  - If code sets a data record's `path` to a file that another data record keeps, the screen answers 0x06. This is recorded in `"file errors"` as `("open", path)`.
+  - While a data record keeps a file, `rdfile`, `delfile`, `refile`, and `newfile` on that file are ignored and answer 0x06, and a file stream does not open it. The commands and the stream's `open` are each recorded in `"file errors"`.
 
 A call that the Nextion Editor refuses to compile stops the run:
 

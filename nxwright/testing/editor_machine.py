@@ -52,8 +52,8 @@ from nxwright.project.zi_font import counted_characters
 from nxwright.source.page_source import reference_kind
 from nxwright.testing.card_files import (DATA_FILES_HELD, DATA_RECORDS_GIVEN_A_PATH,
                                          DATA_RECORDS_SHUT_OUT, component_attributes,
-                                         data_file_at, data_record_values, given_a_path,
-                                         hold_file, is_shut_out, let_go_of_files, let_in,
+                                         data_file_at, data_record_values, file_holder,
+                                         given_a_path, hold_file, is_shut_out, let_go_of_files, let_in,
                                          open_data_record, opening_refusal, opens_no_file,
                                          read_card_file, shut_out, why_not_made,
                                          write_card_file)
@@ -134,6 +134,13 @@ _IGNORED_ON_NO_CARD = ("newfile", "delfile", "refile", "newdir", "deldir")
 # Why the screen ignored a file command on a path of that kind, worded for
 # the log of nxwright's simulator.
 NOT_ON_A_CARD = "the path does not start with sd0/, sd1/, or ram/"
+# The file commands the screen ignores on a file that a data record keeps.
+# The Nextion Editor's simulator answered each with 0x06. `rdfile` is not
+# in the list, because _rdfile makes the same check itself.
+_IGNORED_ON_A_KEPT_FILE = ("newfile", "delfile", "refile")
+# Why the screen ignored a file command on a file that a data record
+# keeps, worded for the log of nxwright's simulator.
+KEPT_BY_A_DATA_RECORD = "a data record keeps the file open"
 
 # The start of the values holding each file stream's open file, such as
 # "open file fs0". An app may have several streams, named as it likes.
@@ -385,6 +392,10 @@ class EditorMachine:
           - a `newfile`, `delfile`, `refile`, `newdir`, or `deldir` on a
             path that is neither on an SD card nor in ram/, such as
             `x.bin`. The screen answers 0x06 (_path_command).
+          - an `rdfile`, `delfile`, `refile`, or `newfile` on a file that a
+            data record keeps, and a file stream's `open` of that file. The
+            screen answers 0x06 for the commands, and sends no answer to
+            the `open` (_is_kept).
           - a data record's method that could not be carried out
             (_data_record).
           - a data record's `path` set to a file that another data record
@@ -576,15 +587,32 @@ class EditorMachine:
     # `en` whether one is open.
 
     def _open_file(self, stream: str, path):
-        """Opens the file `path` on the file stream `stream`, as a file
-        command finds one (_file_bytes), its position at 0. A file not found
-        closes the one open, and is recorded with the file errors."""
+        """Opens the file `path` on the file stream `stream`, with its
+        position at 0. The file is found the way a file command finds one
+        (_file_bytes). If the file is not found, or a data record keeps it
+        (_is_kept), the stream closes the file it has open, and the `open`
+        is recorded with the file errors. For a file that a data record
+        keeps, the Nextion Editor's simulator left the stream's `en` at 0,
+        and did not send an answer."""
+        if self._is_kept(path):
+            self._record("file errors", ("open", path), KEPT_BY_A_DATA_RECORD)
+            self._close_file(stream)
+            return
         data = self._file_bytes("open", path)
         if data is None:
             self._close_file(stream)
             return
         self.values[OPEN_FILE + stream] = path
         self._set_stream(stream, 0, len(data), 1)
+
+    def _is_kept(self, path) -> bool:
+        """Returns whether a data record keeps the file `path`. A data
+        record keeps the file it opened until code changes the record's
+        `path` (card_files.file_holder). The screen ignores rdfile, delfile,
+        refile, and newfile on a file that a data record keeps, and a file
+        stream does not open it."""
+        return isinstance(path, str) and bool(path) and \
+            file_holder(self.cards, path, self.values) is not None
 
     def _close_file(self, stream: str):
         """Closes the file stream's open file, if any."""
@@ -623,16 +651,24 @@ class EditorMachine:
 
     def _rdfile(self, arguments: list):
         """Runs `rdfile <path>,<offset>,<count>,<crc>`, which sends `count`
-        bytes of the SD card's file `path` from byte `offset`, or the file's
-        size, 4 bytes, low byte first, for a count of 0, then the CRC `crc`
-        asks for (_rdfile_crc). They are recorded in "sent", so that the
-        success code follows them. A missing file, or a range not inside the
-        file, sends nothing, and answers 0x06; for a count of 0, the offset
-        must be below the size. The file is never changed."""
+        bytes of the SD card's file `path`, starting at byte `offset`. For a
+        count of 0, `rdfile` sends the file's size in place of the bytes, in
+        4 bytes, low byte first. `rdfile` then sends the CRC that `crc`
+        selects (_rdfile_crc). What `rdfile` sends is recorded in "sent", so
+        that the success code follows it.
+
+        `rdfile` does not send anything, and answers 0x06, if the file is
+        missing, if a data record keeps the file (_is_kept), or if the range
+        is not inside the file. For a count of 0, the offset must be below
+        the size. The file is never changed."""
         path = self._operand(arguments[0])
         offset, count, crc = (self._chain(argument) for argument in arguments[1:])
         if offset < 0 or count < 0:
             raise RefusedCode("a negative offset or count is not modelled")
+        if self._is_kept(path):
+            self._record("file errors", ("rdfile", path), KEPT_BY_A_DATA_RECORD)
+            self._refused(INVALID_FILE_OPERATION)
+            return
         data = self._file_bytes("rdfile", path, INVALID_FILE_OPERATION)
         if data is None:
             return
@@ -1322,8 +1358,12 @@ class EditorMachine:
             "file contents". newfile adds a file of its size, all zero
             bytes, and delfile removes one.
 
-        A newfile whose size is not a number, or is below 0, does not create
-        a file, and is recorded in "file errors" instead."""
+        The machine records two kinds of command in "file errors" instead of
+        "file commands":
+          - A newfile whose size is not a number, or is below 0. It does not
+            create a file.
+          - A newfile, delfile, or refile of a file that a data record keeps
+            (_is_kept). The screen ignores the command, and answers 0x06."""
         # newfile's size may be arithmetic, as the Editor's simulator ran it.
         paths = [self._chain(argument) if word == "newfile" and place == 1
                  else self._operand(argument)
@@ -1336,6 +1376,10 @@ class EditorMachine:
             # A size below 0 makes no file, as the Nextion Editor's
             # simulator answered -1 and -100.
             self._record("file errors", ("newfile", paths[0]))
+            self._refused(INVALID_FILE_OPERATION)
+            return
+        if word in _IGNORED_ON_A_KEPT_FILE and self._is_kept(paths[0]):
+            self._record("file errors", (word, paths[0]), KEPT_BY_A_DATA_RECORD)
             self._refused(INVALID_FILE_OPERATION)
             return
         if word in ("newfile", "refile", "newdir") and ram_files.is_ram_path(paths[0]):

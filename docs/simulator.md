@@ -349,12 +349,14 @@ Only one data record can use a data file at a time. When two data records give t
 
 - The first data record keeps the file while other pages show, and opens it again when its page opens again. It lets the file go when code changes its `path`.
 - The second data record cannot open the file. It shows "Cannot open file:" and the path, its `qty` is 0, and it sends the error code 0x06 twice when its page opens ([Return codes](#return-codes)).
-- The second data record's methods change nothing while the first one keeps the file. Once the file is free, the next method opens it.
-- Code setting a data record's `path` to a file another one keeps answers 0x06.
+- The second data record's methods do not change anything while the first one keeps the file. Once the file is free, the next method opens it.
+- If code sets a data record's `path` to a file that another data record keeps, the screen answers 0x06.
 
 Data records keep at most 8 files at once, across pages. A data record that finds 8 kept by others cannot open its own, the same as when another data record keeps it. A data record that keeps a file can still change its `path`, because it lets the old file go first.
 
-A data record whose `path` is empty shows "File Lost:". It does not keep a file, so it does not shut out any other data record, and it does not send an error code. A data record also shows "File Lost:", followed by the path, when its file in `ram/` is missing ([Files in `ram/`](#files-in-ram)).
+While a data record keeps a file, `rdfile`, `delfile`, `refile`, and `newfile` on that file are ignored, and answer 0x06. A file stream does not open the file either, but does not send an error code.
+
+A data record shows "File Lost:" and the path when its file is missing and the data record cannot create it. This happens when `mode` is 0, when the file does not fit in `ram/` ([Files in `ram/`](#files-in-ram)), or when the file cannot be created in the card's folder. A data record whose `path` is empty shows "File Lost:" alone. It does not keep a file, so it does not prevent any other data record from opening its file, and it does not send an error code.
 
 A data record whose `init` is 1 does not open the file its page file gives:
 
@@ -755,6 +757,7 @@ An ignored command sends one of these error codes ([Return codes](#return-codes)
   - a `refile` of a file that does not exist, onto one that does, or into a missing folder;
   - every ignored `redir`;
   - an `rdfile` of a file that does not exist, or of bytes past its end;
+  - an `rdfile`, `delfile`, `refile`, or `newfile` on a file that a data record keeps ([Data records](#data-records));
 - 0x1B for a `newfile` whose size is not a number;
 - 0x1A for a `twfile` whose size is not a number;
 - 0x01 for a `delfile` or `deldir` of what does not exist;

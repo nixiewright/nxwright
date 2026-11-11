@@ -198,7 +198,7 @@ from nxwright.source.device_keys import (memory_file_storage_size, screen_model,
 from nxwright.source.page_source import Component
 from nxwright.testing.card_files import (DATA_FILES_HELD, DATA_RECORDS_GIVEN_A_PATH,
                                          DATA_RECORDS_SHUT_OUT, component_attributes,
-                                         data_file_at, data_record_values, has_lost_ram_file,
+                                         data_file_at, data_record_values, has_lost_file,
                                          is_shut_out, open_data_record, opens_no_file,
                                          read_card_file, write_card_file)
 from nxwright.testing.combo_boxes import ComboBoxes
@@ -1991,8 +1991,8 @@ class Simulation:
             for name in self._of_kind(self.page, "data-record"):
                 if self._is_shut_out(name, fields, self.globals):
                     found[name] = UNOPENED
-                elif has_lost_ram_file(component_attributes(name, fields), self.globals,
-                                       (self.page, name)):
+                elif has_lost_file(self.cards, component_attributes(name, fields),
+                                   self.globals, (self.page, name)):
                     found[name] = FILE_LOST
                 else:
                     data_file = self._data_file(name, fields, self.globals)

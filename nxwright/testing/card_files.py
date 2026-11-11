@@ -17,7 +17,7 @@ from nxwright.drawing.data_record_drawing import table_layout
 from nxwright.drawing.page_drawing import inside_box
 from nxwright.testing import ram_files
 from nxwright.testing.data_files import data_file_for
-from nxwright.testing.sd_cards import CardRefusal
+from nxwright.testing.sd_cards import CardRefusal, card_of
 
 # The data files the data records hold, {file key: (page, data record)}
 # (held_file_key): the first record to open a file holds it, until code
@@ -86,17 +86,33 @@ def data_file_at(path: str, attributes: dict, found, card_values: dict, space: i
     return data_file_for(attributes, found)
 
 
-def has_lost_ram_file(attributes: dict, card_values: dict, holder: tuple) -> bool:
+def has_lost_file(cards, attributes: dict, card_values: dict, holder: tuple) -> bool:
     """Returns whether the data record `holder`, (page, data record), with
     `attributes`, shows "File Lost:" and its path. The record shows the
-    message when its `path` is in ram/ and the file is missing. A record
-    whose `mode` is 1 creates a missing file when it opens the file, so the
-    file can only be missing if it did not fit. A record that has not
-    opened a file yet (opens_no_file) shows its titles."""
+    message when its `path` is on an SD card or in ram/, and the file is
+    missing. A record whose `mode` is 0 does not create a missing file. A
+    record whose `mode` is 1 creates one when it opens the file, so that
+    record's file can only be missing if the record could not create it:
+    the file did not fit in ram/, or could not be created in the card's
+    folder.
+
+    Returns False for a record that has not opened a file yet
+    (opens_no_file), which shows its titles, and for a path that is neither
+    on a card nor in ram/. Also returns False if looking for the file in
+    the card's folder fails, because the file may be there. `cards` is the
+    SD cards that were given folders (sd_cards.FolderCards), or None, and
+    `card_values` contains the files kept in memory."""
     path = attributes.get("path", "")
-    return (ram_files.is_ram_path(path)
-            and path not in card_values.get("file contents", {})
-            and not opens_no_file(attributes, card_values, holder))
+    on_a_card = isinstance(path, str) and card_of(path) is not None
+    if not (on_a_card or ram_files.is_ram_path(path)) or \
+            opens_no_file(attributes, card_values, holder):
+        return False
+    if cards is not None and cards.owns(path):
+        try:
+            return not cards.find_file(path)
+        except (CardRefusal, OSError):
+            return False
+    return path not in card_values.get("file contents", {})
 
 
 def held_file_key(cards, path: str) -> str:

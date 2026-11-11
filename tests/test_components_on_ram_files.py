@@ -121,9 +121,10 @@ class DataRecordTest(DataFileHoldingTestCase):
         simulation, sent = self.started(space=0, components=[record(init=1)])
         self.assertEqual((simulation.listings()["d0"], self.refusals(sent)), ([], 0))
 
-    def test_a_data_record_with_a_missing_file_on_a_card_lists_no_records(self):
+    def test_a_missing_file_on_a_card_with_mode_0(self):
         simulation, sent = self.started(space=0, components=[record(path="sd0/m.data", mode=0)])
-        self.assertEqual((simulation.listings()["d0"], self.refusals(sent)), ([], 0))
+        self.assertIs(simulation.listings()["d0"], FILE_LOST)
+        self.assertEqual(self.refusals(sent), 0)
 
 
 class TestMachineTest(unittest.TestCase):

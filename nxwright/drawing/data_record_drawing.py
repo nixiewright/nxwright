@@ -36,16 +36,18 @@ lines. A simulation supplies the records, read from the data file
 (testing/data_files.py). In three cases the table shows a message in place
 of its records, in white on black inside the border:
 
-- A simulation lists a data record as UNOPENED when the data record could
-  not open its file, because another data record holds the file or other
-  data records hold 8 files already. The table shows "Cannot open file:"
-  and the path (tests/fixtures/data-record/unopened.png).
-- A data record whose `path` is empty shows "File Lost:"
+- When the data record could not open its file, the table shows "Cannot
+  open file:" and the path (tests/fixtures/data-record/unopened.png).
+  This happens when another data record holds the file, or when other
+  data records hold 8 files already. A simulation lists that data record
+  as UNOPENED.
+- When the file is missing, on an SD card or in ram/, the table shows
+  "File Lost:" and the file's path
+  (tests/fixtures/data-record/ram-file-lost.png). A simulation lists that
+  data record as FILE_LOST.
+- When `path` is empty, the table shows "File Lost:" alone
   (tests/fixtures/data-record/file-lost.png). The Nextion Editor shows the
   same message in its page view, so the page preview draws it too.
-- A simulation lists a data record as FILE_LOST when its file in ram/ is
-  missing. The table shows "File Lost:" and the file's path
-  (tests/fixtures/data-record/ram-file-lost.png).
 """
 from dataclasses import dataclass
 
@@ -62,9 +64,10 @@ NEWEST_FIRST = 0
 # What a simulation lists for a data record that could not open its file,
 # as another record holds it, or 8 others are open, in place of its records.
 UNOPENED = object()
-# What a simulation lists for a data record whose file in ram/ is missing.
-# The record did not create the file, because the file did not fit in the
-# space the project sets aside, or because the record's `mode` is 0.
+# What a simulation lists for a data record whose file is missing, on an SD
+# card or in ram/. The data record did not create the file, because its
+# `mode` is 0, because the file did not fit in ram/, or because the file
+# could not be created in the card's folder.
 FILE_LOST = object()
 # The colours of such a record's message, in RGB565.
 _BLACK, _WHITE = 0, 0xFFFF

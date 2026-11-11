@@ -4,6 +4,12 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.17] - 2026-11-11
+
+- A data record whose file is missing on an SD card now shows "File Lost:" and the file's path.
+- `rdfile`, `delfile`, `refile`, and `newfile` are now ignored on a file a data record keeps open.
+- A file stream no longer opens a file that a data record keeps open.
+
 ### [0.3.16] - 2026-11-11
 
 - `sd0/` and `sd1/` must now be in lower case, matching the behavior of screens.
