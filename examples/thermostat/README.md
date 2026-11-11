@@ -59,7 +59,7 @@ See [Testing your app](../../docs/testing.md) for how the tests run the pages' c
 
 The demo also runs without the emulator, for example in the Nextion Editor's simulator. Until the app receives an outdoor temperature, the weather depends on the mode.
 
-In VS Code, the emulator starts with the demo's simulation. See [Running the emulator](../../docs/mcu-emulator.md#running-the-emulator) for the details, and for how to start it yourself.
+In VS Code, the emulator starts with the demo's simulation. See [Running the emulator](../../docs/mcu-emulator.md#running-the-emulator) for the details, and for how to start it yourself. `tests/test_mcu.py` also runs the app with the emulator through 12 seconds of simulated time, which takes well under a second of real time ([Testing the emulator](../../docs/mcu-emulator.md#testing-the-emulator)).
 
 ## Pictures
 

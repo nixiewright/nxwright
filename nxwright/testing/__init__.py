@@ -6,6 +6,9 @@
     UnreadableLine, a kind of it, stop a run that meets code nxwright
     refuses, or a line it cannot read; ValueNotGiven, one whose code reads
     a value the run was not given.
+  - run_with_emulator: runs a source folder's app with its MCU emulator for
+    a set time, on the simulation's clock, and returns what happened, as an
+    EmulatorRun.
   - simulation.py: runs a source folder's app as the screen does: program.nx,
     pages and their changes, presses, timers, and the simulation's time,
     for the simulator and the MCP server. It is internal: this package does
@@ -17,7 +20,8 @@ classes this package exports.
 """
 from nxwright.testing.editor_machine import (EditorMachine, RefusedCode, UnreadableLine,
                                              ValueNotGiven)
+from nxwright.testing.emulator_run import EmulatorRun, run_with_emulator
 from nxwright.testing.source_runner import SourceFolderRunner
 
-__all__ = ["EditorMachine", "RefusedCode", "SourceFolderRunner", "UnreadableLine",
-           "ValueNotGiven"]
+__all__ = ["EditorMachine", "EmulatorRun", "RefusedCode", "SourceFolderRunner", "UnreadableLine",
+           "ValueNotGiven", "run_with_emulator"]

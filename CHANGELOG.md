@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.14] - 2026-11-11
+
+- Added `nxwright.testing.run_with_emulator`, for a test to run an app with its MCU emulator.
+
 ### [0.3.13] - 2026-11-11
 
 - Files in `ram/` now need `memory_file_storage_size` in `app.toml`, in the simulator and in tests.

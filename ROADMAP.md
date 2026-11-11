@@ -17,7 +17,7 @@ Today, a test runs the events you choose on one page, starting from values you g
 
 The simulator already runs the whole app: `program.nx`, page changes, timers on a clock, and presses. A test could do the same, by starting the app, pressing and releasing components, and letting time pass, before it checks the values and the page shown.
 
-A test could also stand in for the device on the other end of the serial line, sending bytes to the screen and checking the bytes that come back.
+A test could also press components while it stands in for the device on the other end of the serial line, sending bytes to the screen and checking the bytes that come back.
 
 ## Pictures kept as SVG files
 

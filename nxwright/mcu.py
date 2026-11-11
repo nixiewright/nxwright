@@ -17,6 +17,11 @@ that an emulator needs, with the same meaning: `read`, `read_until`,
 `write`, `in_waiting`, `timeout`, and `close`. Code written for a serial
 port therefore works on the line unchanged.
 
+To wait, use the line's `sleep` or a read's `timeout`, and do not use
+time.sleep. When a test runs the app and the emulator on a simulated clock
+(nxwright.testing.run_with_emulator), time.sleep still waits for real, and
+the simulated clock stands still meanwhile.
+
 `open` finds the simulation in one of two ways:
   - If the environment variable NXWRIGHT_MCU gives an address, such as
     127.0.0.1:53124, `open` connects to that address. Set the variable
@@ -26,10 +31,6 @@ port therefore works on the line unchanged.
     `open(listen=7000)`, `open` waits for the simulator to connect to that
     port of this computer. In the simulator, connect the MCU port over TCP
     to 127.0.0.1:7000.
-
-To wait, use the line's `sleep` or a read's `timeout`, and do not use
-time.sleep. A later version of nxwright may run the app on a simulated
-clock, and time.sleep would not follow that clock.
 
 This module uses only Python's standard library, so that an emulator's own
 Python environment needs nothing but nxwright.
@@ -58,18 +59,23 @@ class LineClosed(OSError):
     it to end."""
 
 
-class Line:
-    """The screen's serial line, over the connection `connection` to the
-    simulation. `timeout` is how long a read waits, in seconds: None, the
-    default, waits until the bytes have come, and 0 does not wait. A Line is
-    also a context manager: a `with` block closes the Line when the block
-    ends."""
+class LineBase:
+    """The part of a line that does not depend on how its bytes travel:
+    `read`, `read_until`, `timeout`, and closing at the end of a `with`
+    block. Line carries the bytes over a connection to the simulator. A test
+    that runs an emulator uses another subclass, which follows the
+    simulation's clock (nxwright/testing/emulator_run.py).
 
-    def __init__(self, connection: socket.socket):
-        self._socket = connection
-        # Each write goes out at once. By default, the system would keep a
-        # short one back to send it with the next.
-        self._socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    A subclass adds `write`, `in_waiting`, `sleep`, and `close`, and the two
+    methods that the reads call:
+      - `_deadline()` returns the time at which a read that starts now stops
+        waiting, on the subclass's own clock, or None if the read waits
+        without end;
+      - `_more(deadline)` waits until `deadline` for more bytes from the
+        screen, adds them to `_waiting`, and returns whether any came. It
+        sets `_over` once no more bytes can come."""
+
+    def __init__(self):
         self._waiting = bytearray()  # the bytes received and not read yet
         self._over = False           # whether the simulation closed its end
         self.timeout = None
@@ -102,6 +108,37 @@ class Line:
             if not self._more(deadline):
                 return self._taken(len(self._waiting) if size is None else size)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *error):
+        self.close()
+
+    def _taken(self, count: int) -> bytes:
+        """Removes the first `count` bytes from those waiting, or all of them
+        if there are fewer, and returns them. Raises LineClosed if none wait
+        and none will come."""
+        if not self._waiting and self._over:
+            raise LineClosed("the simulation closed the line")
+        taken = bytes(self._waiting[:count])
+        del self._waiting[:count]
+        return taken
+
+
+class Line(LineBase):
+    """The screen's serial line, over the connection `connection` to the
+    simulation. `timeout` is how long a read waits, in seconds: None, the
+    default, waits until the bytes have come, and 0 does not wait. A Line is
+    also a context manager: a `with` block closes the Line when the block
+    ends."""
+
+    def __init__(self, connection: socket.socket):
+        super().__init__()
+        self._socket = connection
+        # Each write goes out at once. By default, the system would keep a
+        # short one back to send it with the next.
+        self._socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
     def write(self, data: bytes) -> int:
         """Sends `data` to the screen, and returns how many bytes that is.
         Raises LineClosed if the simulation closed its end."""
@@ -120,19 +157,13 @@ class Line:
 
     def sleep(self, seconds: float):
         """Waits for `seconds` seconds. An emulator calls this in place of
-        time.sleep, so that a later version of nxwright can make the wait
-        follow a simulated clock."""
+        time.sleep, so that the wait follows the simulated clock when a test
+        runs the emulator (nxwright/testing/emulator_run.py)."""
         time.sleep(seconds)
 
     def close(self):
         """Closes the line."""
         self._socket.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *error):
-        self.close()
 
     def _deadline(self):
         """Returns the time at which a read that starts now stops waiting, on
@@ -162,16 +193,6 @@ class Line:
             return False
         self._waiting += data
         return True
-
-    def _taken(self, count: int) -> bytes:
-        """Removes the first `count` bytes from those waiting, or all of them
-        if there are fewer, and returns them. Raises LineClosed if none wait
-        and none will come."""
-        if not self._waiting and self._over:
-            raise LineClosed("the simulation closed the line")
-        taken = bytes(self._waiting[:count])
-        del self._waiting[:count]
-        return taken
 
 
 def open(listen: int = None) -> Line:

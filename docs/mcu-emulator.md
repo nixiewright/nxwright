@@ -43,7 +43,7 @@ The line has the members of pyserial's `Serial` that an emulator needs, so code 
 
 - If `timeout` passes before a read has all its bytes, the read returns the bytes that have come, which may be none.
 - When the simulation ends, a read or a write raises `mcu.LineClosed`. Catch it to end your program.
-- To wait, use `line.sleep` or a read's `timeout`, and do not use `time.sleep`. A later version of nxwright may run your app on a simulated clock, and `time.sleep` would not follow that clock.
+- To wait, use `line.sleep` or a read's `timeout`, and do not use `time.sleep`. When a test runs your app and the emulator on a simulated clock, `time.sleep` still waits for real, and the simulated clock stands still meanwhile ([Testing the emulator](#testing-the-emulator)).
 - Some of the screen's messages can contain FF bytes, so `read_until` may stop inside them. For example, the reply to a `get` of a number is 8 bytes long and can contain FF bytes, so read it with `line.read(8)`.
 
 ## Running the emulator
@@ -88,3 +88,32 @@ The emulator can also listen at an address of its own, which stays the same from
 3. In the Simulator section, choose TCP in the MCU port list, enter `127.0.0.1:7000`, and connect ([A program over TCP](simulator.md#a-program-over-tcp)).
 
 The simulator remembers the port, so the project's next simulations connect when they start. Start the emulator before each one, because it serves one simulation and ends when that simulation ends.
+
+## Testing the emulator
+
+A test can run your app and its emulator together, without the simulator. `run_with_emulator` runs both for a number of seconds of simulated time, which takes only a moment, then returns what happened.
+
+```python
+from nxwright.testing import run_with_emulator
+
+run = run_with_emulator("app", emulator.main, 12)
+self.assertEqual(run.value("t0.txt"), "Hello")
+self.assertIn(b't0.txt="Hello"\xff\xff\xff', run.received)
+```
+
+`run_with_emulator` runs your emulator by calling a function with no arguments, so the emulator's code must be in a function, such as the `main` of the program that `new-emulator` writes. See the demo's `tests/test_mcu.py` for how a test loads `mcu/main.py` to get that function.
+
+The result has these members:
+
+| Member | What it is |
+| --- | --- |
+| `value(name)` | A value at the end of the run, by the name your code uses, such as `t0.txt`. |
+| `page` | The name of the page shown at the end. |
+| `received` | The bytes the screen received from the emulator. |
+| `sent` | The bytes the screen sent. |
+
+- While the emulator runs, `mcu.open` returns a line joined to your app, whatever port it is given. The emulator has no command-line arguments, so if yours reads its port number from the command line, it does not find one. Your emulator must call `mcu.open` by that name, because `open` imported with `from nxwright.mcu import open` still opens a real connection.
+- When the emulator waits in a read or in `line.sleep`, the simulated time passes at once. An emulator that keeps using the line and never waits, such as a loop that polls `in_waiting`, is stopped with an error, because your app cannot run meanwhile.
+- After the seconds you gave, the line closes and the emulator gets `mcu.LineClosed`, the same as when a simulation ends.
+- The test cannot act during the run, for example to press a component.
+- The screen's real-time clock starts at your computer's time, so check only what does not depend on the time of day.

@@ -121,7 +121,7 @@ See [How nxwright runs Nextion code](screen-code.md) for how each command runs a
 - Nothing runs by itself. A timer's event or a touch runs only when the test lists it in `events`.
 - Nothing is drawn. Drawing commands are recorded, and attributes that change the look, such as `pco` or `pic`, are values like any other.
 
-To run the app as a whole, with timers, touches, and drawing, use the simulator ([Simulating your app](simulator.md)).
+To run the app as a whole, with timers, touches, and drawing, use the simulator ([Simulating your app](simulator.md)). If your project has an MCU emulator, a test can also run the whole app together with it ([Testing the emulator](mcu-emulator.md#testing-the-emulator)).
 
 ## Lists
 

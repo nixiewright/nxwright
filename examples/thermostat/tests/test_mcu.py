@@ -1,6 +1,8 @@
 """The demo's MCU emulator (mcu/main.py), and what the app does with the
 outdoor temperature it sends."""
+import contextlib
 import importlib.util
+import io
 import re
 import socket
 import subprocess
@@ -9,6 +11,9 @@ import time
 import unittest
 from pathlib import Path
 
+from nxwright.testing import run_with_emulator
+
+from screen import APP
 from test_library import MODE_COOL, MODE_OFF, RUN_IDLE, number_of
 
 EMULATOR = Path(__file__).resolve().parent.parent / "mcu" / "main.py"
@@ -92,6 +97,24 @@ class EmulatorTest(unittest.TestCase):
         # its next reading.
         _, errors = program.communicate(timeout=PATIENCE)
         self.assertEqual((program.returncode, errors), (0, ""))
+
+
+class EmulatorWithTheAppTest(unittest.TestCase):
+
+    def test_the_app_takes_each_reading_the_emulator_sends(self):
+        # The emulator sends a reading when it starts, then one every 5
+        # seconds, so three in 12 seconds. It also prints each reading, and
+        # the test keeps that output out of the test results.
+        with contextlib.redirect_stdout(io.StringIO()):
+            run = run_with_emulator(APP, emulator().main, 12)
+        readings = re.findall(rb"outdoor=(\d+)\xff\xff\xff", run.received)
+        self.assertEqual(len(readings), 3)
+        self.assertEqual(run.received,
+                         b"".join(b"outdoor=%s\xff\xff\xff" % reading for reading in readings))
+        # The readings follow the time of day, so the test does not check
+        # their values. It checks only that the app has the last one.
+        self.assertEqual(run.value("outdoor"), int(readings[-1]))
+        self.assertEqual(run.page, "home")
 
 
 if __name__ == "__main__":
