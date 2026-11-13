@@ -648,20 +648,48 @@ To compare the simulator and the real screen in the log, you can join the MCU po
 
 ### Transparent data
 
-`addt`, `wept`, and `twfile` take the bytes that come next on the serial line as data, not as instructions.
+`addt` and `wept` take the bytes that come next on the serial line as data, not as instructions.
 
 ```
 addt 1,0,100
 ```
 
-After this instruction, the screen adds the next 100 bytes as points to channel 0 of the waveform whose ID is 1. In the same way, `wept 10,100` writes the next 100 bytes to the EEPROM, from byte 10. `twfile "sd0/log.txt",100` writes them as the file `log.txt` on the SD card.
+After this instruction, the screen adds the next 100 bytes as points to channel 0 of the waveform whose ID is 1. In the same way, `wept 10,100` writes the next 100 bytes to the EEPROM, from byte 10.
 
 - The screen sends FE FF FF FF when it is ready for the bytes, and FD FF FF FF once it has them all, whatever `bkcmd` is set to.
 - Every byte counts as data, FF included. The bytes after the last one are instructions again.
 - During a transfer, an instruction you type in the Simulator section is sent as data.
-- The screen ignores `addt` for a waveform or a channel the page lacks, or for more than 1024 bytes, and answers 0x12. It ignores `wept` at a place before 0, and answers 0x1D. What it ignores of `twfile` is in [What the file commands do](#what-the-file-commands-do).
-- `twfile` writes its file once it has all the bytes. A transfer that another one cuts short writes nothing.
-- How `twfile` takes its bytes follows the vendor's instruction set. It has not been checked against a screen ([Different from the Nextion Editor's simulator](#different-from-the-nextion-editors-simulator)).
+- The screen ignores `addt` for a waveform or a channel the page lacks, or for more than 1024 bytes, and answers 0x12. It ignores `wept` at a place before 0, and answers 0x1D.
+- If `addt`, `wept`, or `twfile` starts a transfer before an earlier one has all its bytes, the earlier one does not add or write anything.
+
+### Sending a file with `twfile`
+
+`twfile "sd0/log.txt",5` writes a file of 5 bytes that your program sends on the serial line. The screen sends FE FF FF FF when it is ready, and your program then sends the file in packets. This packet sends `HELLO` as the whole file:
+
+```
+3A A1 BB 44 7F FF FE  00  00 00  05 00  48 45 4C 4C 4F
+```
+
+A packet has these parts, in order:
+
+| Bytes | What they are |
+| --- | --- |
+| 7 | Always `3A A1 BB 44 7F FF FE`. |
+| 1 | Which check follows the data: 0 for none, 1 for Modbus CRC16, or 10 for CRC32, the same as [`rdfile`](screen-code.md#rdfile)'s last argument. |
+| 2 | The packet's number, low byte first. The first packet is number 0. |
+| 2 | How many bytes follow, low byte first: the data and its check, 4096 bytes at most. |
+| the rest | The data, then its check, low byte first. |
+
+What the screen answers depends on the packet:
+
+- The single byte 0x05 when the screen takes the packet. A packet that repeats the last one taken gets 0x05 too, but its data is not added twice.
+- The single byte 0x04 when the check is wrong, or the packet's number is not the next one. Your program can send the packet again.
+- FD FF FF FF when the packet completes the file, whatever `bkcmd` is set to. The screen then writes the file, and the bytes after the packet are instructions again.
+- Nothing when the packet has no bytes, or more than 4096.
+
+The screen drops every byte that is not in a packet, instructions included, so a program that sends the file without packets never gets FD FF FF FF. If you type a `twfile` in the Simulator section, you have to start the simulation again to end the transfer, because you cannot type a packet in that section.
+
+For the `twfile` commands that the screen ignores without starting a transfer, see [What the file commands do](#what-the-file-commands-do).
 
 ### Protocol reparse mode
 
@@ -819,7 +847,7 @@ The simulator does not model:
 - `crcval` reads -1 at each start, until a `crcrest`. The Nextion Editor's simulator keeps it from one run to the next.
 - The bytes that arrive after a transfer's last byte are instructions, as the vendor's instruction set describes ([Transparent data](#transparent-data)). The Nextion Editor's simulator drops the rest of a line typed in its instruction box after the transfer's last byte.
 - `addt` or `wept` with a count of 0 sends FE FF FF FF and FD FF FF FF at once. The Nextion Editor's simulator sends FD FF FF FF only when more bytes arrive, and drops those bytes.
-- `twfile` takes the file's bytes from the serial line, and writes the file, as the vendor's instruction set describes transparent data. This has not been checked against a screen. The Nextion Editor's simulator sends FE FF FF FF, then takes none of the bytes, and never writes the file.
+- `twfile` takes its file in packets, and writes it, like a screen ([Sending a file with `twfile`](#sending-a-file-with-twfile)). The Nextion Editor's simulator sends FE FF FF FF, but then does not take any of the file's bytes, and never writes the file.
 - In address mode, an instruction typed in the Simulator section runs as if it carried the screen's address. The Nextion Editor's simulator drops an instruction typed as text, which has no address.
 - `u[]` and `ucopy` read 0 past the last byte of the buffer of protocol reparse mode. The Nextion Editor's simulator reads leftover bytes, which depend on what it received before.
 - A touch drawing with `thdra` draws its dot in `thc`, as the vendor's instruction set documents. The Nextion Editor's simulator draws it black.

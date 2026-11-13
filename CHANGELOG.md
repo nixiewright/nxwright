@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.4.0] - 2026-11-12
+
+- The simulator now takes a `twfile`'s file in packets, like a real screen, and drops raw bytes.
+
 ### [0.3.21] - 2026-11-12
 
 - File commands and a file stream's `open` are now ignored on a file that a video or a sound plays.

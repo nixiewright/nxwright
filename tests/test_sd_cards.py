@@ -14,6 +14,7 @@ from nxwright import NxwrightError
 from nxwright.testing.preview import Previews
 from nxwright.project.pictures import read_picture, write_png
 from nxwright.source.page_source import Component
+from nxwright.testing.file_packets import CRC16, CRC32, REJECTED, TAKEN, packet
 from nxwright.testing.sd_cards import CardRefusal, FolderCards, card_folder, inside
 from nxwright.testing.simulation import Simulation
 from tests.test_folder_check import edited_app
@@ -404,10 +405,9 @@ on go.down:
 
 
 class TwfileTest(SimulationTestCase):
-    """twfile takes its file's bytes from the serial line, as the vendor's
-    instruction set describes transparent data. The Nextion Editor's
-    simulator took none, and never wrote the file; what it refused is
-    refused alike."""
+    """twfile takes its file from the serial line in packets, the way a
+    real screen took them (testing/file_packets.py). What stops a transfer
+    from starting follows the Nextion Editor's simulator."""
 
     def setUp(self):
         super().setUp()
@@ -428,39 +428,132 @@ on go.down:
         self.sent.clear()
         return simulation
 
+    def started(self, path: str, size: int) -> Simulation:
+        """Returns a simulation that has started a transfer of `size` bytes
+        to the file `path`. `self.sent` is empty again."""
+        simulation = self.simulation()
+        simulation.serial_received(('twfile "%s",%d' % (path, size)).encode() + b"\xff\xff\xff")
+        self.assertEqual(self.sent, [READY])
+        self.sent.clear()
+        return simulation
+
     def log(self, simulation: Simulation) -> list:
         return [line for _, line in simulation.log]
 
-    def test_the_files_bytes_come_from_the_serial_line(self):
-        simulation = self.simulation()
-        simulation.serial_received(b'twfile "sd0/w.txt",5\xff\xff\xffa\xffb\xff')
-        self.assertEqual(self.sent, [READY])
+    def test_the_file_arrives_in_packets(self):
+        simulation = self.started("sd0/w.txt", 10)
+        simulation.serial_received(packet(0, b"a\xffb\xffc"))
+        self.assertEqual(self.sent, [TAKEN])
         self.assertFalse((self.card / "w.txt").exists())
-        # FF is data. The bytes after the fifth are an instruction.
-        simulation.serial_received(b"cget n\xff\xff\xff")
-        self.assertEqual(self.sent, [READY, DONE, N_IS_0])
-        self.assertEqual((self.card / "w.txt").read_bytes(), b"a\xffb\xffc")
-        self.assertEqual(self.log(simulation)[-6:], [
-            "twfile: the next 5 bytes are the file sd0/w.txt", "SIM SEND: fe ff ff ff",
-            "SIM SEND: fd ff ff ff", "SD card: twfile sd0/w.txt 5",
+        # FF is data. The bytes after the last packet are an instruction.
+        simulation.serial_received(packet(1, b"hello") + b"get n\xff\xff\xff")
+        self.assertEqual(self.sent, [TAKEN, DONE, N_IS_0])
+        self.assertEqual((self.card / "w.txt").read_bytes(), b"a\xffb\xffchello")
+        self.assertEqual(self.log(simulation)[-9:], [
+            "twfile: waiting for the file sd0/w.txt (size 10) in packets. Other bytes are "
+            "dropped. To stop waiting, start the simulation again.",
+            "SIM SEND: fe ff ff ff",
+            "twfile: packet 0, 5 bytes: taken", "SIM SEND: 05",
+            "twfile: packet 1, 5 bytes: taken", "SIM SEND: fd ff ff ff",
+            "SD card: twfile sd0/w.txt 10",
             "SIM RECV: get n", "SIM SEND: 71 00 00 00 00 ff ff ff (get)"])
+
+    def test_a_packet_in_several_pieces(self):
+        simulation = self.started("sd0/w.txt", 5)
+        whole = packet(0, b"hello")
+        for piece in (whole[:3], whole[3:9], whole[9:14], whole[14:]):
+            self.assertEqual(self.sent, [])
+            simulation.serial_received(piece)
+        self.assertEqual(self.sent, [DONE])
+        self.assertEqual((self.card / "w.txt").read_bytes(), b"hello")
+
+    def test_a_packet_with_a_check(self):
+        simulation = self.started("sd0/w.txt", 10)
+        simulation.serial_received(packet(0, b"hello", CRC16))
+        simulation.serial_received(packet(1, b"world", CRC32))
+        self.assertEqual(self.sent, [TAKEN, DONE])
+        self.assertEqual((self.card / "w.txt").read_bytes(), b"helloworld")
+
+    def test_a_rejected_packet_can_be_sent_again(self):
+        simulation = self.started("sd0/w.txt", 5)
+        good = packet(0, b"hello", CRC16)
+        simulation.serial_received(good[:-1] + b"\x00")
+        simulation.serial_received(packet(1, b"hello"))
+        self.assertEqual(self.sent, [REJECTED, REJECTED])
+        simulation.serial_received(good)
+        self.assertEqual(self.sent, [REJECTED, REJECTED, DONE])
+        self.assertEqual((self.card / "w.txt").read_bytes(), b"hello")
+        self.assertEqual(self.log(simulation)[-7:-3], [
+            "twfile: packet 0, 7 bytes: rejected, because its check is wrong", "SIM SEND: 04",
+            "twfile: packet 1, 5 bytes: rejected, because packet 0 comes next", "SIM SEND: 04"])
+
+    def test_a_repeat_of_the_last_packet_is_not_added(self):
+        simulation = self.started("sd0/w.txt", 10)
+        for one in (packet(0, b"hello"), packet(0, b"howdy"), packet(1, b"world")):
+            simulation.serial_received(one)
+        self.assertEqual(self.sent, [TAKEN, TAKEN, DONE])
+        self.assertEqual((self.card / "w.txt").read_bytes(), b"helloworld")
+        self.assertIn("twfile: packet 0, 5 bytes: already taken, so its data is not added",
+                      self.log(simulation))
+
+    def test_a_packet_of_no_bytes_or_of_too_many_gets_no_answer(self):
+        simulation = self.started("sd0/w.txt", 5)
+        simulation.serial_received(packet(0, b""))
+        simulation.serial_received(packet(0, bytes(5000)))
+        self.assertEqual(self.sent, [])
+        self.assertEqual(self.log(simulation)[-2:], [
+            "twfile: packet 0, 0 bytes: dropped without an answer, because it is empty",
+            "twfile: packet 0, 5000 bytes: dropped without an answer, because a packet has "
+            "at most 4096 bytes"])
+        simulation.serial_received(packet(0, b"hello"))
+        self.assertEqual(self.sent, [DONE])
+
+    def test_raw_bytes_write_no_file(self):
+        # A real screen drops raw bytes, and goes on waiting for a packet.
+        simulation = self.started("sd0/w.txt", 5)
+        simulation.serial_received(b"hello")
+        self.assertEqual(self.sent, [])
+        self.assertFalse((self.card / "w.txt").exists())
+        self.assertEqual(self.log(simulation)[-1],
+                         "twfile: dropped 5 bytes outside a packet, because a real screen "
+                         "takes the file only in packets")
+        simulation.serial_received(packet(0, b"HELLO"))
+        self.assertEqual(self.sent, [DONE])
+        self.assertEqual((self.card / "w.txt").read_bytes(), b"HELLO")
+
+    def test_an_instruction_during_a_transfer_is_dropped(self):
+        simulation = self.started("sd0/w.txt", 10)
+        simulation.serial_received(packet(0, b"hello") + b"get n\xff\xff\xff")
+        # Typed in the Simulator section, an instruction arrives as bytes too.
+        simulation.serial_input("get n")
+        self.assertEqual(self.sent, [TAKEN])
+        simulation.serial_received(packet(1, b"world") + b"get n\xff\xff\xff")
+        self.assertEqual(self.sent, [TAKEN, DONE, N_IS_0])
+        self.assertIn("twfile: dropped 8 more bytes outside a packet", self.log(simulation))
+
+    def test_bytes_past_the_files_size_are_dropped(self):
+        simulation = self.started("sd0/w.txt", 5)
+        simulation.serial_received(packet(0, b"helloworld") + b"get n\xff\xff\xff")
+        self.assertEqual(self.sent, [DONE, N_IS_0])
+        self.assertEqual((self.card / "w.txt").read_bytes(), b"hello")
 
     def test_ready_and_done_whatever_bkcmd_asks(self):
         simulation = self.simulation()
-        simulation.serial_received(b'bkcmd=0\xff\xff\xfftwfile "sd0/w.txt",1\xff\xff\xff\x07')
+        simulation.serial_received(b'bkcmd=0\xff\xff\xfftwfile "sd0/w.txt",1\xff\xff\xff'
+                                   + packet(0, b"\x07"))
         self.assertEqual(self.sent, [READY, DONE])
 
     def test_a_file_of_that_name_is_replaced(self):
         (self.card / "w.txt").write_bytes(b"old content")
-        simulation = self.simulation()
-        simulation.serial_received(b'twfile "sd0/w.txt",3\xff\xff\xffnew')
+        simulation = self.started("sd0/w.txt", 3)
+        simulation.serial_received(packet(0, b"new"))
         self.assertEqual((self.card / "w.txt").read_bytes(), b"new")
 
     def test_on_the_card_in_memory(self):
         # sd1/, given no folder, keeps its files in memory.
-        simulation = self.simulation()
-        simulation.serial_received(b'twfile "sd1/m.bin",2\xff\xff\xff\x00\x01')
-        self.assertEqual(self.sent, [READY, DONE])
+        simulation = self.started("sd1/m.bin", 2)
+        simulation.serial_received(packet(0, b"\x00\x01"))
+        self.assertEqual(self.sent, [DONE])
         self.assertEqual(simulation.values()["file contents"], {"sd1/m.bin": b"\x00\x01"})
 
     def test_refusals_start_no_transfer(self):
@@ -492,21 +585,22 @@ on go.down:
         self.assertEqual(simulation.values()["file errors"], [("twfile", "sd0/../out.txt")])
 
     def test_a_path_naming_a_folder_writes_nothing(self):
-        # Found only once the bytes are in, after FD FF FF FF.
+        # The simulator finds out that the path is a folder only when it writes
+        # the file, after it has answered FD FF FF FF.
         (self.card / "sub").mkdir()
-        simulation = self.simulation()
-        simulation.serial_received(b'twfile "sd0/sub",2\xff\xff\xffhi')
-        self.assertEqual(self.sent, [READY, DONE])
+        simulation = self.started("sd0/sub", 2)
+        simulation.serial_received(packet(0, b"hi"))
+        self.assertEqual(self.sent, [DONE])
         self.assertEqual(list((self.card / "sub").iterdir()), [])
         self.assertEqual(simulation.values()["file errors"], [("twfile", "sd0/sub")])
         self.assertIn("SD card: twfile of sd0/sub refused", self.log(simulation))
 
     def test_a_transfer_cut_by_another_writes_nothing(self):
-        simulation = self.simulation()
-        simulation.serial_received(b'twfile "sd0/a.txt",5\xff\xff\xffab')
+        simulation = self.started("sd0/a.txt", 5)
+        simulation.serial_received(packet(0, b"ab"))
         simulation.press("go")
-        simulation.serial_received(b"cd")
-        self.assertEqual(self.sent, [READY, READY, DONE])
+        simulation.serial_received(packet(0, b"cd"))
+        self.assertEqual(self.sent, [TAKEN, READY, DONE])
         self.assertEqual([path.name for path in self.card.iterdir()], ["b.txt"])
         self.assertEqual((self.card / "b.txt").read_bytes(), b"cd")
         self.assertIn("serial line: the transfer under way ends, 3 bytes short",

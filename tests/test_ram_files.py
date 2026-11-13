@@ -6,6 +6,7 @@ import unittest
 
 from nxwright.testing import SourceFolderRunner
 from nxwright.testing.editor_machine import EditorMachine
+from nxwright.testing.file_packets import packet
 from nxwright.testing.ram_files import NO_FOLDERS, NO_SPACE, fits, is_ram_path
 from nxwright.testing.simulation import Simulation
 from tests.test_folder_check import edited_app
@@ -179,7 +180,7 @@ class TwfileInATestTest(unittest.TestCase):
 
 class SimulationTest(SimulationTestCase):
     """A simulation takes the space from app.toml, answers 0x06 for what
-    does not fit, and takes a twfile's bytes from the serial line."""
+    does not fit, and takes a twfile's packets from the serial line."""
 
     def setUp(self):
         super().setUp()
@@ -225,10 +226,10 @@ on go.down:
         simulation.press("go")
         self.assertEqual(sizes(simulation.values()), {"ram/a.bin": 8})
 
-    def test_the_bytes_after_a_twfile_become_the_file(self):
+    def test_the_packets_after_a_twfile_become_the_file(self):
         self.set_aside(4096)
         simulation = self.simulation()
-        simulation.serial_received(b'twfile "ram/w.txt",5\xff\xff\xffhello')
+        simulation.serial_received(b'twfile "ram/w.txt",5\xff\xff\xff' + packet(0, b"hello"))
         self.assertEqual(self.sent, [READY, DONE])
         self.assertEqual(simulation.values()["file contents"], {"ram/w.txt": b"hello"})
         # A file stream reads it.
@@ -239,7 +240,7 @@ on go.down:
         self.set_aside(4096)
         simulation = self.simulation()
         self.typed(simulation, 'newfile "ram/w.txt",1772')
-        simulation.serial_received(b'twfile "ram/w.txt",3\xff\xff\xffnew')
+        simulation.serial_received(b'twfile "ram/w.txt",3\xff\xff\xff' + packet(0, b"new"))
         self.assertEqual(self.sent, [READY, DONE])
         self.assertEqual(simulation.values()["file contents"], {"ram/w.txt": b"new"})
 
@@ -334,7 +335,7 @@ class LogTest(SimulationTestCase):
         for data in (b'newfile "ram/a.bin",8', b'refile "ram/a.bin","ram/b.bin"',
                      b'delfile "ram/b.bin"', b'newfile "sd0/a.bin",8', b'twfile "ram/w.txt",5'):
             simulation.serial_received(data + b"\xff\xff\xff")
-        simulation.serial_received(b"hello")
+        simulation.serial_received(packet(0, b"hello"))
         self.assertEqual(
             [line for _, line in simulation.log if line.startswith(("SD card:", "ram/:"))],
             ["ram/: newfile ram/a.bin 8", "ram/: refile ram/a.bin ram/b.bin",

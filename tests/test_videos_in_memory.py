@@ -3,6 +3,7 @@ was given no folder. The Nextion Editor's simulator played a video file
 from `ram/`, for an NX8048P050."""
 from pathlib import Path
 
+from nxwright.testing.file_packets import packets
 from nxwright.testing.preview import Previews
 from nxwright.testing.simulation import Simulation
 from tests.test_folder_check import edited_app
@@ -67,7 +68,7 @@ class VideoInMemoryTest(SimulationTestCase):
         self.assertNotEqual(self.frame(simulation), first)
         # Now the file at the same path gets the bytes of the first file.
         simulation.serial_input('twfile "sd0/c.video",%d' % len(COLOURS))
-        simulation.serial_received(COLOURS)
+        simulation.serial_received(b"".join(packets(COLOURS)))
         simulation.serial_input('v0.path="sd0/c.video"')
         self.assertEqual(self.frame(simulation), first)
 

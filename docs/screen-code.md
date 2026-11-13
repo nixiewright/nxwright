@@ -294,7 +294,7 @@ Some commands act on hardware or data that nxwright does not model, and are only
 - `touch_j`, `code_c`, `play`, `beep`, and `setlayer`
 - the undocumented commands, except `pa_q` and `pa_txt` ([Undocumented commands](#undocumented-commands))
 
-A test records `addt`, `wept`, and `twfile` in `"other commands"` too, because it has no serial line for their data. The simulator runs them ([Transparent data](simulator.md#transparent-data)).
+A test records `addt`, `wept`, and `twfile` in `"other commands"` too, because it has no serial line for their data. The simulator runs them ([Transparent data](simulator.md#transparent-data), [Sending a file with `twfile`](simulator.md#sending-a-file-with-twfile)).
 
 ### Undocumented commands
 
@@ -330,7 +330,7 @@ The file commands act on the SD card's files: `findfile`, `finddir`, `newfile`, 
 
 ### `twfile`
 
-`twfile "sd0/log.txt",100` takes the next 100 bytes of the serial line as the file's bytes, then writes the file. A test records it in `"other commands"`, and writes no file ([Commands recorded but not run](#commands-recorded-but-not-run)).
+`twfile "sd0/log.txt",100` takes a file of 100 bytes from the serial line in packets, then writes the file ([Sending a file with `twfile`](simulator.md#sending-a-file-with-twfile)). A test records the command in `"other commands"`, and does not write a file ([Commands recorded but not run](#commands-recorded-but-not-run)).
 
 These cases do not start a transfer, and each is recorded in `"file errors"`:
 

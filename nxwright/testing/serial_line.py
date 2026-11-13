@@ -5,9 +5,11 @@ instruction may span pieces, and a piece may hold several. The line cuts
 the bytes into instructions at each FF FF FF, as the screen cuts them. It
 keeps the bytes of an instruction not yet ended until its FF FF FF arrives.
 
-A transfer takes a count of bytes as data, not as instructions: the
-transparent data of `addt` and `wept`. The bytes after its count are
-instructions again.
+A transfer takes the bytes that arrive as data, not as instructions. There
+are two kinds: `addt` and `wept` take a given number of bytes, their
+transparent data (Transfer), and `twfile` takes its file in packets
+(file_packets.PacketTransfer). The bytes after a transfer are instructions
+again.
 
 In protocol reparse mode, which `recmod` turns on, every byte goes into the
 buffer that code reads (serial_buffer.py), until the text that ends the
@@ -44,6 +46,7 @@ BROADCAST = b"\xff\xff"
 # What the line gives, each with its value (SerialLine.receive).
 INSTRUCTION = "instruction"
 NOT_ADDRESSED = "not addressed"
+TRANSFER_STEP = "transfer step"
 TRANSFER_END = "transfer end"
 BUFFER = "buffer"
 REPARSE_END = "reparse end"
@@ -52,11 +55,23 @@ DROPPED = "dropped"
 
 @dataclass
 class Transfer:
-    """A transfer under way: the bytes it still takes (`left`), those it
-    took (`data`), and `done(data)`, which runs once they are in."""
+    """A transfer under way that takes a given number of bytes: the bytes
+    it still has to take (`left`), the bytes it took (`data`), and
+    `done(data)`, which runs once they are all in."""
     left: int
     done: Callable[[bytes], None]
     data: bytearray = field(default_factory=bytearray)
+
+    def take(self, waiting: bytes) -> tuple:
+        """Takes its data from the start of `waiting`. Returns (the bytes
+        after its data, an empty list, whether it has all its bytes). The
+        empty list is where file_packets.PacketTransfer.take returns its
+        steps, so that the serial line can call either kind of transfer the
+        same way."""
+        taken = waiting[:self.left]
+        self.data += taken
+        self.left -= len(taken)
+        return waiting[len(taken):], [], not self.left
 
 
 class SerialLine:
@@ -106,17 +121,24 @@ class SerialLine:
         return self._reparse
 
     def drop_transfer(self):
-        """Drops the transfer under way, if any: the bytes after it are
-        instructions."""
+        """Drops the transfer under way, if any, so that the bytes that
+        arrive next are instructions. A transfer of packets may have kept
+        back the beginning of a packet until the next piece arrives. Those
+        bytes are dropped with the transfer. While receive is giving a
+        piece's items, the bytes waiting are the rest of that piece, and
+        they stay."""
+        if self._transfer is not None and not self._receiving:
+            self._waiting = b""
         self._transfer = None
 
-    def start_transfer(self, transfer: Transfer):
-        """Takes the next `transfer.left` bytes as `transfer`'s data, in place
-        of a transfer under way. `transfer.left` is above 0."""
+    def start_transfer(self, transfer):
+        """Gives the next bytes to `transfer`, a Transfer or a
+        file_packets.PacketTransfer, in place of a transfer under way.
+        `transfer.left` is above 0."""
         self._transfer = transfer
 
     def transfer(self):
-        """Returns the Transfer under way, or None."""
+        """Returns the transfer under way, or None."""
         return self._transfer
 
     def receive(self, data: bytes):
@@ -126,7 +148,9 @@ class SerialLine:
             nor the address that came before them in address mode);
           - (NOT_ADDRESSED, the bytes of an instruction dropped in address
             mode, which lack the screen's address and BROADCAST);
-          - (TRANSFER_END, the Transfer), once a transfer has its bytes;
+          - (TRANSFER_STEP, a file_packets.TransferStep), for each packet of
+            a `twfile` and for the bytes dropped around the packets;
+          - (TRANSFER_END, the transfer), once a transfer has its bytes;
           - (BUFFER, bytes for the buffer of protocol reparse mode);
           - (REPARSE_END, None), once END_OF_REPARSE arrived, which turns the
             mode off;
@@ -147,11 +171,10 @@ class SerialLine:
         while self._waiting:
             transfer = self._transfer
             if transfer is not None:
-                taken = self._waiting[:transfer.left]
-                self._waiting = self._waiting[len(taken):]
-                transfer.data += taken
-                transfer.left -= len(taken)
-                if transfer.left:
+                self._waiting, steps, complete = transfer.take(self._waiting)
+                for step in steps:
+                    yield TRANSFER_STEP, step
+                if not complete:
                     return
                 self._transfer = None
                 yield TRANSFER_END, transfer

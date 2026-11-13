@@ -3,9 +3,10 @@ instructions at each FF FF FF, whatever pieces they arrive in, a transfer's
 bytes taken as data, and protocol reparse mode's bytes put in the buffer."""
 import unittest
 
+from nxwright.testing.file_packets import TAKEN, PacketTransfer, packet
 from nxwright.testing.serial_line import (BUFFER, DROPPED, END_OF_REPARSE, INSTRUCTION,
                                           MOST_WAITING, NOT_ADDRESSED, REPARSE_END,
-                                          TRANSFER_END, SerialLine, Transfer)
+                                          TRANSFER_END, TRANSFER_STEP, SerialLine, Transfer)
 
 
 def instructions(given) -> list:
@@ -47,6 +48,32 @@ class SerialLineTest(unittest.TestCase):
         self.assertEqual([kind for kind, _ in given], [TRANSFER_END, INSTRUCTION])
         self.assertEqual((given[0][1].data, given[1][1]), (b"\x01\xff\xff\xff", b"get 1"))
         self.assertIsNone(line.transfer())
+
+    def test_a_transfer_of_packets_gives_a_step_for_each_packet(self):
+        line = SerialLine()
+        line.start_transfer(PacketTransfer(10, print))
+        given = line.receive(packet(0, b"HELLO"))
+        self.assertEqual([(kind, step.answer) for kind, step in given], [(TRANSFER_STEP, TAKEN)])
+        # The bytes after the last packet are an instruction again.
+        given = list(line.receive(packet(1, b"WORLD") + b"get 1\xff\xff\xff"))
+        self.assertEqual([kind for kind, _ in given], [TRANSFER_STEP, TRANSFER_END, INSTRUCTION])
+        self.assertEqual((bytes(given[1][1].data), given[2][1]), (b"HELLOWORLD", b"get 1"))
+        self.assertIsNone(line.transfer())
+
+    def test_the_start_of_a_packet_cut_by_the_end_of_a_piece_is_kept(self):
+        line = SerialLine()
+        line.start_transfer(PacketTransfer(5, print))
+        whole = packet(0, b"HELLO")
+        self.assertEqual(list(line.receive(whole[:3])), [])
+        self.assertEqual([kind for kind, _ in line.receive(whole[3:])],
+                         [TRANSFER_STEP, TRANSFER_END])
+
+    def test_dropping_a_transfer_drops_the_start_of_a_packet_it_kept(self):
+        line = SerialLine()
+        line.start_transfer(PacketTransfer(5, print))
+        list(line.receive(packet(0, b"HELLO")[:3]))
+        line.drop_transfer()
+        self.assertEqual(instructions(line.receive(b"get 1\xff\xff\xff")), [b"get 1"])
 
     def test_emptying_drops_the_bytes_waiting_and_the_transfer(self):
         line = SerialLine()

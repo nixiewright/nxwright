@@ -47,7 +47,6 @@ from nxwright.project.editor_language import (EDITOR_COLOURS, GPIO_VARIABLES,
 from nxwright.project.editor_limits import code_cannot_change_on_series, screen_holds
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.screen_arithmetic import divide_toward_zero, int32
-from nxwright.project.stamp import CRC_START, word_crc
 from nxwright.project.zi_font import counted_characters
 from nxwright.source.page_source import reference_kind
 from nxwright.testing.card_files import (DATA_FILES_HELD, DATA_RECORDS_GIVEN_A_PATH,
@@ -58,6 +57,7 @@ from nxwright.testing.card_files import (DATA_FILES_HELD, DATA_RECORDS_GIVEN_A_P
                                          open_data_record, opening_refusal, opens_no_file,
                                          read_card_file, shut_out, why_not_made,
                                          write_card_file)
+from nxwright.testing.file_packets import check_of
 from nxwright.testing.gpio_pins import PIN_NAMES
 from nxwright.testing.list_working import (COMBO_BOX_CHOICES, FILE_BROWSER_LISTINGS, UNSETTLED,
                                            ListWorking)
@@ -688,8 +688,8 @@ class EditorMachine:
         bytes of the SD card's file `path`, starting at byte `offset`. For a
         count of 0, `rdfile` sends the file's size in place of the bytes, in
         4 bytes, low byte first. `rdfile` then sends the CRC that `crc`
-        selects (_rdfile_crc). What `rdfile` sends is recorded in "sent", so
-        that the success code follows it.
+        selects (file_packets.check_of). What `rdfile` sends is recorded in
+        "sent", so that the success code follows it.
 
         `rdfile` does not send anything, and answers 0x06, if the file is
         missing, if a data record, a sound, or a video keeps the file
@@ -712,7 +712,7 @@ class EditorMachine:
             self._refused(INVALID_FILE_OPERATION)
             return
         sent = len(data).to_bytes(4, "little") if count == 0 else data[offset:offset + count]
-        self._record("sent", ("rdfile", sent + _rdfile_crc(crc, sent)))
+        self._record("sent", ("rdfile", sent + check_of(crc, sent)))
 
     def _read_or_write(self, stream: str, method: str, text: str, start: str, count: str):
         """Runs the file stream's `read` or `write`. `start` counts within
@@ -1027,7 +1027,7 @@ class EditorMachine:
 
     def _twfile(self, arguments: list):
         """Runs `twfile <path>,<size>`. The file's bytes come next on the
-        serial line, the same way as the bytes of `addt`.
+        serial line, in packets (file_packets.py).
 
         In the cases below, the screen ignores the command and does not
         start a transfer, and the machine records the command in "file
@@ -1046,13 +1046,13 @@ class EditorMachine:
             path to keep the user's files safe, such as a path that
             leaves the folder.
 
-        If the size is a number above 0, the reason goes to the simulator's
-        log for a path in ram/, and for one that is neither on a card nor
-        in ram/.
+        When the size is a number above 0, and the screen ignores the
+        command because of a path in ram/, or a path that is neither on a
+        card nor in ram/, the simulator's log gives the reason.
 
-        If the screen accepts the command, the simulation takes the bytes,
-        and writes the file once they have all arrived
-        (Simulation.take_transparent_data). Without a simulation, as in a
+        If the screen accepts the command, the simulation takes the
+        packets, and writes the file once its bytes have all arrived
+        (Simulation.take_file_packets). Without a simulation, as in a
         test, the machine records the command in "other commands", and no
         file is written."""
         path, size = self._operand(arguments[0]), self._chain(arguments[1])
@@ -1081,7 +1081,7 @@ class EditorMachine:
         elif self.screen is None:
             self._record("other commands", tuple(["twfile"] + arguments))
         else:
-            self.screen.take_transparent_data("twfile", [path, size])
+            self.screen.take_file_packets(path, size)
 
     def _ucopy(self, arguments: list):
         """Runs `ucopy <attribute>,<from>,<count>,<to>`, which copies bytes
@@ -2435,21 +2435,6 @@ def _covx_text(value: int, length: int, form: int):
         length = min(length, _COVX_MOST_DIGITS)
         digits = digits[:length].rjust(length, "0")
     return ("-" if value < 0 else "") + digits
-
-
-def _rdfile_crc(kind: int, data: bytes) -> bytes:
-    """Returns the check rdfile sends after `data`, low byte first: none for
-    `kind` 0, the Modbus CRC16 for 1 (modbus_crc.py), and the screen's CRC32
-    for 10, each byte a 32-bit word of its own (stamp.word_crc). Another
-    kind sends zero bytes in their place: 2 for a kind below 10, else 4, as
-    for 2, 3, 11, and -1."""
-    if kind == 0:
-        return b""
-    if kind == 1:
-        return crc_after(crc_start(0xFFFF), data).to_bytes(2, "little")
-    if kind == 10:
-        return word_crc(CRC_START, data).to_bytes(4, "little")
-    return bytes(2 if 0 <= kind < 10 else 4)
 
 
 def _arguments(text: str) -> list:

@@ -209,6 +209,7 @@ from nxwright.testing.combo_boxes import ComboBoxes
 from nxwright.testing.editor_machine import (EEPROM_SIZE, PINYIN_COMMANDS, RECORD_STARTS, RECORDS,
                                              CompileRefusal, EditorMachine, RefusedCode,
                                              UnknownComponentId, own_page_prefix)
+from nxwright.testing.file_packets import PacketTransfer
 from nxwright.testing.folder_resources import FolderResources
 from nxwright.testing.gpio_pins import (PIN_NAMES, UNDRIVEN, GpioPins, checked_levels,
                                         levels_by_name, pin_number)
@@ -224,8 +225,8 @@ from nxwright.testing.scrolling_texts import ScrollingText
 from nxwright.testing.ram_files import is_ram_path
 from nxwright.testing.sd_cards import CARDS, INVALID_FILE_OPERATION, CardRefusal, FolderCards
 from nxwright.testing.serial_line import (ADDRESSES, BUFFER, DROPPED, INSTRUCTION, NOT_ADDRESSED,
-                                          REPARSE_END, SERIAL_BUFFER_SIZE, SerialLine,
-                                          Transfer)
+                                          REPARSE_END, SERIAL_BUFFER_SIZE, TRANSFER_STEP,
+                                          SerialLine, Transfer)
 from nxwright.testing.simulation_log import END, LOGGED, SENT, hex_bytes, shown, shown_instruction
 from nxwright.source.page_source import table_limits
 from nxwright.testing.source_runner import (FolderPageTables, SourceFolderRunner,
@@ -991,14 +992,23 @@ class Simulation:
 
     def serial_received(self, data: bytes):
         """Takes `data`, a piece of the serial line: bytes that arrived at
-        once (serial_line.py). Each instruction they end runs as
-        `serial_input` runs a text. A transfer's bytes are its data, and the
-        transfer ends once they are in (take_transparent_data). In protocol
-        reparse mode, the bytes go into the buffer, and the text ending the
-        mode sets `recmod` to 0. In address mode, an instruction runs only
-        with the screen's address. The log notes bytes the line dropped.
-        What waits in the screen's serial buffer, held instructions and the
-        buffer of protocol reparse mode, keeps at most SERIAL_BUFFER_SIZE
+        once (serial_line.py). What happens to the bytes depends on the
+        state of the line:
+          - Normally, the bytes are instructions. Each one runs when its
+            FF FF FF arrives, the same way `serial_input` runs a text. In
+            address mode, an instruction runs only if it has the screen's
+            address.
+          - During the transfer of an `addt` or a `wept`, the bytes are the
+            command's data, and the transfer ends once all of it has
+            arrived (take_transparent_data).
+          - During the transfer of a `twfile`, the bytes are packets, and
+            the simulation answers and logs each packet (take_file_packets).
+          - In protocol reparse mode, the bytes go into the buffer, and the
+            text that ends the mode sets `recmod` to 0.
+        The log shows when the line drops bytes.
+
+        Held instructions and the buffer of protocol reparse mode wait in
+        the screen's serial buffer, which has room for SERIAL_BUFFER_SIZE
         bytes (_overflow)."""
         self._overflowed = False
         if self._line.transfer() is not None or self._line.in_reparse():
@@ -1018,6 +1028,10 @@ class Simulation:
             elif kind == DROPPED:
                 self._write_log("serial line: dropped %d bytes with no FF FF FF after them"
                                 % taken)
+            elif kind == TRANSFER_STEP:
+                self._write_log("twfile: %s" % taken.note)
+                if taken.answer:
+                    self._send_logged(taken.answer)
             else:
                 self._end_transfer(taken)
 
@@ -2372,13 +2386,13 @@ class Simulation:
         self._answered = True
 
     def take_transparent_data(self, word: str, numbers: list):
-        """Starts the transfer of `addt`, `wept`, or `twfile`, with its
-        arguments checked (EditorMachine._transparent_data, _twfile). The
-        screen answers FE FF FF FF, whatever `bkcmd` asks, in place of the
+        """Starts the transfer of `addt` or `wept`, whose arguments
+        EditorMachine._transparent_data has checked. The screen answers
+        FE FF FF FF, whatever the value of `bkcmd`, in place of the
         command's success, and takes the next bytes of the serial line as
-        data. Once they are in, it answers FD FF FF FF, and `addt` adds each
-        byte as a point, as `add` does, `wept` writes them to the EEPROM, or
-        `twfile` writes them as its file (_end_transfer). A count of 0
+        data. Once they are in, it answers FD FF FF FF. `addt` then adds
+        each byte as a point to its waveform, and `wept` writes the bytes
+        to the EEPROM (_end_transfer). With a count of 0, the screen
         answers both at once."""
         self._answered = True
         *place, count = numbers
@@ -2386,25 +2400,42 @@ class Simulation:
             self._write_log("addt: the next %d bytes are points of channel %d of the waveform "
                             "of ID %d" % (count, place[1], place[0]))
             done = partial(self._add_points, *place)
-        elif word == "wept":
+        else:
             self._write_log("wept: the next %d bytes go to the EEPROM at %d" % (count, place[0]))
             done = partial(self._write_transferred, place[0])
-        else:
-            self._write_log("twfile: the next %d bytes are the file %s" % (count, place[0]))
-            done = partial(self._write_transferred_file, place[0])
+        self._start_transfer(Transfer(count, done))
+
+    def take_file_packets(self, path: str, size: int):
+        """Starts the transfer of a `twfile`, whose arguments
+        EditorMachine._twfile has checked. The screen answers FE FF FF FF, whatever
+        the value of `bkcmd`. It then takes the file's bytes from the
+        serial line in packets, answers each packet, and drops every other
+        byte (file_packets.py). Once the file is complete, the screen
+        answers FD FF FF FF and writes the file (_end_transfer).
+
+        A person who types `twfile` in the Simulator section cannot type a
+        packet, so the log says how to stop waiting."""
+        self._answered = True
+        self._write_log("twfile: waiting for the file %s (size %d) in packets. Other bytes are "
+                        "dropped. To stop waiting, start the simulation again." % (path, size))
+        self._start_transfer(PacketTransfer(size, partial(self._write_transferred_file, path)))
+
+    def _start_transfer(self, transfer):
+        """Answers FE FF FF FF, and gives the next bytes of the serial line
+        to `transfer`, in place of a transfer under way. A transfer of no
+        bytes ends at once."""
         under_way = self._line.transfer()
         if under_way is not None:
             self._write_log("serial line: the transfer under way ends, %d bytes short"
                             % under_way.left)
             self._line.drop_transfer()
         self._send_logged(bytes([0xFE]) + END)
-        transfer = Transfer(count, done)
-        if count == 0:
-            self._end_transfer(transfer)
-        else:
+        if transfer.left:
             self._line.start_transfer(transfer)
+        else:
+            self._end_transfer(transfer)
 
-    def _end_transfer(self, transfer: Transfer):
+    def _end_transfer(self, transfer):
         """Ends a transfer that has its bytes: answers FD FF FF FF, then does
         what its command does with them."""
         self._send_logged(bytes([0xFD]) + END)

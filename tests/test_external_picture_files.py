@@ -7,6 +7,7 @@ import tempfile
 
 from nxwright.drawing.screen_pictures import paint_drawing
 from nxwright.project.pictures import write_png
+from nxwright.testing.file_packets import packets
 from nxwright.testing.preview import Previews
 from nxwright.testing.simulation import Simulation
 from tests.test_folder_check import edited_app
@@ -79,7 +80,7 @@ class MemoryFileTest(ExternalPictureTestCase):
         first = self.shapes(self.drawing(simulation))[0]["picture"]
         self.assertEqual(self.colour_shown(simulation), (255, 0, 0))
         simulation.serial_input('twfile "ram/p.png",%d' % len(BLUE))
-        simulation.serial_received(BLUE)
+        simulation.serial_received(b"".join(packets(BLUE)))
         simulation.serial_input('p0.path="ram/p.png"')
         self.assertNotEqual(self.shapes(self.drawing(simulation))[0]["picture"], first)
         self.assertEqual(self.colour_shown(simulation), (0, 0, 255))
@@ -88,7 +89,7 @@ class MemoryFileTest(ExternalPictureTestCase):
         simulation = self.started("")
         self.assertEqual(self.shapes(self.drawing(simulation)), [])
         simulation.serial_input('twfile "ram/p.png",%d' % len(RED))
-        simulation.serial_received(RED)
+        simulation.serial_received(b"".join(packets(RED)))
         simulation.serial_input('p0.path="ram/p.png"')
         self.assertEqual(self.colour_shown(simulation), (255, 0, 0))
         self.assertEqual(self.refusals(), 0)

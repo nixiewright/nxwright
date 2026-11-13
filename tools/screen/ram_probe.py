@@ -28,6 +28,8 @@ import sys
 
 from PIL import Image
 
+from nxwright.testing.file_packets import packets
+
 # The three bytes that end an instruction, and each answer of the screen.
 END = b"\xff\xff\xff"
 # What the screen answers to an instruction it ignores, and at the start
@@ -59,8 +61,9 @@ class Check:
     Nextion Editor's simulator gave.
 
     `steps` are sent in order. A text is an instruction, sent with the
-    three bytes that end it. Bytes are sent the way they are, as the data
-    of a `twfile`.
+    three bytes that end it. Bytes are the file of the `twfile` before
+    them, sent in packets, because a screen takes the file only in
+    packets (nxwright/testing/file_packets.py).
 
     `simulator` is everything the Nextion Editor's simulator sent for the
     steps, or None if it could not run them.
@@ -233,8 +236,12 @@ def run_checks(checks, exchange, ask) -> list:
 
 def _bytes_of(step) -> bytes:
     """Returns what is sent for a check's step: an instruction with the
-    bytes that end it, or data the way it is."""
-    return step if isinstance(step, bytes) else step.encode("latin-1") + END
+    bytes that end it, or a file's bytes as packets. Every file of the
+    checks fits in one packet, so the screen does not answer until the
+    file is complete."""
+    if isinstance(step, bytes):
+        return b"".join(packets(step))
+    return step.encode("latin-1") + END
 
 
 def report(answers: list, screen: str) -> str:
