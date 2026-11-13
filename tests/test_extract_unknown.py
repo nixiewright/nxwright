@@ -136,6 +136,25 @@ class ExtractUnknownTest(PatchedDemoTestCase):
         project = self.patched("older.HMI", header={9: 0x43, 36: 1, 65: 2})
         self.assertEqual(extract(project, self.target("older")), [])
 
+    def test_a_project_of_1_61_2_extracts_with_no_question_or_warning(self):
+        # The Nextion Editor 1.61.2 writes 3d, 2, and 0 in the manifest
+        # header, and 01 3d 02 00 in each page it writes.
+        blocks = HmiContainer.from_file(self.demo).blocks
+        pages = {}
+        for name in parse_manifest(blocks["main.HMI"]).block_names("pa"):
+            page = bytearray(blocks[name])
+            page[40:44] = bytes.fromhex("013d0200")
+            pages[name] = bytes(page)
+        project = self.patched("1-61-2.HMI", blocks=pages, header={9: 0x3d, 36: 2, 65: 0})
+        self.assertEqual(extract(project, self.target("1-61-2")), [])
+        # The build writes the current form in their place.
+        build(self.target("1-61-2"), self.folder / "1-61-2-again.HMI")
+        rebuilt = HmiContainer.from_file(self.folder / "1-61-2-again.HMI").blocks
+        self.assertEqual((rebuilt["main.HMI"][9], rebuilt["main.HMI"][36],
+                          rebuilt["main.HMI"][65]), (0x44, 2, 3))
+        self.assertEqual({bytes(rebuilt[name][40:43]) for name in pages},
+                         {bytes.fromhex("014402")})
+
     def test_a_page_whose_text_form_differs_asks_first(self):
         # The text form is made to lose the page header's byte 41, which a
         # real page's text form never does.

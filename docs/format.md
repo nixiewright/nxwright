@@ -62,8 +62,9 @@ The page header:
 - **Byte 20 is 1 while the page is locked.** The Nextion Editor will not let a locked page be changed until it is unlocked, and it adds its keyboards locked.
   - A lock may have a password. Bytes 16 to 19 contain the password's hash, calculated like the project password's (`password_hash` in `project/device_settings.py`), and are zero when the lock has no password.
 - **Bytes 21 and 22** are `4f 21` on every page seen.
-- **Bytes 40 to 43 repeat the project's character encoding.** Whenever the Nextion Editor writes a page, it starts them with `01 44 02` and the encoding's number (3 for iso-8859-1).
-  - A page last written by an older Nextion Editor keeps an older form, `01 43 01 00` or `01 44 01 00`, with no encoding. One project had the second form on 32 of its 38 pages, and the newer form on the rest.
+- **Bytes 40 to 43 give the version of the Nextion Editor that last wrote the page, and the project's character encoding.** Byte 40 is 1, bytes 41 and 42 are the second and third numbers of the version, and byte 43 is the encoding's number. The Nextion Editor 1.68.2 writes `01 44 02 03` in a project in iso-8859-1: 0x44 is 68, and iso-8859-1 is encoding 3.
+  - The releases from 1.60.1 to 1.68.1 write 0 in byte 43, and do not record the encoding: `01 3d 02 00` for 1.61.2, `01 43 01 00` for 1.67.1, `01 44 01 00` for 1.68.1. The form of 1.68.2, with the encoding, is called the newer form below.
+  - The Nextion Editor writes these bytes only when it writes the page, so a project can have pages in several forms. One project had the form of 1.68.1 on 32 of its 38 pages, and the form of 1.68.2 on the rest.
   - Changing the encoding rewrites every page.
   - The build writes the newer form into every page. `project/page_header.py` gives the forms.
 
@@ -111,7 +112,8 @@ The header of the manifest contains the project's device settings: the screen mo
 The header also gives the manifest's stamp (bytes 0 to 3), its own size (bytes 4 to 7), and where the list of entries starts and how many entries it has (bytes 24 to 31). In every project seen, its remaining bytes have these values:
 
 - Bytes 8, 10, and 14 are `0x01`, `0x21`, and `0x4f`.
-- Bytes 9, 36, and 65 are `0x43`, 1, and 2 in a project saved by an older Nextion Editor, and `0x44`, 2, and 3 in a current one.
+- Bytes 9 and 36 are the second and third numbers of the version of the Nextion Editor that last saved the project: `0x44` and 2 for 1.68.2, `0x3d` and 2 for 1.61.2.
+- Byte 65 is 3 in a project saved by 1.68.2, 2 in one saved by 1.67.1 or 1.68.1, and 0 in one saved by 1.60.1 to 1.65.1.
 - Byte 37, bytes 40 to 64, and bytes 66 to 95 are 0.
 
 ### Fonts

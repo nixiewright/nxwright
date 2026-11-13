@@ -952,7 +952,9 @@ _SUBCOMMANDS = [
      "The report leaves out the project's code, texts, names, pictures, fonts, sounds, and "
      "password. For each thing nxwright does not know, the report gives at most its first 16 "
      "bytes, which may contain some of the project's texts, so read the report before you "
-     "send it. The project file is only read, and the report is written only to a new file.",
+     "send it. The report also gives the Nextion Editor version that the project file "
+     "records, and the blocks that differ once the project is extracted and built again. "
+     "The project file is only read, and the report is written only to a new file.",
      [("project", {"type": Path, "help": "the project file (.HMI)"}),
       ("output", {"type": Path, "help": "the report to write, a Markdown file that does not "
                   "exist yet"})]),

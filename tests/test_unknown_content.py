@@ -19,6 +19,12 @@ from tests.test_container import manifest
 
 # A manifest header as the build writes it, for a model nxwright knows.
 HEADER = manifest_header(DeviceSettings(model_named("NX4832T035"), 0, "iso-8859-1"))
+# What each release of the Nextion Editor from 1.60.1 to 1.68.2 writes: the
+# second and third numbers of its version, in bytes 9 and 36 of the manifest
+# header and in bytes 41 and 42 of a page's header, then byte 65 of the
+# manifest header.
+RELEASE_FORMS = ((60, 1, 0), (60, 2, 0), (61, 1, 0), (61, 2, 0), (63, 1, 0), (63, 2, 0),
+                 (63, 3, 0), (65, 0, 0), (65, 1, 0), (67, 1, 2), (68, 1, 2), (68, 2, 3))
 
 
 def with_bytes(header: bytes, **places) -> bytes:
@@ -59,20 +65,43 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(sorts(unknown_in_manifest_entries(listed)),
                          [("manifest entry 1", MAY_BE_LOST)])
 
-    def test_the_current_and_the_older_form_are_known(self):
-        older = with_bytes(HEADER, b9=0x43, b36=1, b65=2)
-        for header in (HEADER, older):
-            with self.subTest(header=header[:16].hex()):
+    def test_the_form_of_each_release_from_1_60_1_is_known(self):
+        self.assertEqual(unknown_in_manifest_header(HEADER), [])
+        for second, third, byte_65 in RELEASE_FORMS:
+            with self.subTest(release="1.%d.%d" % (second, third)):
+                header = with_bytes(HEADER, b9=second, b36=third, b65=byte_65)
                 self.assertEqual(unknown_in_manifest_header(header), [])
+
+    def test_a_version_between_two_releases_is_known_too(self):
+        # No release has this version. A release that can no longer be
+        # downloaded may have a version like it, between two others.
+        header = with_bytes(HEADER, b9=62, b36=4, b65=0)
+        self.assertEqual(unknown_in_manifest_header(header), [])
+
+    def test_a_version_outside_those_releases_may_be_lost(self):
+        # A newer version: only the bytes that differ from the build's.
+        self.assertEqual(sorts(unknown_in_manifest_header(with_bytes(HEADER, b36=3))),
+                         [("manifest header, byte 36", MAY_BE_LOST)])
+        self.assertEqual(sorts(unknown_in_manifest_header(with_bytes(HEADER, b9=69, b36=1))),
+                         [("manifest header, byte 9", MAY_BE_LOST),
+                          ("manifest header, byte 36", MAY_BE_LOST)])
+        # 1.60.0, before the oldest release checked.
+        self.assertEqual(sorts(unknown_in_manifest_header(with_bytes(HEADER, b9=60, b36=0))),
+                         [("manifest header, byte 9", MAY_BE_LOST),
+                          ("manifest header, byte 36", MAY_BE_LOST)])
 
     def test_a_constant_byte_of_another_value_may_be_lost(self):
         self.assertEqual(sorts(unknown_in_manifest_header(with_bytes(HEADER, b14=0x50))),
                          [("manifest header, byte 14", MAY_BE_LOST)])
-        # One byte of the older form alone is neither form.
-        self.assertEqual(sorts(unknown_in_manifest_header(with_bytes(HEADER, b9=0x43))),
-                         [("manifest header, byte 9", MAY_BE_LOST)])
+        # Byte 65 was seen as 0, 2, and 3.
+        self.assertEqual(sorts(unknown_in_manifest_header(with_bytes(HEADER, b65=1))),
+                         [("manifest header, byte 65", MAY_BE_LOST)])
         self.assertEqual(sorts(unknown_in_manifest_header(with_bytes(HEADER, b70=1))),
                          [("manifest header, byte 70", MAY_BE_LOST)])
+        # An older release's version does not excuse another byte.
+        older = with_bytes(HEADER, b9=61, b36=2, b65=0, b14=0x50)
+        self.assertEqual(sorts(unknown_in_manifest_header(older)),
+                         [("manifest header, byte 14", MAY_BE_LOST)])
 
     def test_an_unknown_model_may_be_lost(self):
         header = with_bytes(HEADER, b16=0xEE, b17=0xEE)
@@ -157,20 +186,31 @@ class PagesTest(unittest.TestCase):
         text = [("type", bytes([116])), ("id", b"\1"), ("objname", b"t0"), ("aph", b"\x7f")]
         self.assertEqual(unknown_in_pages({"block 0.pa": page(text)}), [])
 
-    def test_the_header_forms_seen_are_known(self):
-        # The current form, and the older ones of pages the Nextion Editor
-        # has not written since it was updated: the second was seen in 32
-        # pages of a project for an NSPanel screen.
-        for start in ("01440203", "01430100", "01440100"):
-            with self.subTest(form=start):
-                header_40 = bytes.fromhex(start) + bytes(12)
+    def test_the_header_form_of_each_release_from_1_60_1_is_known(self):
+        # A page keeps the form of the release that last wrote it. Only the
+        # current release, the last of the list, writes the encoding's
+        # number in byte 43. The form of 1.68.1 was seen in 32 pages of a
+        # project for an NSPanel screen.
+        for second, third, _ in RELEASE_FORMS[:-1]:
+            with self.subTest(release="1.%d.%d" % (second, third)):
+                header_40 = bytes([1, second, third, 0]) + bytes(12)
+                self.assertEqual(unknown_in_pages({"block 0.pa": page(header_40=header_40)}), [])
+        for encoding in (3, 24):
+            with self.subTest(encoding=encoding):
+                header_40 = bytes([1, 68, 2, encoding]) + bytes(12)
                 self.assertEqual(unknown_in_pages({"block 0.pa": page(header_40=header_40)}), [])
 
     def test_a_header_form_not_seen_is_written_otherwise(self):
-        # The build writes the current form, as the Nextion Editor does.
-        header_40 = bytes.fromhex("01450100") + bytes(12)
-        self.assertEqual(sorts(unknown_in_pages({"block 0.pa": page(header_40=header_40)})),
-                         [("block 0.pa, page header bytes 40 to 43", WRITTEN_OTHERWISE)])
+        # The build writes the current form, as the Nextion Editor does. The
+        # four forms tested are one of a newer version, one of a version
+        # before 1.60.1, one of an older version with a number in byte 43,
+        # and one whose byte 40 is not 1.
+        for start in ("01450100", "013c0000", "013d0203", "02440203"):
+            with self.subTest(form=start):
+                header_40 = bytes.fromhex(start) + bytes(12)
+                self.assertEqual(
+                    sorts(unknown_in_pages({"block 0.pa": page(header_40=header_40)})),
+                    [("block 0.pa, page header bytes 40 to 43", WRITTEN_OTHERWISE)])
 
     def test_header_bytes_past_43_other_than_zero_may_be_lost(self):
         header_40 = bytes.fromhex("01440203") + bytes(11) + b"\1"

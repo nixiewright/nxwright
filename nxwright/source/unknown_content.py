@@ -38,6 +38,7 @@ from nxwright.project.container import HmiContainer, numbered_block
 from nxwright.project.device_settings import ENCODINGS, HEADER_SIZE, TextCodec, encoding_name
 from nxwright.project.dump_folder import dump_header_bytes, dump_manifest_header, page_text_files
 from nxwright.project.dumper import handles_block, kept_picture_sources, page_text_difference
+from nxwright.project.editor_version import CURRENT_VERSION, is_checked_version
 from nxwright.project.object_types import TYPE_NAMES
 from nxwright.project.page_block import Attribute, parse_page
 from nxwright.project.page_header import (HEADER_21, SYSTEM_PAGES, header_40_form_known,
@@ -55,11 +56,15 @@ from nxwright.source.page_source import object_irregularities, reference_kind
 UNKNOWN_MODEL_PLACE = "manifest header, bytes 16 to 19"
 
 # The bytes of the manifest header that the build writes as constants
-# (device_settings.manifest_header), by place, in the current form. Projects
-# saved by an older Nextion Editor have an older form, with other values at
-# three of these places. The build turns the older form into the current one.
-_CURRENT_FORM = {8: 0x01, 9: 0x44, 10: 0x21, 14: 0x4f, 36: 2, 65: 3}
-_OLDER_FORM = {**_CURRENT_FORM, 9: 0x43, 36: 1, 65: 2}
+# (device_settings.manifest_header), by place. Bytes 9 and 36 are the second
+# and third numbers of the Nextion Editor's version (editor_version.py).
+CURRENT_FORM = {8: 0x01, 9: CURRENT_VERSION[0], 10: 0x21, 14: 0x4f, 36: CURRENT_VERSION[1],
+                65: 3}
+# The places of the version's two numbers among those constants.
+_VERSION_BYTES = (9, 36)
+# The values that byte 65 has in the projects of the Nextion Editors from
+# 1.60.1 on: 0 up to 1.65.1, 2 in 1.67.1 and 1.68.1, and 3 in 1.68.2.
+_KNOWN_BYTE_65 = (0, 2, 3)
 # The places of the bytes that contain the device settings, the header's own
 # size, the place of the table, the resource count, and the stamp. The build
 # writes every other byte as 0, except for the constants above.
@@ -168,8 +173,8 @@ def unknown_in_manifest_header(header: bytes) -> list:
     that nxwright does not know is kept exactly, as its number. But if the
     screen model is unknown too, app.toml has no screen settings to keep the
     number with, and the encoding may be lost. A byte that the build writes
-    as a constant may be lost if it has another value, unless the header is
-    the older form as a whole."""
+    as a constant may be lost if it has a value that no Nextion Editor from
+    1.60.1 to the current one writes there (_older_editor_writes)."""
     if len(header) != HEADER_SIZE:
         # nxwright cannot read the device settings from a header of another
         # size. The result is the same as for an unknown screen model.
@@ -201,21 +206,26 @@ def unknown_in_manifest_header(header: bytes) -> list:
                                     "nxwright knows the model",
                                     UNKNOWN_MODEL_PLACE, header[16:20],
                                     MAY_BE_LOST))
-    if not _is_form(header, _OLDER_FORM):
-        expected = {place: _CURRENT_FORM.get(place, 0) for place in range(HEADER_SIZE)
-                    if place not in _SETTINGS_BYTES}
-        found += [UnknownContent("a manifest header byte the build writes as %d" % value,
-                                 "manifest header, byte %d" % place, header[place:place + 1],
-                                 MAY_BE_LOST)
-                  for place, value in expected.items() if header[place] != value]
+    expected = {place: CURRENT_FORM.get(place, 0) for place in range(HEADER_SIZE)
+                if place not in _SETTINGS_BYTES}
+    found += [UnknownContent("a manifest header byte the build writes as %d" % value,
+                             "manifest header, byte %d" % place, header[place:place + 1],
+                             MAY_BE_LOST)
+              for place, value in expected.items()
+              if header[place] != value and not _older_editor_writes(header, place)]
     return found
 
 
-def _is_form(header: bytes, form: dict) -> bool:
-    """Returns whether every byte that the build writes as a constant has
-    its value in `form`, or 0 where `form` has no value for it."""
-    return all(header[place] == form.get(place, 0) for place in range(HEADER_SIZE)
-               if place not in _SETTINGS_BYTES)
+def _older_editor_writes(header: bytes, place: int) -> bool:
+    """Returns whether the byte at `place` of the manifest header `header`
+    has a value that a Nextion Editor from 1.60.1 to the current one writes
+    there. Each of them writes its own version in bytes 9 and 36, and one of
+    three values in byte 65. Nothing is lost when the build replaces these
+    values with the current ones, because an older Nextion Editor writes its
+    own values again when it saves the project."""
+    if place in _VERSION_BYTES:
+        return is_checked_version(*(header[each] for each in _VERSION_BYTES))
+    return place == 65 and header[place] in _KNOWN_BYTE_65
 
 
 def unknown_in_picture_headers(blocks: dict) -> list:

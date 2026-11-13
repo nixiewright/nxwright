@@ -80,6 +80,7 @@ python tools/editor/editor.py catalog tools/editor/build/catalog.json
 python tools/editor/editor.py models tools/editor/build/models.json
 python tools/editor/editor.py compile
 python tools/editor/editor.py tft tools/editor/build/tft
+python tools/editor/editor.py add-page
 python tools/editor/editor.py save tools/editor/build/saved.HMI
 python tools/editor/editor.py quit
 python tools/editor/editor.py status
@@ -175,6 +176,13 @@ For example, `"press 200,150; picture held.png; release; wait 500"` takes a pict
 - If the compile fails, the command stops without writing the file.
 - The command closes the Explorer window that the Nextion Editor opens on the folder.
 - Your own Nextion Editor shares the dedicated Editor's settings, so it will suggest the same folder the next time you write a TFT file.
+
+### `add-page`
+
+`add-page` adds a page to the project shown with the Add button of the Page panel, and prints how many pages the project then has. The project shown must be a copy that `open` made.
+
+- A script that needs a page written by the release it drives can add one, because the Nextion Editor writes a page only when the page changes.
+- The Page panel's buttons show only pictures, so the command presses the first one, which is Add in every version from 1.60.1 to 1.68.2. If the panel's page count does not rise by one, the command stops, and its error gives the count before and after.
 
 ### `save <file.HMI>`
 
@@ -311,6 +319,21 @@ python tools/editor/release_pass.py files --old <old folder> --new <new folder> 
 ```
 
 A changed `model0.sa` or `model1.sa` points at a change to the list of screen models. Between 1.60.1 and 1.63.3, for example, both changed, and the keyboards gained a fourth page for each screen size.
+
+## Older Nextion Editor releases
+
+`tools/editor/older_projects.py` shows what an older release does with the projects nxwright builds. Run it with nxwright's own Python, from nxwright's folder, and give it the program of a release unpacked from its zip:
+
+```
+python tools/editor/older_projects.py <the release's program> <output folder>
+```
+
+- The projects are the ones the [round trip](#the-round-trip) uses.
+- The release opens and compiles each project, adds a page, and saves it. The script then extracts the saved project and builds it again, and the release compiles both the saved project and the rebuilt one.
+- `report.md` in the output folder gives, for each project, the compile's output, the saved project's manifest header and page headers, the blocks that differ in the rebuilt project, and whether the two TFT files are the same.
+- To show which bytes of the manifest header a release writes itself, the script also has the release save a copy of the small project of series T whose manifest header is in the form of 1.67.1. The report lists the bytes that changed in that header.
+- If a step stops, the report gives what stopped it, and the next project starts in a fresh Nextion Editor. The projects of series F and E run last, because an older release may not offer those series.
+- The release runs as the dedicated Editor `older-release`, and comes to the front at each `open`, so the run is best left to itself.
 
 ## The tool's tests
 

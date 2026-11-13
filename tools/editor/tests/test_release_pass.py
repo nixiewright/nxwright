@@ -1,9 +1,9 @@
 """The comparisons of a release pass (tools/editor/release_pass.py). The
-round trip's: of two folders file by file, of two projects' live blocks, and
-of the differences the new Nextion Editor alone makes. Then of two Editors'
-catalogs of attributes, of their lists of screen models with nxwright's
-table, and of the files of two releases. They run on small inputs written
-for the tests, and need neither the Nextion Editor nor pywinauto."""
+round trip's: of two folders file by file, and of the differences the new
+Nextion Editor alone makes. Then of two Editors' catalogs of attributes, of
+their lists of screen models with nxwright's table, and of the files of two
+releases. They run on small inputs written for the tests, and need neither
+the Nextion Editor nor pywinauto."""
 import json
 from pathlib import Path
 import subprocess
@@ -11,23 +11,9 @@ import tempfile
 import unittest
 from unittest import mock
 
+from nxwright.project.byte_differences import ADDED, CHANGED, REMOVED, Difference
 from nxwright.project.screen_models import MODELS, ScreenModel
 from tools.editor import release_pass
-from tools.editor.release_pass import Difference
-
-
-class ByteRunsTest(unittest.TestCase):
-
-    def test_neighbouring_bytes_that_differ_make_one_run(self):
-        self.assertEqual(release_pass.differing_runs(b"abcdef", b"aXYdeZ"),
-                         ((1, b"bc", b"XY"), (5, b"f", b"Z")))
-
-    def test_a_longer_side_ends_in_a_run_of_its_own(self):
-        self.assertEqual(release_pass.differing_runs(b"abc", b"abcde"), ((3, b"", b"de"),))
-        self.assertEqual(release_pass.differing_runs(b"abcd", b"ab"), ((2, b"cd", b""),))
-
-    def test_the_same_bytes_have_no_run(self):
-        self.assertEqual(release_pass.differing_runs(b"abc", b"abc"), ())
 
 
 class FoldersTest(unittest.TestCase):
@@ -48,9 +34,9 @@ class FoldersTest(unittest.TestCase):
         self.write(self.original, "pictures/old.png", b"png")
         self.write(self.copy, "pictures/new.png", b"png")
         self.assertEqual(release_pass.compare_folders(self.original, self.copy), [
-            Difference("app.toml", release_pass.CHANGED, ((8, b"a", b"b"),)),
-            Difference("pictures/new.png", release_pass.ADDED),
-            Difference("pictures/old.png", release_pass.REMOVED)])
+            Difference("app.toml", CHANGED, ((8, b"a", b"b"),)),
+            Difference("pictures/new.png", ADDED),
+            Difference("pictures/old.png", REMOVED)])
 
     def test_the_same_folders_give_nothing(self):
         for folder in (self.original, self.copy):
@@ -58,36 +44,25 @@ class FoldersTest(unittest.TestCase):
         self.assertEqual(release_pass.compare_folders(self.original, self.copy), [])
 
 
-class BlocksTest(unittest.TestCase):
-
-    def test_each_block_added_removed_or_changed(self):
-        built = {"main.HMI": b"\x01\x02\x03", "0.pa": b"page", "1.i": b"picture"}
-        saved = {"main.HMI": b"\x01\x09\x03", "0.pa": b"page", "2.i": b"picture"}
-        self.assertEqual(release_pass.compare_blocks(built, saved), [
-            Difference("1.i", release_pass.REMOVED),
-            Difference("2.i", release_pass.ADDED),
-            Difference("main.HMI", release_pass.CHANGED, ((1, b"\x02", b"\x09"),))])
-
-
 class NewEditorOnlyTest(unittest.TestCase):
 
     def test_a_change_both_editors_make_alike_is_left_out(self):
-        stamp = Difference("0.pa", release_pass.CHANGED, ((0, b"\x00", b"\x07"),))
+        stamp = Difference("0.pa", CHANGED, ((0, b"\x00", b"\x07"),))
         self.assertEqual(release_pass.new_editor_only([stamp], [stamp]), [])
 
     def test_a_block_both_editors_change_but_differently_is_a_finding(self):
-        old = Difference("0.pa", release_pass.CHANGED, ((0, b"\x00", b"\x07"),))
-        new = Difference("0.pa", release_pass.CHANGED, ((0, b"\x00", b"\x08"),))
+        old = Difference("0.pa", CHANGED, ((0, b"\x00", b"\x07"),))
+        new = Difference("0.pa", CHANGED, ((0, b"\x00", b"\x08"),))
         self.assertEqual(release_pass.new_editor_only([old], [new]), [new])
 
     def test_only_the_new_editor_s_runs_of_a_block_are_kept(self):
-        old = Difference("0.pa", release_pass.CHANGED, ((0, b"\x00", b"\x07"),))
-        new = Difference("0.pa", release_pass.CHANGED, ((0, b"\x00", b"\x07"), (9, b"a", b"b")))
+        old = Difference("0.pa", CHANGED, ((0, b"\x00", b"\x07"),))
+        new = Difference("0.pa", CHANGED, ((0, b"\x00", b"\x07"), (9, b"a", b"b")))
         self.assertEqual(release_pass.new_editor_only([old], [new]),
-                         [Difference("0.pa", release_pass.CHANGED, ((9, b"a", b"b"),))])
+                         [Difference("0.pa", CHANGED, ((9, b"a", b"b"),))])
 
     def test_a_block_the_new_editor_alone_adds_is_a_finding(self):
-        added = Difference("9.x", release_pass.ADDED)
+        added = Difference("9.x", ADDED)
         self.assertEqual(release_pass.new_editor_only([], [added]), [added])
         self.assertEqual(release_pass.new_editor_only([added], [added]), [])
 
@@ -98,7 +73,7 @@ class SectionTest(unittest.TestCase):
         # With nothing of the old Editor's to tell it from, a difference of
         # the new Editor's is not called its alone.
         old = release_pass.Side(findings=["`editor.py open` stopped: a time-out"])
-        new = release_pass.Side(blocks=[Difference("0.pa", release_pass.CHANGED,
+        new = release_pass.Side(blocks=[Difference("0.pa", CHANGED,
                                                    ((0, b"\x00", b"\x07"),))], finished=True)
         text = release_pass._section("demo", old, new)
         self.assertNotIn("alone", text)
@@ -106,9 +81,9 @@ class SectionTest(unittest.TestCase):
         self.assertIn("`0.pa`", text)
 
     def test_both_runs_finished(self):
-        stamp = Difference("0.pa", release_pass.CHANGED, ((0, b"\x00", b"\x07"),))
+        stamp = Difference("0.pa", CHANGED, ((0, b"\x00", b"\x07"),))
         old = release_pass.Side(blocks=[stamp], finished=True)
-        new = release_pass.Side(blocks=[stamp, Difference("9.x", release_pass.ADDED)],
+        new = release_pass.Side(blocks=[stamp, Difference("9.x", ADDED)],
                                 finished=True)
         text = release_pass._section("demo", old, new)
         alone = text[text.index("What the new Editor alone changes"):]
@@ -195,7 +170,7 @@ class CatalogRunTest(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0 if side in catalogs else 1)
 
         with mock.patch.object(release_pass.subprocess, "run", side_effect=catalog_variants), \
-                mock.patch.object(release_pass, "_editor",
+                mock.patch.object(release_pass, "editor_tool",
                                   side_effect=lambda env, *command: commands.append(command)):
             text = release_pass.catalog(Path("old.exe"), Path("new.exe"), self.output)
         return text, sides, commands
@@ -274,7 +249,7 @@ class ModelsRunTest(unittest.TestCase):
                                             encoding="utf-8")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with mock.patch.object(release_pass, "_editor", side_effect=editor):
+        with mock.patch.object(release_pass, "editor_tool", side_effect=editor):
             text = release_pass.models(Path("old.exe"), Path("new.exe"), self.output)
         return text, commands
 
@@ -319,12 +294,12 @@ class ReleaseFilesTest(unittest.TestCase):
         self.write(self.old, "lib/old.dll", b"dll")
         self.write(self.new, "lib/new.dll", b"dll")
         self.assertEqual(release_pass.compare_files(self.old, self.new), [
-            Difference("NextionEditor.exe", release_pass.CHANGED),
-            Difference("lib/new.dll", release_pass.ADDED),
-            Difference("lib/old.dll", release_pass.REMOVED)])
+            Difference("NextionEditor.exe", CHANGED),
+            Difference("lib/new.dll", ADDED),
+            Difference("lib/old.dll", REMOVED)])
 
     def test_the_report_lists_each_file(self):
-        found = [Difference("model0.sa", release_pass.CHANGED)]
+        found = [Difference("model0.sa", CHANGED)]
         text = release_pass.files_report(self.old, self.new, found)
         self.assertIn("- `model0.sa`: changed", text)
         self.assertIn("Nothing differs.", release_pass.files_report(self.old, self.new, []))

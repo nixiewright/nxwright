@@ -17,6 +17,10 @@ Which version of the Nextion Editor saved the project? Its Help menu shows the v
 
 What did you do in the Nextion Editor before you saved the project? For example, did you add a component of a new type, or change a setting?
 
+## The project nxwright builds
+
+If `nxwright extract` and `nxwright build` both worked, does the project that nxwright built open and compile in your Nextion Editor? If you can, compile your own project and the built one to TFT files there, and say whether the two files are the same.
+
 ## The project file
 
 Could you share the project file privately, if nxwright's maintainers ask? Yes or no.

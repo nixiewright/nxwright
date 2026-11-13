@@ -13,10 +13,13 @@ user locked and unlocked in the Editor:
            (SYSTEM_PAGES). The Editor shows those with their own icon, and
            can reset one to its stock version; a project may change them.
   +40..43  01 44 02 and the project's character encoding, as the Editor
-           writes them whenever it writes a page. A page it has not written
-           since it was updated has an older form, 01 43 01 00 or
-           01 44 01 00. In one project for an NSPanel screen, 32 of the 38
-           pages had 01 44 01 00, and the other 6 had the newer form.
+           1.68.2 writes them whenever it writes a page. The 44 and the 02
+           are the second and third numbers of its version
+           (editor_version.py). An older Editor wrote 01, the two numbers
+           of its own version, and 00: 01 3d 02 00 for 1.61.2. A page keeps
+           the form of the Editor that last wrote it. In one project for an
+           NSPanel screen, 32 of the 38 pages had 01 44 01 00, the form of
+           1.68.1, and the other 6 had the current form.
   +44..55  zero on every page
 
 When bytes 16 to 23 have a value that was not seen in those files, nxwright
@@ -28,6 +31,7 @@ current form, whatever the page had. The finder of unknown content
 """
 from dataclasses import dataclass, replace
 
+from nxwright.project.editor_version import CURRENT_VERSION, is_checked_version
 from nxwright.project.page_block import PageBlock
 
 # Byte 23 of the system pages, by the name a page file gives them: the stock
@@ -39,8 +43,7 @@ SYSTEM_PAGES = {"keyboard": 1, "keypad": 2, "speed-dial": 3, "chinese-input": 4}
 NO_LOCK_PASSWORD = bytes(4)
 # Bytes 21 and 22, the same on every page seen.
 HEADER_21 = bytes.fromhex("4f21")
-_HEADER_40_START = bytes.fromhex("014402")
-_OLDER_HEADER_40_STARTS = (bytes.fromhex("01430100"), bytes.fromhex("01440100"))
+_HEADER_40_START = bytes([0x01, *CURRENT_VERSION])
 _HEADER_40_END = bytes(12)
 
 
@@ -72,8 +75,13 @@ def header_40(encoding_code: int) -> bytes:
 
 def header_40_form_known(field_40: bytes) -> bool:
     """Returns whether a page's header bytes 40 to 43, the start of
-    `field_40`, are in a form that the Editor was seen to write."""
-    return field_40[:3] == _HEADER_40_START or field_40[:4] in _OLDER_HEADER_40_STARTS
+    `field_40`, are in a form that an Editor from 1.60.1 to the current one
+    writes (editor_version.py). The current form ends with the encoding's
+    number, and an older form ends with 0."""
+    if field_40[:3] == _HEADER_40_START:
+        return True
+    return field_40[0] == 0x01 and is_checked_version(field_40[1], field_40[2]) \
+        and field_40[3] == 0
 
 
 def header_44_known(field_40: bytes) -> bool:

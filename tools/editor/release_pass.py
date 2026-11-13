@@ -43,11 +43,11 @@ the baseline below. Then, with each Editor in turn, the round trip:
 A difference is a file in a folder, or a live block in a project file, that
 only one side has, or that both sides have with different bytes. A changed
 file or block comes with its runs. A run is a stretch of neighbouring bytes
-that differ, given with where it starts and with its bytes on each side. The
-comparison leaves out the directory of a project file, because each save
-adds to it. The differences that the old Editor makes are taken as what any
-save changes. The findings are the differences that only the new Editor
-makes (new_editor_only).
+that differ, given with where it starts and with its bytes on each side
+(nxwright/project/byte_differences.py). The comparison leaves out the
+directory of a project file, because each save adds to it. The differences
+that the old Editor makes are taken as what any save changes. The findings
+are the differences that only the new Editor makes (new_editor_only).
 
 The catalog comparison runs catalog_variants.py under each Editor in turn,
 and compares the two merged catalogs (compare_catalogs). Each run takes about
@@ -71,6 +71,7 @@ NXWRIGHT_FOLDER = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(NXWRIGHT_FOLDER))
 
 from nxwright import NxwrightError  # noqa: E402
+from nxwright.project.byte_differences import CHANGED, Difference, compare_by_name  # noqa: E402
 from nxwright.project.container import HmiContainer  # noqa: E402
 from nxwright.project.device_settings import DeviceSettings  # noqa: E402
 from nxwright.project.new_project import write_new_project  # noqa: E402
@@ -117,41 +118,6 @@ _RESOURCE_ATTRIBUTES = ("pic", "pic1", "pic2", "picc", "picc1", "picc2", "bpic",
 # The height in pixels of the font that the every-component project is given.
 _FONT_HEIGHT = 16
 
-# The kinds of difference. ADDED is only on the second side, REMOVED is only
-# on the first side, and CHANGED is on both sides with different bytes.
-ADDED, REMOVED, CHANGED = "added", "removed", "changed"
-
-
-@dataclass(frozen=True)
-class Difference:
-    """A file or block, `where`, that differs between two sides. `kind` is
-    ADDED, REMOVED, or CHANGED. For a changed file or block, `runs` lists
-    its runs, each as (where the run starts, the first side's bytes, the
-    second side's bytes)."""
-    where: str
-    kind: str
-    runs: tuple = ()
-
-
-def differing_runs(first: bytes, second: bytes) -> tuple:
-    """Returns the runs where `first` and `second` differ. A run is a stretch
-    of neighbouring bytes that differ, given as (where it starts, the bytes
-    of `first`, the bytes of `second`). When one side is longer, its bytes
-    after the end of the shorter side make a run of their own."""
-    runs = []
-    start = None
-    shorter = min(len(first), len(second))
-    for place in range(shorter + 1):
-        differs = place < shorter and first[place] != second[place]
-        if differs and start is None:
-            start = place
-        elif not differs and start is not None:
-            runs.append((start, first[start:place], second[start:place]))
-            start = None
-    if len(first) != len(second):
-        runs.append((shorter, first[shorter:], second[shorter:]))
-    return tuple(runs)
-
 
 def compare_folders(first: Path, second: Path) -> list:
     """Returns the Differences of the folder `second` from the folder
@@ -159,29 +125,8 @@ def compare_folders(first: Path, second: Path) -> list:
     with /."""
     files = [{path.relative_to(folder).as_posix(): path for path in folder.rglob("*")
               if path.is_file()} for folder in (first, second)]
-    return _compared({name: path.read_bytes() for name, path in files[0].items()},
-                     {name: path.read_bytes() for name, path in files[1].items()})
-
-
-def compare_blocks(built: dict, saved: dict) -> list:
-    """Returns the Differences of the live blocks `saved` from the live
-    blocks `built`. Each is {name: bytes}, in the form that HmiContainer
-    gives."""
-    return _compared(built, saved)
-
-
-def _compared(first: dict, second: dict) -> list:
-    """Returns the Differences of `second` from `first`, matched by name.
-    Each is {name: bytes}."""
-    found = []
-    for name in sorted(set(first) | set(second)):
-        if name not in first:
-            found.append(Difference(name, ADDED))
-        elif name not in second:
-            found.append(Difference(name, REMOVED))
-        elif first[name] != second[name]:
-            found.append(Difference(name, CHANGED, differing_runs(first[name], second[name])))
-    return found
+    return compare_by_name({name: path.read_bytes() for name, path in files[0].items()},
+                           {name: path.read_bytes() for name, path in files[1].items()})
 
 
 def new_editor_only(old: list, new: list) -> list:
@@ -335,7 +280,7 @@ def run_side(name: str, built: Path, baseline: Path, side: str, program: Path,
                             for warning in extract(saved, extracted, continue_with_unknown=True,
                                                     keep_locks_without_password=True)]
         result.folder = compare_folders(baseline, extracted)
-        result.blocks = _without_save_to_save(compare_blocks(
+        result.blocks = _without_save_to_save(compare_by_name(
             HmiContainer.from_file(built).blocks, HmiContainer.from_file(saved).blocks))
     except NxwrightError as error:
         result.findings.append("nxwright could not read the saved file: %s" % error)
@@ -356,17 +301,17 @@ def _saved_by_the_editor(built: Path, saved: Path, output: Path, environment: di
              ("save", str(saved), "--as", holder)]
     try:
         for step in steps:
-            done = _editor(environment, *step)
+            done = editor_tool(environment, *step)
             if done.returncode != 0:
                 # A dialog or a message that the step left open would stop
                 # `quit`, so the commands before `quit` close them first.
                 for closing in ("close-simulator", "close-file-dialog", "close-message", "quit"):
-                    _editor(environment, closing, "--as", holder)
+                    editor_tool(environment, closing, "--as", holder)
                 return "`editor.py %s` stopped: %s" % (step[0],
                                                        (done.stderr or done.stdout).strip())
         return None
     finally:
-        _editor(environment, "release", holder)
+        editor_tool(environment, "release", holder)
 
 
 def _environment(side: str, program: Path) -> dict:
@@ -375,7 +320,7 @@ def _environment(side: str, program: Path) -> dict:
     return dict(os.environ, NXWRIGHT_EDITOR=str(program), NXWRIGHT_EDITOR_NAME=EDITOR_NAMES[side])
 
 
-def _editor(environment: dict, *command: str) -> subprocess.CompletedProcess:
+def editor_tool(environment: dict, *command: str) -> subprocess.CompletedProcess:
     """Runs the Editor tool's `command` with the tool's Python, for the
     Editor that `environment` selects."""
     return subprocess.run([str(TOOL_PYTHON), str(EDITOR_SCRIPT), *command], cwd=NXWRIGHT_FOLDER,
@@ -575,7 +520,7 @@ def catalog(old: Path, new: Path, output: Path) -> str:
                                   stdout=log, stderr=subprocess.STDOUT)
         # The Editor is closed, so that it does not keep running beside the
         # next Editor for hours.
-        _editor(environment, "quit")
+        editor_tool(environment, "quit")
         # catalog_variants.py also exits with 1 after writing its catalog,
         # when one of nxwright's descriptions equals an Editor's hint. The
         # run therefore counts as finished when merged.json exists, whatever
@@ -694,15 +639,15 @@ def _listed_by_the_editor(project: Path, listed: Path, environment: dict):
     None when every step succeeds, or else what stopped the step."""
     try:
         for step in (("open", str(project)), ("models", str(listed))):
-            done = _editor(environment, *step)
+            done = editor_tool(environment, *step)
             if done.returncode != 0:
                 # A message that the step left open would stop `quit`.
-                _editor(environment, "close-message")
+                editor_tool(environment, "close-message")
                 return "`editor.py %s` stopped: %s" % (step[0],
                                                        (done.stderr or done.stdout).strip())
         return None
     finally:
-        _editor(environment, "quit")
+        editor_tool(environment, "quit")
 
 
 def compare_files(old: Path, new: Path) -> list:
@@ -712,7 +657,7 @@ def compare_files(old: Path, new: Path) -> list:
     without runs."""
     digests = [{path.relative_to(folder).as_posix(): _sha256(path) for path in folder.rglob("*")
                 if path.is_file()} for folder in (old, new)]
-    return [Difference(each.where, each.kind) for each in _compared(*digests)]
+    return [Difference(each.where, each.kind) for each in compare_by_name(*digests)]
 
 
 def _sha256(path: Path) -> bytes:

@@ -12,6 +12,7 @@ and a command that stops, say which.
     python tools/editor/editor.py tft <folder>
     python tools/editor/editor.py catalog <file.json> [--variant <name>] [--known <file.json>]
     python tools/editor/editor.py models <file.json>
+    python tools/editor/editor.py add-page
     python tools/editor/editor.py save <file.HMI>
     python tools/editor/editor.py quit
     python tools/editor/editor.py status
@@ -251,6 +252,9 @@ def main(arguments=None) -> int:
                                  "through File > Save as, close the dedicated Editor, and copy "
                                  "the saved file to a file that does not exist yet")
     saving.add_argument("output", type=Path)
+    commands.add_parser("add-page", parents=[holding],
+                        help="add a page to the project shown, a copy this tool opened, with "
+                        "the Page panel's Add button")
     commands.add_parser("quit", parents=[holding],
                         help="close the dedicated Editor, dropping changes not saved to a copy "
                         "this tool opened")
@@ -395,6 +399,8 @@ def _run_command(options, editor: "DedicatedEditor", folder: Path):
         return save_project(editor, folder, options.output)
     if options.command == "open":
         print("Opened %s" % open_project(editor, folder, options.project))
+    elif options.command == "add-page":
+        print("Added a page: the project now has %d pages" % add_page(editor, folder))
     elif options.command == "attributes":
         # Hints may be in any language, which Windows' console may not encode.
         sys.stdout.reconfigure(encoding="utf-8")
@@ -1004,11 +1010,7 @@ def save_project(editor: DedicatedEditor, folder: Path, output: Path) -> Path:
     main = editor.main_window()
     _stop_on_dialog(main, "before saving")
     work = folder / "work"
-    shown = shown_project(main.window_text())
-    if not is_work_copy(shown, work):
-        raise EditorError("the project shown, %s, is not a copy this tool opened; open the "
-                          "project first" % (shown or "none"))
-    saved = _saved_name(work, Path(shown))
+    saved = _saved_name(work, _shown_work_copy(main, work))
     dialog = _open_file_menu_window(editor, _SAVE_AS_MENU_ITEM, _is_file_dialog,
                                     "the Save As dialog")
 
@@ -1032,6 +1034,56 @@ def save_project(editor: DedicatedEditor, folder: Path, output: Path) -> Path:
         _cancel_left_dialog(dialog)
         raise
     return saved
+
+
+def _shown_work_copy(main, work: Path) -> Path:
+    """Returns the path of the project that the Editor's main window `main`
+    shows. Raises EditorError unless that project is one of the tool's own
+    copies, in the work folder `work`: save and add-page change the project
+    shown, and must never change a project of the user's."""
+    shown = shown_project(main.window_text())
+    if not is_work_copy(shown, work):
+        raise EditorError("the project shown, %s, is not a copy this tool opened; open the "
+                          "project first" % (shown or "none"))
+    return Path(shown)
+
+
+def add_page(editor: DedicatedEditor, folder: Path) -> int:
+    """Adds a page to the project shown, one of the tool's own copies, and
+    returns how many pages the project then has. `folder` contains the
+    records of the dedicated Editor.
+
+    The page is added with the Add button of the Page panel. The buttons of
+    the panel's bar show pictures, and UI Automation gives them no names to
+    tell them apart by, so Add is taken to be the first one. The panel's
+    page count shows whether the press added a page.
+
+    Raises EditorError when the project shown is not one of the tool's
+    copies, when the bar has no button, and when the page count has not
+    risen by one in time."""
+    editor.stop_on_crash()
+    main = editor.main_window()
+    _stop_on_dialog(main, "before adding a page")
+    _shown_work_copy(main, folder / "work")
+    before = _page_count(editor)
+    buttons = [item for item in _page_panel_bar(editor)
+               if item.element_info.control_type == "Button"]
+    if not buttons:
+        raise EditorError("the Page panel's bar has no button to add a page with")
+    failed = _press_in_background(buttons[0])
+
+    def changed():
+        if failed:
+            raise EditorError("the Page panel's first button could not be pressed: %s"
+                              % failed[0])
+        return _page_count(editor) != before
+    _wait_for(changed, DIALOG_WAIT, "the Page panel to count another page",
+              stop=lambda: editor.stop_if_blocked("while adding a page"))
+    after = _page_count(editor)
+    if after != before + 1:
+        raise EditorError("the Page panel's first button changed the project from %d pages to "
+                          "%d, so it is not the Add button" % (before, after))
+    return after
 
 
 def _refuse_existing_output(output: Path):
@@ -1351,20 +1403,33 @@ def _page_places(editor: DedicatedEditor) -> list:
     panel = editor.control(_PAGE_PANEL)
     page_list = _required(_only_match(panel, "descendants", automation_id="colListBox1"),
                           auto_id="colListBox1")
-    # The panel's bar ends with the number of pages.
-    bar = _required(_only_match(panel, "descendants", automation_id="bar1"),
-                    auto_id="bar1").children()
-    counted = bar[-1].element_info.name if bar else ""
-    if not counted.isdigit():
-        raise EditorError("the Page panel's bar shows %r where its page count was" % counted)
     handle = page_list.element_info.handle
     scale = ctypes.windll.user32.GetDpiForWindow(handle) / 96
     height = page_list.element_info.rectangle.height()
     places = []
-    for row in range(int(counted)):
+    for row in range(_page_count(editor)):
         y = round((_PAGE_FIRST + row * _PAGE_ROW) * scale)
         places.append((handle, round(_PAGE_X * scale), y) if y < height else None)
     return places
+
+
+def _page_panel_bar(editor: DedicatedEditor) -> list:
+    """The items of the Page panel's bar: its buttons, then the number of
+    pages."""
+    panel = editor.control(_PAGE_PANEL)
+    return _required(_only_match(panel, "descendants", automation_id="bar1"),
+                     auto_id="bar1").children()
+
+
+def _page_count(editor: DedicatedEditor) -> int:
+    """How many pages the project shown has: the number that the Page
+    panel's bar ends with. Raises EditorError when the bar ends with
+    anything else."""
+    bar = _page_panel_bar(editor)
+    counted = bar[-1].element_info.name if bar else ""
+    if not counted.isdigit():
+        raise EditorError("the Page panel's bar shows %r where its page count was" % counted)
+    return int(counted)
 
 
 def _click_page(editor: DedicatedEditor, place) -> str:

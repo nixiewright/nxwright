@@ -4,6 +4,12 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.4.2] - 2026-11-13
+
+- `nxwright extract` no longer warns about a project saved by Nextion Editor 1.60.1 to 1.68.1.
+- `nxwright report` now gives the Nextion Editor version that the project file records.
+- `nxwright report` now lists the blocks that differ once the project is extracted and built again.
+
 ### [0.4.1] - 2026-11-12
 
 - In the simulator, an external picture no longer shows a PNG, or a JPEG on the Edge series.

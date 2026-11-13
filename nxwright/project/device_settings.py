@@ -23,6 +23,7 @@ import re
 import struct
 
 from nxwright import NxwrightError
+from nxwright.project.editor_version import CURRENT_VERSION
 from nxwright.project.screen_models import ScreenModel, model_with_id
 from nxwright.project.stamp import CRC_START, word_crc
 
@@ -107,7 +108,7 @@ def manifest_header(settings: DeviceSettings) -> bytes:
     ENCODINGS does not hold."""
     header = bytearray(HEADER_SIZE)
     struct.pack_into("<I", header, 4, HEADER_SIZE)
-    header[8:11] = b"\x01\x44\x21"
+    header[8:11] = bytes([0x01, CURRENT_VERSION[0], 0x21])
     header[11] = settings.model.series_code
     header[12] = settings.rotation // 90
     header[13] = encoding_code(settings.encoding)
@@ -117,7 +118,7 @@ def manifest_header(settings: DeviceSettings) -> bytes:
     header[20:24] = settings.password_hash
     struct.pack_into("<I", header, 24, HEADER_SIZE)
     struct.pack_into("<I", header, 32, settings.memory_file_storage_size)
-    header[36] = 2
+    header[36] = CURRENT_VERSION[1]
     header[38] = int(settings.ignore_library_resources)
     header[39] = int(settings.ignore_image_resources)
     header[65] = 3
