@@ -93,7 +93,8 @@ A number that does not fit in 32 bits keeps only its low 32 bits, as in C, and `
 - A plain number counts as true when it is not 0: `if (flag.val)`.
 - Texts compare with `==` and `!=` only.
 - `&&` and `||` evaluate their right side only when needed, as in C. So `b != 0 && a / b > 1` never divides by 0. In `ready.val == 1 && save() == 1`, `save` runs only when `ready.val` is 1.
-- `? :` chooses a value, as in C, and runs only the chosen side: `t0.txt = ready.val ? "Ready" : "Waiting"`. Both sides must be numbers, or both must be texts. You can use `? :` in a command only as the first argument of `get`, `print`, `prints`, or `covx`. For any other command, such as `vis`, put the value in a local first.
+- `? :` chooses a value, as in C, and runs only the chosen side: `t0.txt = ready.val ? "Ready" : "Waiting"`. Both sides must be numbers, or both must be texts.
+- A command can take a `? :` in an argument that it only reads, as in `vis b0,ready.val ? 1 : 0`. The build refuses one where the command puts its result, such as the second argument of `substr`, and in a few other arguments ([nxlang-compiled.md](nxlang-compiled.md#arguments-of-commands)). In those places, write the command in an `if` and an `else`, once with each value.
 
 ## Constants
 

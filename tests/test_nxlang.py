@@ -17,6 +17,8 @@ from nxwright.language.code_preprocessor import preprocess
 from nxwright.source.page_source import compile_nxlang_page
 from nxwright.language.resource_names import ResourceNames
 from nxwright.project.device_settings import TextCodec
+from nxwright.language.code_checks import CONDITIONAL_READ_PLACES
+from nxwright.language.code_lines import command_arguments
 from nxwright.language.editor_code import (editor_equivalent, global_declarations,
                                            keep_editor_meaning, write_expression)
 from nxwright.language.nxlang import (LONGEST_LINE, TEXT, Binary, Literal, Macro, ProgramNames,
@@ -1399,6 +1401,70 @@ class ExtractingOverNxlangTest(NxlangFolderTestCase):
         self.assertNotIn("extract", str(refused.exception))
 
 
+class ConditionalReadPlacesTest(unittest.TestCase):
+    """Checks that no command writes its result to an argument listed in
+    CONDITIONAL_READ_PLACES. nxlang puts a `? :` in such an argument in a
+    temporary first, so a result written there would go to the temporary
+    and be lost. The tests run each command in the test machine with a
+    variable in each of these arguments, and check that none of the
+    variables changes."""
+
+    # A line that the test machine can run, for each command in CONDITIONAL_READ_PLACES.
+    SAMPLES = {
+        "page": "page 0", "ref": "ref 1", "vis": "vis 1,0", "tsw": "tsw 1,0",
+        "click": "click 1,0", "randset": "randset 1,9", "pic": "pic 1,2,0",
+        "picq": "picq 1,2,3,4,0", "xpic": "xpic 1,2,3,4,5,6,0", "fill": "fill 1,2,3,4,5",
+        "line": "line 1,2,3,4,5", "draw": "draw 1,2,3,4,5", "cir": "cir 1,2,3,4",
+        "cirs": "cirs 1,2,3,4", "move": "move 1,2,3,4,5,6,7", "setlayer": "setlayer 1,2",
+        "cfgpio": "cfgpio 1,0,0", "play": "play 0,0,0", "beep": "beep 100",
+        "wepo": "wepo 5,10", "repo": "repo n.val,10", "wept": "wept 10,2", "rept": "rept 10,2",
+        "ucopy": "ucopy n.val,0,1,0", "udelete": "udelete 1", "crcrest": "crcrest 1,65535",
+        "crcputs": 'crcputs "ab",2', "crcputu": "crcputu 0,1", "cov": "cov 5,t.txt,0",
+        "substr": 'substr "abcd",t.txt,1,2', "spstr": 'spstr "a#b",t.txt,"#",1',
+        "newfile": 'newfile "sd0/a.txt",10', "newdir": 'newdir "sd0/d/"',
+        "deldir": 'deldir "sd0/d/"', "refile": 'refile "sd0/a.txt","sd0/b.txt"',
+        "redir": 'redir "sd0/d/","sd0/e/"', "findfile": 'findfile "sd0/a.txt",n.val',
+        "finddir": 'finddir "sd0/d/",n.val', "twfile": 'twfile "sd0/a.txt",10',
+        "rdfile": 'rdfile "sd0/a.txt",0,1,0'}
+    # Arguments that some of these commands write their result to.
+    # test_a_write_is_seen checks that `changed` finds these writes, so that
+    # an empty result from `changed` can be trusted.
+    WRITTEN = {"cov": (1,), "substr": (1,), "spstr": (1,), "repo": (0,), "ucopy": (0,),
+               "findfile": (1,), "finddir": (1,)}
+
+    def changed(self, word: str, places: tuple) -> dict:
+        """Runs the sample of `word` with each of `places` given as a
+        variable, and returns the variables whose values changed."""
+        arguments = [argument.strip()
+                     for argument in command_arguments(self.SAMPLES[word][len(word):])]
+        # recmod lets ucopy copy.
+        values = {"n.val": 0, "t.txt": "", "recmod": 1}
+        for place in places:
+            given = arguments[place]
+            if given.startswith('"') or given.endswith(".txt"):
+                name, value = "a%d.txt" % place, given.strip('"') if '"' in given else "unset"
+            else:
+                name, value = "a%d.val" % place, int(given) if given.isdigit() else 12345
+            arguments[place], values[name] = name, value
+        line = "%s %s" % (word, ",".join(arguments))
+        after = EditorMachine(values, components=["p", "b0", "b1"], page="p").run([line])
+        return {name: after[name] for name in values
+                if name.startswith("a") and after[name] != values[name]}
+
+    def test_every_command_has_a_sample(self):
+        self.assertEqual(self.SAMPLES.keys(), CONDITIONAL_READ_PLACES.keys())
+
+    def test_no_command_writes_to_its_places(self):
+        for word, places in CONDITIONAL_READ_PLACES.items():
+            with self.subTest(word=word):
+                self.assertEqual(self.changed(word, places), {})
+
+    def test_a_write_is_seen(self):
+        for word, places in self.WRITTEN.items():
+            with self.subTest(word=word):
+                self.assertNotEqual(self.changed(word, places), {})
+
+
 class ConditionalTest(unittest.TestCase):
     """`condition ? a : b`, as in C. a.val is 7, b.val -3."""
 
@@ -1427,6 +1493,22 @@ class ConditionalTest(unittest.TestCase):
         self.assertEqual(run("print a.val > 1 ? 4 : 5")["sent"], run("print 4")["sent"])
         self.assertEqual(run("covx a.val > 1 ? 4 : 5,t0.txt,0,0")["t0.txt"], "4")
 
+    def test_in_an_argument_the_command_only_reads(self):
+        chosen = ["if(a.val>1)", "{", "  __g0_0=1", "}else", "{", "  __g0_0=0", "}"]
+        for code, command in (("vis b,a.val > 1 ? 1 : 0", "vis b,__g0_0"),
+                              ("page a.val > 1 ? 1 : 0", "page __g0_0"),
+                              ("fill 0,0,10,a.val > 1 ? 1 : 0,RED", "fill 0,0,10,__g0_0,RED"),
+                              ("substr t0.txt,t1.txt,0,a.val > 1 ? 1 : 0",
+                               "substr t0.txt,t1.txt,0,__g0_0"),
+                              ("wepo n0.val,a.val > 1 ? 1 : 0", "wepo n0.val,__g0_0")):
+            with self.subTest(code=code):
+                self.assertEqual(compile_lines(code), chosen + [command])
+        self.assertEqual(compile_lines('newfile a.val > 1 ? "sd0/a" : "sd0/b",10'),
+                         ["if(a.val>1)", "{", '  __s0.txt="sd0/a"', "}else", "{",
+                          '  __s0.txt="sd0/b"', "}", "newfile __s0.txt,10"])
+        with self.assertRaisesRegex(NxwrightError, r"Write the command in an if and an else"):
+            compile_lines('wepo a.val > 1 ? "x" : "y",10')
+
     def test_in_a_data_record_call(self):
         lines = compile_lines('d.insert(a.val > 1 ? "big" : "small")',
                               object_types={"p": {"d": "data-record"}})
@@ -1444,9 +1526,11 @@ class ConditionalTest(unittest.TestCase):
     def test_refusals(self):
         for code, message in (('x.val = a.val > 1 ? 1 : "one"', r"both sides of \? : must be "
                                                                r"numbers, or both texts"),
-                              ("vis b,a.val > 1 ? 1 : 0", r"nxlang passes this line on as "
-                                                          r"written, .*put the value in a local "
-                                                          r"first")):
+                              # substr writes its result to its second argument.
+                              ("substr t0.txt,a.val > 1 ? t1.txt : t0.txt,0,1",
+                               r"\? : cannot be used here: nxlang passes this line on as "
+                               r"written\. Write the command in an if and an else, once with "
+                               r"each value")):
             with self.subTest(code=code):
                 with self.assertRaisesRegex(NxwrightError, r"line 1: " + message):
                     compile_lines(code)

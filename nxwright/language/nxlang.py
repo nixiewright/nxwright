@@ -103,7 +103,8 @@ from dataclasses import dataclass, field
 import re
 
 from nxwright import NxwrightError, listed_in_words
-from nxwright.language.code_checks import (COMPONENT_PLACES, DATA_RECORD_ARGUMENTS,
+from nxwright.language.code_checks import (COMPONENT_PLACES, CONDITIONAL_READ_PLACES,
+                                           DATA_RECORD_ARGUMENTS,
                                            DATA_RECORD_CALL, NUMBER_PLACES, ONE_OPERAND_FIRST,
                                            READ_ONE_OPERAND_PLACES, SCREEN_ARRAY,
                                            TEXTS_READ_BYTE_BY_BYTE, ends_in_escaped_backslash,
@@ -2801,7 +2802,7 @@ class _EventCompiler:
         if command in COMPONENT_PLACES:
             code = self.component_arguments(command, code, number)
         if ((command in NUMBER_PLACES and command not in ONE_OPERAND_FIRST
-             or command in READ_ONE_OPERAND_PLACES)
+             or command in READ_ONE_OPERAND_PLACES or command in CONDITIONAL_READ_PLACES)
                 and self.computed_arguments(number, indent, command, code, comment)):
             return
         if command in ONE_OPERAND_FIRST:
@@ -2974,7 +2975,7 @@ class _EventCompiler:
     def computed_arguments(self, number: int, indent: str, word: str, code: str,
                            comment: str) -> bool:
         """Compiles the command `code`, whose first word is `word`, when one
-        of its arguments must be put in a temporary first. Two kinds of
+        of its arguments must be put in a temporary first. Three kinds of
         argument may need it:
           - an argument that takes a number (NUMBER_PLACES), given a value
             the Nextion Editor does not read, such as a minus before a
@@ -2982,6 +2983,9 @@ class _EventCompiler:
           - an argument the command only reads (READ_ONE_OPERAND_PLACES),
             given an expression or a minus before a name. `strlen t0.txt+"a",n0.val`
             becomes `__s0.txt=t0.txt+"a"`, then `strlen __s0.txt,n0.val`.
+          - another argument the command only reads (CONDITIONAL_READ_PLACES),
+            given a `? :`. `vis b0,x.val>1?1:0` becomes an if and an else
+            that put 1 or 0 in `__g0_0`, then `vis b0,__g0_0`.
 
         wepo is the exception for texts. When wepo saves a text, it writes
         as many bytes as the text field has room for, plus one. A text
@@ -2998,12 +3002,15 @@ class _EventCompiler:
         arguments = command_arguments(code[len(word):])
         number_places = NUMBER_PLACES.get(word, ())
         read_places = READ_ONE_OPERAND_PLACES.get(word, ())
+        conditional_places = CONDITIONAL_READ_PLACES.get(word, ())
         emitter = None
-        for place in number_places + read_places:
+        for place in number_places + read_places + conditional_places:
             if place >= len(arguments):
                 continue
             text = arguments[place].strip()
             if not text:
+                continue
+            if place in conditional_places and "?" not in STRING_LITERAL.sub("", text):
                 continue
             if place in number_places and (STRING_LITERAL.fullmatch(text)
                                            or chain_parts(text) is not None):
@@ -3038,8 +3045,9 @@ class _EventCompiler:
         word = _NAME.match(code)
         start = word.end() if word else 0
         if "?" in STRING_LITERAL.sub("", code[start:]):
-            raise NxwrightError("nxlang passes this line on as written, so ? : cannot be in "
-                                "it; put the value in a local first", line=number)
+            raise NxwrightError("? : cannot be used here: nxlang passes this line on as "
+                                "written. Write the command in an if and an else, once with "
+                                "each value", line=number)
 
         def replace(match) -> str:
             found = self.scope.lookup(match[2]) if match[2] else None

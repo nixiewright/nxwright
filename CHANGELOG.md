@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.20] - 2026-11-12
+
+- nxlang now accepts `? :` in the arguments a command only reads, as in `vis b0,x ? 1 : 0`.
+
 ### [0.3.19] - 2026-11-12
 
 - The simulator now shows a video's frames when its file is in `ram/` or on an SD card with no folder.

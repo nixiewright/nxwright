@@ -107,15 +107,17 @@ The Nextion Editor accepts only one text or one number in many command arguments
 
 - Each argument of a data record's call, such as `d0.insert("Total: " + t0.txt)`. A number given for a text becomes its digits, and a text given for a number is refused.
 - The first argument of `get`, `print`, `prints`, and `covx`. The other numbers of these commands, `prints`' length and `covx`'s length and form, are written as arithmetic, which the Nextion Editor accepts in those arguments.
-- The text of `xstr`, its last argument. A minus before a name in that text also goes into a temporary first. The other arguments of `xstr` are written as they are.
+- The text of `xstr`, its last argument. A minus before a name in that text also goes into a temporary first. The other arguments of `xstr` are written as they are, so the build refuses a `? :` in them.
 - The value `wepo` writes, the value `crcputs` sends, the file `delfile` deletes, the text that `strlen`, `substr`, `spstr`, and `btlen` read, and the separator `spstr` splits on. A minus before a name in these arguments also goes into a temporary first, because the Nextion Editor refuses it there: `strlen -n0.val, n0.val` becomes `__g0_0=0-n0.val`, then `strlen __g0_0,n0.val`.
 
 Two cases differ:
 
 - **A `print` of joined texts** is written as one `print` for each part, so no temporary is needed and no part is cut short. `print "Total: " + t0.txt` becomes `print "Total: "`, then `print t0.txt`. Every part is worked out first, then each is printed.
-- **Joined texts given to `wepo`** are refused, as in `wepo t0.txt + "a", 0`. When `wepo` saves a text, it writes as many bytes as the text field has room for, plus one. A temporary has room for 255 bytes, so `wepo` would write 256 bytes, far more than the text. A number, as in `wepo n0.val * 2, 0`, is put in a temporary as usual.
+- **Joined texts given to `wepo`** are refused, as in `wepo t0.txt + "a", 0`, and so is a `? :` of texts. When `wepo` saves a text, it writes as many bytes as the text field has room for, plus one. A temporary has room for 255 bytes, so `wepo` would write 256 bytes, far more than the text. A number, as in `wepo n0.val * 2, 0`, is put in a temporary as usual.
 
 The Nextion Editor does not read a minus before a name where a command takes a number, as in `cls -x.val` or `cls 2*-x.val`. So nxlang computes such a value into a temporary first: `cls -x.val` becomes `__g0_0=0-x.val`, then `cls __g0_0`.
+
+The Nextion Editor has no `? :`, so nxlang computes one into a temporary first when it is in an argument that a command only reads, such as the value of `vis` or a number of `fill`. `vis b0, x.val > 1 ? 1 : 0` becomes an `if` and an `else` that put 1 or 0 in `__g0_0`, then `vis b0,__g0_0`.
 
 nxlang does not compute an expression where a command puts its result, as in `cov n0.val, sys0 + 1, 0`, or in a command the vendor does not document, such as `getv`. The build refuses these lines ([build-rules.md](build-rules.md#first-arguments)).
 

@@ -127,6 +127,22 @@ _WRITTEN_ONE_OPERAND_PLACES = {"repo": (0,), "ucopy": (0,), "findfile": (1,), "c
 _UNDOCUMENTED_ONE_OPERAND_PLACES = {
     "getv": (0,), "fstr": (0,), "strsize": (2,), "pa_q": (0, 1), "pa_txt": (1,), "gets": (1,),
     "i": (0, 1), "nstr": (0,), "zstr": (4,), "qrcode": (7,), "piccolor": (3,)}
+# Other arguments that a command only reads, according to the vendor's
+# instruction set. The Nextion Editor has no `? :`, so in an event, nxlang
+# puts a `? :` in one of these arguments in a temporary first. nxlang refuses
+# a `? :` in any other argument, because a command may write its result to
+# that argument. substr, for example, writes to its second one.
+CONDITIONAL_READ_PLACES = {
+    "page": (0,), "ref": (0,), "vis": (0, 1), "tsw": (0, 1), "click": (0, 1),
+    "randset": (0, 1), "pic": (0, 1, 2), "picq": (0, 1, 2, 3, 4), "xpic": (0, 1, 2, 3, 4, 5, 6),
+    "fill": (0, 1, 2, 3, 4), "line": (0, 1, 2, 3, 4), "draw": (0, 1, 2, 3, 4),
+    "cir": (0, 1, 2, 3), "cirs": (0, 1, 2, 3), "move": (0, 1, 2, 3, 4, 5, 6),
+    "setlayer": (0, 1), "cfgpio": (0, 1, 2), "play": (0, 1, 2), "beep": (0,), "wepo": (1,),
+    "repo": (1,), "wept": (0, 1), "rept": (0, 1), "ucopy": (1, 2, 3), "udelete": (0,),
+    "crcrest": (0, 1),
+    "crcputs": (1,), "crcputu": (0, 1), "cov": (0, 2), "substr": (2, 3), "spstr": (3,),
+    "newfile": (0,), "newdir": (0,), "deldir": (0,), "refile": (0, 1), "redir": (0, 1),
+    "findfile": (0,), "finddir": (0,), "twfile": (0, 1), "rdfile": (0, 2, 3)}
 ONE_OPERAND_PLACES = {
     word: (READ_ONE_OPERAND_PLACES.get(word, ()) + _WRITTEN_ONE_OPERAND_PLACES.get(word, ())
            + _UNDOCUMENTED_ONE_OPERAND_PLACES.get(word, ()))
