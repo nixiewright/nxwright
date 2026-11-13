@@ -19,14 +19,6 @@ The simulator already runs the whole app: `program.nx`, page changes, timers on 
 
 A test could also press components while it stands in for the device on the other end of the serial line, sending bytes to the screen and checking the bytes that come back.
 
-## Pictures kept as SVG files
-
-A screen's design is mostly flat shapes, lines, and text, which SVG describes well. An SVG file is also text, so changes to it show up in a diff, like changes to your code.
-
-Today, the source folder keeps each picture as a PNG or other picture file. If you draw your pictures in SVG, you turn them into PNG files yourself, each time an SVG file changes.
-
-A command, or a panel in VS Code, could generate the PNG files from SVG files kept in the source folder, and update them whenever an SVG file changes. The build, the preview, and the simulator would go on reading the PNG files, so nothing would change for a project without SVG files.
-
 ## Newer versions of the Nextion Editor
 
 nxwright is tested with one release of the Nextion Editor at a time. When Nextion publishes a new release, nxwright will move to it, to support the component types and attributes it adds and to compile with its firmware. See [tools/editor/RELEASES.md](tools/editor/RELEASES.md) for how nxwright moves to a new release.
