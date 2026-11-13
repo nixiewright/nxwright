@@ -24,6 +24,7 @@ from nxwright.testing.preview import Previews
 from nxwright.project.media_files import animation_frames, sound_length, video_frames
 from nxwright.project.pictures import data_url
 from nxwright.source.source_folder import folder_reader, read_page_components
+from nxwright.testing.editor_machine import EditorMachine
 from nxwright.testing.sd_cards import INVALID_FILE_OPERATION
 from nxwright.testing.simulation import Simulation
 from nxwright.testing.simulation_log import END
@@ -33,6 +34,8 @@ COLOURS = animation_frames((FIXTURES / "colours.screen.gmov").read_bytes())
 BLINK = animation_frames((FIXTURES / "blink.screen.gmov").read_bytes())
 # What a player answers as it loads a file its card lacks.
 MISSING_FILE = bytes([INVALID_FILE_OPERATION]) + END
+# What the screen answers when it ignores a file command.
+IGNORED = MISSING_FILE
 VIDEO = video_frames((FIXTURES / "colours.video").read_bytes())
 # The probe's page: the animation, the video, a sound, and what code reads.
 PLAYERS = """
@@ -439,6 +442,110 @@ class PlaybackTest(PlayingFolderTestCase):
         simulation.serial_input('video0.path="sd0/clip.video"')
         simulation.advance(100)
         self.assertEqual(self.fields(simulation, "video0.tim"), (100,))
+
+
+class KeptFileTest(PlayingFolderTestCase):
+    """A sound or a video whose `from` is 1 keeps the file it plays, until
+    its `path` changes or its page closes. While it keeps the file, the
+    file commands on that file are ignored and answer 0x06, and a file
+    stream does not open the file. This was seen on a real NX8048P070 for
+    a video, and for a sound that had the file but was not playing. The
+    Nextion Editor's simulator behaved the same for both, playing or not,
+    except that it did not send an answer to the `open`."""
+    PLAYED = {"video0": ("clip.video", "colours.video"), "wav0": ("clip.wav", "chirp.wav")}
+
+    def setUp(self):
+        super().setUp()
+        self.card = self.folder / "card"
+        self.card.mkdir()
+        for name, fixture in self.PLAYED.values():
+            shutil.copyfile(FIXTURES / fixture, self.card / name)
+        shutil.copyfile(FIXTURES / "chirp.wav", self.card / "other.wav")
+        page = self.source / "pages" / "page0.page.toml"
+        edit_text(page, 'vid = "colours"\n\n[[component]]\nname = "wav0"',
+                  'from = 1\n\n[[component]]\nname = "wav0"')
+        edit_text(page, 'vid = "beep"', 'from = 1\nloop = 0')
+        with open(page, "a", encoding="utf-8", newline="\n") as file:
+            file.write('\n[[component]]\nname = "fs0"\ntype = "file-stream"\n')
+        self.sent = []
+        self.simulation = Simulation(self.source, cards={"sd0/": self.card},
+                                     sending=self.sent.append)
+
+    def read(self, path: str) -> list:
+        """What `rdfile` of `path`, its size asked for, sends."""
+        self.sent.clear()
+        self.simulation.serial_input('rdfile "%s",0,0,0' % path)
+        return list(self.sent)
+
+    def size(self, name: str) -> list:
+        return [(self.card / name).stat().st_size.to_bytes(4, "little")]
+
+    def test_the_file_commands_on_a_kept_file_answer_06(self):
+        for player, (name, _) in self.PLAYED.items():
+            with self.subTest(player=player):
+                path = "sd0/" + name
+                self.simulation.serial_input('%s.path="%s"' % (player, path))
+                commands = ('delfile "%s"' % path, 'refile "%s","sd0/moved"' % path,
+                            'newfile "%s",8' % path)
+                for command in commands:
+                    self.sent.clear()
+                    self.simulation.serial_input(command)
+                    self.assertEqual(self.sent, [IGNORED], command)
+                self.assertEqual(self.read(path), [IGNORED])
+                self.assertEqual((self.card / name).read_bytes(),
+                                 (FIXTURES / self.PLAYED[player][1]).read_bytes())
+                self.assertIn("SD card: rdfile of %s refused: %s keeps the file open"
+                              % (path, player), [line for _, line in self.simulation.log])
+                # A real screen answered 0x06 to the open. The Nextion
+                # Editor's simulator sent no answer.
+                self.sent.clear()
+                self.simulation.serial_input('fs0.open("%s")' % path)
+                self.assertEqual((self.simulation.values()["fs0.en"], self.sent),
+                                 (0, [IGNORED]))
+                self.simulation.serial_input('%s.path=""' % player)
+                self.assertEqual(self.read(path), self.size(name))
+
+    def test_stopping_or_ending_keeps_the_file(self):
+        self.simulation.serial_input('wav0.path="sd0/clip.wav"')
+        self.simulation.serial_input("wav0.en=0")
+        self.assertEqual(self.read("sd0/clip.wav"), [IGNORED])
+        self.simulation.serial_input("wav0.en=1")
+        self.simulation.advance(1000)
+        self.assertEqual((self.simulation.values()["wav0.en"], self.read("sd0/clip.wav")),
+                         (0, [IGNORED]))
+
+    def test_another_path_lets_the_first_file_go(self):
+        self.simulation.serial_input('wav0.path="sd0/clip.wav"')
+        self.simulation.serial_input('wav0.path="sd0/other.wav"')
+        self.assertEqual(self.read("sd0/clip.wav"), self.size("clip.wav"))
+        self.assertEqual(self.read("sd0/other.wav"), [IGNORED])
+
+    def test_a_page_change_lets_the_file_go(self):
+        self.simulation.serial_input('wav0.path="sd0/clip.wav"')
+        self.simulation.serial_input('video0.path="sd0/clip.video"')
+        self.simulation.serial_input("page 0")
+        self.assertEqual(self.read("sd0/clip.wav"), self.size("clip.wav"))
+        self.assertEqual(self.read("sd0/clip.video"), self.size("clip.video"))
+
+    def test_a_page_files_path_keeps_the_file_from_the_start(self):
+        edit_text(self.source / "pages" / "page0.page.toml", "loop = 0",
+                  'loop = 0\npath = "sd0/clip.wav"')
+        simulation = Simulation(self.source, cards={"sd0/": self.card}, sending=self.sent.append)
+        self.sent.clear()
+        simulation.serial_input('rdfile "sd0/clip.wav",0,0,0')
+        self.assertEqual(self.sent, [IGNORED])
+
+
+class KeptFileTestMachineTest(unittest.TestCase):
+    """The test machine alone does not play sounds or videos, but a test can
+    give it the files that they keep ("played files held")."""
+
+    def test_a_given_kept_file_is_not_deleted(self):
+        values = EditorMachine({"played files held": {"wav0": "sd0/a.wav"},
+                                "file contents": {"sd0/a.wav": b"RIFF"}}).run(
+            ['delfile "sd0/a.wav"'])
+        self.assertEqual((values["file errors"], values["file contents"]),
+                         ([("delfile", "sd0/a.wav")], {"sd0/a.wav": b"RIFF"}))
 
 
 class HiddenAttributesTest(PlayingFolderTestCase):

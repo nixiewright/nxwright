@@ -45,6 +45,20 @@ class VideoInMemoryTest(SimulationTestCase):
                 self.assertTrue(self.frame(simulation).startswith("data:image/jpeg;base64,"))
                 self.assertEqual(self.sent.count(IGNORED), 0)
 
+    def test_a_file_in_memory_is_kept_open(self):
+        # A video keeps its file open whether the file is in memory or in a
+        # card's folder (test_playback.KeptFileTest).
+        for path in ("ram/v.video", "sd0/v.video"):
+            with self.subTest(path=path):
+                simulation = self.started(path, {path: COLOURS})
+                self.sent.clear()
+                simulation.serial_input('delfile "%s"' % path)
+                self.assertEqual(self.sent, [IGNORED])
+                simulation.serial_input('v0.path=""')
+                self.sent.clear()
+                simulation.serial_input('rdfile "%s",0,0,0' % path)
+                self.assertEqual(self.sent, [len(COLOURS).to_bytes(4, "little")])
+
     def test_new_bytes_show_in_the_next_drawing(self):
         # Both files are on a card, because `ram/` has room for only one of them.
         simulation = self.started("sd0/v.video", {"sd0/v.video": COLOURS, "sd0/c.video": CLIP})

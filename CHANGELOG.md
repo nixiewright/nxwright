@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.3.21] - 2026-11-12
+
+- File commands and a file stream's `open` are now ignored on a file that a video or a sound plays.
+
 ### [0.3.20] - 2026-11-12
 
 - nxlang now accepts `? :` in the arguments a command only reads, as in `vis b0,x ? 1 : 0`.

@@ -51,8 +51,9 @@ from nxwright.project.stamp import CRC_START, word_crc
 from nxwright.project.zi_font import counted_characters
 from nxwright.source.page_source import reference_kind
 from nxwright.testing.card_files import (DATA_FILES_HELD, DATA_RECORDS_GIVEN_A_PATH,
-                                         DATA_RECORDS_SHUT_OUT, component_attributes,
-                                         data_file_at, data_record_values, file_holder,
+                                         DATA_RECORDS_SHUT_OUT, PLAYED_FILES_HELD,
+                                         component_attributes, data_file_at,
+                                         data_record_values, file_holder, file_player,
                                          given_a_path, hold_file, is_shut_out, let_go_of_files, let_in,
                                          open_data_record, opening_refusal, opens_no_file,
                                          read_card_file, shut_out, why_not_made,
@@ -134,9 +135,10 @@ _IGNORED_ON_NO_CARD = ("newfile", "delfile", "refile", "newdir", "deldir")
 # Why the screen ignored a file command on a path of that kind, worded for
 # the log of nxwright's simulator.
 NOT_ON_A_CARD = "the path does not start with sd0/, sd1/, or ram/"
-# The file commands the screen ignores on a file that a data record keeps.
-# The Nextion Editor's simulator answered each with 0x06. `rdfile` is not
-# in the list, because _rdfile makes the same check itself.
+# The file commands the screen ignores on a file that a data record, a
+# sound, or a video keeps (_kept_reason). The Nextion Editor's simulator
+# answered each with 0x06. `rdfile` is not in the list, because _rdfile
+# makes the same check itself.
 _IGNORED_ON_A_KEPT_FILE = ("newfile", "delfile", "refile")
 # Why the screen ignored a file command on a file that a data record
 # keeps, worded for the log of nxwright's simulator.
@@ -152,7 +154,8 @@ RECORDS = frozenset({"page opened", "sent", "replies", "eeprom", "eeprom accesse
                      "rand range", "reset", "other commands", "painted", "waveform",
                      "existing", "file contents", "file errors", "file commands",
                      "serial buffer", "component errors", "refusals", DATA_FILES_HELD,
-                     DATA_RECORDS_SHUT_OUT, DATA_RECORDS_GIVEN_A_PATH, FILE_BROWSER_LISTINGS,
+                     DATA_RECORDS_SHUT_OUT, DATA_RECORDS_GIVEN_A_PATH, PLAYED_FILES_HELD,
+                     FILE_BROWSER_LISTINGS,
                      COMBO_BOX_CHOICES, UNSETTLED})
 # A data record's attributes whose setting by code works out its table's values.
 _TABLE_ATTRIBUTES = ("format", "hig", "gdw", "gdh")
@@ -393,9 +396,11 @@ class EditorMachine:
             path that is neither on an SD card nor in ram/, such as
             `x.bin`. The screen answers 0x06 (_path_command).
           - an `rdfile`, `delfile`, `refile`, or `newfile` on a file that a
-            data record keeps, and a file stream's `open` of that file. The
-            screen answers 0x06 for the commands, and sends no answer to
-            the `open` (_is_kept).
+            data record, a sound, or a video keeps, and a file stream's
+            `open` of that file. The screen answers 0x06 for the commands,
+            and for the `open` of a sound's or a video's file. It does not
+            send an answer to the `open` of a data record's file
+            (_kept_reason, _open_file).
           - a data record's method that could not be carried out
             (_data_record).
           - a data record's `path` set to a file that another data record
@@ -404,11 +409,17 @@ class EditorMachine:
             (_open_named_file).
       - "file commands": the commands that changed files, a data record's
         methods among them, and a file browser's `up()`, in order.
-      - "data files held": the files the data records hold
-        (card_files.DATA_FILES_HELD), made as one first opens a file; "data
-        records shut out": those that could not open theirs
-        (card_files.DATA_RECORDS_SHUT_OUT); "data records given a path":
-        those whose `path` code set (card_files.DATA_RECORDS_GIVEN_A_PATH).
+      - "data files held": the files the data records keep
+        (card_files.DATA_FILES_HELD), made when a data record first opens
+        a file.
+      - "data records shut out": the data records that could not open
+        their file (card_files.DATA_RECORDS_SHUT_OUT).
+      - "data records given a path": the data records whose `path` code
+        set (card_files.DATA_RECORDS_GIVEN_A_PATH).
+      - "played files held": the files the page's sounds and videos keep
+        (card_files.PLAYED_FILES_HELD). The machine does not play sounds
+        or videos, so the simulation records these files, or a test gives
+        them.
       - "file browser listings" and "combo box choices": what each file
         browser lists, and each combo box's last `val` within its items
         (list_working.py), made as they are first worked.
@@ -589,14 +600,23 @@ class EditorMachine:
     def _open_file(self, stream: str, path):
         """Opens the file `path` on the file stream `stream`, with its
         position at 0. The file is found the way a file command finds one
-        (_file_bytes). If the file is not found, or a data record keeps it
-        (_is_kept), the stream closes the file it has open, and the `open`
-        is recorded with the file errors. For a file that a data record
-        keeps, the Nextion Editor's simulator left the stream's `en` at 0,
-        and did not send an answer."""
-        if self._is_kept(path):
-            self._record("file errors", ("open", path), KEPT_BY_A_DATA_RECORD)
+        (_file_bytes). If the file is not found, or a data record, a sound,
+        or a video keeps it (_kept_reason), the stream closes the file it
+        has open, and the `open` is recorded with the file errors.
+
+        The answer to the `open` depends on what keeps the file. For a
+        sound or a video, the `open` answers 0x06, because a real screen
+        left the stream's `en` at 0 and answered 0x06. The Nextion Editor's
+        simulator did not send an answer. For a data record, the `open`
+        does not send an answer, because that case has only been tried in
+        the Nextion Editor's simulator, which left `en` at 0 and did not
+        send one."""
+        kept = self._kept_reason(path)
+        if kept:
+            self._record("file errors", ("open", path), kept)
             self._close_file(stream)
+            if not self._kept_by_a_data_record(path):
+                self._refused(INVALID_FILE_OPERATION)
             return
         data = self._file_bytes("open", path)
         if data is None:
@@ -605,12 +625,26 @@ class EditorMachine:
         self.values[OPEN_FILE + stream] = path
         self._set_stream(stream, 0, len(data), 1)
 
-    def _is_kept(self, path) -> bool:
-        """Returns whether a data record keeps the file `path`. A data
-        record keeps the file it opened until code changes the record's
-        `path` (card_files.file_holder). The screen ignores rdfile, delfile,
-        refile, and newfile on a file that a data record keeps, and a file
-        stream does not open it."""
+    def _kept_reason(self, path) -> str:
+        """Returns what keeps the file `path`, worded for the simulator's
+        log, such as "wav0 keeps the file open", or "" when nothing keeps
+        the file. The screen ignores rdfile, delfile, refile, and newfile
+        on a kept file, and a file stream does not open it (_open_file).
+
+        A data record keeps the file it opened until code changes the
+        record's `path` (card_files.file_holder). A sound or a video whose
+        `from` is 1 keeps the file it plays until its `path` changes or its
+        page closes (card_files.file_player)."""
+        if not (isinstance(path, str) and path):
+            return ""
+        if self._kept_by_a_data_record(path):
+            return KEPT_BY_A_DATA_RECORD
+        player = file_player(self.cards, path, self.values)
+        return "" if player is None else "%s keeps the file open" % player
+
+    def _kept_by_a_data_record(self, path) -> bool:
+        """Returns whether a data record keeps the file `path`
+        (card_files.file_holder)."""
         return isinstance(path, str) and bool(path) and \
             file_holder(self.cards, path, self.values) is not None
 
@@ -658,15 +692,16 @@ class EditorMachine:
         that the success code follows it.
 
         `rdfile` does not send anything, and answers 0x06, if the file is
-        missing, if a data record keeps the file (_is_kept), or if the range
-        is not inside the file. For a count of 0, the offset must be below
-        the size. The file is never changed."""
+        missing, if a data record, a sound, or a video keeps the file
+        (_kept_reason), or if the range is not inside the file. For a count
+        of 0, the offset must be below the size. The file is never changed."""
         path = self._operand(arguments[0])
         offset, count, crc = (self._chain(argument) for argument in arguments[1:])
         if offset < 0 or count < 0:
             raise RefusedCode("a negative offset or count is not modelled")
-        if self._is_kept(path):
-            self._record("file errors", ("rdfile", path), KEPT_BY_A_DATA_RECORD)
+        kept = self._kept_reason(path)
+        if kept:
+            self._record("file errors", ("rdfile", path), kept)
             self._refused(INVALID_FILE_OPERATION)
             return
         data = self._file_bytes("rdfile", path, INVALID_FILE_OPERATION)
@@ -1358,12 +1393,13 @@ class EditorMachine:
             "file contents". newfile adds a file of its size, all zero
             bytes, and delfile removes one.
 
-        The machine records two kinds of command in "file errors" instead of
-        "file commands":
+        Wherever the path is, the machine also records these commands in
+        "file errors" instead of "file commands":
           - A newfile whose size is not a number, or is below 0. It does not
             create a file.
-          - A newfile, delfile, or refile of a file that a data record keeps
-            (_is_kept). The screen ignores the command, and answers 0x06."""
+          - A newfile, delfile, or refile of a file that a data record, a
+            sound, or a video keeps (_kept_reason). The screen ignores the
+            command, and answers 0x06."""
         # newfile's size may be arithmetic, as the Editor's simulator ran it.
         paths = [self._chain(argument) if word == "newfile" and place == 1
                  else self._operand(argument)
@@ -1378,8 +1414,9 @@ class EditorMachine:
             self._record("file errors", ("newfile", paths[0]))
             self._refused(INVALID_FILE_OPERATION)
             return
-        if word in _IGNORED_ON_A_KEPT_FILE and self._is_kept(paths[0]):
-            self._record("file errors", (word, paths[0]), KEPT_BY_A_DATA_RECORD)
+        kept = self._kept_reason(paths[0]) if word in _IGNORED_ON_A_KEPT_FILE else ""
+        if kept:
+            self._record("file errors", (word, paths[0]), kept)
             self._refused(INVALID_FILE_OPERATION)
             return
         if word in ("newfile", "refile", "newdir") and ram_files.is_ram_path(paths[0]):

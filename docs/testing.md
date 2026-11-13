@@ -99,6 +99,7 @@ nxwright uses the page file for two things:
 | `"data files held"` | The files data records keep open, as `{file: (page, data record)}`. The first data record to open a file keeps it ([Data records](screen-code.md#data-records)). |
 | `"data records shut out"` | The data records that could not open their file, as `{(page, data record): True}`. These data records do not read any records until they open a file. |
 | `"data records given a path"` | The data records whose `path` was set by code, as `{(page, data record): True}`. A data record whose `init` is 1 does not open a file until code sets its `path`. |
+| `"played files held"` | The files that videos and sounds keep open, as `{video or sound: file}`. A test does not play videos or sounds, so this value is only there when the test sets it. |
 | `"file browser listings"` | What each file browser lists, as `{(page, file browser): [names]}`. A folder's name ends with `/`. A file browser's `val` picks an entry from this list. |
 | `"combo box choices"` | Each combo box's last `val` within its items, as `{(page, combo box): number}`. |
 | `"component errors"` | Each `click`, `vis`, `tsw`, or `ref` whose ID does not match any object of the page, in order, as `(command, argument as written)`. |

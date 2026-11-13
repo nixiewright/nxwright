@@ -1,16 +1,22 @@
-"""The files on a screen's SD cards, as running code holds them: reading and
-writing one, on a card given a folder of the computer (sd_cards.py) or on
-the card the test machine keeps in memory (read_card_file,
-write_card_file); and which data record holds which data file, and which
-are shut out of theirs (DATA_FILES_HELD, DATA_RECORDS_SHUT_OUT).
+"""The files on a screen's SD cards, as running code uses them:
 
-Also a data record opening its file as its page opens, and the values that
-follow from the file (open_data_record, data_record_values). They read a
-component's attributes from the machine's values by their own names
-(component_attributes), as the simulation does too.
+- read_card_file and write_card_file read and write a file, on a card given
+  a folder of the computer (sd_cards.py) or on the card kept in memory.
+- open_data_record opens a data record's file when its page opens, and
+  data_record_values works out the values that follow from the file. Both
+  read a component's attributes with component_attributes, as the
+  simulation does too.
+- DATA_FILES_HELD and DATA_RECORDS_SHUT_OUT record which data record keeps
+  which data file, and which data records could not open theirs.
+- PLAYED_FILES_HELD records which sound or video keeps the file it plays.
 
-The test machine (editor_machine.py) and the simulation (simulation.py) keep
-these records in their values; the data file's own format is data_files.py's."""
+The test machine (editor_machine.py) and the simulation (simulation.py)
+store these records among their values.
+
+A data record, a sound, or a video keeps a file by having it open. The
+screen then ignores rdfile, delfile, refile, and newfile on that file
+(EditorMachine._kept_reason). See data_files.py for the format of a data
+file."""
 import os
 
 from nxwright.drawing.data_record_drawing import table_layout
@@ -34,6 +40,12 @@ DATA_RECORDS_SHUT_OUT = "data records shut out"
 # The data records whose `path` code has set, {(page, data record): True}.
 # One whose `init` is 1 opens no file until then (opens_no_file).
 DATA_RECORDS_GIVEN_A_PATH = "data records given a path"
+# The files that the sounds and videos of the page shown keep,
+# {sound or video: file key} (held_file_key). A sound or a video whose
+# `from` is 1 keeps the file at its `path`, even after it stops or ends.
+# The sound or video lets the file go when its `path` changes or its page
+# closes.
+PLAYED_FILES_HELD = "played files held"
 
 
 def read_card_file(cards, path: str, card_values: dict):
@@ -173,6 +185,26 @@ def shut_out(card_values: dict, holder: tuple):
     """Notes that `holder`, (page, data record), could not open its file
     (opening_refusal, DATA_RECORDS_SHUT_OUT)."""
     card_values.setdefault(DATA_RECORDS_SHUT_OUT, {})[holder] = True
+
+
+def file_player(cards, path: str, card_values: dict):
+    """Returns the name of a sound or video that `card_values` records as
+    keeping the file `path` (PLAYED_FILES_HELD), or None when no sound or
+    video keeps it."""
+    key = held_file_key(cards, path)
+    return next((player for player, held in card_values.get(PLAYED_FILES_HELD, {}).items()
+                 if held == key), None)
+
+
+def hold_played_file(cards, path: str, card_values: dict, player: str):
+    """Notes that the sound or video `player` keeps the file `path`, in place
+    of any file it kept before (PLAYED_FILES_HELD)."""
+    card_values.setdefault(PLAYED_FILES_HELD, {})[player] = held_file_key(cards, path)
+
+
+def let_go_of_played_file(card_values: dict, player: str):
+    """Notes that the sound or video `player` no longer keeps a file."""
+    card_values.get(PLAYED_FILES_HELD, {}).pop(player, None)
 
 
 def let_in(card_values: dict, holder: tuple):

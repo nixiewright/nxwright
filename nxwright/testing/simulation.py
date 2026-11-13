@@ -199,10 +199,12 @@ from nxwright.source.device_keys import (memory_file_storage_size, screen_model,
                                          settings_from_keys)
 from nxwright.source.page_source import Component
 from nxwright.testing.card_files import (DATA_FILES_HELD, DATA_RECORDS_GIVEN_A_PATH,
-                                         DATA_RECORDS_SHUT_OUT, component_attributes,
-                                         data_file_at, data_record_values, has_lost_file,
-                                         is_shut_out, open_data_record, opens_no_file,
-                                         read_card_file, write_card_file)
+                                         DATA_RECORDS_SHUT_OUT, PLAYED_FILES_HELD,
+                                         component_attributes, data_file_at,
+                                         data_record_values, has_lost_file, hold_played_file,
+                                         is_shut_out, let_go_of_played_file,
+                                         open_data_record, opens_no_file, read_card_file,
+                                         write_card_file)
 from nxwright.testing.combo_boxes import ComboBoxes
 from nxwright.testing.editor_machine import (EEPROM_SIZE, PINYIN_COMMANDS, RECORD_STARTS, RECORDS,
                                              CompileRefusal, EditorMachine, RefusedCode,
@@ -584,14 +586,16 @@ class Simulation:
         self.globals["eeprom"] = bytes(eeprom[:EEPROM_SIZE]).ljust(EEPROM_SIZE, b"\0")
         if appid is not None:
             self.globals["appid"] = appid
-        # The records of what stays between stores, made at the start, so
-        # that every event's values share them; a new start holds none:
-        # the files the data records hold, those shut out of theirs, and
-        # those whose `path` code set (card_files.py); each file browser's
-        # listing, each combo box's last `val` within its items, and the
-        # lists whose scroll values wait to settle (list_working.py).
+        # The records that last from one event to the next. They are made
+        # here, empty at each start, so that every event's values share them:
+        # - the files the data records keep, the data records that could
+        #   not open their file, the data records whose `path` code set,
+        #   and the files the sounds and videos keep (card_files.py);
+        # - each file browser's listing, each combo box's last `val` within
+        #   its items, and the lists whose scroll values wait to settle
+        #   (list_working.py).
         for record in (DATA_FILES_HELD, DATA_RECORDS_SHUT_OUT, DATA_RECORDS_GIVEN_A_PATH,
-                       FILE_BROWSER_LISTINGS, COMBO_BOX_CHOICES, UNSETTLED):
+                       PLAYED_FILES_HELD, FILE_BROWSER_LISTINGS, COMBO_BOX_CHOICES, UNSETTLED):
             self.globals[record] = {}
         self.fields = {name: dict(page.start) for name, page in self.pages.items()}
         if hasattr(self, "clock"):
@@ -2719,6 +2723,8 @@ class Simulation:
         scrolling texts, its animations, videos, and sounds, and its moves
         (moves.py)."""
         self._clocked = {}
+        # The sounds and videos of the previous page no longer keep their files.
+        self.globals[PLAYED_FILES_HELD].clear()
         for component, kind, _ in self.pages[self.page].components:
             if kind == "scrolling-text":
                 self._clocked[component] = ScrollingText(component, self._laid_out_size)
@@ -2800,19 +2806,29 @@ class Simulation:
             self._write_log("%s cannot show %s: the file is not a picture" % (component, path))
 
     def _loader(self, component: str, kind: str):
-        """Returns the loader of what the player `component` plays, as
-        MediaPlayer takes it: the animation, video, or sound (`kind`) its
-        `vid` names, or the file its `path` names on an SD card given a
-        folder, when its `from` is 1. What cannot be read is logged, and
-        plays nothing; a file its card lacks also answers 06 (_card_file)."""
+        """Returns the function that MediaPlayer calls to load what the
+        player `component` plays. `kind` is ANIMATION, VIDEO, or SOUND.
+
+        The function first has the player let go of the file it kept
+        before (card_files.PLAYED_FILES_HELD). If a video's or a sound's
+        `from` is 1, the function reads the file at its `path`
+        (_card_file), and the player keeps that file. Otherwise the
+        function reads the project's animation, video, or sound that
+        `vid` gives.
+
+        If nothing can be read, the player plays nothing, and the log
+        gives the reason. A missing file also answers 0x06."""
         def load(fields: dict):
             def value(attribute: str, default):
                 return fields.get("%s.%s" % (component, attribute), default)
+            let_go_of_played_file(self.globals, component)
             try:
                 if kind != ANIMATION and value("from", 0) == FROM_CARD:
-                    data = self._card_file(component, value("path", ""))
+                    path = value("path", "")
+                    data = self._card_file(component, path)
                     if not data:
                         return None
+                    hold_played_file(self.cards, path, self.globals, component)
                 else:
                     names = self.app[LISTS[kind]]
                     # A `vid` of 65535, none, names no resource either. An
