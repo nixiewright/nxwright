@@ -661,9 +661,11 @@ class BridgeSessionTest(ScreenPortTestCase):
         self.screen.arriving.put(b"\x1a\xff\xff\xff")
         wait_until(lambda: b"\x1a\xff\xff\xff" in b"".join(self.mcu.written))
         self.request("nxwright/press", x=10, y=10)
-        wait_until(lambda: self.count() == 14)
+        # The log's line comes after the event has run, so by then `pressed`
+        # would have reached the MCU.
+        wait_until(lambda: "SIM SEND: 70 72 65 73 73 65 64" in self.log_lines())
+        self.assertEqual(self.count(), 14)
         self.assertNotIn(b"pressed", b"".join(self.mcu.written))
-        self.assertIn("SIM SEND: 70 72 65 73 73 65 64", self.log_lines())
 
     def test_both_with_the_simulator_answering(self):
         self.join(simulator="answers")
