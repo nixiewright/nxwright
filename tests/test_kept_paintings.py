@@ -1,10 +1,13 @@
 """Reusing what a component painted in the last drawing of its page
 (drawing/kept_paintings.py): a drawing made with reuse is the same as one
 made without, whatever changed between the two drawings."""
+import io
 from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
+
+from PIL import Image
 
 from nxwright.drawing import page_drawing
 from nxwright.drawing.kept_paintings import alike
@@ -17,10 +20,19 @@ from tests.test_zi_font import font_block, pairs_glyph
 FONTS = Path(__file__).resolve().parent / "fixtures" / "fonts"
 
 
+def _jpeg() -> bytes:
+    """Returns a black JPEG picture of 4 by 2 pixels. The file is a JPEG
+    because an external picture does not show a PNG
+    (testing/external_pictures.py)."""
+    file = io.BytesIO()
+    Image.new("RGB", (4, 2)).save(file, "JPEG")
+    return file.getvalue()
+
+
 class KeptPaintingsTest(unittest.TestCase):
     """The tests draw a page of a folder that has the font `Sans20` and the
     pictures `back` (800 by 480), `logo` (64 by 64), and `later`, which has no
-    file. An SD card given a folder contains `splash.png`. The page shows a
+    file. An SD card given a folder contains `splash.jpg`. The page shows a
     component of each type the thermostat demo uses, an external picture, and
     a number component, whose type is not reused."""
 
@@ -35,7 +47,7 @@ class KeptPaintingsTest(unittest.TestCase):
         self.write_picture("logo", 64, 64, (255, 0, 0, 255))
         self.card = self.root.parent / "card"
         self.card.mkdir()
-        (self.card / "splash.png").write_bytes(write_png(4, 2, bytes(32)))
+        (self.card / "splash.jpg").write_bytes(_jpeg())
         self.cards = FolderCards({"sd0/": self.card})
         self.app = {"pictures": ["back", "logo", "later"], "fonts": ["Sans20"],
                     "encoding": "iso-8859-1", "rotation": 0, "screen": "NX8048P050"}
@@ -55,7 +67,7 @@ class KeptPaintingsTest(unittest.TestCase):
             Component("chart", "waveform", {"x": 10, "y": 200, "w": 300, "h": 100, "sta": 1,
                                             "bco": 0, "ch": 1, "pco0": 0x07e0}),
             Component("exp0", "external-picture", {"x": 400, "y": 200, "w": 100, "h": 50,
-                                                   "path": "sd0/splash.png"}),
+                                                   "path": "sd0/splash.jpg"}),
             Component("count", "number", dict(text, x=10, y=320, w=100, h=40, sta=1,
                                               bco=0xffff, val=7)),
         ]
@@ -98,7 +110,7 @@ class KeptPaintingsTest(unittest.TestCase):
         self.assertEqual(self.reused(first, second),
                          ["page", "title", "ok", "photo", "missing", "knob", "chart", "exp0"])
         # The card's file is listed again, though the external picture was not painted again.
-        self.assertIn(str(self.card / "splash.png"), second["pictureFiles"])
+        self.assertIn(str(self.card / "splash.jpg"), second["pictureFiles"])
         self.assertIn("missing: pic 2 is not a picture of the folder", second["notes"])
 
     def test_a_type_not_reused_is_painted_each_time(self):
@@ -163,16 +175,16 @@ class KeptPaintingsTest(unittest.TestCase):
         self.assertNotIn("missing: pic 2 is not a picture of the folder", second["notes"])
 
     def test_a_changed_card_file(self):
-        # A damaged PictureBox file is not drawn.
-        first, second = self.drawn_twice(lambda: (self.card / "splash.png").write_bytes(
+        # A damaged PictureBox file shows the error marker.
+        first, second = self.drawn_twice(lambda: (self.card / "splash.jpg").write_bytes(
             b"hmipicxi" + bytes(30)))
-        self.assertEqual([shape for shape in second["shapes"] if shape["component"] == "exp0"],
-                         [])
+        self.assertEqual([shape["picture"] for shape in second["shapes"]
+                          if shape["component"] == "exp0"], ["marker:100 by 50"])
 
     def test_a_card_file_that_appears(self):
-        (self.card / "splash.png").unlink()
-        first, second = self.drawn_twice(lambda: (self.card / "splash.png").write_bytes(
-            write_png(4, 2, bytes(32))))
+        (self.card / "splash.jpg").unlink()
+        first, second = self.drawn_twice(lambda: (self.card / "splash.jpg").write_bytes(
+            _jpeg()))
         self.assertEqual([shape["kind"] for shape in second["shapes"]
                           if shape["component"] == "exp0"], ["picture"])
 

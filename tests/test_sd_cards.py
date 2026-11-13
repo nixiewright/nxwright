@@ -4,11 +4,14 @@ each tested as a function, without deleting anything; the file commands on
 a stand-in, a temporary folder each test makes; and file browsers and
 selects, which the simulation works."""
 import base64
+import io
 import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
+
+from PIL import Image
 
 from nxwright import NxwrightError
 from nxwright.testing.preview import Previews
@@ -20,6 +23,13 @@ from nxwright.testing.simulation import Simulation
 from tests.test_folder_check import edited_app
 from tests.test_live_debugging import LiveTestCase
 from tests.test_simulation import DONE, N_IS_0, READY, SimulationTestCase, placed, table
+
+
+def _jpeg() -> bytes:
+    """Returns a black JPEG picture of 4 by 2 pixels."""
+    file = io.BytesIO()
+    Image.new("RGB", (4, 2)).save(file, "JPEG")
+    return file.getvalue()
 
 
 def _link_folder(link: Path, target: Path) -> bool:
@@ -709,8 +719,10 @@ class ExternalPictureTest(unittest.TestCase):
         self.addCleanup(folder.cleanup)
         self.card = Path(folder.name).resolve() / "card"
         self.card.mkdir()
-        for place in (self.card / "splash.png", self.card.parent / "outside.png"):
-            place.write_bytes(write_png(4, 2, bytes(32)))
+        # The files are JPEGs because an external picture does not show a PNG
+        # (testing/external_pictures.py).
+        for place in (self.card / "splash.jpg", self.card.parent / "outside.jpg"):
+            place.write_bytes(_jpeg())
         self.cards = FolderCards({"sd0/": self.card})
         self.root = Path(folder.name) / "app"
 
@@ -723,8 +735,8 @@ class ExternalPictureTest(unittest.TestCase):
                                      [page, picture], cards=cards)
 
     def test_its_file_on_a_card_folder(self):
-        drawing = self.drawing("sd0/splash.png", self.cards)
-        name = str(self.card / "splash.png")
+        drawing = self.drawing("sd0/splash.jpg", self.cards)
+        name = str(self.card / "splash.jpg")
         self.assertEqual([shape for shape in drawing["shapes"] if shape["component"] == "exp0"],
                          [{"component": "exp0", "kind": "picture", "x": 10, "y": 20, "w": 100,
                            "h": 50, "picture": name, "sx": 0, "sy": 0, "rotation": 0,
@@ -733,7 +745,7 @@ class ExternalPictureTest(unittest.TestCase):
 
     def test_turned_back_by_the_screens_rotation(self):
         # Stored for a screen turned 180 degrees, the file is shown upright.
-        drawing = self.drawing("sd0/splash.png", self.cards, rotation=180)
+        drawing = self.drawing("sd0/splash.jpg", self.cards, rotation=180)
         self.assertEqual([shape["rotation"] for shape in drawing["shapes"]
                           if shape["component"] == "exp0"], [180])
 
@@ -777,15 +789,28 @@ class ExternalPictureTest(unittest.TestCase):
             self.assertEqual([shape["kind"] for shape in drawing["shapes"]
                               if shape["component"] == "exp0"], ["picture"])
 
-    def test_a_damaged_pictureboxs_file_draws_nothing(self):
+    def test_a_damaged_pictureboxs_file_shows_the_error_marker(self):
+        # The marker is stored upright, whatever the screen's rotation.
         (self.card / "cut.xi").write_bytes(b"hmipicxi" + bytes(30))
-        drawing = self.drawing("sd0/cut.xi", self.cards)
-        self.assertEqual([shape for shape in drawing["shapes"] if shape["component"] == "exp0"], [])
-        self.assertEqual(drawing["pictureFiles"], {})
+        drawing = self.drawing("sd0/cut.xi", self.cards, rotation=180)
+        shape, = [shape for shape in drawing["shapes"] if shape["component"] == "exp0"]
+        self.assertEqual((shape["kind"], shape["rotation"], shape["picture"]),
+                         ("picture", 0, "marker:100 by 50"))
+        self.assertTrue(drawing["pictureFiles"]["marker:100 by 50"]["data"].startswith(
+            "data:image/png;base64,"))
+
+    def test_a_screen_nxwright_does_not_know_shows_what_the_intelligent_series_does(self):
+        # These drawings are of a project that gives no screen. A PNG shows
+        # the marker, which is what the Intelligent series shows. An Edge
+        # screen would not show anything.
+        (self.card / "p.png").write_bytes(write_png(4, 2, bytes(32)))
+        drawing = self.drawing("sd0/p.png", self.cards)
+        self.assertEqual([shape["picture"] for shape in drawing["shapes"]
+                          if shape["component"] == "exp0"], ["marker:100 by 50"])
 
     def test_nothing_without_its_file(self):
-        for path, cards in (("sd0/missing.png", self.cards), ("sd1/splash.png", self.cards),
-                            ("sd0/../outside.png", self.cards), ("sd0/splash.png", None),
+        for path, cards in (("sd0/missing.jpg", self.cards), ("sd1/splash.jpg", self.cards),
+                            ("sd0/../outside.jpg", self.cards), ("sd0/splash.jpg", None),
                             ("", self.cards)):
             with self.subTest(path=path, cards=cards is not None):
                 drawing = self.drawing(path, cards)
@@ -805,10 +830,10 @@ class LaunchTest(LiveTestCase):
 
     def test_an_external_picture_from_a_card_folder(self):
         self.page("page0", [table("exp0", "external-picture", x=0, y=0, w=800, h=480,
-                                  path="sd0/splash.png")])
+                                  path="sd0/splash.jpg")])
         with tempfile.TemporaryDirectory() as folder:
-            splash = Path(folder).resolve() / "splash.png"
-            splash.write_bytes(write_png(4, 2, bytes(32)))
+            splash = Path(folder).resolve() / "splash.jpg"
+            splash.write_bytes(_jpeg())
             self.launch(sdCard0=folder)
             drawing = self.wait_for("nxwright/drawing")
             self.assertIn(("exp0", "picture", str(splash)),

@@ -1308,16 +1308,27 @@ class EditorDrawingProbesTest(unittest.TestCase):
 
 
 class TurnedCardFilesTest(unittest.TestCase):
-    """A probe of a card's files on a turned screen, in
-    fixtures/drawing-assumptions/turned/: a folder for each of 90, 180, and
-    270 degrees, whose pages the Editor's simulator showed,
-    editor-<rotation>-<page>.png, cut to the screen, and the card it read. On
-    each, external pictures show one marked picture as a PNG, a JPEG, and .xi
-    files made for each rotation, and larger than its component, and videos
-    show it made for 0 and for the screen's rotation. The Editor's window
-    showed a screen turned 90 or 270 degrees down to its 523rd row, which the
-    probe's components stay above. Every component's pixels come within 12 of
-    the Editor's in each colour."""
+    """Compares nxwright's drawing of a card's files on a turned screen
+    with what the Nextion Editor's simulator showed.
+
+    The probe is in fixtures/drawing-assumptions/turned/. It has a project
+    folder for each of 90, 180, and 270 degrees, and the card that the
+    Nextion Editor's simulator read. It also has a screenshot of each page
+    the simulator showed, editor-<rotation>-<page>.png, cut to the screen.
+
+    On each page, external pictures show one marked picture as a PNG, as a
+    JPEG, and as .xi files made for each rotation. The picture is larger
+    than its component. Videos show the same picture, made for 0 degrees
+    and for the screen's rotation.
+
+    The Nextion Editor's window showed a screen turned 90 or 270 degrees
+    only down to its 523rd row, so the probe's components stay above that
+    row.
+
+    Every component's pixels come within 12 of the screenshot's in each
+    colour. The external pictures that show a PNG are left out, because
+    the Nextion Editor's simulator shows the PNG, and nxwright draws what a
+    real screen draws for it (testing/external_pictures.py)."""
     FOLDER = Path(__file__).resolve().parent / "fixtures" / "drawing-assumptions" / "turned"
     PROBES = [("f90", "page0"), ("f90", "page1"), ("f180", "page0"), ("f270", "page0"),
               ("f270", "page1")]
@@ -1334,6 +1345,8 @@ class TurnedCardFilesTest(unittest.TestCase):
                     folder[1:], page))).read_bytes())
                 differing = []
                 for entry in simulation.components()[1:]:
+                    if str(entry.values.get("path", "")).endswith(".png"):
+                        continue
                     differing += [(entry.name, x, y) for x, y in
                                   differing_pixels(drawn, screenshot, entry.values, 12)]
                 self.assertEqual(differing[:5], [], "%d pixels differ" % len(differing))

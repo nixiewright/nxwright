@@ -61,6 +61,24 @@ class ProbeTest(unittest.TestCase):
         answer, = run_checks([check], SimulatorExchange(PROJECT), lambda question: True)
         self.assertEqual(answer.sent, b"\xfe" + END + b"\xfd" + END + b"\x05\x00\x00\x00HELLO")
 
+    def test_the_probe_waits_for_a_screen_that_is_slow_to_store_a_file(self):
+        # A real screen took so long to store a file that the probe had
+        # stopped waiting for its answer, and the screen garbled the
+        # instruction sent in the meantime. This stand-in answers that the
+        # transfer has finished on the probe's second extra wait.
+        sent, answers = [], [b"", b"\xfe" + END, b"", b"", b"\xfd" + END, b"\x05\x00\x00\x00"]
+
+        def slow_screen(data: bytes) -> bytes:
+            sent.append(data)
+            return answers.pop(0)
+
+        check = Check("A slow transfer", ('twfile "ram/t.txt",5', b"HELLO",
+                                          'rdfile "ram/t.txt",0,0,0'))
+        answer, = run_checks([check], slow_screen, lambda question: True)
+        self.assertEqual(answer.sent, b"\xfe" + END + b"\xfd" + END + b"\x05\x00\x00\x00")
+        # The instruction after the file went out only once the transfer had finished.
+        self.assertEqual(sent[3:], [b"", b"", b'rdfile "ram/t.txt",0,0,0' + END])
+
     def test_the_report(self):
         checks = [Check("A rule", ('newfile "RAM/a.bin",8',), number(0)),
                   Check("A question", ("get sys0",), number(0), question="Is it there?",

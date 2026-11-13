@@ -33,6 +33,7 @@ from nxwright.source.source_folder import (folder_byte_reader, folder_reader, is
                                            picture_file, picture_file_size, played_file,
                                            read_page_components)
 from nxwright.source.svg_pictures import drawn_svg_picture, prepared_svg_picture
+from nxwright.testing.external_pictures import MARKER, PICTURE, error_marker, file_kind, shown
 from nxwright.testing.ram_files import is_ram_path
 from nxwright.testing.sd_cards import CARDS, CardRefusal
 
@@ -286,18 +287,25 @@ class _FolderResources(DrawingResources):
         self.memory_files = memory_files or {}
         self.encoding = app.get("encoding", DrawingResources.encoding)
         self.rotation = app.get("rotation", DrawingResources.rotation)
+        # The letter of the screen's series, or None if nxwright does not
+        # know the screen. The build rejects such a screen, but its project
+        # can still be drawn.
+        self.series = None
         try:
-            self.opaque_pictures = \
-                model_named(app.get("screen", "")).picture_format != FORMAT_COMPRESSED
+            model = model_named(app.get("screen", ""))
         except NxwrightError:
-            pass    # a screen nxwright does not know, which the build refuses
+            pass
+        else:
+            self.opaque_pictures = model.picture_format != FORMAT_COMPRESSED
+            self.series = model.series
         # The cards' files the drawing shows, by the name its shapes give
         # them. That name is the file's full path, so it cannot be the name
         # of a picture of the folder.
         self._card_files = {}
         # The picture files kept in memory that the drawing shows: {the name
         # its shapes give the file (Previews.memory_name): (its bytes, what
-        # _picture_parts gives for them)}.
+        # _picture_parts gives for them)}. The error markers the drawing
+        # shows are here too, each under the name _marker gives it.
         self._memory_pictures = {}
         # {(finding function, its arguments): what it found}, and {file: its
         # file_stamp}, for this drawing.
@@ -349,43 +357,64 @@ class _FolderResources(DrawingResources):
             self._reads.files[file] = stamp
         return self.previews.kept(file, read, stamp)
 
-    def card_picture(self, path: str):
-        """Returns the name that picture shapes give the file at `path`,
-        and remembers the file for picture_file. If `path` is on a card
-        that was given a folder, the file is the one in that folder.
-        Otherwise it is the file kept in memory at `path`, on a card or in
-        ram/ (_memory_picture).
-        Returns None, so that nothing is drawn, when there is no such file,
-        or when it is a PictureBox picture file (.xi) that cannot be read."""
+    def card_picture(self, path: str, width: int, height: int):
+        """Returns what an external picture of `width` by `height` pixels
+        shows for the file at `path`, in the form that
+        DrawingResources.card_picture documents, and remembers the file or
+        the marker for picture_file.
+
+        If `path` is on a card that was given a folder, the file is the one
+        in that folder. Otherwise it is the file kept in memory at `path`,
+        on a card or in ram/ (_memory_picture).
+
+        What a screen of the project's series shows depends on the kind of
+        the file: the picture, the error marker, or nothing
+        (external_pictures.shown). Returns None, so that nothing is drawn,
+        when there is no such file, or when the screen does not show
+        anything for it."""
         local = self._resolved(_FolderResources._card_file, path)
         if local is None:
-            return self._memory_picture(path)
-        try:
-            self._kept(local, _card_picture_parts)
-        except NxwrightError:
-            return None
+            return self._memory_picture(path, width, height)
+        shows = shown(self._kept(local, _card_file_kind), self.series)
+        if shows != PICTURE:
+            return self._marker(width, height) if shows == MARKER else None
+        self._kept(local, _card_picture_parts)
         self._card_files[str(local)] = local
         if self._reads is not None:
             self._reads.card_files[str(local)] = local
-        return str(local)
+        return str(local), self.rotation
 
-    def _memory_picture(self, path: str):
-        """Returns the name under which picture shapes show the picture
-        file kept in memory at `path`, and remembers its bytes for
-        picture_file. Returns None when there is no such file, or when it
-        is a PictureBox picture file (.xi) that cannot be read."""
+    def _memory_picture(self, path: str, width: int, height: int):
+        """Returns what card_picture gives for the file kept in memory at
+        `path`, and remembers the file's bytes, or the marker, for
+        picture_file. Returns None when there is no such file, or when the
+        screen shows nothing for it."""
         name = self._resolved(_FolderResources._memory_name, path)
         if name is None:
             return None
         data = self.memory_files[path]
-        try:
-            parts = self.previews.memory_read(path, data, _picture_parts)
-        except NxwrightError:
-            return None
-        self._memory_pictures[name] = (data, parts)
+        shows = shown(self.previews.memory_read(path, data, file_kind), self.series)
+        if shows != PICTURE:
+            return self._marker(width, height) if shows == MARKER else None
+        self._remember(name, (data, self.previews.memory_read(path, data, _picture_parts)))
+        return name, self.rotation
+
+    def _marker(self, width: int, height: int) -> tuple:
+        """Returns what card_picture gives for the error marker of a
+        component of `width` by `height` pixels, and remembers the marker's
+        picture for picture_file. The marker is stored upright, whatever
+        the screen's rotation."""
+        name = "marker:%d by %d" % (width, height)
+        self._remember(name, (error_marker(width, height), None))
+        return name, 0
+
+    def _remember(self, name: str, picture: tuple):
+        """Keeps `picture` under `name` for picture_file, and for the
+        painting being recorded. `picture` is (a picture's bytes, what
+        _picture_parts gives for them)."""
+        self._memory_pictures[name] = picture
         if self._reads is not None:
-            self._reads.memory_pictures[name] = (data, parts)
-        return name
+            self._reads.memory_pictures[name] = picture
 
     def _memory_name(self, path: str):
         """The name of the file kept in memory at `path`
@@ -559,6 +588,12 @@ def file_stamp(file: Path):
     except OSError:
         return None
     return status.st_mtime_ns, status.st_size
+
+
+def _card_file_kind(file: Path) -> str:
+    """Returns the kind (external_pictures.file_kind) of `file`, a file on
+    a card given a folder."""
+    return file_kind(file.read_bytes())
 
 
 def _card_picture_parts(file: Path):

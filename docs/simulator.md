@@ -754,13 +754,27 @@ The screen's SD cards can be folders of your computer. A launch configuration's 
 
 ### External pictures
 
-An external picture shows the picture file at its `path`: a PNG, a JPEG, or PictureBox's `.xi` file ([format.md, Pictures for the SD card](format.md#pictures-for-the-sd-card)). The file can be in `ram/`, or on a card, whether or not the card has a folder.
+An external picture shows the picture file at its `path`. The file can be in `ram/`, or on a card, whether or not the card has a folder. Which files show depends on the screen's series:
+
+| The file | Intelligent (P) | Edge (E) |
+| --- | --- | --- |
+| PictureBox's `.xi` file ([format.md, Pictures for the SD card](format.md#pictures-for-the-sd-card)) | the picture | the picture |
+| A JPEG | the picture | an error marker |
+| Any other file, such as a PNG | an error marker | nothing |
+
+The kind of a file comes from its contents, so renaming a file does not change what shows. To make a PNG, a JPEG, or another picture show on every screen, convert it to a `.xi` file with `nxwright sd-picture`.
+
+The error marker is the text "Show Picture Error!" in red on blue, at the component's top left corner. A real screen draws the same text in a font of its own. When a file does not show, the log gives the reason.
+
+If the file is missing, the external picture shows nothing. The screen then sends 0x06 when the page opens and when code sets the `path`, unless `vis` has hidden the external picture. For a file that exists, the screen does not send an error code, even when the file does not show.
+
+A file that shows is drawn this way:
 
 - The file shows in its own colours, and with its transparency.
-- The screen draws a picture's file the way it is stored, so on a screen that the app's `rotation` rotates, the file must be stored rotated to show upright. `nxwright sd-picture --rotation` writes such a `.xi` file. A PNG or a JPEG you saved upright shows rotated.
-- The picture starts at the component's top left corner. As much of it shows as the component has room for.
+- The screen draws a picture file the way it is stored. If your app's `rotation` is not 0, the file must be stored rotated to show upright, so a JPEG you saved upright shows rotated. `nxwright sd-picture --rotation` writes a `.xi` file that is stored rotated.
+- The picture starts at the component's top left corner. The part that does not fit in the component is not drawn.
 
-If the file is missing, or is not a picture, the external picture shows nothing. The log gives the file's path and the reason. For a missing file, the screen also sends 0x06 when the page opens and when code sets the `path`, unless `vis` has hidden the external picture. The screen does not send an error code for a file that is not a picture.
+The table comes from one real screen of each series, an NX8048P070 and an NX4848E040. The NX4848E040 was tried with files in `ram/` only.
 
 ### What the file commands do
 
@@ -864,7 +878,7 @@ The simulator does not model:
 - The real-time clock starts at your computer's time when you launch a simulation. The Nextion Editor's simulator keeps a time that code set, from one run to the next.
 - Some SD card commands do less, to keep your files safe ([What the file commands do](#what-the-file-commands-do)).
 - A data record's `delete` with a count below 0 changes nothing. The Nextion Editor's simulator adds records instead, as many as the count says.
-- An external picture whose file is not a picture shows nothing ([External pictures](#external-pictures)). The Nextion Editor's simulator draws a marker of its own in the component.
+- An external picture shows only the kinds of file that a real screen of the project's series shows, and draws what the screen draws for the others ([External pictures](#external-pictures)). The Nextion Editor's simulator shows a PNG and a JPEG on every screen, and draws a marker of its own for a file that is not a picture.
 
 ### Not compared yet
 

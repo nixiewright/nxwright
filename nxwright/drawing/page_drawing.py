@@ -157,22 +157,32 @@ whole number of pixels is cut toward zero, across and down, as the
 Editor's simulator drew them (tests/fixtures/drawing-assumptions/). It is
 drawn in progress_bar_drawing.py.
 
-An external picture shows the file at its `path`, on an SD card or in ram/:
-a PNG, a JPEG, or PictureBox's .xi file (project/media_files.py,
-read_card_picture). A simulation's resources find that file in the folder
-given to its card, or among the files the simulation keeps in memory. If
-they find it, the external picture's picture shape is marked "card", and
-carries the screen's rotation. If they do not, nothing is drawn. The preview
-has no cards and no files in memory, so it never draws an external picture's
-file. The Nextion Editor's simulator showed each kind of file in its own
-colours, rather than the screen's 16 bits, and with its transparency. The
-screen draws the file's pixels as they are stored, so a file for a turned
-screen is stored turned. The webview turns the stored pixels back by the
-screen's rotation, so that such a file shows upright, as the user sees it.
-The turned picture's top left corner is at the component's, and the
-component cuts it at its right and bottom. The Nextion Editor's simulator
-showed each kind of file this way at 90, 180, and 270 degrees, whatever
-rotation a .xi file was made for, so a file stored upright shows turned
+An external picture shows the file at its `path`, on an SD card or in ram/.
+A simulation's resources find the file in the folder given to its card, or
+among the files the simulation keeps in memory. The preview has no cards
+and no files in memory, so it never draws an external picture's file.
+
+What is drawn depends on the kind of the file and on the screen's series
+(testing/external_pictures.py). Every screen shows PictureBox's .xi file
+(project/media_files.py, read_card_picture), and the Intelligent series
+shows a JPEG too. For a file it does not show, a screen draws an error
+marker, or does not draw anything, depending on its series. If the file is
+missing, nothing is drawn. A file that the screen shows becomes a picture
+shape that is marked "card" and carries the screen's rotation. The error
+marker is a picture shape too, with a rotation of 0, because its picture
+is stored upright.
+
+A file that the screen shows is drawn in its own colours, rather than the
+screen's 16 bits, and with its transparency. The screen draws the file's
+pixels the way they are stored, so a file for a turned screen is stored
+turned. The webview turns the stored pixels back by the screen's rotation,
+so such a file shows upright, and a file stored upright shows turned. The
+turned picture's top left corner is at the component's top left corner,
+and the picture is cut at the component's right and bottom edges.
+
+These rules come from the Nextion Editor's simulator. It showed a PNG, a
+JPEG, and a .xi file this way at 90, 180, and 270 degrees, whatever
+rotation the .xi file was made for
 (tests/fixtures/drawing-assumptions/turned/).
 
 A file browser draws its background and its border as a text does, then
@@ -400,9 +410,15 @@ class DrawingResources:
       - font_height(id): its height in pixels, from its header, which a font
         nxwright cannot decode has too, or None when it cannot be read (by
         default: the decoded font's, or None);
-      - card_picture(path): the name that a picture shape gives an external
-        picture's file at `path`, on an SD card or in ram/, or None when
-        there is no such file (by default, always None);
+      - card_picture(path, width, height): what an external picture of
+        `width` by `height` pixels shows for the file at `path`, on an SD
+        card or in ram/. That is the file itself, or the error marker a
+        screen draws for a file it cannot show
+        (testing/external_pictures.py). The result is (the name a picture
+        shape gives the picture, the rotation the picture's pixels are
+        stored for), and the marker is stored upright. None when there is
+        no such file, or when the screen does not show anything for it
+        (by default, always None);
       - frames(kind, id): the media_files.Frames of the folder's animation or
         video `id`, `kind` being ANIMATION or VIDEO (resource_names.py), or
         None when there is none such (by default: there are none); raises
@@ -447,7 +463,7 @@ class DrawingResources:
         `reads` was being recorded, such as which card file a picture shape
         shows (card_picture)."""
 
-    def card_picture(self, path: str):
+    def card_picture(self, path: str, width: int, height: int):
         return None
 
     def frames(self, kind: str, media_id: int):
@@ -776,10 +792,11 @@ class ComponentPainter:
         elif kind == "select":
             paint_select(self)
         elif kind == "external-picture":
-            name = self.resources.card_picture(self.values.get("path", ""))
-            if name is not None:
-                self.add("picture", picture=name, sx=0, sy=0, rotation=self.resources.rotation,
-                         card=True)
+            found = self.resources.card_picture(self.values.get("path", ""), self.box["w"],
+                                                self.box["h"])
+            if found is not None:
+                name, rotation = found
+                self.add("picture", picture=name, sx=0, sy=0, rotation=rotation, card=True)
         elif kind == "qr-code":
             paint_qr_code(self)
         elif kind == "hotspot":

@@ -22,12 +22,12 @@ any other file.
 """
 import argparse
 from dataclasses import dataclass
-import io
 from pathlib import Path
 import sys
 
 from PIL import Image
 
+from nxwright.project.media_files import CARD_PICTURE_QUALITIES, card_picture_file
 from nxwright.testing.file_packets import packets
 
 # The three bytes that end an instruction, and each answer of the screen.
@@ -40,6 +40,11 @@ FINISHED = b"\xfd" + END
 # The bytes the probe's project sets aside for `ram/` files, unless it is
 # built with none to run the checks of NO_SPACE_CHECKS.
 SPACE = 4096
+# After a file's packets, how many more times the probe waits for the
+# screen to answer that it has stored the file (_answer_to). Each wait
+# ends when the screen has been quiet for the time given as `quiet`
+# (SerialExchange).
+MOST_WAITS = 10
 
 
 def number(value: int) -> bytes:
@@ -48,11 +53,12 @@ def number(value: int) -> bytes:
 
 
 def red_square() -> bytes:
-    """Returns a PNG of a red square, 100 pixels wide, small enough for
-    `ram/`."""
-    picture = io.BytesIO()
-    Image.new("RGB", (100, 100), (255, 0, 0)).save(picture, "PNG")
-    return picture.getvalue()
+    """Returns a red square, 100 pixels wide, as a .xi file small enough
+    for `ram/`. The probe sends a .xi file because it is the only kind that
+    both an Intelligent screen and an Edge screen showed
+    (nxwright/testing/external_pictures.py)."""
+    return card_picture_file(Image.new("RGBA", (100, 100), (255, 0, 0, 255)),
+                             CARD_PICTURE_QUALITIES["very-high"], 0)
 
 
 @dataclass(frozen=True)
@@ -161,9 +167,9 @@ CHECKS = (
            'delfile "ram/a.bin"'),
           number(0)),
     Check("An external picture shows a picture that twfile put in ram/",
-          ('twfile "ram/p.png",%d' % len(PICTURE), PICTURE, 'p0.path="ram/p.png"'),
+          ('twfile "ram/p.xi",%d' % len(PICTURE), PICTURE, 'p0.path="ram/p.xi"'),
           question="Does the screen show a red square at its top right?",
-          then=('p0.path=""', 'delfile "ram/p.png"')),
+          then=('p0.path=""', 'delfile "ram/p.xi"')),
     Check("An external picture whose file is missing answers 0x06, in ram/ and on the SD card",
           ('p0.path="ram/none.png"', 'p0.path="sd0/nxprobe-none.png"'),
           IGNORED + IGNORED,
@@ -226,12 +232,30 @@ def run_checks(checks, exchange, ask) -> list:
     exchange(b"bkcmd=2" + END)
     answers = []
     for check in checks:
-        sent = b"".join(exchange(_bytes_of(step)) for step in check.steps)
+        sent = b"".join(_answer_to(step, exchange) for step in check.steps)
         seen = ask(check.question) if check.question else None
         for step in check.then:
-            exchange(_bytes_of(step))
+            _answer_to(step, exchange)
         answers.append(Answer(check, sent, seen))
     return answers
+
+
+def _answer_to(step, exchange) -> bytes:
+    """Sends a check's step, and returns what the screen answers.
+
+    After a file's packets, the screen answers only once it has stored the
+    file. A real NX8048P070 took longer than half a second to store 1737
+    bytes, and garbled the instruction that arrived in the meantime. For a
+    file, _answer_to therefore keeps waiting until the screen answers that
+    the transfer has finished, or until it has waited MOST_WAITS more
+    times."""
+    answer = exchange(_bytes_of(step))
+    if isinstance(step, bytes):
+        waits = 0
+        while not answer.endswith(FINISHED) and waits < MOST_WAITS:
+            answer += exchange(b"")
+            waits += 1
+    return answer
 
 
 def _bytes_of(step) -> bytes:

@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.4.1] - 2026-11-12
+
+- In the simulator, an external picture no longer shows a PNG, or a JPEG on the Edge series.
+- An external picture now draws the screen's error marker, or nothing, for a file it does not show.
+
 ### [0.4.0] - 2026-11-12
 
 - The simulator now takes a `twfile`'s file in packets, like a real screen, and drops raw bytes.

@@ -189,11 +189,10 @@ from nxwright.language.resource_names import ANIMATION, LISTS, SOUND, VIDEO, Res
 from nxwright.project.device_settings import TextCodec
 from nxwright.project.editor_language import SERIES_LACKED_VARIABLES
 from nxwright.project.editor_limits import screen_holds
-from nxwright.project.media_files import (FROM_CARD, animation_frames, is_card_picture,
-                                          read_card_picture, sound_frames, video_frames)
+from nxwright.project.media_files import (FROM_CARD, animation_frames, sound_frames,
+                                          video_frames)
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.page_header import SYSTEM_PAGES
-from nxwright.project.pictures import read_picture
 from nxwright.source import source_folder as folders
 from nxwright.source.device_keys import (memory_file_storage_size, screen_model,
                                          settings_from_keys)
@@ -205,6 +204,7 @@ from nxwright.testing.card_files import (DATA_FILES_HELD, DATA_RECORDS_GIVEN_A_P
                                          is_shut_out, let_go_of_played_file,
                                          open_data_record, opens_no_file, read_card_file,
                                          write_card_file)
+from nxwright.testing import external_pictures
 from nxwright.testing.combo_boxes import ComboBoxes
 from nxwright.testing.editor_machine import (EEPROM_SIZE, PINYIN_COMMANDS, RECORD_STARTS, RECORDS,
                                              CompileRefusal, EditorMachine, RefusedCode,
@@ -2815,15 +2815,19 @@ class Simulation:
                 self._check_picture_file(name, fields.get(name + ".path", ""), card_values)
 
     def _check_picture_file(self, component: str, path, card_values: dict):
-        """Checks `path`, the file that the external picture `component` shows,
-        and writes to the log what stops the picture from showing.
+        """Checks the file at `path`, which the external picture `component`
+        shows, and writes to the log what stops the picture from showing.
         `card_values` contains the files kept in memory.
 
         If the file is missing, the simulation answers 0x06 when `bkcmd` is 2
-        or 3. It does not answer for a file that is not a picture. An empty
+        or 3. The Nextion Editor's simulator answered the same way. An empty
         `path`, or one that is neither on a card nor in ram/, is not checked.
-        The Nextion Editor's simulator behaved the same way in each of these
-        cases."""
+
+        If the file exists, and the screen does not show files of its kind
+        (external_pictures.shown), the log lists the kinds of file the
+        screen shows. For a .xi file or a JPEG that cannot be read, the log
+        says that the file is damaged. The simulation does not answer in
+        either case, because two real screens did not."""
         if not isinstance(path, str) or not (path.startswith(CARDS) or is_ram_path(path)):
             return
         try:
@@ -2833,8 +2837,12 @@ class Simulation:
         if data is None:
             self._write_log("%s cannot show %s: there is no such file" % (component, path))
             self._return_code(INVALID_FILE_OPERATION, False)
-        elif not _is_picture(data):
-            self._write_log("%s cannot show %s: the file is not a picture" % (component, path))
+        else:
+            kind = external_pictures.file_kind(data)
+            if external_pictures.shown(kind, self._series) != external_pictures.PICTURE:
+                reason = ("the file is damaged" if kind == external_pictures.DAMAGED
+                          else external_pictures.kinds_shown(self._series))
+                self._write_log("%s cannot show %s: %s" % (component, path, reason))
 
     def _loader(self, component: str, kind: str):
         """Returns the function that MediaPlayer calls to load what the
@@ -3063,20 +3071,6 @@ def _series_has_gpio(series: str) -> bool:
     """Returns whether a screen of `series` has GPIO pins: every series but
     the Basic does, and so does a screen of no known model, None."""
     return series is None or PIN_NAMES[0] not in SERIES_LACKED_VARIABLES[series]
-
-
-def _is_picture(data: bytes) -> bool:
-    """Returns whether nxwright can read `data`, a file's bytes, as one of
-    the kinds of picture that an external picture can show: a PNG, a JPEG,
-    or PictureBox's .xi file."""
-    try:
-        if is_card_picture(data):
-            read_card_picture(data)
-        else:
-            read_picture(data)
-    except (NxwrightError, OSError, ValueError):
-        return False
-    return True
 
 
 def _owner(key: str) -> str:

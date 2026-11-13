@@ -388,7 +388,7 @@ Compiling:
 
 ## Pictures for the SD card
 
-An external picture shows a file of the screen's SD card, which the project does not contain. The Nextion Editor's simulator shows a PNG, a JPEG, and a `.xi` file alike, each in its own colours, with its transparency.
+An external picture shows a picture file that is on the screen's SD card, and not in the project. The Nextion Editor's simulator shows a PNG, a JPEG, and a `.xi` file alike, each in its own colours, with its transparency. A real screen shows a `.xi` file, and a JPEG too if the screen is of the Intelligent series, but does not show a PNG ([simulator.md, External pictures](simulator.md#external-pictures)).
 
 PictureBox, the Nextion Editor's tool for SD card pictures, writes `.xi` files. Version 1.1 writes them in this form:
 
