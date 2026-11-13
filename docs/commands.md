@@ -111,7 +111,7 @@ nxwright report thermostat.HMI report.md
 - Each thing nxwright does not know comes with what it is, at most its first 16 bytes, and where it is: a block's name, an object's number, or an attribute's name. Those bytes may contain some of your own text, so read the report before you send it.
 - The project's code, texts, names of pages or components, pictures, fonts, animations, videos, and sounds are left out. The password's hash is blanked, and the report gives only whether there is a password.
 - The report gives the Nextion Editor versions that the project file records: the one that last saved the project, and the ones that last wrote its pages.
-- nxwright also extracts the project into a temporary folder and builds it again. The report lists each block that differs in this rebuild, with its size and where its bytes differ, but never the bytes.
+- nxwright also extracts the project into a temporary folder and builds it again. The report lists each block that differs in this rebuild, with its size and where its bytes differ. For these blocks it gives no bytes at all, because a difference can lie anywhere in your project.
 - The rest of the report is the versions of nxwright, Python, and Windows, the project file's blocks by name and size, its manifest header, and the device settings nxwright reads from it.
 - Two blanks are left for you to fill in: the Nextion Editor's version, and what you did in it before you saved the project.
 - The project file does not change, and the command fails if the report's file already exists.

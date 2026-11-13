@@ -422,7 +422,7 @@ nxwright diff app screen.HMI          # shows what differs between the folder an
 
 nxwright is tested with projects saved by Nextion Editor 1.68.2. Older versions, from 1.60.1 on, have only basic support: nxwright extracts the projects they save, and the projects it builds open and compile in each of those versions, as long as a project uses only the screen series and component types that version has. `nxwright compile` uses the firmware of the tested version, whichever version saved your project ([The firmware](https://github.com/nixiewright/nxwright/blob/main/docs/commands.md#the-firmware)).
 
-A project saved by a newer Nextion Editor may contain things nxwright does not know, and the next build may lose some of them. `nxwright extract` warns you about each one, and `nxwright report` writes a report on them that you can send to nxwright's maintainers. The report leaves out your project's own content ([commands.md](https://github.com/nixiewright/nxwright/blob/main/docs/commands.md#report)).
+A project saved by a newer Nextion Editor may contain things nxwright does not know, and the next build may lose some of them. `nxwright extract` warns you about each one, and `nxwright report` writes a report on them that you can send to nxwright's maintainers. The report gives the first bytes of each thing nxwright does not know, and leaves out the rest of your project's own content. Some of the reported bytes may unknowingly contain very small portions of some of your own text (for instance, the start of a component name): please read the report before you send it ([commands.md](https://github.com/nixiewright/nxwright/blob/main/docs/commands.md#report)).
 
 **Put it on the screen:**
 
