@@ -10,7 +10,8 @@ make that input, and read that part:
   series (probes/). nxwright's page reader makes it, with the base folder's
   component defaults, so that a page of a probe's components is that
   probe's page. page_of() makes it from what a probe's change adds, which
-  probe_change() gives.
+  probe_change() gives. without_attribute() gives one of the page's
+  objects without an attribute.
 - project_of() makes a Project of only the facts a function reads, such as
   the series, a page's components, or the number of pictures. Many of
   nxwright's functions take a Project only to read those. It is never a whole
@@ -205,6 +206,15 @@ def page(*components: str, series: str = "T", code: str = "", strict: bool = Fal
     check_component_places(made, base.screen, settings_from_keys(base.app).page_size, where)
     check_series_components(made, base.screen, where)
     return made
+
+
+def without_attribute(page_object, name: str):
+    """Returns `page_object` without its attribute `name`. A component lacks
+    an attribute this way when its table in the page file sets
+    `defaults = false` and leaves the attribute out."""
+    return replace(page_object, items=[
+        item for item in page_object.items
+        if not (isinstance(item, Attribute) and item.name == name)])
 
 
 def _base_of(series: str, strict: bool = False, program: tuple = (), declarations: tuple = (),

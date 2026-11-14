@@ -10,6 +10,7 @@ after the head (tests/tft/p_components.py). The probes of a gmov's whole user
 code, and its record's place of its playend event's code, are compared in
 tests/tft/test_whole_files.py.
 """
+from dataclasses import replace
 import unittest
 
 from nxwright.tft import component_types
@@ -18,7 +19,7 @@ from nxwright.tft.matching import Need, matched_rules, unmatched
 from tools.tft.probing import gmov_probes, p_probes
 from tests.tft.p_components import PTypePieces, p_entries, p_memory, p_probe, p_values
 from tests.tft.t_components import LoadSectionPieces
-from tests.tft.unit_inputs import page, piece, place, project_of
+from tests.tft.unit_inputs import page, piece, place, project_of, without_attribute
 
 _PROBE_AT_ITS_DEFAULTS = "p-gmov-at-its-defaults"
 # A place for a gmov of no probe: that of the gmov at its defaults, from
@@ -80,6 +81,17 @@ class EntryTest(unittest.TestCase):
         self.assertEqual(entries[24 * 21:][:24], bytes(24))
         self.assertEqual(p_memory(gmov_object, _PLACE)[56:58], bytes(2))
         self.assertRaises(KeyError, gmov._of(False).attribute_place, "vid")
+
+    def test_without_its_from(self):
+        # A gmov that has no from is written with a from of 0, the default.
+        # Its values and its entries are those of the probe at its defaults.
+        made = page(gmov_probes.gmov_component(), series="P")
+        made = replace(made, objects=[made.objects[0],
+                                      without_attribute(made.objects[1], "from")])
+        gmov_object = project_of(made, series="P").pages[0].objects[1]
+        probe = p_probe(_PROBE_AT_ITS_DEFAULTS)
+        self.assertEqual(p_values(gmov_object, _PLACE), piece(probe, "page0-1-memory"))
+        self.assertEqual(p_entries(gmov_object, _PLACE), piece(probe, "page0-1-entries"))
 
 
 class RuleTest(unittest.TestCase):

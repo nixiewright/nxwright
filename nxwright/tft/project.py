@@ -4,15 +4,26 @@ modules: its device settings, its pages, its program.s, and its resources.
 A compile builds a source folder into a project file, then reads it here.
 Every piece of the compile takes a project in this form.
 
-Each object of a project's pages is a Component: its records as stored,
-which code may still read as nxwright's PageObject, with its attributes
-found by name, and what describes it worked out the first time it is
-needed (component_types.object_module). A project and its components are never
+Each object of a project's pages is a Component. It is made from the
+records of the stored object, and code may still read it as nxwright's
+PageObject. Its attributes are found by name, and what describes it is
+worked out the first time it is needed
+(component_types.object_module). A project and its components are never
 changed once made: code that needs another makes it with
 dataclasses.replace, and the new one finds its own attributes. A project
 made from another keeps its components, so they are not described again.
 A component's events are clean (below), so code that makes a component
 with other events gives them clean.
+
+A Component has every attribute of its type, even when the stored
+object lacks one. A stored object lacks an attribute when its table in
+the page file sets `defaults = false` and leaves the attribute out, or
+when an older Nextion Editor saved the project before the object's type
+had that attribute. The Component gets each missing
+attribute at its type's default (_with_missing_defaults), so every piece
+of the compile reads the object as if that default had been stored. When
+the Nextion Editor opened a project, it filled in a text's missing
+attributes with the type's defaults too.
 
 A Project keeps its code clean: program.s, each event's code, and each
 macro's lines, as plain_lines gives them. The Nextion Editor stores code
@@ -26,6 +37,7 @@ from pathlib import Path
 
 from nxwright import NxwrightError
 from nxwright.language.code_lines import declared_int_names, split_line
+from nxwright.project.component_defaults import nxwright_defaults
 from nxwright.project.container import HmiContainer
 from nxwright.project.device_settings import DeviceSettings, TextCodec, read_device_settings
 from nxwright.project.page_block import Attribute, Event, PageObject, parse_page
@@ -47,19 +59,39 @@ RESOURCE_KINDS = {"i": "picture", "zi": "font", "gmov": "animation", "v": "video
 NOT_DESCRIBED = object()
 
 
+def _with_missing_defaults(items: list) -> list:
+    """Returns `items`, the records of a stored object, followed by each
+    attribute of the object's type that the object lacks, at the type's
+    default (component_defaults.nxwright_defaults). If nxwright has no
+    defaults for the type, `items` is returned unchanged. The defaults
+    leave out the attributes every object derives, such as its objname, so
+    those stay missing."""
+    kind = next((item.value for item in items
+                 if isinstance(item, Attribute) and item.name == "type"), None)
+    defaults = nxwright_defaults().get(kind[0]) if kind else None
+    if defaults is None:
+        return items
+    stored = {item.name for item in items if isinstance(item, Attribute)}
+    return items + [Attribute(name, value) for name, value in defaults.attributes
+                    if name not in stored]
+
+
 @dataclass(eq=False)
 class Component(PageObject):
-    """An object of a project's page: its records as stored (PageObject's
-    `items`), each attribute found by its name, and what describes it,
-    once component_types.object_module has worked it out. As PageObject's,
-    `attribute` gives the value of the first record of a name. Two
-    components of the same records are equal, as PageObject's equality
-    goes, but a component never equals a plain PageObject."""
+    """An object of a project's page. Its `items` are the records of the
+    stored object, followed by the attributes of its type that the stored
+    object lacks, at their defaults. `attribute` gives the value of the
+    first record of a name in `items`, by the same rule as PageObject's
+    `attribute`. `description` is what describes the object, once
+    component_types.object_module has worked it out. Component keeps
+    PageObject's equality, so two components with the same records are
+    equal, but a component never equals a plain PageObject."""
     # Not given when a component is made, so that one made from another
     # with replace is described again.
     description: object = field(default=NOT_DESCRIBED, init=False, repr=False, compare=False)
 
     def __post_init__(self):
+        self.items = _with_missing_defaults(self.items)
         attributes = {}
         for item in self.items:
             if isinstance(item, Attribute):
