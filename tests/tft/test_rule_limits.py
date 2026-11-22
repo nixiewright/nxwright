@@ -156,6 +156,10 @@ class LimitsTest(unittest.TestCase):
                        else _component_entries(project, page_object))
             on_series = ranges_on_series(type_name, series)
             for name, entry in entries.items():
+                if entry == (0, 0):
+                    # An entry the type does not write carries no limits to
+                    # compare, as a drawn object's aph does on T, K and F.
+                    continue
                 checked = range_on_every_series(type_name, name) or on_series.get(name)
                 if checked is not None and checked != entry:
                     differ.add((type_name, name, series, checked, entry))

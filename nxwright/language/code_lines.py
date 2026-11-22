@@ -60,9 +60,16 @@ ARGUMENT = re.compile(r'(?:"(?:\\.|[^"\\])*"|[^,"])+')
 # A number as code writes it: in decimal, or in hexadecimal, as 0x1234 or
 # 0X1234, which the Nextion Editor compiled and ran alike.
 NUMBER = r"-?0[xX][0-9A-Fa-f]+|-?[0-9]+"
-# An operand of a chain: a number, a quoted text, or a name, which may be
-# dotted and indexed, as n0.val or b[1].val.
-OPERAND = (NUMBER + r'|"(?:\\.|[^"\\])*"|[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?'
+# A call of a component's method, as `fs0.open(t0.txt)` or `fs0.close()`: a
+# dotted attribute, then its arguments between parentheses. The Nextion
+# Editor compiled one on the right of `=`, as `sys0=fs0.open(t0.txt)`, as the
+# method's operand, then `(`, its arguments as a command's, and `)`.
+CALL = r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\([^()]*\)"
+# An operand of a chain: a number, a quoted text, a call, or a name, which
+# may be dotted and indexed, as n0.val or b[1].val. A call comes before the
+# name it starts, which would otherwise take its first letters.
+OPERAND = (NUMBER + r'|"(?:\\.|[^"\\])*"|' + CALL
+           + r'|[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?'
            r'(?:\.[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?)*')
 # An assignment in the Nextion Editor's syntax: its target, its operator, =
 # or a compound one such as +=, and its value.

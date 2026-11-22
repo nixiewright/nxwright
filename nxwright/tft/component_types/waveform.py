@@ -67,7 +67,7 @@ _PLACES = {"sta": 0, "dir": 1, "ch": 2, "bco": 4, "pic": 4, "picc": 4, "gdc": 6,
 # Each attribute's entry, within the type, in a waveform of a colour, but
 # those of the channels' colours and of dis, which depend on its ch
 # (_Waveform).
-_ENTRY = {"type": 0, "id": 1, "vscope": 3, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
+_ENTRY = {"type": 0, "id": 1, "vscope": 3, "aph": 6, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
           "endy": 14, "sta": 19, "dir": 20, "ch": 21, "bco": 22, "gdc": 23, "gdw": 24,
           "gdh": 25}
 # The entry of channel 0's colour in a waveform of a colour; the others

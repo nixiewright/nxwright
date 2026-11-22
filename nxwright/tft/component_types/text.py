@@ -50,7 +50,7 @@ _PLACES = {"font": 0, "isbr": 1, "pco": 2, "background": 4, "xcen": 6, "ycen": 7
 MEMORY_VALUES = ("font", "isbr", "pco", "background", "xcen", "ycen", "pw")
 MEMORY_FORMAT = "<BBHHBBB"
 # The entries every object drawn has, and its sta's, each by its attribute.
-_ENTRY = {"type": 0, "id": 1, "vscope": 3, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
+_ENTRY = {"type": 0, "id": 1, "vscope": 3, "aph": 6, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
           "endy": 14, "sta": 19}
 # The entries after its sta's, in order, by what each gives. First come its
 # style's entry, at a sta of 1 alone, one left empty, and its border's two,

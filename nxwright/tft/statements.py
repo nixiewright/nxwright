@@ -89,7 +89,7 @@ import struct
 
 from nxwright import NxwrightError
 from nxwright.language.code_lines import compact
-from nxwright.project.attribute_descriptions import code_cannot_change, describe
+from nxwright.project.attribute_descriptions import code_cannot_change, describe, is_a_method
 from nxwright.project.device_settings import TextCodec
 from nxwright.project.editor_language import NAMES_THE_EDITOR_REFUSES
 from nxwright.project.editor_limits import code_cannot_change_on_series
@@ -363,9 +363,15 @@ _NAME_ALONE = re.compile(r"(?<![\w.])[A-Za-z_][A-Za-z0-9_]*(?![\w.\[])")
 # the longest first. A hexadecimal number comes before a number, which would
 # otherwise take its 0. A reference and an attribute come before a name,
 # which would otherwise take their first letters.
+# A call of a component's method, as `fs0.open(t0.txt)`: a dotted attribute,
+# then its arguments between parentheses. The Nextion Editor compiled one as
+# a value, as `sys0=fs0.open(t0.txt)`, as the method's operand, then `(`, its
+# arguments as a command's, and `)` (read from a reference TFT's code).
+_CALL = r"%s\([^()]*\)" % ATTRIBUTE
 _PART = re.compile(r"\s*(?:(?P<hex>%s)(?![0-9A-Za-z_])" % HEX_NUMBER
                    + r"|(?P<number>\d+)|(?P<indirect>%s)" % INDIRECT
                    + r"|(?P<serial>%s)" % SERIAL_BUFFER
+                   + r"|(?P<call>%s)" % _CALL
                    + r"|(?P<attribute>%s)" % ATTRIBUTE
                    + r"|(?P<name>[A-Za-z_][A-Za-z0-9_]*)|(?P<text>%s)" % TEXT
                    + r"|(?P<operator><<=|>>=|<<|>>|\+\+|--|[-+*/%&|^]=|[-+*/%&|^=,]))", re.ASCII)
@@ -625,6 +631,11 @@ def _block(line: str, series: str, variables, attribute_entry=None, components=N
     call = METHOD_CALL.fullmatch(stripped)
     if call is not None:
         return _method_call_block(call, series, variables, attribute_entry, codec)
+    # A call written without its parentheses, as `fs0.close`, which the
+    # Nextion Editor compiled as the method's operand alone, where
+    # `fs0.close()` gives the operand then `()`.
+    if _ATTRIBUTE.fullmatch(stripped) and is_a_method(stripped.rsplit(".", 1)[1]):
+        return _operand(("attribute", stripped), series, variables, attribute_entry, codec)
     return _assignment_block(_parts(stripped), series, variables, attribute_entry, codec)
 
 
@@ -894,7 +905,7 @@ def _part_kind(need, part: tuple):
         return "text"
     if kind == "attribute":
         return attribute_kind(need, text)
-    return "any" if kind == "indirect" else None
+    return "any" if kind in ("indirect", "call") else None
 
 
 def attribute_kind(need, attribute: str):
@@ -1352,6 +1363,9 @@ def _operand(part: tuple, series: str, variables, attribute_entry=None, codec=No
     written as it is, its quotes included, in `codec`, the project's: in
     iso-8859-1, `"é"` is 22 e9 22."""
     kind, text = part
+    if kind == "call":
+        return _method_call_block(METHOD_CALL.fullmatch(text), series, variables,
+                                  attribute_entry, codec)
     if kind == "indirect":
         return _indirect_operand(text, series, variables, attribute_entry)
     if kind == "serial":
