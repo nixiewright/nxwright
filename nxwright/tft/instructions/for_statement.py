@@ -4,8 +4,13 @@ series (ResearchNotes/tft/for-statement.md).
 A `for` spans several lines of a run: `for(<start>;<condition>;<step>)`,
 then `{`, its body, then `}`. The braces give no block. The start and the
 step are assignments, such as `sys0=0` and `sys0++`, each encoded as a line
-of its own. The Nextion Editor refuses an empty start or step. Conditions,
+of its own. The Nextion Editor rejects an empty start or step. Conditions,
 bodies, and jumps are as control_statements.py gives them.
+
+If the start contains a method call, the Nextion Editor writes the start
+only up to the first call's parentheses, so the screen does not run the
+call (_start_as_written). In the step, the Nextion Editor rejects a call
+("Invalid Variables").
 
 The statement's blocks, in order:
 
@@ -52,21 +57,28 @@ def encode_statement(lines: list, start: int, place, context, encode_run) -> tup
     if not CLOSING.fullmatch(closing):
         raise StatementError("%r: a for's body ends with } alone" % closing)
     blocks = encode_run(body, place, context) + [_assignment(step, head, place, context)]
-    return threaded([_assignment(first, head, place, context)]
+    return threaded([_assignment(_start_as_written(first), head, place, context)]
                     + loop_blocks(condition, blocks, place, context, series)), end
 
 
 def covers(line: str, need=None) -> bool:
-    """Whether MATCHED covers `line`: one of a `for`'s own lines, as the
-    encoder writes them. `need` is the line's, which gives the attributes
-    the line may refer to. A start or a step that holds a text is a line
-    of its own, which the statement encoder's rule takes
-    (statements.covers_line). Any other may refer to them as numbers
-    (statements.attributes_are_numbers), and may set only those code can
-    change (statements.sets_only_changeable_attributes). One that refers to
-    an attribute through the screen's arrays must be one the encoder's rule
-    of them takes (statements.indirect_covered). Its condition refers to
-    them as control_statements.covers_condition takes them."""
+    """Whether MATCHED covers `line`, one of a `for`'s own lines. `need` is
+    the line's need, which gives the attributes that the line may refer to.
+
+    The condition is checked by control_statements.covers_condition. The
+    start and the step are each checked by their kind:
+
+      - A step that contains a method call is not covered, because the
+        Nextion Editor rejects it ("Invalid Variables").
+      - A start or a step that contains a text, and a start that contains a
+        method call, are each checked as a line of their own
+        (statements.covers_line).
+      - Any other start or step must refer to attributes as numbers
+        (statements.attributes_are_numbers), and set only the attributes
+        that code can change (statements.sets_only_changeable_attributes).
+        If it refers to an attribute through the screen's arrays,
+        statements.indirect_covered must cover it.
+    """
     if OPENING.fullmatch(line) or CLOSING.fullmatch(line):
         return True
     # On P and on F, the line holds only what that series' probes of code
@@ -79,24 +91,24 @@ def covers(line: str, need=None) -> bool:
         first, condition, step = _parts(line)
     except StatementError:
         return False
-    # A for with a method call in its start or its step is not covered. The
-    # Nextion Editor wrote a start of `sys0=fs0.close()` as `sys0=fs0.close`,
-    # without the call's parentheses and arguments, and the encoder does not
-    # write that form yet. The Nextion Editor rejected a call in the step
-    # ("Invalid Variables").
+    if holds_a_call(step):
+        return False
     return covers_condition(condition, need) and all(
-        _ASSIGNMENT.fullmatch(part) is not None and not holds_a_call(part) and encodable(part)
-        and _part_covered(part, need) for part in (first, step))
+        _ASSIGNMENT.fullmatch(part) is not None and encodable(part) and _part_covered(part, need)
+        for part in (first, step))
 
 
 def _part_covered(part: str, need) -> bool:
     """Whether the start or step `part` of the line of `need` is one the
     encoder writes. One that holds a text, as `t0.txt=""`, is a line of
     its own to the encoder, so the statement encoder's rule of a line takes
-    it (statements.covers_line). Any other refers to attributes as
+    it (statements.covers_line). A start that contains a method call is
+    checked by that rule too, in full, so that every call in it is checked.
+    The encoder then writes the start only up to its first call's
+    parentheses (_start_as_written). Any other refers to attributes as
     numbers, sets only those code can change, and refers through the
     screen's arrays as the encoder's rule of them takes it."""
-    if '"' in part:
+    if '"' in part or holds_a_call(part):
         return need is not None and covers_line(replace(need, value=part))
     return (attributes_are_numbers(need, part) and sets_only_changeable_attributes(need, part)
             and (not refers_through_arrays(part)
@@ -128,6 +140,15 @@ def _parts(line: str) -> tuple:
         raise StatementError("%r: the Nextion Editor refuses a for whose start or step is empty"
                              % line)
     return tuple(parts)
+
+
+def _start_as_written(start: str) -> str:
+    """Returns the part of `start`, a for's start, that the Nextion Editor
+    writes. If the start contains a method call, that part ends before the
+    first call's parentheses: `sys0=fs0.close` for `sys0=fs0.close()`, and
+    `sys0=fs0.open` for `sys0=fs0.open(t0.txt)+1`. So the screen reads the
+    method as an attribute, and does not call it."""
+    return start[:start.index("(")] if holds_a_call(start) else start
 
 
 def _assignment(text: str, line: str, place, context) -> bytes:

@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.5.6] - 2026-11-23
+
+- `nxwright compile` now compiles a `for` with a method call in its first part.
+- The simulator now drops what follows a method call in the first part of a `for`, matching physical screens.
+
 ### [0.5.5] - 2026-11-23
 
 - nxlang now accepts a method call as a value, as in `n0.val = fs0.open(t0.txt)`.

@@ -13,7 +13,7 @@ import unittest
 
 from nxwright.tft.compile_context import CompileContext
 from nxwright.tft.matching import Need, matched_rules, project_needs, unmatched
-from nxwright.tft.statements import CodePlace, StatementError, encode_line
+from nxwright.tft.statements import CodePlace, StatementError, encode_code, encode_line
 from tools.tft.probing.command_operand_probes import COMPONENTS
 from tools.tft.probing.data_record_probes import data_record_component
 from tools.tft.probing.file_browser_probes import file_browser_component
@@ -88,16 +88,21 @@ def _context(project) -> dict:
 
 class PiecesTest(CodePieces, unittest.TestCase):
     """Compares the statement encoder's blocks with the blocks the Nextion
-    Editor wrote, for the three probes on P of calls as values and of
-    methods alone on a line: the file stream's, the data record's, and the
-    file browser's. Each probe's page is made in memory, and the Nextion
-    Editor's blocks are the ones the probe keeps."""
+    Editor wrote, for four probes on P. Three are the probes of calls as
+    values and of methods alone on a line: the file stream's, the data
+    record's, and the file browser's. The fourth is the probe of a file
+    stream's calls in a for's start. Each probe's page is made in memory,
+    and the Nextion Editor's blocks are the ones the probe keeps."""
 
-    PROBES = [probe for probe in p_probes.PROBES if probe.name.endswith("-calls-as-values")]
-    CODE_COUNT = 3
+    PROBES = [probe for probe in p_probes.PROBES
+              if probe.name.endswith(("-calls-as-values", "-calls-in-a-for-s-start"))]
+    CODE_COUNT = 4
 
 
-class OnPTest(unittest.TestCase):
+class PageOnPTestCase(unittest.TestCase):
+    """The base of the tests on P. Its page has the components that this
+    module's docstring lists. `covered` returns whether the match check
+    covers a line of code in the page's Touch Release event."""
 
     @classmethod
     def setUpClass(cls):
@@ -109,6 +114,9 @@ class OnPTest(unittest.TestCase):
     def covered(self, line: str, series: str) -> bool:
         need = Need("code", "event", line, context=self.context, series=series)
         return unmatched([need], self.rules) == []
+
+
+class OnPTest(PageOnPTestCase):
 
     def test_what_the_nextion_editor_compiled(self):
         place = CodePlace(0, "page0", "up")
@@ -135,23 +143,72 @@ class OnPTest(unittest.TestCase):
                     encode_line(line, place, CompileContext(self.project))
 
 
-class InAForTest(unittest.TestCase):
-    """A call in a for's start. The Nextion Editor wrote the start without
-    the call's parentheses and arguments: `sys0=fs0.close` for
-    `sys0=fs0.close()`. The encoder cannot write that form yet, so the match
-    check must not cover a for whose start contains a call."""
+class InAForTest(PageOnPTestCase):
+    """A call in a for's start. The Nextion Editor wrote the start only up
+    to the first call's parentheses: `sys0=fs0.close` for `sys0=fs0.close()`,
+    and `sys0=fs0.open` for `sys0=fs0.open(t0.txt)+1`. Each for was
+    `for(<start>;sys0<1;sys0++)`, with `sys1=1` as its body. The for whose
+    start sets `n0.val` had `n0.val` in its condition and its step."""
 
-    def test_a_call_in_its_start_is_not_covered(self):
-        rules = matched_rules()
-        for start in ("sys0=fs0.close()", "sys0=fs0.open(t0.txt)", 'sys0=fs0.open("sd0/a.txt")'):
+    # Each start, and the bytes that the Nextion Editor wrote for it.
+    STARTS = {
+        "sys0=fs0.close()": "%s 3d %s" % (_SYS0, _CLOSE),
+        "sys0=fs0.open(t0.txt)": "%s 3d %s" % (_SYS0, _OPEN),
+        'sys0=fs0.open("sd0/a.txt")': "%s 3d %s" % (_SYS0, _OPEN),
+        "sys0=fs0.read(t0.txt,0,3)+1": "%s 3d %s" % (_SYS0, _READ),
+        "sys0=fs0.open(t0.txt)+1": "%s 3d %s" % (_SYS0, _OPEN),
+        "sys0=fs0.open(t0.txt)+fs0.find(t0.txt)": "%s 3d %s" % (_SYS0, _OPEN),
+        "sys0=fs0.close()+fs0.open(t0.txt)": "%s 3d %s" % (_SYS0, _CLOSE),
+        "sys0=1+fs0.close()": "%s 3d 31 2b %s" % (_SYS0, _CLOSE),
+        "sys0=1+fs0.close()+2": "%s 3d 31 2b %s" % (_SYS0, _CLOSE),
+        "sys0+=fs0.close()": "%s 2b 3d %s" % (_SYS0, _CLOSE),
+        "sys0=page0.fs0.close()": "%s 3d %s" % (_SYS0, _CLOSE),
+        "sys0=d0.clear()": "%s 3d %s" % (_SYS0, _CLEAR),
+        "sys0=d0.delete(0,1)": "%s 3d %s" % (_SYS0, _DELETE),
+        "sys0=fb0.up()": "%s 3d %s" % (_SYS0, _BROWSER_UP),
+        # A method written without its parentheses.
+        "sys0=fs0.close": "%s 3d %s" % (_SYS0, _CLOSE),
+    }
+    # The blocks after the start's: the condition, the body, the step, and
+    # the jump back to the condition.
+    REST = ["09 00 04 %s 2c 31 2c 32 2c 03 21 00 00 00" % _SYS0, "05 04 00 00 00 3d 31",
+            "%s 2b 2b" % _SYS0, "54 20 03 c9 ff ff ff"]
+
+    def test_the_start_is_written_up_to_its_first_call_s_parentheses(self):
+        place = CodePlace(0, "page0", "up")
+        for start, written in self.STARTS.items():
             head = "for(%s;sys0<1;sys0++)" % start
+            for series in ("P", "E"):
+                with self.subTest(head, series=series):
+                    self.assertTrue(self.covered(head, series))
             with self.subTest(head):
-                project = project_of(page(
-                    *COMPONENTS, file_stream_component(), series="P", strict=True,
-                    code="on page0.up:\n  %s\n  {\n    sys1=1\n  }\n" % head),
-                    series="P", strict=True, fonts=0)
-                self.assertEqual([need.value for need in unmatched(project_needs(project), rules)],
-                                 [head])
+                blocks = encode_code([head, "{", "sys1=1", "}"], place,
+                                     CompileContext(self.project))
+                self.assertEqual([block.hex(" ") for block in blocks], [written, *self.REST])
+
+    def test_a_start_that_puts_its_call_in_a_number_s_val(self):
+        blocks = encode_code(["for(n0.val=fs0.close();n0.val<1;n0.val++)", "{", "sys1=1", "}"],
+                             CodePlace(0, "page0", "up"), CompileContext(self.project))
+        self.assertEqual(blocks[0].hex(" "), "%s 3d %s" % (_VAL, _CLOSE))
+
+    def test_what_the_rule_does_not_cover(self):
+        # Each of these keeps the rule from covering a for:
+        # - a call in the step. The Nextion Editor rejected it ("Invalid
+        #   Variables").
+        # - a start with a call that the Nextion Editor rejects when the call
+        #   is on a line of its own, such as `sys0=fs0.close(1)`. nxwright's
+        #   build rejects that call in a for too.
+        # - a step that the rule does not cover, such as `cls RED`, after a
+        #   start with a call.
+        for head in ("for(sys0=0;sys0<1;sys0+=fs0.close())",
+                     "for(sys0=fs0.close(1);sys0<1;sys0++)", "for(sys0=n0.val();sys0<1;sys0++)",
+                     "for(t0.txt=fs0.open(t0.txt);sys0<1;sys0++)",
+                     "for(sys0=fs0.open(fs0.find(t0.txt));sys0<1;sys0++)",
+                     "for(sys0=fs0.close();sys0<1;cls RED)",
+                     "for(sys0=fs0.close();sys0<1;sys0=t0.txt)"):
+            for series in ("P", "E"):
+                with self.subTest(head, series=series):
+                    self.assertFalse(self.covered(head, series))
 
 
 class WithoutMethodsTest(unittest.TestCase):

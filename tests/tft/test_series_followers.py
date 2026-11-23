@@ -94,7 +94,7 @@ class FollowerTest(unittest.TestCase):
     # The pieces each follower compares, (components' pieces, probes of
     # code, pieces of the probes of labels and goto), as its leader's unit
     # tests compare them.
-    COUNTS = {"F": (2710, 158, 73), "K": (2190, 157, 73), "E": (1666, 57, 7)}
+    COUNTS = {"F": (2710, 158, 73), "K": (2190, 157, 73), "E": (1666, 58, 7)}
 
     def assert_components(self, leader, follower, differences: dict, used: set) -> int:
         """Checks each component of `follower`'s pages at its type's

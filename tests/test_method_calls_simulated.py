@@ -123,6 +123,20 @@ class FileStreamTest(MethodCallsTestCase):
         simulation.serial_input("click b0,0")
         self.assertEqual((simulation.values()["sys0"], simulation.values()["fs0.en"]), (101, 1))
 
+    def test_the_start_of_a_for_ends_at_its_first_call(self):
+        # The Nextion Editor writes the start only up to the first call's
+        # parentheses. It wrote `sys0=1+fs0.close()+2` as `sys0=1+fs0.close`,
+        # and `sys0=fs0.close()+fs0.open(t0.txt)` as `sys0=fs0.close`. As an
+        # attribute, `close` has the value 101.
+        for start, value in (("sys0=1+fs0.close()+2", 102), ("sys0=fs0.close()+5", 101),
+                             ('sys0=fs0.close()+fs0.open("sd0/a.txt")', 101)):
+            with self.subTest(start):
+                simulation, _ = self.started(
+                    'on b0.up:\n  for(%s;sys0<0;sys0++)\n  {\n  }\n' % start)
+                simulation.serial_input("click b0,0")
+                self.assertEqual((simulation.values()["sys0"], simulation.values()["fs0.en"]),
+                                 (value, 0))
+
     def test_a_call_in_the_start_of_a_for_may_have_a_parenthesis_in_its_text(self):
         (Path(self.card.name) / "a(1).txt").write_bytes(b"0123456789")
         simulation, _ = self.started(

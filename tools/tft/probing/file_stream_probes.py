@@ -4,10 +4,13 @@ compared with the Nextion Editor's whole file. Run them on P with
 `tools.tft.probe run p_probes`, which takes them, and on E with
 `tools.tft.probe run e_probes`.
 
-The probes of a file stream at its defaults and of two file streams beside
-a text keep the user code as their fixtures (kept), in p_probes.py's
-folder. The probe of a file stream's calls as values keeps the blocks of its
-event in the same folder.
+Some probes keep fixtures in p_probes.py's folder (kept):
+
+  - the probe of a file stream at its defaults, and the probe of two file
+    streams beside a text, keep the user code;
+  - the probe of a file stream's calls as values, and the probe of its
+    calls in a for's start, keep the blocks of the event that has the
+    calls.
 """
 from tools.tft.probing.attribute_probes import with_attributes
 from tools.tft.probing.component_probes import editor_file, user_code_kept, whole_file, with_components
@@ -49,6 +52,12 @@ _CALLS_AS_VALUES = [
     "sys0=1+fs0.close()", "sys0=fs0.open(t0.txt)+fs0.find(t0.txt)",
     "sys0=page0.fs0.open(t0.txt)", "fs0.open", "fs0.read", "fs0.write", "fs0.close",
     "fs0.find", "page0.fs0.close"]
+# Starts of a for that contain a call. The Nextion Editor writes each only
+# up to its first call's parentheses.
+_STARTS_WITH_A_CALL = [
+    "sys0=fs0.close()", "sys0=fs0.open(t0.txt)+1", "sys0=fs0.read(t0.txt,0,3)+1",
+    "sys0=1+fs0.close()+2", "sys0+=fs0.close()", "sys0=fs0.close()+fs0.open(t0.txt)",
+    "sys0=page0.fs0.close()", "n0.val=fs0.close()"]
 
 PROBES = [
     # A file stream at its defaults: its memory, entries, record, buffer,
@@ -90,5 +99,12 @@ PROBES = [
     # page0's Touch Release event. The probe keeps the event's blocks.
     Probe("file-stream-calls-as-values", "P", with_attributes(
         _CALLS_AS_VALUES, [text_component(), number_component(y=60), file_stream_component()]),
+        ours_in_event, theirs_in_event, kept=ours_in_event),
+    # Several for loops in a row, each with a call in its start, in page0's
+    # Touch Release event. The probe keeps the event's blocks.
+    Probe("file-stream-calls-in-a-for-s-start", "P", with_attributes(
+        [line for start in _STARTS_WITH_A_CALL
+         for line in ("for(%s;sys0<1;sys0++)" % start, "{", "sys1=1", "}")],
+        [text_component(), number_component(y=60), file_stream_component()]),
         ours_in_event, theirs_in_event, kept=ours_in_event),
 ]

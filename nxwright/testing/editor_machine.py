@@ -172,13 +172,15 @@ _TEXT_SUBTRACTION = re.compile(r"^(%s)-(.+)$" % OPERAND)
 _METHOD_CALL = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\((.*)\)")
 # A line that is only a component's attribute, such as `fs0.close`.
 _ATTRIBUTE_ALONE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)")
-# A method call in the start of a `for`. The Nextion Editor compiles such
-# a start without the call's parentheses and arguments, so the screen reads
-# the method as an attribute, and does not call it. In the Nextion Editor's
-# simulator, `for(sys0=fs0.close();sys0<0;sys0++)` left the file open, and
-# gave `sys0` the value that `close` has as an attribute, 101.
-_CALL_IN_A_FOR_S_START = re.compile(
-    r'((?:[A-Za-z_][A-Za-z0-9_]*\.)+[A-Za-z_][A-Za-z0-9_]*)\((?:"(?:\\.|[^"\\])*"|[^()"])*\)')
+# The start of a `for`, up to the parentheses of its first method call.
+# When a start contains a method call, the Nextion Editor compiles the
+# start only up to those parentheses: `sys0=fs0.close` for
+# `sys0=fs0.close()`, and `sys0=fs0.open` for `sys0=fs0.open(t0.txt)+1`. So
+# the screen reads the method as an attribute, and does not call it. In the
+# Nextion Editor's simulator, `for(sys0=fs0.close();sys0<0;sys0++)` left the
+# file open, and gave `sys0` 101, the value that `close` has as an attribute.
+_FOR_S_START_UP_TO_A_CALL = re.compile(
+    r'((?:"(?:\\.|[^"\\])*"|[^("])*?(?:[A-Za-z_][A-Za-z0-9_]*\.)+[A-Za-z_][A-Za-z0-9_]*)\(')
 # How many arguments each method takes, for each type of component that has
 # methods.
 _METHOD_ARGUMENTS = {
@@ -2579,7 +2581,9 @@ def _block(lines: list, places: list, position: int) -> tuple:
                 statements.append(("for", "", line[6:-1], "", body, place))
             else:
                 start, condition, step = line[4:-1].split(";")
-                start = _CALL_IN_A_FOR_S_START.sub(r"\1", start)
+                up_to_a_call = _FOR_S_START_UP_TO_A_CALL.match(start)
+                if up_to_a_call is not None:
+                    start = up_to_a_call.group(1)
                 statements.append(("for", start, condition, step, body, place))
         else:
             statements.append(("simple", line, place))
