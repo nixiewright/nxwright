@@ -115,7 +115,7 @@ from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, chain_parts, com
                                           command_word, declared_int_names, declared_ints,
                                           goto_label, minus_is_sign,
                                           outside_strings, split_line)
-from nxwright.language.code_preprocessor import with_own_attributes
+from nxwright.language.code_preprocessor import message_with_both_lines, with_own_attributes
 from nxwright.language.resource_names import REFERENCE_TEXT
 from nxwright.project.device_settings import TextCodec
 from nxwright.project.editor_language import (EDITOR_COLOURS, EDITOR_PROGRAM_VARIABLES,
@@ -435,7 +435,7 @@ def token_spans(code: str, number: int = None) -> list:
         match = _TOKEN.match(code, position)
         if not match or match.end() == position:
             if number is not None:
-                raise NxwrightError("cannot read %r" % code[position:].strip(), line=number)
+                raise NxwrightError("`%s` is not valid code" % code[position:].strip(), line=number)
             position += 1
             continue
         kind = match.lastgroup
@@ -476,7 +476,7 @@ class Parser:
     def expect(self, text: str):
         """Takes the next token, which must be `text`; raises NotParsed otherwise."""
         if self.peek() != text:
-            raise NotParsed("expected %r" % text, line=self.number)
+            raise NotParsed("expected `%s`" % text, line=self.number)
         self.position += 1
 
     def at_end(self) -> bool:
@@ -487,7 +487,7 @@ class Parser:
         """Raises NotParsed, naming the next token, unless every token has
         been taken."""
         if not self.at_end():
-            raise NotParsed("unexpected %r" % self.peek(), line=self.number)
+            raise NotParsed("unexpected `%s`" % self.peek(), line=self.number)
 
     def whole_expression(self):
         """Reads an expression that takes every token left. Raises NotParsed
@@ -558,7 +558,7 @@ class Parser:
             if self.peek() == "(" and self.scope is not None:
                 return self.call(text)
             return self.reference(text)
-        raise NotParsed("unexpected %r" % text, line=self.number)
+        raise NotParsed("unexpected `%s`" % text, line=self.number)
 
     def call(self, name: str) -> Call:
         """Reads the arguments of a call of the function `name`, from its "("."""
@@ -572,9 +572,10 @@ class Parser:
                 arguments.append(self.expression())
         self.expect(")")
         if len(arguments) != len(function.parameters):
-            raise NxwrightError("%s takes %d arguments, not %d"
-                                % (name, len(function.parameters), len(arguments)),
-                                line=self.number)
+            wanted = len(function.parameters)
+            raise NxwrightError("`%s` takes %d %s, not %d"
+                                % (name, wanted, "argument" if wanted == 1 else "arguments",
+                                   len(arguments)), line=self.number)
         return Call(function, tuple(arguments))
 
     def reference(self, first: str):
@@ -585,7 +586,7 @@ class Parser:
             self.take()
             kind, text = self.take()
             if kind != "name":
-                raise NotParsed("expected a name after '.'", line=self.number)
+                raise NotParsed("expected a name after `.`", line=self.number)
             parts.append((text, self.index()))
         if len(parts) == 1 and parts[0][1] is None and self.scope is not None:
             found = self.scope.lookup(first)
@@ -635,30 +636,33 @@ def kind_of(expression, number: int) -> str:
     if isinstance(expression, (Literal, Local, Reference)):
         return expression.kind
     if isinstance(expression, OwnAttribute):
-        raise NxwrightError("the kind of %s is not known here" % expression.text, line=number)
+        raise NxwrightError("nxlang cannot tell whether `%s` is a number or text. Use the "
+                            "object's name, as in `n0.val`." % expression.text, line=number)
     if isinstance(expression, Call):
         if expression.function.result is None:
-            raise NxwrightError("function %s has no result"
+            raise NxwrightError("function `%s` has no result"
                                 % expression.function.name, line=number)
         return expression.function.result
     if isinstance(expression, Unary):
         if expression.operator == "!":
-            raise NxwrightError("! can only be in a condition", line=number)
+            raise NxwrightError("`!` can only be used in a condition", line=number)
         if kind_of(expression.operand, number) != NUMBER:
-            raise NxwrightError("%s cannot apply to text" % expression.operator, line=number)
+            raise NxwrightError("the operator `%s` cannot be used on text" % expression.operator,
+                                line=number)
         return NUMBER
     if isinstance(expression, Conditional):
         kind = kind_of(expression.then, number)
         if kind != kind_of(expression.otherwise, number):
-            raise NxwrightError("both sides of ? : must be numbers, or both texts", line=number)
+            raise NxwrightError("both sides of `? :` must be numbers, or both texts", line=number)
         return kind
     if expression.operator in _LOGIC or expression.operator in _COMPARISONS:
-        raise NxwrightError("a comparison can only be a condition", line=number)
+        raise NxwrightError("a comparison can only be used as a condition", line=number)
     kinds = (kind_of(expression.left, number), kind_of(expression.right, number))
     if expression.operator == "+" and TEXT in kinds:
         return TEXT
     if TEXT in kinds:
-        raise NxwrightError("%s cannot apply to text" % expression.operator, line=number)
+        raise NxwrightError("the operator `%s` cannot be used on text" % expression.operator,
+                            line=number)
     return NUMBER
 
 
@@ -900,6 +904,14 @@ class _Temporaries:
         return temporary
 
 
+def _kinds_of_value(in_program: bool) -> str:
+    """Returns the list, for a message about an unknown name, of what a name
+    that gives a value can be. program.nx cannot have locals, so its list
+    leaves them out."""
+    return ("a constant, an int variable, or a system variable" if in_program
+            else "a constant, a local, an int variable, or a system variable")
+
+
 class _Emitter:
     """Compiles one statement: collects the lines that compute its parts."""
 
@@ -922,8 +934,8 @@ class _Emitter:
 
     def temporary(self, kind: str) -> str:
         if self.temporaries is None:
-            raise NxwrightError("this needs a temporary variable, which program.nx "
-                                "cannot have; split it into simpler steps", line=self.number)
+            raise NxwrightError("this line requires a temporary variable, which program.nx "
+                                "cannot have. Split it into simpler steps.", line=self.number)
         return self.temporaries.take(kind, self.number)
 
     @property
@@ -958,8 +970,9 @@ class _Emitter:
             if name in EDITOR_PROGRAM_VARIABLES:
                 raise NxwrightError(UNDECLARED_PROGRAM_VARIABLE % name, line=self.number,
                                     fix={"kind": "declare", "variable": name})
-            raise NxwrightError("unknown name %s: not a constant, local, int "
-                                "variable, or system variable" % name, line=self.number)
+            raise NxwrightError("unknown name `%s`: not %s"
+                                % (name, _kinds_of_value(self.temporaries is None)),
+                                line=self.number)
         parts = []
         for name, index in expression.parts:
             if index is None:
@@ -1038,11 +1051,12 @@ class _Emitter:
         if target_kind == TEXT and operator == "-=":
             # The Editor's "t0.txt-=n" removes the last n characters.
             if kind != NUMBER:
-                raise NxwrightError("-= on text takes a number of characters", line=self.number)
+                raise NxwrightError("`-=` on text requires a number: it removes that many characters from the end", line=self.number)
             self.emit(target + "-=" + self.value(expression))
             return
         if target_kind == TEXT and operator not in ("=", "+="):
-            raise NxwrightError("%s cannot apply to text" % operator, line=self.number)
+            raise NxwrightError("the operator `%s` cannot be used on text" % operator,
+                                line=self.number)
         if target_kind == TEXT and kind == NUMBER:
             # A number becomes text through covx; adding it needs a temporary.
             source = self.value(expression)
@@ -1141,7 +1155,7 @@ class _Emitter:
         for (_, kind), variable, operand in zip(function.parameters, function.parameter_variables,
                                                 operands):
             if kind == NUMBER and kind_of(operand, self.number) == TEXT:
-                raise NxwrightError("%s takes a number, not text"
+                raise NxwrightError("`%s` must be called with a number, not text"
                                     % function.name, line=self.number)
             # The argument is recorded under the function's use of the
             # parameter's variable. So its room counts where the function
@@ -1202,9 +1216,9 @@ class _Emitter:
         """Returns `left operator right`, with each side computed first unless plain."""
         left_kind = kind_of(expression.left, self.number)
         if left_kind != kind_of(expression.right, self.number):
-            raise NxwrightError("a comparison needs two numbers or two texts", line=self.number)
+            raise NxwrightError("a comparison requires two numbers or two texts", line=self.number)
         if left_kind == TEXT and expression.operator not in ("==", "!="):
-            raise NxwrightError("texts compare only with == and !=", line=self.number)
+            raise NxwrightError("texts can only be compared with `==` and `!=`", line=self.number)
         sides = [self.value(expression.left, True), self.value(expression.right, True)]
         if left_kind == TEXT and self.temporaries is not None:
             self.fit_comparison(sides)
@@ -1309,7 +1323,8 @@ def _normalize(expression, negate: bool, number: int):
         operator = _REVERSED[expression.operator] if negate else expression.operator
         return Binary(operator, expression.left, expression.right)
     if kind_of(expression, number) != NUMBER:
-        raise NxwrightError("a condition needs a comparison", line=number)
+        raise NxwrightError("text cannot be used as a condition. Compare it, as in "
+                            "`t0.txt != \"\"`", line=number)
     return Binary("==" if negate else "!=", expression, Literal("0", NUMBER))
 
 
@@ -1365,7 +1380,7 @@ class _PageState:
         if kind == NUMBER:
             name = GLOBAL_NAME % (self.page_id, len(self.globals))
             if len(name) > NAME_LIMIT:
-                raise NxwrightError("page %s needs too many generated variables"
+                raise NxwrightError("page `%s` requires too many generated variables"
                                     % self.page_name, line=number)
             self.globals.append(name)
             return name
@@ -1429,7 +1444,7 @@ class _PageState:
         self.counters[prefix] = count + 1
         name = "%s%d" % (prefix, count)
         if len(name) > NAME_LIMIT:
-            raise NxwrightError("page %s needs too many generated variables"
+            raise NxwrightError("page `%s` requires too many generated variables"
                                 % self.page_name, line=number)
         self.generated.append(Generated(name, kind))
         return name
@@ -1467,20 +1482,20 @@ class _PageState:
         """Raises NxwrightError when `name` cannot be given to a new `what`:
         "constant", "function", "parameter", or "local"."""
         if name.startswith(GENERATED_PREFIX):
-            raise NxwrightError("%s %s may not start with %r, which generated "
-                                "variables use" % (what, name, GENERATED_PREFIX), line=number)
+            raise NxwrightError("%s `%s` may not start with `%s`, this prefix is "
+                                "reserved" % (what, name, GENERATED_PREFIX), line=number)
         # A local or parameter may share a component's name: bare, the name is
         # the local; with a field, such as name.txt, it is the component. A
         # library function cannot know the components of the pages including it.
         may_shadow = what in ("local", "parameter")
         if ((name in self.component_names and not may_shadow) or name in EDITOR_SYSTEM_VARIABLES
                 or name in _KEYWORDS or name in self.variables):
-            raise NxwrightError("%s %s has the name of a component, variable, or "
+            raise NxwrightError("%s `%s` has the name of a component, variable, or "
                                 "keyword" % (what, name), line=number)
         if name in self.constants:
-            raise NxwrightError("%s is already a constant" % name, line=number)
+            raise NxwrightError("`%s` already exists as a constant, it cannot be redefined" % name, line=number)
         if self.functions and name in self.functions:
-            raise NxwrightError("%s is already a function" % name, line=number)
+            raise NxwrightError("`%s` already exists as a function, it cannot be redefined" % name, line=number)
 
 
 class _Scope:
@@ -1498,7 +1513,7 @@ class _Scope:
         if self.page.functions is None:
             raise NxwrightError("program.nx cannot call functions", line=number)
         if name not in self.page.functions:
-            raise NxwrightError("unknown function %s" % name, line=number)
+            raise NxwrightError("unknown function `%s`" % name, line=number)
         return self.page.functions[name]
 
 
@@ -1532,7 +1547,7 @@ def _read_constants(lines: list, page: _PageState):
         if not code:
             continue
         if not _CONST_LINE.match(code):
-            raise NxwrightError("only includes and constants can come before the "
+            raise NxwrightError("only `include` lines and constants can come before the "
                                 "first event or function", line=number)
         name, value = _parse_constant(code, number)
         page.check_new_name(name, number, "constant")
@@ -1544,7 +1559,7 @@ def _parse_constant(code: str, number: int) -> tuple:
     _check_no_own_attribute(code, number, _IN_A_CONSTANT)
     tokens = tokenize(code, number)
     if len(tokens) < 4 or tokens[1][0] != "name" or tokens[2][1] != "=":
-        raise NxwrightError("a constant is written const NAME = <number or text>", line=number)
+        raise NxwrightError("a constant is written `const NAME = <number or text>`", line=number)
     rest = tokens[3:]
     if len(rest) == 2 and rest[0][1] == "-" and rest[1][0] == "number":
         return tokens[1][1], Literal(editor_number("-" + rest[1][1]), NUMBER)
@@ -1552,30 +1567,33 @@ def _parse_constant(code: str, number: int) -> tuple:
         return tokens[1][1], Literal(editor_number(rest[0][1]), NUMBER)
     if len(rest) == 1 and rest[0][0] == "string":
         return tokens[1][1], Literal(rest[0][1], TEXT)
-    raise NxwrightError("a constant's value must be a number or a text", line=number)
+    raise NxwrightError("a constant's value must be a number or text", line=number)
 
 
-# Why nxlang refuses the form '&name&' outside an event of an object, which
-# replaces it before its lines are compiled (compile_page).
-_IN_A_FUNCTION = ("in a function: a function's body runs from a hotspot nxlang adds, so the "
-                 "form would name the hotspot's attributes")
-_IN_A_CONSTANT = "in a constant: its text reaches every line that names it, a function's too"
-_IN_NO_EVENT = "here: no object's event holds this line"
+# Where nxlang rejects the form '&name&': outside an event of an object,
+# which replaces it before its lines are compiled (compile_page). A
+# function's body runs from a hotspot nxlang adds, so the form would give the
+# hotspot's attributes. A constant's text reaches every line that uses the
+# constant, a function's too.
+_IN_A_FUNCTION = "cannot be used in a function"
+_IN_A_CONSTANT = "cannot be used in a constant"
+_IN_NO_EVENT = "can only be used in an object's event"
 
 
 def _with_owner(lines: list, owner) -> tuple:
     """Returns an event's lines, [(line number, text)], with the form
     '&name&' replaced in each line's code part by `owner`'s ID or attribute,
     in a quoted text too, as the Nextion Editor reads it
-    (with_own_attributes), and {line number: code as written} of the lines
-    it changed. Every line is replaced before any is compiled, so that what
-    reads lines ahead, such as a switch's case labels, reads them replaced."""
+    (with_own_attributes), and {line number: (code as written, code as
+    read)} of the lines it changed. Every line is replaced before any is
+    compiled, so that what reads lines ahead, such as a switch's case labels,
+    reads them replaced."""
     replaced, written = [], {}
     for number, text in lines:
         indent, code, comment = split_line(text, number)
         read = with_own_attributes(code, owner)
         if read != code:
-            written[number] = code
+            written[number] = (code, read)
             text = indent + read + comment
         replaced.append((number, text))
     return replaced, written
@@ -1587,8 +1605,8 @@ def _check_no_own_attribute(code: str, number: int, where: str):
     _IN_A_CONSTANT, or _IN_NO_EVENT. The Editor would replace it by an
     attribute of the object whose event holds the line."""
     if OWN_ATTRIBUTE.search(code):
-        raise NxwrightError("nxlang refuses the form '&name&' %s. Name the object itself, as "
-                            "in n0.val" % where, line=number)
+        raise NxwrightError("the form `'&name&'` %s. Use the object's name, as in `n0.val`."
+                            % where, line=number)
 
 
 def is_constant_line(text: str) -> bool:
@@ -1628,11 +1646,11 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
     page_file = preambles[-1][0] if preambles else page_file_stem(page_name) + ".nx"
     for name in component_names:
         if name.startswith(GENERATED_PREFIX):
-            raise NxwrightError("component %s starts with %r, which generated variables use"
+            raise NxwrightError("component `%s` may not start with `%s`, this prefix is reserved"
                                 % (name, GENERATED_PREFIX))
     for name in program.constants:
         if name in component_names:
-            raise NxwrightError("program.nx constant %s has the name of a component of page %s"
+            raise NxwrightError("program.nx constant `%s` has the name of a component of page `%s`"
                                 % (name, page_name))
     page = _PageState(page_name, component_names, program, page_id, object_types, codec)
     page.text_limits = text_limits or {}
@@ -1648,7 +1666,7 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
     for function in page.functions.values():
         for parameter, _ in function.parameters:
             if parameter in page.functions:
-                raise NxwrightError("%s is already a function"
+                raise NxwrightError("`%s` already exists as a function, it cannot be redefined"
                                     % parameter, file=function.file, line=function.number)
     callees = {name: _calls_in(lines, page.functions) for name, (_, _, _, lines) in functions.items()}
     _check_no_cycle(callees, page.functions)
@@ -1748,14 +1766,14 @@ def _cut_texts(page: "_PageState", local_names: dict) -> list:
             continue
         names = local_names.get(candidate.owner, {})
         rooms_of_parts = listed_in_words(
-            ["%s has room for %d bytes" % component for component in candidate.components]
-            + ["%s has room for %d bytes" % (names[name], part_room) if name in names
+            ["`%s` has room for %d bytes" % component for component in candidate.components]
+            + ["`%s` has room for %d bytes" % (names[name], part_room) if name in names
                and names[name] != "(result)" else "a hidden variable has room for %d bytes"
                % part_room for name, part_room in long])
         found.append((candidate.file, candidate.line,
-                      "this text can be up to %d bytes long, since %s. nxlang keeps it in a "
-                      "variable with room for %d bytes here, so it may be cut. To keep it whole, "
-                      "put it in a variable component whose txt_maxl is at least %d"
+                      "this text may be cut. It can be up to %d bytes long, since %s, and "
+                      "nxlang keeps it in a variable with room for %d bytes. To keep it whole, "
+                      "put it in a variable component whose `txt_maxl` is at least %d."
                       % (needed, rooms_of_parts, room, needed)))
     return found
 
@@ -1809,9 +1827,8 @@ def _clicks_in(lines: list, page: _PageState) -> set:
             continue
         match = _CLICK.fullmatch(code)
         if match is None or match[1] in page.constants:
-            raise NxwrightError("a click names its component and 0 or 1, as in "
-                                "click b0,1, so the build can tell which event it runs",
-                                line=number)
+            raise NxwrightError("`click` must be called with a component's name and 0 or 1, "
+                                "as in `click b0,1`", line=number)
         clicked.add((match[1], "down" if match[2] == "1" else "up"))
     return clicked
 
@@ -1893,13 +1910,12 @@ def _follow_macros(graph: dict, macros: dict, objects, events: dict):
                 continue
             match = _MACRO_CLICK.fullmatch(code)
             if match is None:
-                raise NxwrightError("%s: a click in a macro that nxlang code calls gives a "
-                                    "component's ID and 0 or 1, as in click 3,1, so that the "
-                                    "build can tell which event it runs" % code,
+                raise NxwrightError("`%s`: in a macro, `click` must be called with a "
+                                    "component's ID and 0 or 1, as in `click 3,1`" % code,
                                     file=macro.file, line=number)
             if objects is None:
-                raise NxwrightError("%s: program.nx runs macro %s, and has no page whose "
-                                    "events the build could follow from its click"
+                raise NxwrightError("`%s`: macro `%s` is called from program.nx, which does "
+                                    "not support clicks"
                                     % (code, node.name), file=macro.file, line=number)
             if int(match[1]) in objects:
                 runs.add((objects[int(match[1])], "down" if match[2] == "1" else "up"))
@@ -1936,10 +1952,14 @@ def _callees_first(graph: dict, events: dict, functions: dict) -> list:
     def refuse(cycle: list):
         owner = cycle[0]
         file, number = _owner_place(owner, events, functions)
-        why = ("the build cannot count how deep they nest" if isinstance(owner, _MacroRun)
-               else "which has one set of variables")
-        raise NxwrightError("the calls and clicks %s come back to %s, %s" % (" -> ".join(
-                                _owner_label(item) for item in cycle), _owner_label(owner), why),
+        if isinstance(owner, _MacroRun):
+            what = "macro `%s`" % owner.name
+        elif isinstance(owner, tuple):
+            what = "event `%s.%s`" % owner
+        else:
+            what = "function `%s`" % owner
+        raise NxwrightError("%s calls itself (%s). nxlang forbids recursion."
+                            % (what, " -> ".join(_owner_label(item) for item in cycle)),
                             file=file, line=number)
     return _depth_first(graph, lambda owner: sorted(graph[owner], key=_owner_label), refuse)
 
@@ -1999,10 +2019,10 @@ def _check_nesting(chain: list, events: dict, functions: dict):
     if len(chain) - 1 <= MOST_CALL_DEPTH:
         return
     file, number = _owner_place(chain[-1], events, functions)
-    raise NxwrightError("the calls and clicks %s nest %d deep; at most %d may, so "
-                        "that a page change keeps room within the 9 `click` allows"
-                        % (" -> ".join(_owner_label(owner) for owner in chain),
-                           len(chain) - 1, MOST_CALL_DEPTH), file=file, line=number)
+    raise NxwrightError("too many calls and clicks in a chain: %d, and the limit is %d (%s)"
+                        % (len(chain) - 1, MOST_CALL_DEPTH,
+                           " -> ".join(_owner_label(owner) for owner in chain)),
+                        file=file, line=number)
 
 
 def _calls_in(lines: list, functions: dict) -> set:
@@ -2045,10 +2065,9 @@ def _place_functions(page: _PageState, callees: dict, depths: dict) -> list:
     for name, chain in _longest_chains(list(page.functions), callees).items():
         if len(chain) > MOST_CALL_DEPTH:
             function = page.functions[name]
-            raise NxwrightError("the calls %s nest %d deep; at most %d may, so "
-                                "that a page change keeps room within the 9 `click` allows"
-                                % (" -> ".join(chain), len(chain),
-                                   MOST_CALL_DEPTH), file=function.file, line=function.number)
+            raise NxwrightError("too many calls in a chain: %d, and the limit is %d (%s)"
+                                % (len(chain), MOST_CALL_DEPTH, " -> ".join(chain)),
+                                file=function.file, line=function.number)
     by_depth = {}
     for name, function in page.functions.items():
         if name in depths:
@@ -2068,19 +2087,20 @@ def _declare_function(page: _PageState, heading: str, number: int, file: str) ->
     """Reads a function heading; _name_variables names its variables."""
     match = FUNCTION_SIGNATURE.fullmatch(heading)
     if not match:
-        raise NxwrightError("a function is written function name(param: number, "
-                            "other: text) -> number:", line=number)
+        raise NxwrightError("a function is written `function name(parameters):`, with "
+                            "`-> number` or `-> text` before the `:` if it has a result",
+                            line=number)
     name, parameter_text, result = match.groups()
     if page.functions and name in page.functions:
-        raise NxwrightError("function %s is defined twice" % name, line=number)
+        raise NxwrightError("function `%s` is already defined" % name, line=number)
     page.check_new_name(name, number, "function")
     parameters = []
     for part in parameter_text.split(",") if parameter_text.strip() else []:
         parameter = PARAMETER.fullmatch(part)
         if not parameter:
-            raise NxwrightError("a parameter is written name: number or name: text", line=number)
+            raise NxwrightError("a parameter is written `name: number` or `name: text`", line=number)
         if parameter[1] in [known for known, _ in parameters]:
-            raise NxwrightError("parameter %s appears twice" % parameter[1], line=number)
+            raise NxwrightError("parameter `%s` is already declared" % parameter[1], line=number)
         page.check_new_name(parameter[1], number, "parameter")
         parameters.append((parameter[1], parameter[2]))
     return Function(name, parameters, result, heading.strip()[:-1].rstrip(), number, file)
@@ -2104,7 +2124,8 @@ def _check_no_cycle(callees: dict, functions: dict):
     has one set of variables, which a second call would overwrite."""
     def refuse(cycle: list):
         name = cycle[0]
-        raise NxwrightError("function %s calls itself (%s)" % (name, " -> ".join(cycle)),
+        raise NxwrightError("function `%s` calls itself (%s). nxlang forbids recursion."
+                            % (name, " -> ".join(cycle)),
                             file=functions[name].file, line=functions[name].number)
     _depth_first(functions, lambda name: sorted(callees.get(name, ())), refuse)
 
@@ -2189,7 +2210,7 @@ def _read_defines(defines: dict, page: "_PageState"):
             _, constant = _parse_constant("const %s = %s" % (name, literal), None)
             page.check_new_name(name, None, "constant")
         except NxwrightError as error:
-            raise NxwrightError("the define %s of [defines]: %s" % (name, error.reason)) from None
+            raise NxwrightError("in `[defines]`, `%s`: %s" % (name, error.reason)) from None
         page.constants[name] = constant
 
 
@@ -2199,8 +2220,8 @@ def _read_int_names(lines: list, variables: set):
         declared = declared_int_names(split_line(text, number)[1])
         for name in declared:
             if name.startswith(GENERATED_PREFIX):
-                raise NxwrightError("int %s may not start with %r, which "
-                                    "generated variables use" % (name, GENERATED_PREFIX),
+                raise NxwrightError("int `%s` may not start with `%s`, this prefix "
+                                    "is reserved" % (name, GENERATED_PREFIX),
                                     line=number)
         variables.update(declared)
 
@@ -2214,7 +2235,8 @@ class _EventCompiler:
         self.page, self.temporaries, self.allow_locals = page, temporaries, allow_locals
         self.function = function    # the function whose body this is, or None
         # An event's lines whose form '&name&' its owner replaced: {line
-        # number: the code as written}, which a refusal of the line gives.
+        # number: (the code as written, the code as read)}. The message of an
+        # error in the line gives both.
         self.written = written or {}
         self.scope = _Scope(page)
         if function:
@@ -2238,10 +2260,10 @@ class _EventCompiler:
             raise NxwrightError("a block is not closed", line=lines[-1][0] if lines else 0)
         for number, label in self.gotos:
             if label not in self.placed_labels:
-                raise NxwrightError("function %s has no label %s"
+                raise NxwrightError("function `%s` has no label `%s`"
                                     % (self.function.name, label), line=number)
         if self.function and self.function.result and not self.returned:
-            raise NxwrightError("function %s must end with return"
+            raise NxwrightError("function `%s` must end with `return`"
                                 % self.function.name, line=self.function.number)
         return self.out
 
@@ -2277,30 +2299,30 @@ class _EventCompiler:
 
     def line(self, number: int, text: str, following: list):
         """Compiles one line. `following` holds the lines after it, for those
-        that read ahead, such as a loop's head looking for `break`. A line
-        whose form '&name&' was replaced is refused as the Nextion Editor
-        reads it, the message giving the line as written first."""
+        that read ahead, such as a loop's head looking for `break`. For an
+        error in a line whose form '&name&' was replaced, the message gives
+        the line as written, then the line as read."""
         try:
             self._compile_line(number, text, following)
         except NxwrightError as error:
-            written = self.written.get(number)
-            if written is None or error.line != number:
+            lines = self.written.get(number)
+            if lines is None or error.line != number:
                 raise
-            raise type(error)("%s, as the Nextion Editor reads it: %s" % (written, error.reason),
-                              line=number, fix=error.fix) from None
+            raise type(error)(message_with_both_lines(*lines, error.reason), line=number,
+                              fix=error.fix) from None
 
     def _compile_line(self, number: int, text: str, following: list):
         indent, code, comment = split_line(text, number)
         _check_no_own_attribute(code, number, _IN_A_FUNCTION if self.function else _IN_NO_EVENT)
         if self.pending is not None and code != "{":
-            raise NxwrightError("expected \"{\" on the line after if, while, for, or else",
+            raise NxwrightError("expected `{` on the line after `if`, `while`, `for`, or `else`",
                                 line=number)
         if not code:
             self.put(number, text)
             return
         if code == "{":
             if self.pending is None:
-                raise NxwrightError("\"{\" must follow if, while, for, or else", line=number)
+                raise NxwrightError("`{` must follow `if`, `while`, `for`, or `else`", line=number)
             block, self.pending = self.pending, None
             if block.braces:
                 self.put(number, text)
@@ -2317,7 +2339,7 @@ class _EventCompiler:
             rest = rest[:-1].rstrip(" \t")
         bare = STRING_LITERAL.sub("", rest)
         if "{" in bare or "}" in bare:
-            raise NxwrightError("\"{\" and \"}\" go at the start or end of a line", line=number)
+            raise NxwrightError("`{` and `}` go at the start or end of a line", line=number)
         head = _NAME.match(rest)
         word = head[0] if head else ""
         if word == "else":
@@ -2333,7 +2355,7 @@ class _EventCompiler:
         elif word == "switch" and heads:
             self.switch_head(number, indent, rest, comment, opens, following)
         elif opens:
-            raise NxwrightError("\"{\" can only end an if, while, for, or else line",
+            raise NxwrightError("`{` can only end an `if`, `while`, `for`, or `else` line",
                                 line=number)
         else:
             self.statement(number, indent, rest, comment, following)
@@ -2342,7 +2364,7 @@ class _EventCompiler:
         """Compiles a "}", closing the innermost block. `rest` is what follows
         it on its line, which only else may be."""
         if not self.stack:
-            raise NxwrightError("\"}\" closes no block", line=number)
+            raise NxwrightError("`}` does not close a block", line=number)
         if self.stack[-1].kind == "case":
             self.close_case(number)
         block = self.stack.pop()
@@ -2356,9 +2378,9 @@ class _EventCompiler:
             self.put(number, indent + comment.lstrip(" \t"))
         continues = rest.startswith("else") or (not rest and _next_is_else(following))
         if continues and block.kind != "if":
-            raise NxwrightError("else must follow the block of an if", line=number)
+            raise NxwrightError("`else` must follow the block of an `if`", line=number)
         if rest and not rest.startswith("else"):
-            raise NxwrightError("only else can follow \"}\" on its line", line=number)
+            raise NxwrightError("only `else` can follow `}` on its line", line=number)
         # Jumps that may have run inside leave the rest of the enclosing
         # blocks to skip, up to the loop or switch they leave.
         leaving = {jump for jump in block.jumps if jump[1] is not block}
@@ -2378,7 +2400,7 @@ class _EventCompiler:
             return
         block = self.stack[-1]
         if block.kind == "switch":
-            raise NxwrightError("code before the first case of a switch can never run", line=number)
+            raise NxwrightError("code before the first `case` of a switch is not allowed", line=number)
         if block.pending:
             condition = "&&".join(sorted(flag + "==0" for flag, _ in block.pending))
             self.put(number, indent + "if(%s)" % condition)
@@ -2394,7 +2416,7 @@ class _EventCompiler:
         brace = " {" if opens else ""
         flag = ""
         if word in ("while", "for") and any(_loop_jumps(following, opens)):
-            self.need_page(number, "break or continue")
+            self.need_page(number, "`break` and `continue`")
             flag = self.page.variable("_k", NUMBER, number)
         if word == "for":
             block = self.for_head(number, indent, tokens, comment, brace, flag)
@@ -2448,8 +2470,7 @@ class _EventCompiler:
     def need_page(self, number: int, what: str):
         """Refuses `what` in program.nx, which has no page to hold its variables."""
         if self.temporaries is None:
-            raise NxwrightError("program.nx cannot use %s, which needs variables "
-                                "only a page can hold" % what, line=number)
+            raise NxwrightError("%s cannot be used in program.nx" % what, line=number)
 
     def switch_head(self, number: int, indent: str, rest: str, comment: str, opens: bool,
                     following: list):
@@ -2457,7 +2478,7 @@ class _EventCompiler:
         sets its control variables. It reads its case labels ahead, to check
         them and, with a default, to know before the first case whether any
         case can match."""
-        self.need_page(number, "switch")
+        self.need_page(number, "`switch`")
         tokens = tokenize(rest, number)[1:]
         parser = Parser(_inside_parentheses(tokens, number), number, self.scope)
         expression = _whole_expression(parser)
@@ -2470,7 +2491,7 @@ class _EventCompiler:
         for label_number, label in _switch_labels(following, opens):
             if _DEFAULT_LABEL.fullmatch(label):
                 if has_default:
-                    raise NxwrightError("a switch has one default at most", line=label_number)
+                    raise NxwrightError("a switch has at most one `default`", line=label_number)
                 has_default = True
                 continue
             case_value = self.case_value(label, label_number, kind)
@@ -2479,7 +2500,7 @@ class _EventCompiler:
             same = int32(_number_value(case_value)) if kind == NUMBER else case_value
             if same in [int32(_number_value(known)) if kind == NUMBER else known
                         for known in values]:
-                raise NxwrightError("case %s appears twice"
+                raise NxwrightError("case `%s` is already in this switch"
                                     % _CASE_LABEL.fullmatch(label)[1].strip(), line=label_number)
             values.append(case_value)
         flag, matched = (self.page.variable("_k", NUMBER, number) for _ in range(2))
@@ -2508,9 +2529,9 @@ class _EventCompiler:
         except NotParsed:
             value = None
         if not isinstance(value, Literal) or value.text.startswith("@"):
-            raise NxwrightError("a case holds a number, a text, or a constant", line=number)
+            raise NxwrightError("a case must be a number, text, or a constant", line=number)
         if value.kind != kind:
-            raise NxwrightError("the case's value is not of the switch's kind", line=number)
+            raise NxwrightError("the case's value and the switch's value must both be numbers, or both texts", line=number)
         return value.text
 
     def case_test(self, number: int, indent: str, value: str, case_value: str) -> str:
@@ -2537,7 +2558,7 @@ class _EventCompiler:
         if self.stack and self.stack[-1].kind == "case":
             self.close_case(number)
         if not self.stack or self.stack[-1].kind != "switch":
-            raise NxwrightError("case and default can only be in a switch", line=number)
+            raise NxwrightError("`case` and `default` can only be used in a switch", line=number)
         switch = self.stack[-1]
         value, matched, no_match, kind = switch.switch
         if _DEFAULT_LABEL.fullmatch(label):
@@ -2576,8 +2597,8 @@ class _EventCompiler:
         if target is not None:
             self.gotos.append((number, label))
         elif label in self.placed_labels:
-            raise NxwrightError("%s: function %s holds this label twice"
-                                % (label, self.function.name), line=number)
+            raise NxwrightError("function `%s` already has the label `%s`"
+                                % (self.function.name, label), line=number)
         else:
             self.placed_labels.add(label)
         if label not in self.label_names:
@@ -2602,7 +2623,7 @@ class _EventCompiler:
         for place, (argument, kind) in enumerate(zip(arguments, kinds), 1):
             given = kind_of(argument, number)
             if kind == NUMBER and given == TEXT:
-                raise NxwrightError("argument %d of %s is a number, not a text" % (place, name),
+                raise NxwrightError("argument %d of `%s` must be a number, not text" % (place, name),
                                     line=number)
             if kind == TEXT and given == NUMBER:
                 text = emitter.temporary(TEXT)
@@ -2696,7 +2717,7 @@ class _EventCompiler:
         kinds = ("while", "for", "switch") if word == "break" else ("while", "for")
         target = next((block for block in reversed(self.stack) if block.kind in kinds), None)
         if target is None:
-            raise NxwrightError("%s can only be in a loop%s"
+            raise NxwrightError("`%s` can only be used in a loop%s"
                                 % (word, " or a switch" if word == "break" else ""), line=number)
         self.put(number, indent + "%s=%d" % (target.flag, 2 if word == "break" else 1) + comment)
         self.stack[-1].jumps.add((target.flag, target))
@@ -2705,7 +2726,7 @@ class _EventCompiler:
     def else_head(self, number: int, indent: str, rest: str, comment: str, opens: bool):
         """Compiles an else or else if line."""
         if self.carry is None:
-            raise NxwrightError("else must follow the \"}\" of an if", line=number)
+            raise NxwrightError("`else` must follow the `}` of an `if`", line=number)
         extra, self.carry = self.carry, None
         jumps, self.carry_jumps = self.carry_jumps, set()
         brace = " {" if opens else ""
@@ -2715,7 +2736,7 @@ class _EventCompiler:
             self.open(_Block("else", extra=extra, jumps=jumps), opens, number, indent)
             return
         if tokens[0][1] != "if":
-            raise NxwrightError("expected else or else if", line=number)
+            raise NxwrightError("expected `else` or `else if`", line=number)
         emitter = self.emitter(indent, number)
         condition = self.condition(tokens[1:], number, emitter)
         if not emitter.lines:
@@ -2774,11 +2795,10 @@ class _EventCompiler:
         if word == "int":
             if self.allow_locals:
                 # An event's or a function's line: program.nx alone has no locals.
-                raise NxwrightError("%s: an int is a variable every page shares, so declare it "
-                                    "in program.nx. For a local, write var. The Nextion Editor "
-                                    "refuses an int in an event (\"Global variable definitions "
-                                    "must precede all code in the program.c\")" % code,
-                                    line=number)
+                # The Nextion Editor rejected an int in an event ("Global variable
+                # definitions must precede all code in the program.c").
+                raise NxwrightError("`%s`: `int` declares a global in program.nx. For a local, "
+                                    "write `var`." % code, line=number)
             self.put(number, indent + _int_line(code, self.page.constants, number) + comment)
             return
         if goto_label(code) is not None or LABEL.fullmatch(code):
@@ -2840,12 +2860,13 @@ class _EventCompiler:
             operator = parser.peek()
             if target is None or not (operator == "=" or operator in COMPOUND_ASSIGNMENTS
                                       or operator in ("++", "--")):
-                raise NotParsed("unexpected %r" % operator, line=number)
+                raise NotParsed("unexpected `%s`" % operator, line=number)
         except NotParsed as error:
             if calls:
                 raise NxwrightError(error.reason, line=error.line) from None
             if code is None:
-                raise NxwrightError("a for header holds assignments", line=number) from None
+                raise NxwrightError("the start and the step of a `for` header must be assignments",
+                                    line=number) from None
             return None
         parser.take()
         if isinstance(target, Literal):
@@ -2856,7 +2877,7 @@ class _EventCompiler:
         target_kind = kind_of(target, number)
         if operator in ("++", "--"):
             if not parser.at_end() or target_kind != NUMBER:
-                raise NxwrightError("%s takes a number and nothing after it"
+                raise NxwrightError("`%s` can only be used on a number, with nothing after it"
                                     % operator, line=number)
             emitter.emit(target_text + operator)
             return emitter.lines
@@ -2869,12 +2890,12 @@ class _EventCompiler:
                          following: list):
         function = self.function
         if function is None:
-            raise NxwrightError("return can only be in a function", line=number)
+            raise NxwrightError("`return` can only be used in a function", line=number)
         if function.result is None:
-            raise NxwrightError("function %s has no result to return"
+            raise NxwrightError("function `%s` has no result to return"
                                 % function.name, line=number)
         if self.stack or any(split_line(text, line)[1] for line, text in following):
-            raise NxwrightError("return must be the last line of the function, "
+            raise NxwrightError("`return` must be the last line of the function, "
                                 "outside any block", line=number)
         parser = Parser(tokenize(code, number)[1:], number, self.scope)
         expression = _whole_expression(parser)
@@ -2889,10 +2910,10 @@ class _EventCompiler:
         if not self.allow_locals:
             raise NxwrightError("program.nx cannot have locals", line=number)
         if len(tokens) < 4 or tokens[1][0] != "name" or tokens[2][1] != "=":
-            raise NxwrightError("a local is written var name = <expression>", line=number)
+            raise NxwrightError("a local is written `var name = <expression>`", line=number)
         name = tokens[1][1]
         if name in self.scope.locals:
-            raise NxwrightError("local %s is declared twice" % name, line=number)
+            raise NxwrightError("local `%s` is already declared" % name, line=number)
         self.page.check_new_name(name, number, "local")
         parser = Parser(tokens[3:], number, self.scope)
         expression = _whole_expression(parser)
@@ -2939,9 +2960,11 @@ class _EventCompiler:
                 if component in EDITOR_PROGRAM_VARIABLES:
                     raise NxwrightError(UNDECLARED_PROGRAM_VARIABLE % component, line=number,
                                         fix={"kind": "declare", "variable": component})
-                raise NxwrightError("unknown name %s: not a component of this page, a constant, "
-                                    "a local, an int variable, or a system variable"
-                                    % component, line=number)
+                # program.nx does not belong to any page, so its message does
+                # not offer a component.
+                raise NxwrightError("unknown name `%s`: not %s%s"
+                                    % (component, "" if in_program else "a component of this page, ",
+                                       _kinds_of_value(in_program)), line=number)
         # Joined again only when rewritten, as the split drops an empty
         # argument, which the line is otherwise written with.
         return code[:len(word)] + ",".join(arguments) if rewritten else code
@@ -2968,8 +2991,8 @@ class _EventCompiler:
         if name in EDITOR_PROGRAM_VARIABLES:
             raise NxwrightError(UNDECLARED_PROGRAM_VARIABLE % name, line=number,
                                 fix={"kind": "declare", "variable": name})
-        raise NxwrightError(page_name_refusal(code, name, pages, "a constant, a local, an int "
-                                              "variable, a system variable, or a colour"),
+        raise NxwrightError(page_name_refusal(code, name, pages,
+                                              _kinds_of_value(self.temporaries is None)),
                             line=number)
 
     def computed_arguments(self, number: int, indent: str, word: str, code: str,
@@ -3045,9 +3068,11 @@ class _EventCompiler:
         word = _NAME.match(code)
         start = word.end() if word else 0
         if "?" in STRING_LITERAL.sub("", code[start:]):
-            raise NxwrightError("? : cannot be used here: nxlang passes this line on as "
-                                "written. Write the command in an if and an else, once with "
-                                "each value", line=number)
+            # program.nx alone is compiled without temporaries, which a `? :`
+            # requires in any argument.
+            if self.temporaries is None:
+                raise NxwrightError("`? :` cannot be used in program.nx", line=number)
+            raise NxwrightError("`? :` cannot be used here", line=number)
 
         def replace(match) -> str:
             found = self.scope.lookup(match[2]) if match[2] else None
@@ -3163,17 +3188,17 @@ def _check_int_starts(code: str, constants: dict, number: int):
             continue
         form = _INT_START_VALUE.fullmatch(value)
         if form is None:
-            raise NxwrightError("%s: the starting value of %s must be a whole number or a "
+            raise NxwrightError("`%s`: the initial value of `%s` must be a whole number or a "
                                 "constant" % (code, name), line=number)
         named = form[1]
         if named is None:
             continue
         if named not in constants:
-            raise NxwrightError("%s: %s is not a constant. An int's starting value must be a "
-                                "whole number or a constant" % (code, named), line=number)
+            raise NxwrightError("`%s`: `%s` is not a constant. An int's initial value must be "
+                                "a whole number or a constant." % (code, named), line=number)
         if constants[named].kind != NUMBER:
-            raise NxwrightError("%s: the constant %s is a text. An int's starting value must be "
-                                "a number" % (code, named), line=number)
+            raise NxwrightError("`%s`: the constant `%s` is text. An int's initial value must "
+                                "be a number." % (code, named), line=number)
 
 
 def _int_starting_value(text: str) -> int:
@@ -3278,7 +3303,7 @@ def _split_for(tokens: list, number: int) -> list:
     try:
         inside = _inside_parentheses(tokens, number)
     except NxwrightError:
-        raise NxwrightError("a for header is written for(start;condition;step)",
+        raise NxwrightError("a `for` header is written `for (start; condition; step)`",
                             line=number) from None
     for kind, text in inside:
         if kind == "operator" and text in ("(", "["):
@@ -3292,5 +3317,5 @@ def _split_for(tokens: list, number: int) -> list:
             current.append((kind, text))
     parts.append(current)
     if len(parts) != 3:
-        raise NxwrightError("a for header is written for(start;condition;step)", line=number)
+        raise NxwrightError("a `for` header is written `for (start; condition; step)`", line=number)
     return parts

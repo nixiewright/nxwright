@@ -182,7 +182,7 @@ class LiveDebuggingTest(LiveTestCase):
         self.wait_for("terminated")
         failed = [body for body in self.events("output") if body["category"] == "stderr"]
         self.assertEqual(len(failed), 1)
-        self.assertIn("NxwrightError: %s:2: nowhere" % (self.root / "pages" / "page0.nx"),
+        self.assertIn("NxwrightError: %s:2: `nowhere`" % (self.root / "pages" / "page0.nx"),
                       failed[0]["output"])
         self.assertEqual((Path(failed[0]["source"]["path"]).resolve(), failed[0]["line"]),
                          ((self.root / "pages" / "page0.nx").resolve(), 2))
@@ -274,7 +274,7 @@ class LiveDebuggingTest(LiveTestCase):
         self.request("nxwright/startAgain")
         stop = self.wait_for("stopped")
         self.assertEqual(stop["reason"], "exception")
-        self.assertIn("pages/page0.nx line 2: nowhere", stop["description"])
+        self.assertIn("pages/page0.nx line 2: `nowhere`", stop["description"])
         self.request("continue")
         self.request("nxwright/press", x=10, y=10)
         self.assertEqual(self.wait_for_log()[-1], "SIM SEND: 70 72 65 73 73 65 64")
@@ -510,7 +510,7 @@ class AgentRequestsTest(LiveTestCase):
         self.write("pages/page0.nx", "on go.down:\n  nowhere.val = 1\n")
         reply = self.reply_to(self.request_later("nxwright/startAgain", handled=True, agent=True))
         self.assertFalse(reply["success"])
-        self.assertIn("pages/page0.nx line 2: nowhere", reply["message"])
+        self.assertIn("pages/page0.nx line 2: `nowhere`", reply["message"])
 
     def test_an_action_waiting_when_the_debugger_pauses_is_not_done(self):
         # The delay of hold's press keeps the press on go waiting in turn.

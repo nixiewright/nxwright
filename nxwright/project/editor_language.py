@@ -113,6 +113,4 @@ NAMES_THE_EDITOR_REFUSES = EDITOR_SYSTEM_VARIABLES | frozenset(EDITOR_COLOURS)
 EDITOR_PROGRAM_VARIABLES = ("sys0", "sys1", "sys2")
 EDITOR_PROGRAM_DECLARATION = "int sys0=0,sys1=0,sys2=0"
 # The build's refusal of code naming one of them undeclared, given its name.
-UNDECLARED_PROGRAM_VARIABLE = ("%%s is an int variable program.nx must declare, as the "
-                               "Nextion Editor's new project does: %s"
-                               % EDITOR_PROGRAM_DECLARATION)
+UNDECLARED_PROGRAM_VARIABLE = "unknown variable `%s`"

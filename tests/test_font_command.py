@@ -166,9 +166,11 @@ class FontCommandTest(unittest.TestCase):
                 (folder, (NOTO_SANS, 24, "notosans20"), "the folder has a font named NotoSans20"),
                 (folder, (NOTO_SANS, 24, "Stray"),
                  "Stray.zi is already there, though app.toml does not list it"),
-                (folder, (NOTO_SANS, 24, "two words"), "fonts: 'two words' is not a valid name"),
+                (folder, (NOTO_SANS, 24, "two words"),
+                 "`two words` is not a valid font name. Use only letters, digits, `-`, and `_`, "
+                 "with `/` for subfolders."),
                 (folder, (NOTO_SANS, 11), "height 11 is not from 12 to 254"),
-                (folder, (self.temp / "missing.ttf", 20), "missing.ttf is missing"),
+                (folder, (self.temp / "missing.ttf", 20), "missing.ttf does not exist"),
                 (folder, (NOTO_SANS, 24, "Big", True, "20-7e"),
                  "a font in iso-8859-1 holds every character of its encoding; characters are "
                  "chosen in utf-8 only"),

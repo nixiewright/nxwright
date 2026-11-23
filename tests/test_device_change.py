@@ -113,7 +113,8 @@ class ScreenModelTest(DeviceChangeTestCase):
         self.add('name = "s0"\ntype = "select"\nx = 0\ny = 0\nw = 120\nh = 120\n')
         change = change_device(self.source, screen="NX4832T035")
         self.assertEqual(self.app()["screen"], "NX4832T035")
-        self.assertTrue(any("lacks the type select" in refusal for refusal in change.refusals),
+        self.assertTrue(any("component `s0` is of type `select`, which is not available on the "
+                            "NX4832T035" in refusal for refusal in change.refusals),
                         change.refusals)
 
 
@@ -424,7 +425,7 @@ class RefusalTest(DeviceChangeTestCase):
         font = next((self.source / "fonts").iterdir())
         font.unlink()
         before = folder_files(self.source)
-        with self.assertRaisesRegex(NxwrightError, "%s is missing" % font.name):
+        with self.assertRaisesRegex(NxwrightError, "%s does not exist" % font.name):
             change_device(self.source, rotation=90)
         self.assertEqual(folder_files(self.source), before)
 

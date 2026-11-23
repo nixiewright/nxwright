@@ -75,8 +75,7 @@ from nxwright.project.page_file_names import page_file_stem
 from nxwright.project.resources import (COPIED_KINDS, FONTS, MEDIA, PICTURE_SUFFIXES,
                                         SOURCE_SUFFIX, decodes_picture)
 from nxwright.project.device_settings import (DEFAULT_ENCODING, ENCODINGS, DeviceSettings,
-                                              TextCodec, encoding_code, encoding_name,
-                                              is_unknown_encoding)
+                                              TextCodec, encoding_name, is_unknown_encoding)
 from nxwright.source.defines import checked_defines, filled, placeholder_name
 from nxwright.source.mcu_table import checked_mcu
 from nxwright.source.device_keys import (DEVICE_KEYS, app_encoding, device_keys, screen_model,
@@ -98,7 +97,8 @@ from nxwright.source.asset_names_in_code import with_asset_names
 from nxwright.source.nxlang_switch import switch_events_to_nxlang
 from nxwright.project.page_text import page_from_text, page_to_text
 from nxwright.language.resource_names import (ANIMATION, LISTS, SOUND, VIDEO, ResourceNames,
-                                              check_names, font_header_name, is_valid_name)
+                                              check_names, font_header_name, is_device_name,
+                                              is_valid_name)
 from nxwright.language.editor_code import (editor_equivalent, global_declarations,
                                            keep_editor_meaning)
 from nxwright.language.nxlang import (MOST_GLOBALS, ProgramNames, compile_program,
@@ -171,9 +171,10 @@ def refuse_unless_new_folder(source_folder: Path):
     folder. extract and import write only new folders, so that they can never replace
     work in a source folder. The check writes nothing."""
     source_folder = Path(source_folder)
-    if source_folder.exists() and (not source_folder.is_dir() or any(source_folder.iterdir())):
-        raise NxwrightError("failed to write into %s: the folder is not empty. Choose a new or "
-                            "empty folder" % source_folder)
+    if source_folder.exists() and not source_folder.is_dir():
+        raise NxwrightError("%s is not a folder. Choose a new or empty folder." % source_folder)
+    if source_folder.exists() and any(source_folder.iterdir()):
+        raise NxwrightError("%s is not empty. Choose a new or empty folder." % source_folder)
 
 
 def import_dump(dump_folder: Path, source_folder: Path, name: str = None,
@@ -261,7 +262,7 @@ def folder_reader(source_folder: Path):
     """Returns read(path): the text of a file of the source folder, by its relative path."""
     def read(path: str) -> str:
         if not (source_folder / path).is_file():
-            raise MissingFileError("%s is missing" % path)
+            raise MissingFileError("%s does not exist" % path)
         return read_text(source_folder / path)
     return read
 
@@ -642,7 +643,7 @@ def resource_problems(kind: str, name: str, exists, listed=None) -> list:
         except NxwrightError as error:
             problems.append(str(error))
         return problems
-    return ["%s is missing" % path for path in resource_paths(kind, name, exists)
+    return ["%s does not exist" % path for path in resource_paths(kind, name, exists)
             if not exists(path)]
 
 
@@ -683,13 +684,13 @@ def new_source_folder(source_folder: Path, settings: DeviceSettings, language: s
     source_folder = Path(source_folder)
     name = Path(source_folder).resolve().name if name is None else name
     if not _is_app_name(name):
-        raise NxwrightError("the app's %s" % _APP_NAME_RULE)
+        raise NxwrightError("the app's name %s" % _APP_NAME_RULE)
     if source_folder.exists() and any(source_folder.iterdir()):
-        raise NxwrightError("%s is not empty" % source_folder)
+        raise NxwrightError("%s is not empty. Choose a new or empty folder." % source_folder)
     if language not in LANGUAGES:
         raise NxwrightError("language must be %r or %r" % LANGUAGES)
     if settings.encoding not in ENCODINGS.values():
-        raise NxwrightError("unknown character encoding %r" % settings.encoding)
+        raise NxwrightError("unknown encoding `%s`" % settings.encoding)
     width, height = settings.page_size
     font_name, font_block, warning = _shipped_font(settings.encoding, settings.font_rotation)
     app = dict({"format": SOURCE_FORMAT, "name": name, "language": language},
@@ -729,7 +730,7 @@ def add_page(source_folder: Path, name: str = None) -> str:
     files = new_page_files(app, name)
     for relative in files:
         if (source_folder / relative).exists():
-            raise NxwrightError("%s is already there, though app.toml does not list it"
+            raise NxwrightError("%s already exists. Choose another name, or remove the file."
                                 % (source_folder / relative))
     for relative, content in files.items():
         (source_folder / relative).parent.mkdir(parents=True, exist_ok=True)
@@ -746,7 +747,8 @@ def new_page_files(app: dict, name: str) -> dict:
     an app.toml without screen settings."""
     settings = settings_from_keys(app)
     if settings is None:
-        raise NxwrightError("app.toml gives no screen settings, so the page's size is not known")
+        raise NxwrightError("app.toml has no screen settings, so the size of the new page is "
+                            "unknown. Add `screen`, `rotation`, and `encoding` to app.toml.")
     width, height = settings.page_size
     return {page_toml_path(name): (_NEW_PAGE % (name, width, height)).encode("utf-8"),
             page_nx_path(name): b""}
@@ -758,20 +760,27 @@ def check_new_page_name(name: str, pages: list, renamed: str = None):
     it as a page, if the build rejects it for a page, or if another page has it
     in any letter case. With `renamed`, `name` is checked as the new name of
     the page `renamed`, which may keep its own name in another letter case."""
+    if is_device_name(name):
+        raise NxwrightError("`%s` is not a valid page name, because Windows reserves it as a "
+                            "file name, and pages are written as files" % name)
     if not is_valid_name(name) or "/" in name:
-        raise NxwrightError("%r is not a valid page name" % name)
+        raise NxwrightError("`%s` is not a valid page name. Use only letters, digits, `-`, and "
+                            "`_`." % name)
     taken = {page.lower(): page for page in pages if page != renamed}
     if name.lower() in taken:
-        raise NxwrightError("the folder has a page named %s already" % taken[name.lower()])
+        existing = taken[name.lower()]
+        raise NxwrightError("page `%s` already exists%s" % (
+            existing, "" if existing == name else " (page names are case insensitive)"))
     if len(name) > NAME_LIMIT:
-        raise NxwrightError("the name %s has %d characters; the Nextion Editor keeps %d"
+        raise NxwrightError("the name `%s` has %d characters, and the limit is %d"
                             % (name, len(name), NAME_LIMIT))
+    # The Nextion Editor says "Illegal name" for such a name.
     if name in NAMES_THE_EDITOR_REFUSES:
-        raise NxwrightError('the Nextion Editor refuses this name, saying "Illegal name": %s'
-                            % name)
+        raise NxwrightError("`%s` is a reserved name" % name)
+    # The Nextion Editor refuses a project with such a page as it opens it
+    # ("First character of a Name can not be number").
     if name[:1].isdigit():
-        raise NxwrightError('the Nextion Editor refuses a name that starts with a digit, saying '
-                            '"First character of a Name can not be number": %s' % name)
+        raise NxwrightError("`%s`: a name cannot start with a digit" % name)
 
 
 @cache
@@ -796,8 +805,9 @@ def _shipped_font(encoding: str, rotation: int):
     return name, block, warning
 
 
-# What a name in app.toml's `name` must be, as a refusal says it.
-_APP_NAME_RULE = "name must be a text of one line, not empty, with no spaces at its start or end"
+# What a name in app.toml's `name` must be, as a message says it after the
+# name's label.
+_APP_NAME_RULE = "must be a non-empty string of one line, without leading or trailing spaces"
 
 
 def _is_app_name(name) -> bool:
@@ -922,7 +932,7 @@ def export_dump(source_folder: Path, dump_folder: Path, refuse_by_table: bool = 
     """
     source_folder, dump_folder = Path(source_folder), Path(dump_folder)
     if dump_folder.exists() and any(dump_folder.iterdir()):
-        raise NxwrightError("%s exists and is not empty" % dump_folder)
+        raise NxwrightError("%s is not empty. Choose a new or empty folder." % dump_folder)
     files, pictures, memory = _dump_files_from_source(source_folder, refuse_by_table,
                                                       lock_pages)
     for relative, content in files.items():
@@ -941,7 +951,7 @@ def _source_files_from_dump(dump_folder: Path, project_name: str,
     # A dump missing one of these would import as a project without it.
     for required in ("pages", "images") + tuple(kind.folder for kind in COPIED_KINDS):
         if not (dump_folder / required).is_dir():
-            raise NxwrightError("%s has no %s folder" % (dump_folder, required))
+            raise NxwrightError("%s has no `%s` folder" % (dump_folder, required))
     files = {}
     # Each resource as the bytes of its files, in the order of RESOURCE_FILES.
     pictures = dump_pictures(dump_folder)
@@ -987,8 +997,9 @@ def _source_files_from_dump(dump_folder: Path, project_name: str,
         pages.append(page.name)
         files[page_toml_path(page.name)] = source.toml.encode("utf-8")
         files[page_nx_path(page.name)] = with_asset_names(source.events, names).encode("utf-8")
-    if len(set(pages)) != len(pages):
-        raise NxwrightError("two pages share a name")
+    repeated = next((page for page in pages if pages.count(page) > 1), None)
+    if repeated is not None:
+        raise NxwrightError("the dump has more than one page `%s`" % repeated)
     # The spaces and tabs ending a line are dropped first, as for the events.
     program = b"\r\n".join(line.rstrip(b" \t")
                            for line in (dump_folder / "program.s").read_bytes().split(b"\r\n"))
@@ -1133,7 +1144,7 @@ def _program_to_source(program: bytes, encoding: str) -> tuple:
     # An empty program has no line, not one empty line.
     lines = program.split(b"\r\n") if program else []
     if any(b"\r" in line or b"\n" in line for line in lines):
-        raise NxwrightError("program.s mixes line endings; only CRLF can be kept")
+        raise NxwrightError("program.s has mixed line endings. Every line must end with CRLF.")
     # A program ending in a line end ends with an empty last line, which stays.
     body, end = (lines[:-1], lines[-1:]) if program.endswith(b"\r\n") else (lines, [])
     kept = [line for line in body if line.strip()]
@@ -1141,7 +1152,7 @@ def _program_to_source(program: bytes, encoding: str) -> tuple:
         if len(kept) < len(body) else []
     text = TextCodec(encoding).decode(b"\n".join(kept + end), "program.s")
     if any(ord(char) < 0x20 and char not in "\t\n" or ord(char) == 0x7f for char in text):
-        raise NxwrightError("program.s holds a control character")
+        raise NxwrightError("program.s contains a control character")
     return text.encode("utf-8"), warnings
 
 
@@ -1610,39 +1621,44 @@ def parse_app(text: str) -> dict:
     # TOML's true is Python's True, which equals 1: only a real number counts.
     is_number = isinstance(found, int) and not isinstance(found, bool)
     if is_number and found > SOURCE_FORMAT:
-        raise NxwrightError("app.toml is in source format %d, which needs a newer nxwright; "
-                            "this one reads format %d" % (found, SOURCE_FORMAT))
+        raise NxwrightError("app.toml uses source format %d, but this version of nxwright only "
+                            "reads format %d. Update nxwright." % (found, SOURCE_FORMAT))
     if is_number and 1 <= found < SOURCE_FORMAT:
-        raise NxwrightError("app.toml is in source format %d; nxwright upgrade converts it to "
-                            "format %d" % (found, SOURCE_FORMAT))
+        raise NxwrightError("app.toml uses source format %d, and this version of nxwright reads "
+                            "format %d. Run `nxwright upgrade` to convert it."
+                            % (found, SOURCE_FORMAT))
     if not is_number or found != SOURCE_FORMAT:
-        raise NxwrightError("app.toml: format must be %d" % SOURCE_FORMAT)
+        raise NxwrightError("app.toml: `format` must be %d" % SOURCE_FORMAT)
     encoding = app.get("encoding")
     # app.toml gives an encoding nxwright does not know by its number. The
     # rest of nxwright uses the name that encoding_name makes from the
     # number, such as "encoding-37".
     if isinstance(encoding, int) and not isinstance(encoding, bool):
-        if not 0 <= encoding < 256 or encoding in ENCODINGS:
-            raise NxwrightError("app.toml: encoding %d must be the name of an encoding, such as "
-                                "\"iso-8859-1\", or the number of one nxwright does not know"
-                                % encoding)
+        if encoding in ENCODINGS:
+            raise NxwrightError("app.toml: `encoding = %d` is not valid. Use the encoding's "
+                                "name: `encoding = \"%s\"`." % (encoding, ENCODINGS[encoding]))
+        if not 0 <= encoding < 256:
+            raise NxwrightError("app.toml: `encoding` must be the name of an encoding, such as "
+                                "`iso-8859-1`, or a number between 0 and 255")
         app["encoding"] = encoding_name(encoding)
     elif is_unknown_encoding(encoding):
-        raise NxwrightError("app.toml: encoding %r is not the name of an encoding; give an "
-                            "encoding nxwright does not know by its number, %s"
-                            % (encoding, encoding_code(encoding)))
+        # The name nxwright itself makes for an encoding it does not know,
+        # such as "encoding-37". app.toml gives such an encoding by its number.
+        raise NxwrightError("app.toml: unknown encoding `%s`" % encoding)
     pages = app.get("pages")
     if not isinstance(pages, list) or not all(isinstance(name, str) and _PAGE_NAME.fullmatch(name)
                                               for name in pages):
-        raise NxwrightError("app.toml: pages must be a list of page names, each made of Latin-1 "
-                            "characters, without a double quote or a control character")
+        raise NxwrightError("app.toml: `pages` must be a list of page names. A page name cannot "
+                            "contain a double quote, a control character, or a character "
+                            "outside Latin-1.")
     if len(set(pages)) != len(pages):
-        raise NxwrightError("app.toml: pages lists a name twice")
+        raise NxwrightError("app.toml: page `%s` already exists"
+                            % next(name for name in pages if pages.count(name) > 1))
     for kind in _OPTIONAL_LISTS:
         app.setdefault(kind, [])
     for kind in RESOURCE_FILES:
         if not isinstance(app.get(kind), list):
-            raise NxwrightError("app.toml: %s must be a list of names" % kind)
+            raise NxwrightError("app.toml: `%s` must be a list of names" % kind)
         try:
             check_names(app[kind], kind)
         except NxwrightError as error:
@@ -1650,15 +1666,15 @@ def parse_app(text: str) -> dict:
     extra = (set(app) - {"format", "name", "language", "pages"} - set(RESOURCE_FILES)
              - set(DEVICE_KEYS))
     if extra:
-        raise NxwrightError("app.toml: unknown key %s" % sorted(extra)[0])
+        raise NxwrightError("app.toml: unknown key `%s`" % sorted(extra)[0])
     app["defines"] = defines
     if mcu:
         app["mcu"] = mcu
     if "name" in app and not _is_app_name(app["name"]):
-        raise NxwrightError("app.toml: %s" % _APP_NAME_RULE)
+        raise NxwrightError("app.toml: `name` %s" % _APP_NAME_RULE)
     app["language"] = language_of_value(app.get("language"))
     if app["language"] is None:
-        raise NxwrightError("app.toml: language must be %r or %r"
+        raise NxwrightError("app.toml: `language` must be `%s` or `%s`"
                             % tuple(_LANGUAGE_VALUES.values()))
     settings_from_keys(app)
     return app
@@ -1669,7 +1685,7 @@ def read_text(path: Path) -> str:
     try:
         return read_bytes(path).decode("utf-8-sig").replace("\r\n", "\n")
     except UnicodeDecodeError:
-        raise NxwrightError("%s is not UTF-8 text" % path) from None
+        raise NxwrightError("%s is not a UTF-8 text file" % path) from None
 
 
 def read_bytes(path: Path) -> bytes:
@@ -1678,7 +1694,7 @@ def read_bytes(path: Path) -> bytes:
     try:
         return path.read_bytes()
     except FileNotFoundError:
-        raise NxwrightError("%s is missing" % path) from None
+        raise NxwrightError("%s does not exist" % path) from None
 
 
 def _program_from_source(text: str, names: ResourceNames, program: ProgramNames = None,

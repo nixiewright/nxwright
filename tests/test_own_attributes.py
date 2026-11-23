@@ -24,8 +24,7 @@ from tests.test_source_folder import SourceFolderTestCase
 # The lines the probe ran in n0's Touch Press event, as the build keeps them.
 PROBED = ["sys1='&id&'", "'&val&'+=10", "covx '&val&',t1.txt,0,0", "t2.txt=\"'&val&'\"",
           "t3.txt=\"a'&id&'b\""]
-NO_OWNER = (r"the form '&name&' stands for an attribute of the object whose event holds the "
-            r"line, and this line has no such object \(\"Invalid Variables\"\)")
+NO_OWNER = r"the form `'&name&'` can only be used in an object's event"
 
 
 class ReplacementTest(unittest.TestCase):
@@ -84,27 +83,31 @@ class OwnAttributeTest(SourceFolderTestCase):
     def test_a_refusal_names_the_line_as_written_and_as_read(self):
         # Refused as n0.val="a" is.
         self.write_events("on n0.down:\n  '&val&'=\"a\"\n")
-        self.assert_export_refused(r"first\.nx line 2: '&val&'=\"a\", as the Nextion Editor reads "
-                                   r"it: n0\.val=\"a\": the Nextion Editor refuses to compile a "
-                                   r"text given to a number \(\"Assignment operation failed\"\)")
-        with self.assertRaisesRegex(NxwrightError, r"as the Nextion Editor reads it: "
-                                                   r"n0\.val=\"a\""):
+        self.assert_export_refused(r"first\.nx line 2: `'&val&'=\"a\"`, read as `n0\.val=\"a\"`: "
+                                   r"text cannot be put in a number")
+        with self.assertRaisesRegex(NxwrightError,
+                                    r"`'&val&'=\"a\"`, read as `n0\.val=\"a\"`: text cannot"):
             SourceFolderRunner(self.source).run("first", [("n0", "down")])
+        # The check drops the spaces of the line it reads. The message still
+        # gives that line only once.
+        self.write_events("on n0.down:\n  '&val&' = \"a\"\n")
+        self.assert_export_refused(r"first\.nx line 2: `'&val&' = \"a\"`, read as "
+                                   r"`n0\.val = \"a\"`: text cannot be put in a number")
 
     def test_a_form_with_spaces_is_read_as_the_editor_drops_them(self):
         # In an event, checked as n0.val; in program.nx, refused as '&id&' is.
         self.write_events("on n0.down:\n  '& val &'=\"a\"\n")
-        self.assert_export_refused(r"first\.nx line 2: '& val &'=\"a\", as the Nextion Editor "
-                                   r"reads it: n0\.val=\"a\"")
+        self.assert_export_refused(r"first\.nx line 2: `'& val &'=\"a\"`, read as "
+                                   r"`n0\.val=\"a\"`: text cannot")
         self.write_events("")
         program = self.source / "program.nx"
         start = program.read_text(encoding="utf-8")
         program.write_text(start + "\nsys2='& id &'\n", encoding="utf-8", newline="\n")
-        self.assert_export_refused(r"program\.nx line 3: sys2='&id&': " + NO_OWNER)
+        self.assert_export_refused(r"program\.nx line 3: `sys2='&id&'`: " + NO_OWNER)
         program.write_text(start, encoding="utf-8", newline="\n")
         (self.source / "macros.nx").write_text("macro probe:\n  '& val &'=1\n", encoding="utf-8",
                                                newline="\n")
-        self.assert_export_refused(r"macros\.nx line 2: '&val&'=1: " + NO_OWNER)
+        self.assert_export_refused(r"macros\.nx line 2: `'&val&'=1`: " + NO_OWNER)
 
     def test_code_of_no_event_refuses_it(self):
         # Outside a quoted text, as the Editor refused it in program.s and in a
@@ -113,18 +116,18 @@ class OwnAttributeTest(SourceFolderTestCase):
         program = self.source / "program.nx"
         start = program.read_text(encoding="utf-8")
         program.write_text(start + "\nsys2='&id&'\n", encoding="utf-8", newline="\n")
-        self.assert_export_refused(r"program\.nx line 3: sys2='&id&': " + NO_OWNER)
+        self.assert_export_refused(r"program\.nx line 3: `sys2='&id&'`: " + NO_OWNER)
         program.write_text(start + "\nprints \"'&id&'\",0\n", encoding="utf-8", newline="\n")
         export_dump(self.source, self.folder / "quoted")
         program.write_text(start, encoding="utf-8", newline="\n")
         (self.source / "macros.nx").write_text("macro probe:\n  '&val&'=1\n", encoding="utf-8",
                                                newline="\n")
-        self.assert_export_refused(r"macros\.nx line 2: '&val&'=1: " + NO_OWNER)
+        self.assert_export_refused(r"macros\.nx line 2: `'&val&'=1`: " + NO_OWNER)
         (self.source / "macros.nx").write_text("macro probe:\n  prints \"'&id&'\",0\n",
                                                encoding="utf-8", newline="\n")
         export_dump(self.source, self.folder / "quoted in a macro")
         # A text given to events_from_text belongs to no page.
-        with self.assertRaisesRegex(NxwrightError, "line 2: '&val&'=1: " + NO_OWNER):
+        with self.assertRaisesRegex(NxwrightError, "line 2: `'&val&'=1`: " + NO_OWNER):
             SourceFolderRunner(self.source).events_from_text("on n0.down:\n  '&val&'=1\n")
 
     def test_the_editor_code_view_and_an_extract_keep_it(self):
@@ -262,9 +265,9 @@ def numbered(text: str) -> list:
     return list(enumerate(text.split("\n"), start=1)) if text else []
 
 
-IN_A_FUNCTION = r"nxlang refuses the form '&name&' in a function"
-IN_A_CONSTANT = r"nxlang refuses the form '&name&' in a constant"
-IN_NO_EVENT = r"nxlang refuses the form '&name&' here: no object's event holds this line"
+IN_A_FUNCTION = r"the form `'&name&'` cannot be used in a function"
+IN_A_CONSTANT = r"the form `'&name&'` cannot be used in a constant"
+IN_NO_EVENT = r"the form `'&name&'` can only be used in an object's event"
 
 
 class NxlangTest(unittest.TestCase):
@@ -289,7 +292,7 @@ class NxlangTest(unittest.TestCase):
         with self.assertRaises(NxwrightError) as written:
             compile_event("'&val&' = \"a\"")
         self.assertEqual(str(written.exception),
-                         "p.nx line 1: '&val&' = \"a\", as the Nextion Editor reads it: %s"
+                         "p.nx line 1: `'&val&' = \"a\"`, read as `a.val = \"a\"`: %s"
                          % refused.exception.reason)
         # A refusal's quick fix stays: here, declaring sys0 in program.nx.
         with self.assertRaises(NxwrightError) as refused:

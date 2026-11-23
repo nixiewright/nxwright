@@ -66,8 +66,8 @@ class BlockTest(unittest.TestCase):
         # one. A macro with one compiled and ran in the Nextion Editor.
         self.assertEqual(macros_from_block(b"gap\r\n3\r\nprinth 4D\r\n  \r\n\r\n"),
                          ([("gap", ["printh 4D"])],
-                          ["macro gap: 2 blank lines dropped; the Nextion Editor compiles them "
-                           "to nothing"]))
+                          ["macro `gap`: 2 blank lines were dropped, since they have no "
+                           "effect"]))
 
 
 class SourceTest(unittest.TestCase):
@@ -166,34 +166,39 @@ class FolderTest(SourceFolderTestCase):
         # refused, in macros too.
         cases = [
             ("macro m:\n  printh 4D\n", ("call nosuch",),
-             r"first\.nx line 2: call nosuch: the folder has no macro nosuch"),
-            ("macro m:\n  printh 4D\n", ("call M",), r"has no macro M"),
+             r"first\.nx line 2: `call nosuch`: `nosuch` is not a valid macro"),
+            ("macro m:\n  printh 4D\n", ("call M",), r"`M` is not a valid macro"),
             ("macro m:\n  printh 4D\n\nmacro m:\n  printh 4E\n", (),
-             r"macros\.nx line 4: macro m appears twice"),
+             r"macros\.nx line 4: macro `m` is already defined"),
             ("macro my-name:\n  printh 4D\n", (), r"macros\.nx line 1: my-name: a macro's name"),
             ("macro m:\n  t1.txt=\"g\"\n", (),
-             r"macros\.nx line 2: t1: a macro names a component with its page"),
+             r"macros\.nx line 2: `t1`: in a macro, a component must include its page"),
             ("macro m:\n  first.t0.txt=\"g\"\n", (),
-             r"macros\.nx line 2: first\.t0: a macro cannot reach a component of local scope"),
-            ("macro m:\n  call nosuch\n", (), r"macros\.nx line 2: call nosuch"),
+             r"macros\.nx line 2: `first\.t0`: `t0` has local scope, so it cannot be used by a "
+             r"macro"),
+            ("macro m:\n  call nosuch\n", (), r"macros\.nx line 2: `call nosuch`: `nosuch` is not a valid macro"),
             # A command naming a component, by name with its page's or not:
             # the Editor refused `vis t0,0` and `click page0.b0,1`, b0 global,
             # saying "Invalid Component ID".
             ("macro m:\n  vis t0,0\n", (),
-             r"macros\.nx line 2: vis t0: in a macro, a command takes a component's number"),
-            ("macro m:\n  click first.t1,1\n", (), r"macros\.nx line 2: click first\.t1: in a "),
-            ("macro m:\n  goto later\n", (), r"macros\.nx line 2: goto later: the "
-                                             r"Nextion Editor finds"),
-            ("macro m:\n  first.t1.w=10\n", (), r"macros\.nx line 2: .*code cannot change"),
+             r"macros\.nx line 2: `vis t0`: in a macro, `vis` must be called with a component's "
+             r"ID or a variable"),
+            ("macro m:\n  click first.t1,1\n", (), r"macros\.nx line 2: `click first\.t1`: in a "),
+            ("macro m:\n  goto later\n", (), r"macros\.nx line 2: `goto later`: this event "
+                                             r"has no label `later`"),
+            ("macro m:\n  first.t1.w=10\n", (), r"macros\.nx line 2: `first\.t1\.w=10`: attribute "
+                                                r"`w` cannot be changed in code"),
             # The escapes and a variable's attributes, as in a page's code.
             ('macro m:\n  first.t1.txt="a\\qb"\n', (),
-             r"macros\.nx line 2: .*Improper use of escape characters"),
-            ("macro m:\n  sys0=first.vg.val\n", (), r"macros\.nx line 2: .*Invalid Variables"),
+             r"macros\.nx line 2: .*`\\q` is not a valid escape"),
+            ("macro m:\n  sys0=first.vg.val\n", (), r"macros\.nx line 2: .*`vg\.val` cannot be "
+                                                    r"used while `vg` contains text"),
             # A name alone that names nothing, as in a page's code: the
             # Editor refused `sys0=abc` in a macro, and took `sys0=RED+dim`.
             ("macro m:\n  sys0=abc\n", (),
-             r"macros\.nx line 2: sys0=abc: the Nextion Editor knows no abc"),
-            ("macro m\n  printh 4D\n", (), r"macros\.nx line 1: expected a 'macro <name>:'"),
+             r"macros\.nx line 2: `sys0=abc`: unknown name `abc`"),
+            ("macro m\n  printh 4D\n", (), r"macros\.nx line 1: expected a `macro <name>:` "
+                                           r"heading, or code indented by two spaces"),
         ]
         # vg: a variable of a text, of global scope, which a macro reaches.
         with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8",
@@ -249,14 +254,15 @@ class FolderTest(SourceFolderTestCase):
         cases = [
             # A click whose event the build cannot tell.
             ("macro m:\n  click sys0,1\n", ("call m",),
-             r"macros\.nx line 2: click sys0,1: .*a component's ID and 0 or 1"),
+             r"macros\.nx line 2: `click sys0,1`: .*a component's ID and 0 or 1"),
             ("macro m:\n  call other\n\nmacro other:\n  click 1,sys0\n", ("call m",),
-             r"macros\.nx line 5: click 1,sys0: "),
+             r"macros\.nx line 5: `click 1,sys0`: "),
             # Coming back to a macro already running.
             ("macro m:\n  call other\n\nmacro other:\n  call m\n", ("call m",),
              r"macro m -> macro other -> macro m"),
             # 8 calls and clicks from first.down.
-            (_macro_chain(8), ("call m1",), r"first\.down -> macro m1 -> .* nest 8 deep"),
+            (_macro_chain(8), ("call m1",), r"too many calls and clicks in a chain: 8, and the "
+                                            r"limit is 7 \(first\.down -> macro m1 -> "),
         ]
         for macros, code, message in cases:
             with self.subTest(macros=macros):
@@ -269,7 +275,7 @@ class FolderTest(SourceFolderTestCase):
         switch_to_nxlang(self.source)
         self.write_macros("macro m:\n  call tap\n\nmacro tap:\n  click 1,1\n")
         self.add_to_program("call m")
-        self.assert_build_refused(r"macros\.nx line 5: click 1,1: .*program\.nx")
+        self.assert_build_refused(r"macros\.nx line 5: `click 1,1`: .*program\.nx")
 
     def test_formatting_lays_the_macros_out_as_editor_code(self):
         # As a code editor asks the formatter for macros.nx alone. The file is

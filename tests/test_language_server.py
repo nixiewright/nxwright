@@ -1022,7 +1022,7 @@ class LiveCheckTest(LiveCheckTestCase):
     def test_unsaved_text_is_checked(self):
         self.change("pages/page0.nx", "on page0.load:\n  bogus.txt = 1\n", "textDocument/didOpen")
         self.assertEqual(self.published(), {self.uri("pages/page0.nx"): [
-            (1, 1, "bogus is neither a component of this page nor a page")]})
+            (1, 1, "`bogus` is neither a page nor a component of this page")]})
         self.change("pages/page0.nx", "on page0.load:\n  title.txt = \"a\"\n")
         self.assertEqual(self.published(), {self.uri("pages/page0.nx"): []})
 
@@ -1067,7 +1067,7 @@ class LiveCheckTest(LiveCheckTestCase):
         # message from the editor.
         with self.nxwright_lsp() as (write, output):
             write(self.opening("pages/page0.nx", "on page0.load:\n  bogus.txt = 1\n"))
-            self.wait_for(output, b"bogus is neither a component of this page nor a page")
+            self.wait_for(output, b"`bogus` is neither a page nor a component of this page")
 
     def list_a_picture_without_a_file(self):
         """Adds the picture "nowhere" to app.toml's list. It has no file, so
@@ -1119,7 +1119,7 @@ class LiveCheckTest(LiveCheckTestCase):
                 mock.patch("nxwright.language_server.server.STEP_GAP", 0.05), \
                 self.nxwright_lsp() as (write, output):
             write(self.opening("pages/page0.nx", "on page0.load:\n  bogus.txt = 1\n"))
-            self.wait_for(output, b"bogus is neither a component of this page nor a page")
+            self.wait_for(output, b"`bogus` is neither a page nor a component of this page")
             write({"jsonrpc": "2.0", "method": "textDocument/didChange",
                    "params": {"textDocument": {"uri": self.uri("pages/page0.nx"), "version": 2},
                               "contentChanges": [{"text": ""}]}})
@@ -1432,8 +1432,8 @@ class LiveCheckTest(LiveCheckTestCase):
         self.change("pages/page0.nx", "on page0.load:\n  bogus.txt = 2\n")
         self.assertEqual(self.published(), {
             self.uri("pages/page0.nx"): [],
-            self.uri("app.toml"): [(0, 1, "app.toml is in source format 9, which needs a newer "
-                                          "nxwright; this one reads format 1")]})
+            self.uri("app.toml"): [(0, 1, "app.toml uses source format 9, but this version of "
+                                          "nxwright only reads format 1. Update nxwright.")]})
 
     def request(self, method: str, path: str, **params) -> dict:
         self.connection.handle({"jsonrpc": "2.0", "id": 9, "method": method, "params": dict(

@@ -127,7 +127,8 @@ class NewSourceFolderTest(unittest.TestCase):
         new_source_folder(plain, settings, "nextion")
         self.assertEqual(tomllib.loads((plain / "app.toml").read_text(encoding="utf-8"))["name"],
                          "clock")
-        with self.assertRaisesRegex(NxwrightError, "name must be a text of one line"):
+        with self.assertRaisesRegex(NxwrightError, "the app's name must be a non-empty string of "
+                                                   "one line, without leading or trailing spaces"):
             new_source_folder(self.folder / "spaced", settings, "nextion", " Clock")
         self.assertFalse((self.folder / "spaced").exists())
         with redirect_stdout(io.StringIO()):

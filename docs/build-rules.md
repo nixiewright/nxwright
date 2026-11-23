@@ -18,9 +18,8 @@ Most sections below are lists of what the build refuses. A quoted message in par
 - A page's or a component's name that starts with a digit, such as `2page`. The Nextion Editor refuses the project when it opens it ("First character of a Name can not be number"). `nxwright new-page` refuses such a name too.
 - A `txt` longer than its `txt_maxl` bytes. The Nextion Editor cuts it when it opens the project.
 - A text attribute longer than its bound, which is the attribute of the same name ending in `_m`. Examples are an external picture's `path` past its `path_m`, a data record's `filter` past its `filter_m`, and a file browser's `dir` past its `dir_m`. The Nextion Editor keeps the text when it opens the project, warns about most of these, and refuses to compile them ("The length exceeds the maximum value").
-  - The build allows two cases, because the Nextion Editor compiles them:
-    - a video's or a sound's `path` while its `from` is 0;
-    - a data record's `format` and `dir`, up to a limit worked out from the bound: add 1, round up to a multiple of 4, and subtract 1. For example, a `format_m` of 8 allows a `format` of 11 bytes, and the screen shows all 11.
+  - The build allows a video's or a sound's `path` while its `from` is 0, because the Nextion Editor compiles it.
+  - The build refuses a data record's `format` or `dir` longer than its bound, although the Nextion Editor compiles one up to 3 bytes longer.
   - A sliding text's `path_m` sets aside room for the text's lines, and does not limit its `path`.
 
 ### Values the Nextion Editor refuses
@@ -114,7 +113,7 @@ The build counts each page's memory the same way as the Nextion Editor's compile
 - The total counts the pages as built, including keyboard pages and the components nxlang generates. Global memory includes the number globals nxlang generates, at 4 bytes each.
 - A page is also refused if its total leaves less memory than its QR codes need.
 - If several pages are refused, the build stops at the first, and `nxwright check` reports each one.
-- A text longer than its bound, in the cases the Nextion Editor compiles, counts as the length of its bound.
+- A text longer than its bound, in the cases the build allows, counts as the length of its bound.
 
 nxwright has not measured the memory of every component, such as a sliding text on the Intelligent and Edge series whose `path` is not empty. It counts such a component as taking no memory, so a page's real total may be higher than the count. The build warns, and lists each page's memory as `at least`:
 

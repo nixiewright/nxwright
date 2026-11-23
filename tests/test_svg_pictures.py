@@ -163,7 +163,7 @@ class DrawingTest(SvgTestCase):
         self.write("art/other.svg", '<svg xmlns="http://www.w3.org/2000/svg">'
                                     '<use id="you" href="self.svg#me"/></svg>')
         for content, said in (
-                ('<use href="../art/missing.svg#box"/>', "art/missing.svg is missing"),
+                ('<use href="../art/missing.svg#box"/>', "art/missing.svg does not exist"),
                 ('<use href="../../outside.svg#box"/>', "is outside the source folder"),
                 ('<use href="http://example.com/a.svg#box"/>', "must be a path relative"),
                 ('<use href="../art/parts.svg#nothing"/>', "art/parts.svg has no element with "
@@ -181,7 +181,7 @@ class DrawingTest(SvgTestCase):
                 self.refused(said)
 
     def test_a_linked_style_sheet_must_be_in_the_folder(self):
-        for href, said in (("../art/none.css", "art/none.css is missing"),
+        for href, said in (("../art/none.css", "art/none.css does not exist"),
                            ("../../theme.css", "is outside the source folder")):
             with self.subTest(href):
                 self.photo(svg("", before='<?xml-stylesheet href="%s"?>' % href))
@@ -292,8 +292,8 @@ class ToolsTest(SvgTestCase):
         self.assertEqual(self.findings(), [])
         self.photo(svg('<use href="../art/missing.svg#a"/>'))
         messages = [finding.message for finding in self.findings()]
-        self.assertIn("pictures/photo.svg: art/missing.svg is missing", messages)
-        with self.assertRaisesRegex(NxwrightError, "art/missing.svg is missing"):
+        self.assertIn("pictures/photo.svg: art/missing.svg does not exist", messages)
+        with self.assertRaisesRegex(NxwrightError, "art/missing.svg does not exist"):
             self.built()
 
     def test_the_preview_shows_the_png_drawn(self):
@@ -387,7 +387,7 @@ class ToolsTest(SvgTestCase):
     def test_picture_adds_an_svg_file_whose_shared_files_are_there(self):
         given = self.folder / "logo.svg"
         given.write_text(svg('<use href="../art/parts.svg#a"/>'), encoding="utf-8")
-        with self.assertRaisesRegex(NxwrightError, "art/parts.svg is missing"):
+        with self.assertRaisesRegex(NxwrightError, "art/parts.svg does not exist"):
             add_pictures(self.source, [given])
         self.assertFalse((self.source / "pictures" / "logo.svg").exists())
         self.write("art/parts.svg", '<svg xmlns="http://www.w3.org/2000/svg">'
@@ -415,7 +415,7 @@ class ToolsTest(SvgTestCase):
         self.assertIn('href="../art/parts.svg#a"',
                       read_text(self.source / "pictures" / "icons" / "photo.svg"))
         messages = [finding.message for finding in self.findings()]
-        self.assertIn("pictures/icons/photo.svg: pictures/art/parts.svg is missing", messages)
+        self.assertIn("pictures/icons/photo.svg: pictures/art/parts.svg does not exist", messages)
 
     def test_a_picture_uses_the_drawing_of_another_picture(self):
         # As a page's pressed picture uses the drawing of its normal one.

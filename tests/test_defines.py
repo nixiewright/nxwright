@@ -96,7 +96,7 @@ class BuildTest(DefinesTestCase):
     def test_a_text_with_a_line_break_is_refused(self):
         code, errors = self.build("--define", "TITLE=two\nlines")
         self.assertEqual(code, 1)
-        self.assertIn("app.toml the define TITLE of [defines]: a quoted text cannot contain a "
+        self.assertIn("app.toml in `[defines]`, `TITLE`: a quoted text cannot contain a "
                       "line break", errors)
 
     def test_the_values_last_only_for_the_command(self):
@@ -124,8 +124,8 @@ class BuildTest(DefinesTestCase):
                            encoding="utf-8", newline="\n")
         code, errors = self.build()
         self.assertEqual(code, 1)
-        self.assertIn("app.toml the define LIMIT of [defines]: LIMIT is already a constant",
-                      errors)
+        self.assertIn("app.toml in `[defines]`, `LIMIT`: `LIMIT` already exists as a constant, it "
+                      "cannot be redefined", errors)
 
     def test_a_number_past_32_bits_keeps_its_low_32_bits_as_a_constant_does(self):
         self.app.write_text(self.app.read_text(encoding="utf-8").replace(

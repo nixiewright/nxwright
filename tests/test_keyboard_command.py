@@ -228,10 +228,10 @@ class KeyboardCommandTest(unittest.TestCase):
                 (stray, "keypad", "keybdB.page.toml is already there, though app.toml does "
                                   "not list it"),
                 (unset, "keypad", "app.toml gives no screen settings"),
-                (full, "keypad", 'the folder has 251 pages, the most the Nextion Editor '
-                                 'compiles ("Too many pages"). Remove a page first.'),
-                (cased, "keypad", "fonts: %s and %s are the same name"
-                                  % (keypad_font.lower(), keypad_font))):
+                (full, "keypad", "the project already has 251 pages, which is the limit. Remove "
+                                 "a page first."),
+                (cased, "keypad", "font `%s` already exists (resources are case insensitive)"
+                                  % keypad_font.lower())):
             with self.subTest(message=message):
                 before = folder_files(folder)
                 with self.assertRaisesRegex(NxwrightError, re.escape(message)):

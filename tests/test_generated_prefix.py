@@ -51,7 +51,7 @@ class GeneratedNamesTest(FolderTestCase):
                 [finding] = self.findings()
                 self.assertEqual((finding.file, finding.line, finding.severity),
                                  (file, line, ERROR))
-                self.assertIn("'__'", finding.message)
+                self.assertIn("`__`", finding.message)
                 self.write("program.nx", "int sys0=0,sys1=0,sys2=0\npage 0\n")
                 self.write("pages/page0.nx", "")
 

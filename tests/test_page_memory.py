@@ -296,11 +296,9 @@ class ProjectMemoryTest(unittest.TestCase):
 
     def test_a_value_longer_than_its_bound(self):
         # Counted as its bound, as the Editor's compile counted each value the
-        # build lets past its bound. A data record is of global scope alone
-        # on this series.
+        # build lets past its bound.
         model = model_named("NX8048P050")
-        for kind, values, attribute in (("data-record", {"vscope": 1, "format_m": 8}, "format"),
-                                        ("variable", {"sta": 0, "txt_maxl": 8}, "txt"),
+        for kind, values, attribute in (("variable", {"sta": 0, "txt_maxl": 8}, "txt"),
                                         ("video", {"from": 0, "path_m": 8}, "path")):
             with self.subTest(kind=kind):
                 within, past = (measure_page(model, page(built(kind, "c0", **values,

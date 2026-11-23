@@ -39,28 +39,45 @@ class UnknownNameError(NxwrightError):
     """Raised for a reference to a resource's name that app.toml does not list."""
 
 
+def is_device_name(name: str) -> bool:
+    """True when `name` is a name Windows keeps for devices, such as "con",
+    in any letter case. Windows does not let a file have such a name."""
+    return name.lower() in _DEVICE_NAMES
+
+
 def is_valid_name(name: str) -> bool:
     """True when `name` follows the character and device-name rules."""
     parts = name.split("/")
-    return all(_PART.fullmatch(part) and part.lower() not in _DEVICE_NAMES for part in parts)
+    return all(_PART.fullmatch(part) and not is_device_name(part) for part in parts)
 
 
 def check_names(names: list, kind: str):
     """Raises NxwrightError unless `names`, the names of one kind in ID order,
-    follow every rule in this module's docstring. `kind`, the kind's list in
-    app.toml, such as "pictures", starts the error message."""
+    follow every rule in this module's docstring. `kind` is the kind's list
+    in app.toml, such as "pictures". The error message says which kind the
+    name is of."""
+    noun = NOUNS[KIND_OF_LIST[kind]]
     seen = {}
     for name in names:
+        # A reserved name is not valid as the file's name, or as the name of
+        # one of its folders.
+        if isinstance(name, str) and any(is_device_name(part) for part in name.split("/")):
+            raise NxwrightError("`%s` is not a valid %s name, because Windows reserves it as a "
+                                "file name, and %s are written as files" % (name, noun, kind))
         if not isinstance(name, str) or not is_valid_name(name):
-            raise NxwrightError("%s: %r is not a valid name" % (kind, name))
+            raise NxwrightError("`%s` is not a valid %s name. Use only letters, digits, `-`, and "
+                                "`_`, with `/` for subfolders." % (name, noun))
         if name.lower() in seen:
-            raise NxwrightError("%s: %s and %s are the same name" % (kind, seen[name.lower()], name))
+            existing = seen[name.lower()]
+            raise NxwrightError("%s `%s` already exists%s" % (
+                noun, existing, "" if existing == name else " (resources are case insensitive)"))
         seen[name.lower()] = name
     folders = {"/".join(name.lower().split("/")[:end]) for name in names
                for end in range(1, name.count("/") + 1)}
     clashes = sorted(name for name in names if name.lower() in folders)
     if clashes:
-        raise NxwrightError("%s: %s is also the folder of another name" % (kind, clashes[0]))
+        raise NxwrightError("`%s` cannot be both %s %s and a folder"
+                            % (clashes[0], "an" if noun[0] in "aeiou" else "a", noun))
 
 
 @dataclass
@@ -100,7 +117,7 @@ class ResourceNames:
         try:
             return self._ids[kind][name]
         except KeyError:
-            raise UnknownNameError("no %s is named %s" % (NOUNS[kind], name)) from None
+            raise UnknownNameError("unknown %s `%s`" % (NOUNS[kind], name)) from None
 
 
 def font_header_name(font: bytes):

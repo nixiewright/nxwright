@@ -808,10 +808,8 @@ class ArrangeTest(ComponentsTestCase):
     def test_a_size_under_two_pixels(self):
         # The Editor sets a side under 2 pixels back to its type's default
         # as it opens the project, which the build refuses.
-        with self.assertRaisesRegex(NxwrightError, "b0 would be 1 by 40; the Nextion Editor says "
-                                                   "\"Width can not be less than 2\" as it opens "
-                                                   "the project, and sets the width back to 100, "
-                                                   "its type's default; make it at least 2 by 2"):
+        with self.assertRaisesRegex(NxwrightError, r"^`b0` would be 1 by 40\. It must be at least "
+                                                   r"2 by 2\.$"):
             self.place({"b0": {"x": 10, "y": 20, "w": 1, "h": 40}})
 
     def test_a_component_too_small_in_its_page_file(self):

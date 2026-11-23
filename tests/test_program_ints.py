@@ -1,6 +1,6 @@
 """The int declarations of program.nx that the Nextion Editor 1.68.2 refused
 as it compiled, on an NX4832T035, and those it compiled. The build refuses
-them on their line, with the Nextion Editor's words, in either language,
+them on their line, in either language,
 but where nxlang writes a form the Nextion Editor compiles: it moves a late
 int above program.nx's other code, and keeps the low 32 bits of a decimal
 starting value past 32 bits. The test runner and the simulator start each
@@ -32,17 +32,20 @@ class ProgramIntTest(FolderTestCase):
         self.write("program.nx", self.program.replace(
             EDITOR_PROGRAM_DECLARATION, "\n".join((EDITOR_PROGRAM_DECLARATION,) + lines), 1))
 
-    def assert_refused(self, file: str, line: int, words: str):
+    def assert_refused(self, file: str, line: int, message: str):
         [finding] = self.findings()
         self.assertEqual((finding.file, finding.line, finding.severity), (file, line, ERROR))
-        self.assertIn('("%s")' % words, finding.message)
+        self.assertEqual(finding.message, message)
 
     def test_a_name_declared_twice(self):
-        for lines, line in ((("int a=1,a=2",), 4), (("int a=1", "int a=2"), 5),
-                            (("int sys1=4",), 4)):
+        # The line refused, the name, and the line of its first declaration.
+        for lines, line, name, first in ((("int a=1,a=2",), 4, "a", 4),
+                                         (("int a=1", "int a=2"), 5, "a", 4),
+                                         (("int sys1=4",), 4, "sys1", 3)):
             with self.subTest(lines=lines):
                 self.declare(*lines)
-                self.assert_refused("program.nx", line, "Repeated definition global variable name")
+                self.assert_refused("program.nx", line, "`%s`: int `%s` is already declared on "
+                                                        "line %d" % (lines[-1], name, first))
         # Letter case tells names apart, as the Nextion Editor compiled.
         self.declare("int a=1,A=2")
         self.assertEqual(self.findings(), [])
@@ -51,33 +54,35 @@ class ProgramIntTest(FolderTestCase):
         for colour in EDITOR_COLOURS:
             with self.subTest(colour=colour):
                 self.declare("int %s=1" % colour)
-                self.assert_refused("program.nx", 4, "Illegal name")
+                self.assert_refused("program.nx", 4, "`int %s=1`: `%s` already exists as a "
+                                    "constant, it cannot be redefined" % (colour, colour))
         self.declare("int Red=1")
         self.assertEqual(self.findings(), [])
 
     def test_a_name_past_32_characters(self):
         self.declare("int %s=1" % ("a" * 33))
-        self.assert_refused("program.nx", 4, "Illegal global variable name length")
+        self.assert_refused("program.nx", 4, "`int %s=1`: the name `%s` has 33 characters, and "
+                            "the limit for an int is 32" % ("a" * 33, "a" * 33))
         self.declare("int %s=1" % ("a" * 32))
         self.assertEqual(self.findings(), [])
 
     def test_an_int_in_an_event(self):
         self.write("pages/page0.nx", "on page0.load:\n  int i=5\n")
-        self.assert_refused("pages/page0.nx", 2,
-                            "Global variable definitions must precede all code in the program.c")
+        self.assert_refused("pages/page0.nx", 2, "`int i=5`: `int` declares a global variable, "
+                                                 "and can only be used in program.nx")
 
     def test_an_int_in_a_macro(self):
         self.write("macros.nx", "macro m0:\n  int x=3\n  sys0=1\n")
         self.write("program.nx", self.text("program.nx").replace("page 0", "call m0\npage 0"))
-        self.assert_refused("macros.nx", 2,
-                            "Global variable definitions must precede all code in the program")
+        self.assert_refused("macros.nx", 2, "`int x=3`: `int` declares a global variable, and "
+                                            "can only be used in program.nx")
 
     def test_a_decimal_starting_value_past_32_bits(self):
         for value in ("2147483648", "-2147483649", "4294967295"):
             with self.subTest(value=value):
                 self.declare("int a=%s" % value)
-                self.assert_refused("program.nx", 4,
-                                    "Initial value for a global variable must be a constant")
+                self.assert_refused("program.nx", 4, "`int a=%s`: the initial value of `a` must "
+                                    "be between -2147483648 and 2147483647" % value)
         self.declare("int a=2147483647,b=-2147483648")
         self.assertEqual(self.findings(), [])
 
@@ -91,7 +96,7 @@ class ProgramIntTest(FolderTestCase):
                 [finding] = self.findings()
                 self.assertEqual((finding.file, finding.line, finding.severity),
                                  ("program.nx", 5, ERROR))
-                self.assertIn("starting value", finding.message)
+                self.assertIn("initial value", finding.message)
                 with self.assertRaises(NxwrightError) as refusal:
                     Simulation(self.root)
                 self.assertEqual((refusal.exception.file, refusal.exception.line),
@@ -104,28 +109,24 @@ class ProgramIntTest(FolderTestCase):
 
     def test_the_message_for_a_starting_value_that_is_not_a_number(self):
         self.declare("int first=1", "int a=first")
-        self.assert_refused("program.nx", 5,
-                            "Initial value for a global variable must be a constant")
-        self.assertIn("int a=first: the starting value of a must be a whole number, written in "
-                      "decimal", self.findings()[0].message)
+        self.assert_refused("program.nx", 5, "`int a=first`: the initial value of `a` must be "
+                                             "a whole number, written in decimal")
 
     def test_a_sign_apart_from_its_number(self):
         for value in ("- 5", "+ 5"):
             with self.subTest(value=value):
                 self.declare("int a=%s" % value)
-                self.assert_refused("program.nx", 4,
-                                    "Initial value for a global variable must be a constant")
-                self.assertIn("int a=%s: the starting value of a has a space after its sign"
-                              % value, self.findings()[0].message)
+                self.assert_refused("program.nx", 4, "`int a=%s`: the initial value of `a` must "
+                                    "not have a space after its sign" % value)
 
     def test_a_malformed_int_line(self):
         # Text after a name, a number in place of a name, a comma with no
         # variable beside it, and `int` alone. The simulator stops at the
         # same line as the build.
         missing = "a variable is missing"
-        for line, said in (("int a b", '"a b" is not a variable'),
-                           ("int a b=5", '"a b=5" is not a variable'),
-                           ("int 5", '"5" is not a variable'),
+        for line, said in (("int a b", "`a b` is not a variable"),
+                           ("int a b=5", "`a b=5` is not a variable"),
+                           ("int 5", "`5` is not a variable"),
                            ("int a,", missing), ("int ,a", missing), ("int a,,b", missing),
                            ("int", missing)):
             with self.subTest(line=line):
@@ -133,8 +134,8 @@ class ProgramIntTest(FolderTestCase):
                 [finding] = self.findings()
                 self.assertEqual((finding.file, finding.line, finding.severity),
                                  ("program.nx", 4, ERROR))
-                self.assertIn("%s: %s. An int line lists variables separated by commas, as in "
-                              "int a=1,b" % (line, said), finding.message)
+                self.assertEqual(finding.message, "`%s`: %s. An `int` line lists variables "
+                                 "separated by commas, as in `int a=1,b`." % (line, said))
                 with self.assertRaises(NxwrightError) as refusal:
                     Simulation(self.root)
                 self.assertEqual((refusal.exception.file, refusal.exception.line),
@@ -149,12 +150,20 @@ class ProgramIntTest(FolderTestCase):
 
     def test_an_int_after_other_code(self):
         self.write("program.nx", self.text("program.nx").replace("page 0", "int late=1\npage 0"))
-        self.assert_refused("program.nx", 8,
-                            "Global variable definitions must precede all code in the program")
+        self.assert_refused("program.nx", 8, "`int late=1`: an `int` line must come before any "
+                                             "other code in program.nx. Move it above line 4.")
 
 
 class NxlangProgramIntTest(ProgramIntTest):
     language = "nxlang"
+
+    def assert_local_suggested(self, file: str, line: int):
+        """Checks that the only finding is nxlang's error for the line
+        `int i=5` outside program.nx, which says how to write a local."""
+        [finding] = self.findings()
+        self.assertEqual((finding.file, finding.line, finding.severity), (file, line, ERROR))
+        self.assertEqual(finding.message, "`int i=5`: `int` declares a global in program.nx. "
+                                          "For a local, write `var`.")
 
     def run_load(self) -> dict:
         """Returns the values after page0's load event, which sets sys0, as
@@ -163,14 +172,13 @@ class NxlangProgramIntTest(ProgramIntTest):
         return SourceFolderRunner(self.root).run("page0", [("page0", "load")])
 
     def test_an_int_in_an_event(self):
-        # nxlang's message adds how to write a local.
-        super().test_an_int_in_an_event()
-        self.assertIn("For a local, write var.", self.findings()[0].message)
+        # nxlang has its own message, which says how to write a local.
+        self.write("pages/page0.nx", "on page0.load:\n  int i=5\n")
+        self.assert_local_suggested("pages/page0.nx", 2)
 
     def test_an_int_in_a_function(self):
         self.write("pages/page0.nx", "function f():\n  int i=5\n\non page0.load:\n  f()\n")
-        self.assert_refused("pages/page0.nx", 2,
-                            "Global variable definitions must precede all code in the program.c")
+        self.assert_local_suggested("pages/page0.nx", 2)
 
     def test_a_decimal_starting_value_past_32_bits(self):
         # nxlang keeps its low 32 bits, as C does. The test runner and the
@@ -210,15 +218,15 @@ class NxlangProgramIntTest(ProgramIntTest):
     def test_the_message_for_a_starting_value_that_is_not_a_number(self):
         # nxlang has its own messages, because it also accepts a constant as a
         # starting value.
-        for value, words in (("first", "first is not a constant"),
-                             ("LIMT", "LIMT is not a constant"),
-                             ("1+2", "the starting value of a must be a whole number or a "
+        for value, words in (("first", "`first` is not a constant"),
+                             ("LIMT", "`LIMT` is not a constant"),
+                             ("1+2", "the initial value of `a` must be a whole number or a "
                                      "constant")):
             with self.subTest(value=value):
                 self.declare("int first=1", "int a=%s" % value)
                 [finding] = self.findings()
                 self.assertEqual((finding.file, finding.line), ("program.nx", 5))
-                self.assertIn("int a=%s: %s" % (value, words), finding.message)
+                self.assertIn("`int a=%s`: %s" % (value, words), finding.message)
 
     def test_a_sign_apart_from_its_number(self):
         # nxlang writes the number without the space, so the Nextion Editor
@@ -238,7 +246,7 @@ class NxlangProgramIntTest(ProgramIntTest):
         self.declare('const UNIT = "mm"', "int count=UNIT")
         [finding] = self.findings()
         self.assertEqual((finding.file, finding.line, finding.severity), ("program.nx", 5, ERROR))
-        self.assertIn("the constant UNIT is a text. An int's starting value must be a number",
+        self.assertIn("the constant `UNIT` is text. An int's initial value must be a number",
                       finding.message)
         for start in (self.run_load, lambda: Simulation(self.root)):
             with self.assertRaises(NxwrightError) as refusal:
@@ -259,7 +267,8 @@ class NxlangProgramIntTest(ProgramIntTest):
         globals_ = Simulation(self.root).globals
         self.assertEqual((globals_["late"], globals_["inner"]), (1, 2))
         self.write("program.nx", self.text("program.nx").replace("int inner=2", "int RED=2"))
-        self.assert_refused("program.nx", 10, "Illegal name")
+        self.assert_refused("program.nx", 10, "`int RED=2`: `RED` already exists as a constant, "
+                                              "it cannot be redefined")
 
 
 if __name__ == "__main__":

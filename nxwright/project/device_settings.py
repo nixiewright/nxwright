@@ -268,6 +268,5 @@ def encoding_code(name: str) -> int:
     if is_unknown_encoding(name):
         return int(_UNKNOWN_ENCODING.fullmatch(name)[1])
     if name not in _ENCODING_CODES:
-        raise NxwrightError("unknown character encoding %r; known: %s"
-                            % (name, ", ".join(_ENCODING_CODES)))
+        raise NxwrightError("unknown encoding `%s`" % name)
     return _ENCODING_CODES[name]

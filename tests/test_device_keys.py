@@ -45,7 +45,7 @@ class DeviceKeysTest(unittest.TestCase):
                                 ({"screen": "NX0000X000"}, "unknown screen model"),
                                 ({"rotation": 45}, "rotation must be"),
                                 ({"rotation": True}, "rotation must be"),
-                                ({"encoding": "latin-9"}, "unknown character encoding"),
+                                ({"encoding": "latin-9"}, "unknown encoding `latin-9`"),
                                 ({"one_time_update": 1}, "one_time_update must be true or false"),
                                 ({"memory_file_storage_size": -1}, "must be a number of bytes"),
                                 ({"password_hash": "2C8B519C"}, "password_hash must be")):

@@ -37,7 +37,7 @@ class NxwrightError(ValueError):
       - `table`: for a page's .page.toml file, which of its tables, counted from 0
         for the [page] table.
     Given to the constructor, `file` and `line` start the message, as in
-    "pages/home.nx line 12: unknown name speed". `reason` is the message
+    "pages/home.nx line 12: unknown name `speed`". `reason` is the message
     without them.
 
     A refusal with one sure fix may carry it as `fix`, a dict of plain

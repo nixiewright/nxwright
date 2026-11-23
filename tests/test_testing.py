@@ -177,7 +177,7 @@ class SourceFolderRunnerTest(SourceFolderTestCase):
         # As the build names it, so that the file to fix is known.
         (self.source / "pages" / "first.nx").write_text(
             "on first.down:\n  sys0=sys0+\n", encoding="utf-8", newline="\n")
-        with self.assertRaisesRegex(NxwrightError, r"^pages/first\.nx line 2: sys0=sys0\+: "):
+        with self.assertRaisesRegex(NxwrightError, r"^pages/first\.nx line 2: `sys0=sys0\+`: "):
             SourceFolderRunner(self.source).run("first", [("first", "down")], {"sys0": 0})
 
     def test_a_refusal_of_nxlang_code_names_its_file(self):
@@ -193,7 +193,7 @@ class SourceFolderRunnerTest(SourceFolderTestCase):
                 (self.source / "pages" / "first.nx").write_text(code, encoding="utf-8",
                                                                  newline="\n")
                 with self.assertRaisesRegex(NxwrightError,
-                                            r"^pages/%s line %d: nowhere is neither"
+                                            r"^pages/%s line %d: `nowhere` is neither"
                                             % (re.escape(file), line)):
                     SourceFolderRunner(self.source).run("first", [("first", "down")])
 
@@ -226,7 +226,7 @@ class SourceFolderRunnerTest(SourceFolderTestCase):
     def test_events_from_text_refuses_a_value_the_editor_refuses(self):
         # Before any event runs, with its line, as the build refuses it.
         with self.assertRaisesRegex(NxwrightError,
-                                    r"^line 2: sys0==2: .*\(\"Invalid Variables\"\)$"):
+                                    r"^line 2: `sys0==2`: the value is not valid"):
             self.runner.events_from_text("on b0.down:\n  sys0 = = 2\n")
 
 

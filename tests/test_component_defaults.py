@@ -224,7 +224,7 @@ class SourceFolderDefaultsTest(unittest.TestCase):
 
     def test_folder_without_defaults_is_refused(self):
         (self.source / "defaults.toml").unlink()
-        with self.assertRaisesRegex(NxwrightError, "defaults.toml is missing"):
+        with self.assertRaisesRegex(NxwrightError, "defaults.toml does not exist"):
             export_dump(self.source, self.folder / "again")
 
 

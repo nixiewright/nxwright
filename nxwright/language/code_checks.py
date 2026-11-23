@@ -35,8 +35,7 @@ from nxwright.language.code_lines import (ARGUMENT, ASSIGNMENT, ELSE, LABEL, OWN
 from nxwright.project.attribute_descriptions import code_cannot_change, describe, type_has
 from nxwright.project.editor_language import (EDITOR_COLOURS, EDITOR_COMMANDS,
                                               EDITOR_PROGRAM_VARIABLES,
-                                              EDITOR_SYSTEM_VARIABLES, NO_COMMAND_WHEN_ALONE,
-                                              REFUSED_AS_A_NAME,
+                                              EDITOR_SYSTEM_VARIABLES, REFUSED_AS_A_NAME,
                                               SERIES_LACKED_COMMANDS, SERIES_LACKED_VARIABLES,
                                               UNDECLARED_PROGRAM_VARIABLE)
 from nxwright.project.editor_limits import (ATTRIBUTES_CODE_CANNOT_CHANGE_ON_SERIES,
@@ -76,9 +75,6 @@ LACKED_INSTRUCTION, LACKED_VARIABLE = "instruction", "variable"
 # The Editor's words for a first word that is no command of its own
 # (first_word_refusal).
 INVALID_COMMAND, INVALID_VARIABLES = "Invalid command", "Invalid Variables"
-INVALID_ARGUMENT_COUNT = "Invalid number of arguments"
-INVALID_COMPONENT_ID, INVALID_PAGE_ID = "Invalid Component ID", "Invalid Page ID"
-INVALID_VARIABLE_OPERATION = "Invalid variable operation"
 # As a command, one of these words can only be nxlang. `return` and `default:`
 # are left out because the Nextion Editor has a `return` command, and reads
 # `default:` as a label.
@@ -170,8 +166,6 @@ _DECIMAL_START = re.compile(r"([+-]?)([0-9]+)")
 # A decimal starting value with spaces or tabs between its sign and its
 # digits. The Nextion Editor rejects it.
 _SPACED_SIGN_START = re.compile(r"[+-]\s+[0-9]+")
-# The Nextion Editor's words for a starting value it rejects.
-_INITIAL_VALUE_WORDS = "Initial value for a global variable must be a constant"
 # A line the Editor reads as a label, whatever its characters.
 _LABEL_LIKE = re.compile(r"(\S+):")
 # What goes in each place of a data record's methods' arguments: a text or
@@ -304,10 +298,10 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
     `program_globals` each page's components of global scope. `codec`, the
     project's TextCodec, counts the line's bytes for `screen`'s series
     (_check_length). If `suggest_nxlang` is true and the line starts with a
-    word that only nxlang has, the error says how to switch."""
+    word that only nxlang has, the error says that the word is nxlang's."""
     if _TAB_AFTER_INT.match(code):
-        raise NxwrightError("a tab after int: the Nextion Editor takes int and a space only, and "
-                            "refuses this declaration (\"Invalid Variables\")", line=number,
+        # The Nextion Editor read `int`, the tab, and the name as one name.
+        raise NxwrightError("`int` must be followed by a space, not a tab", line=number,
                             fix={"kind": "tab-after-int", "text": "int\t", "new": "int "})
     _check_hex(code, number)
     if is_declaration(code):
@@ -315,14 +309,14 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
             _check_declared_names(code, program_pages, number)
             check_int_declaration(code, number)
         elif objects is not None:
-            _refuse_declaration_outside_program(code, objects, number)
+            _refuse_declaration_outside_program(code, number)
         return
     if code.endswith("{") and code != "{":
         code = code[:-1].rstrip()
         if not (_BLOCK_HEAD.match(code) or ELSE.match(code)):
             if suggest_nxlang:
                 _check_nxlang_word(code, number)
-            raise NxwrightError("\"{\" can only end an if, while, for, or else line",
+            raise NxwrightError("`{` can only end an `if`, `while`, `for`, or `else` line",
                                 line=number)
     code = compact(code)
     if codec is not None and screen is not None:
@@ -394,18 +388,17 @@ def _check_length(code: str, codec, longest: int, number: int):
     if head and head[1] != "for":
         _check_comparison_lengths(code[head.end():].removesuffix(")"), codec, longest, number)
         return
-    refusal = "and this series takes at most %d (\"The instructions are too long\")" % longest
     if not head:
-        _check_part_length(code, "this line", refusal, codec, longest, number)
+        _check_part_length(code, "this line", codec, longest, number)
         return
     # The parts end at the head's semicolons, which no text in a for's head
     # may hold (_check_value_and_head).
     parts = code[head.end():].removesuffix(")").split(";")
-    _check_part_length(parts[0], "this for's start", refusal, codec, longest, number)
+    _check_part_length(parts[0], "the start of this `for` header", codec, longest, number)
     if len(parts) > 1:
         _check_comparison_lengths(parts[1], codec, longest, number)
     if len(parts) > 2:
-        _check_part_length(parts[2], "this for's step", refusal, codec, longest, number)
+        _check_part_length(parts[2], "the step of this `for` header", codec, longest, number)
 
 
 def _check_comparison_lengths(condition: str, codec, longest: int, number: int):
@@ -429,9 +422,8 @@ def _check_comparison_lengths(condition: str, codec, longest: int, number: int):
                 comparison[:_SHOWN_COMPARISON] + "…"
             # Only a long quoted text can make a side this long, so the
             # message suggests a shorter one.
-            raise NxwrightError("the comparison %s is too long. The Nextion Editor turns it into "
-                                "a line of %d bytes in %s, and on this series it takes at most "
-                                "%d (\"The instructions are too long\"). Compare a shorter text."
+            raise NxwrightError("the comparison `%s` is too long: it takes %d bytes in %s, and "
+                                "the limit for this series is %d. Compare a shorter text."
                                 % (shown, size, codec.name, longest), line=number)
 
 
@@ -465,17 +457,17 @@ def _comparison_sides(comparison: str):
     return None
 
 
-def _check_part_length(part: str, what: str, refusal: str, codec, longest: int, number: int):
-    """Raises NxwrightError, saying `what` is too long and then `refusal`,
-    when `part` is longer than `longest` bytes in `codec`'s encoding
-    (_check_length)."""
+def _check_part_length(part: str, what: str, codec, longest: int, number: int):
+    """Raises NxwrightError, saying `what` is too long, when `part` is longer
+    than `longest` bytes in `codec`'s encoding (_check_length)."""
     try:
         size = len(codec.encode(part, ""))
     except NxwrightError:
         return
     if size > longest:
-        raise NxwrightError("%s is %d bytes in %s, not counting the spaces the Nextion Editor "
-                            "drops, %s" % (what, size, codec.name, refusal), line=number)
+        raise NxwrightError("%s is too long: %d bytes in %s, not counting spaces, and the limit "
+                            "for this series is %d" % (what, size, codec.name, longest),
+                            line=number)
 
 
 def _check_value_and_head(code: str, number: int):
@@ -491,25 +483,21 @@ def _check_value_and_head(code: str, number: int):
     head, otherwise = _BLOCK_HEAD.match(code), ELSE.match(code)
     if head or (otherwise and otherwise[2]):
         if not code.endswith(")"):
-            words = "SYNTAX ERROR:for" if head and head[1] == "for" \
-                else 'SYNTAX ERROR:must end with ")"'
-            raise NxwrightError("%s: the Nextion Editor wants the head to end with \")\" (\"%s\")"
-                                % (code, words), line=number)
+            raise NxwrightError("`%s`: this line must end with `)`" % code, line=number)
         # The Editor refused a text holding a semicolon in any part of a
         # for's head, and compiled one in a while's or an if's condition.
         if head and head[1] == "for" and any(";" in text for text in STRING.findall(code)):
-            raise NxwrightError("%s: the Nextion Editor refuses a text that contains a semicolon "
-                                "in a for's head (\"SYNTAX ERROR:for\")" % code, line=number)
+            raise NxwrightError("`%s`: text in a `for` header cannot contain a semicolon. "
+                                "Use a `while` loop." % code, line=number)
         return
     assignment = ASSIGNMENT.match(code)
     if assignment is None or holds_own_attribute(assignment[3]):
         return
     if not assignment[3]:
-        raise NxwrightError("%s: the Nextion Editor refuses an assignment without a value "
-                            "(\"%s\")" % (code, INVALID_COMMAND), line=number)
+        raise NxwrightError("`%s`: the assignment has no value" % code, line=number)
     if chain_parts(assignment[3]) is None:
-        raise NxwrightError("%s: the Nextion Editor refuses this value, which is not operands "
-                            "joined by operators (\"%s\")" % (code, INVALID_VARIABLES),
+        raise NxwrightError("`%s`: the value is not valid. A value is made of numbers, texts, "
+                            "and names joined by operators, without parentheses." % code,
                             line=number)
 
 
@@ -519,8 +507,9 @@ def check_own_forms(code: str, number: int):
     for part in STRING.split(code)[::2]:
         for form in OWN_FORM.finditer(part):
             if not OWN_ATTRIBUTE.fullmatch("'&%s&'" % re.sub(r"\s", "", form[1])):
-                raise NxwrightError("%s: the Nextion Editor reads no attribute in %s "
-                                    "(\"Invalid Variables\")" % (code, form[0]), line=number)
+                raise NxwrightError("`%s`: `%s` is not valid. The form `'&name&'` requires an "
+                                    "attribute's name, as in `'&val&'`." % (code, form[0]),
+                                    line=number)
 
 
 def check_without_owner(code: str, number: int):
@@ -529,9 +518,8 @@ def check_without_owner(code: str, number: int):
     program.s and in a macro ("Invalid Variables"). In a quoted text it
     stays as written, as the Editor's simulator sent it from both."""
     if holds_own_attribute(code):
-        raise NxwrightError("%s: the form '&name&' stands for an attribute of the object whose "
-                            "event holds the line, and this line has no such object (\"%s\")"
-                            % (code, INVALID_VARIABLES), line=number)
+        raise NxwrightError("`%s`: the form `'&name&'` can only be used in an object's event. "
+                            "Use the object's name, as in `n0.val`." % code, line=number)
 
 
 # Two names are close when difflib gives them at least this ratio. One of
@@ -551,7 +539,7 @@ def _name_meant_hint(name: str, known) -> tuple:
     same.
 
     The hint is the text that ends the error, such as ". Did you mean
-    title?". The fix, {"kind": "name-meant", "text": name, "new": the name
+    `title`?". The fix, {"kind": "name-meant", "text": name, "new": the name
     meant}, writes the name meant in place of `name`. It is a guess, so a
     code editor offers it and does not apply it without asking
     (quick_fixes.py)."""
@@ -570,7 +558,7 @@ def _name_meant_hint(name: str, known) -> tuple:
         meant = in_small_letters[close[0]] if close else None
     if meant is None:
         return "", None
-    return ". Did you mean %s?" % meant, {"kind": "name-meant", "text": name, "new": meant}
+    return ". Did you mean `%s`?" % meant, {"kind": "name-meant", "text": name, "new": meant}
 
 
 def _check_references(code: str, objects: ObjectNames, number: int):
@@ -592,14 +580,14 @@ def _check_references(code: str, objects: ObjectNames, number: int):
             if first not in objects.pages:
                 if first not in objects.own:
                     hint, fix = _name_meant_hint(first, set(objects.own) | set(objects.pages))
-                    raise NxwrightError("%s is neither a component of this page nor a page%s"
+                    raise NxwrightError("`%s` is neither a page nor a component of this page%s"
                                         % (first, hint), line=number, fix=fix)
                 continue
             known = objects.pages[first]
             if known is None:
                 continue
             if third and second not in known:
-                raise NxwrightError("page %s has no component %s"
+                raise NxwrightError("page `%s` has no component `%s`"
                                     % (first, second), line=number)
             # `first` is this page, or one of its components that has the same
             # name as another page, such as a radio named `second` in `second.val`.
@@ -609,16 +597,13 @@ def _check_references(code: str, objects: ObjectNames, number: int):
             # check for another page's attributes skips it.
             array = part.startswith("[", match.end())
             if not third and not array and second not in known:
-                raise NxwrightError("%s.%s: only page %s's own code can use the page's "
-                                    "attributes. The Nextion Editor refuses this line (\"%s\")"
-                                    % (first, second, first, INVALID_VARIABLES), line=number)
+                raise NxwrightError("`%s.%s`: the attributes of a page can only be used in "
+                                    "that page" % (first, second), line=number)
             reachable = (objects.reachable or {}).get(first)
             if third and reachable is not None and second not in reachable:
-                raise NxwrightError("%s.%s: %s is of local scope, so another page's code cannot "
-                                    "use it. The Nextion Editor refuses this line (\"%s\"). Give "
-                                    "%s global scope (vscope = 1)."
-                                    % (first, second, second, INVALID_VARIABLES, second),
-                                    line=number)
+                raise NxwrightError("`%s.%s`: `%s` has local scope, so it cannot be used in "
+                                    "another page. Give `%s` global scope (`vscope = 1`)."
+                                    % (first, second, second, second), line=number)
 
 
 def _check_macro_references(code: str, objects: ObjectNames, number: int):
@@ -634,22 +619,24 @@ def _check_macro_references(code: str, objects: ObjectNames, number: int):
     own attribute, `page0.x`, is left to the Editor, as no probe tried it."""
     command = _NAME_IN_COMMAND.match(code)
     if command and _is_component_name(command[2], objects):
-        raise NxwrightError("%s %s: in a macro, a command takes a component's number, or a "
-                            "variable that contains it. The Nextion Editor refuses its name "
-                            "there" % (command[1], command[2]), line=number)
+        raise NxwrightError("`%s %s`: in a macro, `%s` must be called with a component's ID or "
+                            "a variable" % (command[1], command[2], command[1]), line=number)
     for part in STRING.split(code)[::2]:
         for first, second, third in _DOTTED.findall(part):
             if first not in objects.pages:
-                raise NxwrightError("%s: a macro names a component with its page's name, as "
-                                    "page.%s, and of global scope" % (first, first), line=number)
+                raise NxwrightError("`%s`: in a macro, a component must include its page, as in "
+                                    "`<page>.%s`, and it must have global scope"
+                                    % (first, first), line=number)
             known, reachable = objects.pages[first], objects.reachable.get(first)
             if not third or known is None:
                 continue
             if second not in known:
-                raise NxwrightError("page %s has no component %s" % (first, second), line=number)
+                raise NxwrightError("page `%s` has no component `%s`" % (first, second),
+                                    line=number)
             if reachable is not None and second not in reachable:
-                raise NxwrightError("%s.%s: a macro cannot reach a component of local scope"
-                                    % (first, second), line=number)
+                raise NxwrightError("`%s.%s`: `%s` has local scope, so it cannot be used by a "
+                                    "macro. Give `%s` global scope (`vscope = 1`)."
+                                    % (first, second, second, second), line=number)
 
 
 def _check_declared_names(code: str, pages: dict, number: int):
@@ -671,25 +658,24 @@ def _check_declared_names(code: str, pages: dict, number: int):
     line, so a new name would break that reader."""
     for name in declared_int_names(code):
         if len(name) > LONGEST_INT_NAME:
-            raise NxwrightError("%s: %s has %d characters, and the Nextion Editor takes at most "
-                                "%d in an int's name (\"Illegal global variable name length\")"
-                                % (code, name, len(name), LONGEST_INT_NAME), line=number)
+            raise NxwrightError("`%s`: the name `%s` has %d characters, and the limit for an int "
+                                "is %d" % (code, name, len(name), LONGEST_INT_NAME), line=number)
         if name in EDITOR_COMMANDS:
-            what, words = "a command of the Nextion Editor", "Conflict with instructions name"
+            what = "a command"
         elif name in EDITOR_SYSTEM_VARIABLES:
-            what, words = "a system variable", "Illegal name"
+            what = "a system variable"
         elif name in EDITOR_COLOURS:
-            what, words = "a colour", "Illegal name"
+            what = "a constant"
         elif name in pages:
-            what, words = "a page", "Conflict with page name"
+            what = "a page"
         else:
             owner = next((page for page, known in pages.items()
                           if known is not None and name in known), None)
             if owner is None:
                 continue
-            what, words = "a component of page %s" % owner, "Conflict with Component name"
-        raise NxwrightError("%s: %s is %s, and the Nextion Editor refuses that name for an "
-                            "int (\"%s\")" % (code, name, what, words), line=number)
+            what = "a component of page `%s`" % owner
+        raise NxwrightError("`%s`: `%s` already exists as %s, it cannot be redefined"
+                            % (code, name, what), line=number)
 
 
 def check_int_declaration(code: str, number: int):
@@ -714,9 +700,9 @@ def _check_declaration_form(code: str, number: int):
     the build rejects that line too."""
     part = malformed_int_part(code)
     if part is not None:
-        raise NxwrightError("%s: %s. An int line lists variables separated by commas, as in "
-                            "int a=1,b"
-                            % (code, '"%s" is not a variable' % part if part
+        raise NxwrightError("`%s`: %s. An `int` line lists variables separated by commas, as "
+                            "in `int a=1,b`."
+                            % (code, "`%s` is not a variable" % part if part
                                else "a variable is missing"), line=number)
 
 
@@ -729,41 +715,31 @@ def _check_starting_values(code: str, number: int):
     or without leading zeros. It rejected every other starting value tried:
     a number outside the range, a hexadecimal number, a sign followed by a
     space, another variable, arithmetic, a number with a fraction, a text,
-    and nothing after the "=". Its message was always the one in
-    _INITIAL_VALUE_WORDS. In the build, _check_hex reports a hexadecimal
-    number before this check runs."""
+    and nothing after the "=". Its message was always "Initial value for a
+    global variable must be a constant". In the build, _check_hex reports a
+    hexadecimal number before this check runs."""
     for name, value in declared_ints(code):
         if value is None:
             continue
         if _SPACED_SIGN_START.fullmatch(value):
-            raise NxwrightError("%s: the starting value of %s has a space after its sign. The "
-                                "Nextion Editor rejects it (\"%s\")"
-                                % (code, name, _INITIAL_VALUE_WORDS), line=number)
+            raise NxwrightError("`%s`: the initial value of `%s` must not have a space after "
+                                "its sign" % (code, name), line=number)
         decimal = _DECIMAL_START.fullmatch(value)
         if decimal is None:
-            raise NxwrightError("%s: the starting value of %s must be a whole number, written "
-                                "in decimal. The Nextion Editor rejects anything else (\"%s\")"
-                                % (code, name, _INITIAL_VALUE_WORDS), line=number)
+            raise NxwrightError("`%s`: the initial value of `%s` must be a whole number, "
+                                "written in decimal" % (code, name), line=number)
         value = int(decimal[1] + decimal[2])
         if value != int32(value):
-            raise NxwrightError("%s: %s starts at %d, which does not fit in 32 bits "
-                                "(-2147483648 to 2147483647). The Nextion Editor rejects it "
-                                "(\"%s\")" % (code, name, value, _INITIAL_VALUE_WORDS),
-                                line=number)
+            raise NxwrightError("`%s`: the initial value of `%s` must be between -2147483648 "
+                                "and 2147483647" % (code, name), line=number)
 
 
-def _refuse_declaration_outside_program(code: str, objects: ObjectNames, number: int):
-    """Raises NxwrightError for an int declaration in an event, or in a
-    macro when `objects` has no page. An int is a variable every page
-    shares, which the Nextion Editor takes in program.s alone. The Nextion
-    Editor's message differs between an event and a macro."""
-    where, words = (("a macro", "Global variable definitions must precede all code in the "
-                                "program") if objects.page is None else
-                    ("an event", "Global variable definitions must precede all code in the "
-                                 "program.c"))
-    raise NxwrightError("%s: an int is a variable every page shares, so declare it in "
-                        "program.nx. The Nextion Editor refuses an int in %s (\"%s\")"
-                        % (code, where, words), line=number)
+def _refuse_declaration_outside_program(code: str, number: int):
+    """Raises NxwrightError for an int declaration in an event or in a
+    macro. An int is a variable every page shares, which the Nextion Editor
+    takes in program.s alone."""
+    raise NxwrightError("`%s`: `int` declares a global variable, and can only be used in "
+                        "program.nx" % code, line=number)
 
 
 def check_program_declarations(lines: list):
@@ -779,15 +755,12 @@ def check_program_declarations(lines: list):
                 first_code = number
             continue
         if first_code is not None:
-            raise NxwrightError("%s: an int goes before program.nx's other code, so move it "
-                                "above line %d. The Nextion Editor refuses an int after other "
-                                "code (\"Global variable definitions must precede all code in "
-                                "the program\")" % (code, first_code), line=number)
+            raise NxwrightError("`%s`: an `int` line must come before any other code in "
+                                "program.nx. Move it above line %d." % (code, first_code),
+                                line=number)
         for name in declared_int_names(code):
             if name in declared:
-                raise NxwrightError("%s: %s is declared already, on line %d, and the Nextion "
-                                    "Editor refuses a name declared twice (\"Repeated "
-                                    "definition global variable name\")"
+                raise NxwrightError("`%s`: int `%s` is already declared on line %d"
                                     % (code, name, declared[name]), line=number)
             declared[name] = number
 
@@ -811,10 +784,8 @@ def _check_program_names(code: str, pages: dict, number: int):
     else:
         named = page in pages or _page_having(page, pages) is not None
     if named:
-        raise NxwrightError("%s: program.nx belongs to no page, so %s takes a component's "
-                            "number, or a variable that contains it. The Nextion Editor "
-                            "refuses a page's or a component's name there (\"Invalid "
-                            "Component ID\")" % (code, command[1]), line=number)
+        raise NxwrightError("`%s`: in program.nx, `%s` must be called with a component's ID or a "
+                            "variable" % (code, command[1]), line=number)
 
 
 def _check_components(code: str, objects: ObjectNames, variables: frozenset,
@@ -854,26 +825,21 @@ def _check_components(code: str, objects: ObjectNames, variables: frozenset,
             continue
         component = arguments[place].strip()
         if in_event and _TXT.fullmatch(component):
-            raise NxwrightError("%s: %s is a text, and the Nextion Editor refuses it as %s's "
-                                "component (\"%s\")"
-                                % (code, component, word, INVALID_COMPONENT_ID), line=number)
+            raise NxwrightError("`%s`: `%s` must be called with a component, not text"
+                                % (code, word), line=number)
         if in_program and SCREEN_ARRAY.fullmatch(component):
-            raise NxwrightError("%s: program.nx belongs to no page, so %s does not reach a "
-                                "component in program.nx. Give the component's number, or a "
-                                "variable that contains it (\"%s\")"
-                                % (code, component, INVALID_COMPONENT_ID), line=number)
+            raise NxwrightError("`%s`: `%s` cannot be used in program.nx. Use the component's ID "
+                                "or a variable." % (code, component), line=number)
         if (_NAME_ONLY.fullmatch(component) and known is not None and component not in known
                 and not (in_event and component in objects.own)):
-            what = ("%s is neither a component of this page nor a variable" % component
-                    if in_event else "program.nx belongs to no page, and %s is not a variable"
-                    % component)
+            what = ("`%s` is neither a variable nor a component of this page" % component
+                    if in_event else "in program.nx, `%s` must be called with a component's ID or "
+                    "a variable" % word)
             # The name meant can be a variable of program.nx or, in an event,
             # one of the page's components.
             hint, fix = _name_meant_hint(
                 component, (set(objects.own) if in_event else set()) | set(variables))
-            raise NxwrightError("%s: %s, so the Nextion Editor refuses it as %s's component "
-                                "(\"%s\")%s" % (code, what, word, INVALID_COMPONENT_ID, hint),
-                                line=number, fix=fix)
+            raise NxwrightError("`%s`: %s%s" % (code, what, hint), line=number, fix=fix)
 
 
 def _check_number_arguments(code: str, number: int):
@@ -895,14 +861,11 @@ def _check_number_arguments(code: str, number: int):
         argument = arguments[place].strip()
         quoted = STRING.fullmatch(argument) is not None
         if _TXT.fullmatch(argument) or quoted:
-            raise NxwrightError("%s: %s is a text, where %s takes a number, and the Nextion "
-                                "Editor refuses it (\"%s\")"
-                                % (code, argument, word, INVALID_VARIABLE_OPERATION),
-                                line=number)
+            raise NxwrightError("`%s`: `%s` must be called with a number, not text"
+                                % (code, word), line=number)
         if not quoted and chain_parts(argument) is None:
-            raise NxwrightError("%s: the Nextion Editor does not read %s as a number, or as "
-                                "numbers joined by operators (\"%s\")"
-                                % (code, argument, INVALID_VARIABLES), line=number)
+            raise NxwrightError("`%s`: `%s` is not a valid value" % (code, argument),
+                                line=number)
 
 
 def _check_one_operand_arguments(code: str, number: int):
@@ -929,15 +892,13 @@ def _check_one_operand_arguments(code: str, number: int):
         if not joined and not _has_minus_before_a_name(argument):
             continue
         if place in READ_ONE_OPERAND_PLACES.get(word, ()):
-            advice = "Put the expression in a variable first, then give that variable."
+            advice = ". Put the expression in a variable first."
         elif place in _WRITTEN_ONE_OPERAND_PLACES.get(word, ()):
-            advice = "Give the variable that is to take the result."
+            advice = ". Use the variable that will take the result."
         else:
-            advice = "Give a single value."
-        raise NxwrightError("%s: %s takes a single value here, such as a number, a text, or an "
-                            "attribute, not the expression %s. %s The Nextion Editor refuses "
-                            "this line (\"%s\")"
-                            % (code, word, argument, advice, INVALID_VARIABLES), line=number)
+            advice = ""
+        raise NxwrightError("`%s`: `%s` must be called with a single value%s"
+                            % (code, word, advice), line=number)
 
 
 def _check_page_argument(code: str, pages, variables: frozenset, number: int):
@@ -956,9 +917,8 @@ def _check_page_argument(code: str, pages, variables: frozenset, number: int):
         return
     argument = code[len("page"):].strip()
     if STRING.fullmatch(argument):
-        raise NxwrightError("%s: page takes a page's name without quotes, or its number, and "
-                            "the Nextion Editor refuses a text (\"%s\")"
-                            % (code, INVALID_PAGE_ID), line=number)
+        raise NxwrightError("`%s`: `page` must be called with a page's name without quotes, or "
+                            "its ID" % code, line=number)
     if pages is None or variables is None:
         return
     known = (variables | EDITOR_SYSTEM_VARIABLES | frozenset(EDITOR_COLOURS)
@@ -966,7 +926,7 @@ def _check_page_argument(code: str, pages, variables: frozenset, number: int):
     name = refused_page_name(argument, pages, known.__contains__)
     if name is not None:
         raise NxwrightError(page_name_refusal(code, name, pages, "an int variable, a system "
-                                              "variable, or a colour"), line=number)
+                                              "variable, or a constant"), line=number)
 
 
 def refused_page_name(argument: str, pages, is_value):
@@ -999,15 +959,21 @@ def page_name_refusal(code: str, name: str, pages, values: str) -> str:
     """Returns the error message for `name`, a name that `page` does not
     take in the line `code` (refused_page_name). `values` lists the kinds of
     name that give a value in `page`'s argument, such as "an int variable, a
-    system variable, or a colour"."""
+    system variable, or a constant". The Nextion Editor rejected such a line
+    ("Invalid Page ID")."""
     if name in pages:
-        words = "%s is a page's name, which must be the whole argument of page" % name
+        words = "`%s` is a page's name, which must be the whole argument of `page`" % name
     else:
         written = next((page for page in pages if page.lower() == name.lower()), None)
-        words = ("no page is named %s, though one is named %s" % (name, written) if written
-                 else "%s is not a page, %s" % (name, values))
-    return "%s: %s. The Nextion Editor refuses this line (\"%s\")" % (code, words,
-                                                                   INVALID_PAGE_ID)
+        if written:
+            words = "unknown page `%s`. Did you mean `%s`?" % (name, written)
+        elif code[len("page"):].strip() == name:
+            words = "`%s` is not a page, %s" % (name, values)
+        else:
+            # The name is part of an expression, where a page's name would
+            # not work either. The message therefore does not offer one.
+            words = "unknown name `%s`: not %s" % (name, values)
+    return "`%s`: %s" % (code, words)
 
 
 def _check_program_attributes(code: str, pages: dict, globals_: dict, number: int):
@@ -1016,80 +982,51 @@ def _check_program_attributes(code: str, pages: dict, globals_: dict, number: in
     page, so a component's attribute there needs its page's name, as
     `page0.n2.val`, and the component must be of global scope. Two kinds
     of line are refused:
-      - an attribute named without its page, as `n0.val`;
+      - an attribute named without its page, as `n0.val`, whether or not a
+        page has a component with that name;
       - an attribute of a component of local scope, even with its page's
         name, as `page0.n0.val`.
     `pages` contains each page's objects, by page name, as
     ObjectNames.pages does. `globals_` contains each page's components of
     global scope. A page's entry is None or missing when its components
-    are unknown. The Nextion Editor's words are in _program_refusal_words.
+    are unknown.
+
+    On the T series, the Nextion Editor said "Invalid Variables" for both
+    kinds in an assignment, as `sys0=n0.val`. Without the page's name, it
+    said "Invalid Page ID" for `page n0.val`, and "Invalid Component ID"
+    for `vis n0.val,0` and `tsw n0.val,1`.
 
     nxlang does not add the page's name itself. program.nx is compiled
     apart from the pages' components, and a name may belong to several
     pages."""
     for part in STRING.split(code)[::2]:
-        for first, second, third in _DOTTED.findall(part):
+        for match in _DOTTED.finditer(part):
+            first, second, third = match[1], match[2], match[3] or ""
             if first in pages:
                 known, reachable = pages[first], globals_.get(first)
                 if (third and known is not None and second in known and reachable is not None
                         and second not in reachable):
-                    raise NxwrightError("%s.%s.%s: %s is of local scope, and program.nx can use "
-                                        "only a component of global scope. The Nextion Editor "
-                                        "refuses this line%s"
-                                        % (first, second, third, second,
-                                           _program_refusal_words(code, local=True)),
-                                        line=number)
+                    raise NxwrightError("`%s.%s.%s`: `%s` has local scope, so it cannot be used "
+                                        "in program.nx. Give `%s` global scope (`vscope = 1`)."
+                                        % (first, second, third, second, second), line=number)
                 continue
-            page = _page_having(first, pages, globals_)
-            if page is None:
-                continue
-            words = _program_refusal_words(code, local=False)
-            reachable = globals_.get(page)
-            if reachable is not None and first not in reachable:
-                # Adding the page's name would not help, because no page
-                # has the component of global scope.
-                raise NxwrightError("%s.%s: %s is of local scope, and program.nx can use only a "
-                                    "component of global scope, with its page's name. The "
-                                    "Nextion Editor refuses this line%s"
-                                    % (first, second, first, words), line=number)
-            raise NxwrightError("%s.%s: in program.nx, a component needs its page's name, as "
-                                "in %s.%s.%s, because program.nx belongs to no page. The "
-                                "Nextion Editor refuses this line%s"
-                                % (first, second, page, first, second, words), line=number)
+            # A name before a dot that is not a page is taken for a component
+            # without its page. No page is searched for it: several pages
+            # may have a component with that name, or none. In
+            # `page1.b[1].val`, `b` is the array of a page's components, which
+            # picks its component when the code runs, so it is not checked.
+            if not third and not part.startswith("[", match.end()):
+                raise NxwrightError("`%s.%s`: in program.nx, a component must include its page, "
+                                    "as in `<page>.%s.%s`" % (first, second, first, second),
+                                    line=number)
 
 
-def _program_refusal_words(code: str, local: bool) -> str:
-    """Returns the Nextion Editor's words, as ' ("Invalid Variables")', for
-    refusing the line of program.nx `code` that uses a component's
-    attribute: of `local` scope with its page's name, or else without its
-    page's name. Returns "" for a line of a form the Nextion Editor was not
-    seen to refuse.
-
-    On the T series, the Nextion Editor said "Invalid Variables" for both
-    kinds in an assignment,
-    as `sys0=n0.val`. Without the page's name, it said "Invalid Page ID"
-    for `page n0.val`, and "Invalid Component ID" for `vis n0.val,0` and
-    `tsw n0.val,1`."""
-    if _ASSIGNMENT_LINE.fullmatch(code):
-        return ' ("Invalid Variables")'
-    if local:
-        return ""
-    if code.startswith("page "):
-        return ' ("Invalid Page ID")'
-    if re.match(r"(vis|tsw) ", code):
-        return ' ("Invalid Component ID")'
-    return ""
-
-
-def _page_having(name: str, pages: dict, globals_: dict = None):
-    """Returns the name of a page, in `pages`' order, that has a component
-    named `name`, or None. `pages` holds each page's objects, by page name,
-    None for a page whose objects are unknown. With `globals_`, each page's
-    components of global scope, a page where the component is of global
-    scope comes first, as program.nx reaches it there."""
-    having = [page for page, known in pages.items() if known is not None and name in known]
-    reached = [page for page in having if name in ((globals_ or {}).get(page) or ())]
-    return (reached or having or [None])[0]
+def _page_having(name: str, pages: dict):
+    """Returns the name of the first page, in `pages`' order, that has a
+    component named `name`, or None. `pages` holds each page's objects, by
+    page name, None for a page whose objects are unknown."""
+    return next((page for page, known in pages.items() if known is not None and name in known),
+                None)
 
 
 def _is_component_name(name: str, objects: ObjectNames) -> bool:
@@ -1111,7 +1048,7 @@ def _check_call(code: str, macros: frozenset, number: int):
     if command_word(code) == "call":
         name = code[len("call "):]
         if name not in macros:
-            raise NxwrightError("%s: the folder has no macro %s" % (code, name), line=number)
+            raise NxwrightError("`%s`: `%s` is not a valid macro" % (code, name), line=number)
 
 
 def _check_data_record_call(code: str, objects: ObjectNames, number: int):
@@ -1130,12 +1067,12 @@ def _check_data_record_call(code: str, objects: ObjectNames, number: int):
         raise NxwrightError(method_count_refusal(name, len(places)), line=number)
     for place, (argument, kind) in enumerate(zip(arguments, places), 1):
         if kind is str and not _ONE_OPERAND.fullmatch(argument):
-            raise NxwrightError("argument %d of %s is one text or number, as the Nextion Editor "
-                                "compiles it, not %s" % (place, name, argument), line=number)
+            raise NxwrightError("argument %d of `%s` must be a single value. Put the expression "
+                                "in a variable first." % (place, name), line=number)
         if kind is int and any(operand.startswith('"') or operand.endswith(".txt")
                                for operand in _ONE_OPERAND.findall(argument)):
-            raise NxwrightError("argument %d of %s is a number, not a text, as the Nextion Editor "
-                                "compiles it: %s" % (place, name, argument), line=number)
+            raise NxwrightError("argument %d of `%s` must be a number, not text" % (place, name),
+                                line=number)
 
 
 def _check_file_stream_call(code: str, objects: ObjectNames, number: int):
@@ -1163,13 +1100,8 @@ def _check_first_argument(code: str, number: int):
     first = ARGUMENT.match(code[len(word):].strip())
     if first is None or is_one_operand(first[0]):
         return
-    if _has_minus_before_a_name(first[0]):
-        raise NxwrightError("%s: the Nextion Editor takes only a single text or number as the "
-                            "first argument of %s, and it refuses a minus before a name there "
-                            "(\"%s\")" % (code, word, INVALID_VARIABLES), line=number)
-    raise NxwrightError("%s: the Nextion Editor takes only a single text or number as the "
-                        "first argument of %s, not arithmetic or joined texts" % (code, word),
-                        line=number)
+    raise NxwrightError("`%s`: the first argument of `%s` must be a single value. Put the "
+                        "expression in a variable first." % (code, word), line=number)
 
 
 def is_one_operand(text: str) -> bool:
@@ -1205,60 +1137,52 @@ def _check_xstr_text(code: str, number: int):
         return
     arguments = command_arguments(code[len("xstr"):].strip())
     if len(arguments) == COMMAND_PARAMETERS["xstr"] and not is_one_operand(arguments[-1]):
-        raise NxwrightError("%s: the text of xstr must be a single value: a text, a txt, a "
-                            "number, or a variable. The Nextion Editor refuses joined "
-                            "texts, arithmetic, and a minus before a name here (\"%s\")"
-                            % (code, INVALID_VARIABLES), line=number)
+        raise NxwrightError("`%s`: the text of `xstr` must be a single value. Put the "
+                            "expression in a variable first." % code, line=number)
 
 
 def _check_nxlang_word(code: str, number: int):
     """Raises NxwrightError for a line that starts with a word only nxlang
-    has. `nxwright language` stops on such a line, so the error says to take
-    it out before switching."""
+    has, in a folder in strict Nextion syntax."""
     word = first_word(code) or code.split(" ", 1)[0].split("(", 1)[0]
     if word in _NXLANG_WORDS:
-        raise NxwrightError("%s: %s is part of nxlang, but this folder uses strict Nextion "
-                            "syntax. To switch to nxlang, take out the lines that already use it, "
-                            "run nxwright language <source-folder> nxlang, then put them back"
-                            % (code, word), line=number)
+        raise NxwrightError("`%s`: `%s` can only be used with nxlang but this project uses strict "
+                            "Nextion syntax" % (code, word), line=number)
 
 
 def _check_first_word(code: str, number: int, suggest_nxlang: bool = False):
     """Raises NxwrightError for a line whose first word is not a Nextion Editor
-    command. The error quotes the words the Nextion Editor refuses the line
-    with as it compiles (first_word_refusal). If `suggest_nxlang` is true and
-    only nxlang has that word, the error says how to switch instead."""
+    command (first_word_refusal). If the word is a command written with
+    capital letters, the error suggests it in small letters. If
+    `suggest_nxlang` is true and only nxlang has that word, the error says
+    that the word is nxlang's instead."""
     refusal = first_word_refusal(code)
     if refusal is None:
         return
     if suggest_nxlang:
         _check_nxlang_word(code, number)
     word = first_word(code)
-    fix = None
+    hint, fix = "", None
     if refusal == INVALID_VARIABLES and word.lower() in EDITOR_COMMANDS:
-        problem = ("the Nextion Editor's commands are written in small letters, as %s, and it "
-                   "refuses %s"
-                   % (word.lower(), word))
+        hint = ". Did you mean `%s`?" % word.lower()
         fix = {"kind": "small-letters", "text": word, "new": word.lower()}
-    else:
-        problem = "the Nextion Editor knows no command %s, and refuses it" % word
-    raise NxwrightError("%s: %s (\"%s\")" % (code, problem, refusal), line=number, fix=fix)
+    raise NxwrightError("`%s`: unknown command `%s`%s" % (code, word, hint), line=number,
+                        fix=fix)
 
 
 def _check_parameter_count(code: str, number: int):
     """Raises NxwrightError for a command of COMMAND_PARAMETERS given another
     number of arguments than it takes, counted as command_arguments counts
-    them. A command written alone is given none: the Editor refused each
-    that takes some, but add for no command (NO_COMMAND_WHEN_ALONE). A
-    command the table lacks takes any number."""
+    them. A command written alone is given none. A command the table lacks
+    takes any number."""
     word = first_word(code)
     wanted = COMMAND_PARAMETERS.get(word)
-    if wanted is None or len(command_arguments(code[len(word):].strip())) == wanted:
+    if wanted is None:
         return
-    words = INVALID_COMMAND if code == word and word in NO_COMMAND_WHEN_ALONE \
-        else INVALID_ARGUMENT_COUNT
-    raise NxwrightError("%s: %s takes %d, and the Nextion Editor refuses to compile another "
-                        "number (\"%s\")" % (code, word, wanted, words), line=number)
+    given = len(command_arguments(code[len(word):].strip()))
+    if given != wanted:
+        raise NxwrightError("`%s`: `%s` takes %s, not %d"
+                            % (code, word, _arguments_in_words(wanted), given), line=number)
 
 
 def series_lacks(code: str, series: str):
@@ -1284,10 +1208,8 @@ def _check_series(code: str, screen: ScreenModel, number: int):
     the Editor refuses to compile (series_lacks)."""
     lacked = series_lacks(code, screen.series)
     if lacked is not None:
-        kind, word = lacked
-        raise NxwrightError("%s: the %s lacks %s, and the Nextion Editor refuses to compile it "
-                            "for its series (\"Do not support such %s for this series device\")"
-                            % (code, screen.name, word, kind), line=number)
+        raise NxwrightError("`%s`: `%s` is not available on the %s"
+                            % (code, lacked[1], screen.name), line=number)
 
 
 def _check_escapes(code: str, number: int):
@@ -1299,10 +1221,8 @@ def _check_escapes(code: str, number: int):
     for text in STRING.findall(code):
         for escape in re.finditer(r"\\(.)", text[1:-1]):
             if escape[1] not in SCREEN_ESCAPES:
-                raise NxwrightError("%s: the screen does not read the escape \\%s, and the "
-                                    "Nextion Editor refuses to compile it (\"Improper use of "
-                                    "escape characters\")"
-                                    % (code, escape[1]), line=number)
+                raise NxwrightError("`%s`: `\\%s` is not a valid escape" % (code, escape[1]),
+                                    line=number)
 
 
 def _check_condition_texts(code: str, number: int):
@@ -1313,8 +1233,8 @@ def _check_condition_texts(code: str, number: int):
     in a for's first and last parts, and outside a head."""
     for text in _condition_texts(code):
         if ends_in_escaped_backslash(text):
-            raise NxwrightError("%s: the Nextion Editor refuses a text that ends in an escaped "
-                                "backslash in a condition (\"SYNTAX ERROR\")" % code,
+            raise NxwrightError("`%s`: in a condition, text cannot end with an escaped "
+                                "backslash. Put the text in a variable first." % code,
                                 line=number)
 
 
@@ -1345,12 +1265,9 @@ def _check_texts_in_pairs(code: str, codec, number: int):
         stored = _stored_text(text, codec)
         if stored is not None and _reading_in_pairs(stored)[-1] != len(stored) - 1:
             katakana = _katakana_read_with_the_next_byte(text, codec)
-            raise NxwrightError("%s: the Nextion Editor reads this text in pairs of bytes. The "
-                                "half-width katakana %s is a single byte, so it gets paired "
-                                "with the next byte, and the closing quote ends up inside the "
-                                "text (\"Invalid "
-                                "Variables\"). Put another character after the katakana, or "
-                                "write the text another way." % (code, katakana), line=number)
+            raise NxwrightError("`%s`: the half-width katakana `%s` is read together with the "
+                                "byte after it, so the closing quote is not found. Put another "
+                                "character after `%s`." % (code, katakana, katakana), line=number)
 
 
 def _reading_in_pairs(stored: bytes) -> list:
@@ -1400,10 +1317,9 @@ def _check_texts_byte_by_byte(code: str, codec, number: int):
         escaping = next((character for character in reversed(text[1:-1])
                          if len(_stored_text(character, codec) or b"") > 1
                          and _stored_text(character, codec)[-1] == _BACKSLASH_BYTE), text[-2])
-        raise NxwrightError("%s: %s ends in the byte 0x5C, which the Nextion Editor reads as a "
-                            "backslash before the closing quote (\"Invalid number of "
-                            "arguments\"). Put the text in a variable first, and use the "
-                            "variable here." % (code, escaping), line=number)
+        raise NxwrightError("`%s`: the last byte of `%s` is read as a backslash before the "
+                            "closing quote, so the text does not end. Put the text in a variable "
+                            "first." % (code, escaping), line=number)
 
 
 def misread_byte_by_byte(text: str, codec) -> bool:
@@ -1533,33 +1449,32 @@ def _check_assignment_kinds(code: str, variables, number: int):
     if wanted is None or terms is None:
         return
     kinds = [(joining, _value_kind(operand, variables)) for joining, operand in terms]
+    text_in_a_number = "`%s`: text cannot be put in a number" % code
     if operator == "=" and len(kinds) == 1:
         if kinds[0][1] not in (None, wanted):
-            raise NxwrightError("%s: the Nextion Editor refuses to compile a %s given to a %s "
-                                "(\"Assignment operation failed\")"
-                                % (code, kinds[0][1], wanted), line=number)
+            raise NxwrightError(text_in_a_number if wanted == _NUMBER
+                                else "`%s`: a number cannot be put in text" % code, line=number)
         return
     if operator != "=":
         kinds = [(None, wanted), (operator[:-1], kinds[0][1])] + kinds[1:]
-    mixed = ("%s: the Nextion Editor refuses to compile a text and a number joined so "
-             "(\"Invalid variable operation\")" % code)
     if wanted == _NUMBER:
         if any(kind == _TEXT for _, kind in kinds):
-            raise NxwrightError(mixed, line=number)
+            raise NxwrightError(text_in_a_number, line=number)
         return
     left = kinds[0][1]
     for joining, right in kinds[1:]:
         if joining == "+":
             if {left, right} == {_TEXT, _NUMBER}:
-                raise NxwrightError(mixed, line=number)
+                raise NxwrightError("`%s`: text and a number cannot be joined with `+`" % code,
+                                    line=number)
             left = _TEXT if _TEXT in (left, right) else None
         elif joining == "-":
             # A number removes characters; a text taken from a text was not
             # tried in the Editor, and is taken.
             left = left if right == _NUMBER else None
         elif _TEXT in (left, right):
-            raise NxwrightError("%s: the Nextion Editor refuses %s on a text (\"Invalid variable "
-                                "operation\")" % (code, joining), line=number)
+            raise NxwrightError("`%s`: the operator `%s` cannot be used on text"
+                                % (code, joining), line=number)
         else:
             left = None
 
@@ -1575,9 +1490,8 @@ def _check_absent_attributes(code: str, objects: ObjectNames, number: int):
     for page, name, attribute in _named_attributes(code, objects):
         why = ((objects.absent_attributes.get(page) or {}).get(name) or {}).get(attribute)
         if why is not None:
-            raise NxwrightError("%s: %s %s, so it has no %s, and the Nextion Editor refuses to "
-                                "compile it (\"Invalid Variables\")"
-                                % (code, name, why, attribute), line=number)
+            raise NxwrightError("`%s`: `%s.%s` cannot be used %s"
+                                % (code, name, attribute, why.format(name=name)), line=number)
 
 
 def _check_type_names(code: str, objects: ObjectNames, number: int):
@@ -1597,12 +1511,9 @@ def _check_type_names(code: str, objects: ObjectNames, number: int):
         if type_name == "page" or page == objects.page:
             who = name
         else:
-            who = "%s's %s" % (page, name)
-        # "an xfloat" too, said with a vowel ("ex-float").
-        article = "an" if type_name[0] in "aeioux" else "a"
-        raise NxwrightError("%s: %s is %s %s, which has no %s, and the Nextion Editor refuses to "
-                            "compile it (\"Invalid Variables\")"
-                            % (code, who, article, type_name, attribute), line=number)
+            who = "%s.%s" % (page, name)
+        raise NxwrightError("`%s`: %s `%s` has no attribute `%s`"
+                            % (code, type_name, who, attribute), line=number)
 
 
 def _named_attributes(code: str, objects: ObjectNames):
@@ -1624,8 +1535,13 @@ def method_count_refusal(name: str, count: int) -> str:
     """Returns the refusal of a call of a component's method `name`, as
     `d0.insert` or `fs0.read`, given other than the `count` arguments it
     takes."""
-    words = {0: "no arguments", 1: "1 argument"}.get(count, "%d arguments" % count)
-    return "%s takes %s, as the Nextion Editor compiles it" % (name, words)
+    return "`%s` takes %s" % (name, _arguments_in_words(count))
+
+
+def _arguments_in_words(count: int) -> str:
+    """Returns `count` arguments in words, for a message: "no arguments",
+    "1 argument", or "3 arguments"."""
+    return {0: "no arguments", 1: "1 argument"}.get(count, "%d arguments" % count)
 
 
 def _check_assigned_attribute(code: str, objects: ObjectNames, number: int):
@@ -1640,17 +1556,16 @@ def _check_assigned_attribute(code: str, objects: ObjectNames, number: int):
     assigned = _assigned_attribute(code, objects)
     if assigned is None:
         return
-    type_name, attribute, owner = assigned
+    type_name, attribute = assigned
     if not type_has(type_name, attribute):
         return
     described = describe(type_name, attribute)
     if described is not None and described.method:
-        raise NxwrightError("%s: %s is a method of %s, which code calls, and the Nextion Editor "
-                            "refuses to compile an assignment to it (\"Invalid Variables\")"
-                            % (code, attribute, owner), line=number)
+        raise NxwrightError("`%s`: `%s` is a method, it cannot be assigned" % (code, attribute),
+                            line=number)
     if code_cannot_change(type_name, attribute):
-        raise NxwrightError("%s: the Nextion Editor refuses to assign to %s of %s, which code "
-                            "cannot change" % (code, attribute, owner), line=number)
+        raise NxwrightError("`%s`: attribute `%s` cannot be changed in code"
+                            % (code, attribute), line=number)
 
 
 def _check_series_assignment(code: str, objects: ObjectNames, screen: ScreenModel, number: int):
@@ -1665,21 +1580,17 @@ def _check_series_assignment(code: str, objects: ObjectNames, screen: ScreenMode
     assigned = _assigned_attribute(code, objects)
     if assigned is None:
         return
-    type_name, attribute, owner = assigned
+    type_name, attribute = assigned
     if (code_cannot_change_on_series(type_name, attribute, screen.series)
             and type_has(type_name, attribute)):
-        raise NxwrightError("%s: on the %s, the Nextion Editor refuses to assign to %s of %s, "
-                            "which code cannot change on its series (\"Assignment operation "
-                            "failed\")"
-                            % (code, screen.name, attribute, owner), line=number)
+        raise NxwrightError("`%s`: on the %s, attribute `%s` cannot be changed in code"
+                            % (code, screen.name, attribute), line=number)
 
 
 def _assigned_attribute(code: str, objects: ObjectNames):
-    """Returns (type name, attribute, owner) for a line assigning to an
-    attribute of the page's own object or of another page's, or None for
-    another line and for an object it cannot tell the type of. The owner
-    names the object for a refusal, with its page, as a line of a file
-    several pages include may be refused for one alone."""
+    """Returns (type name, attribute) for a line assigning to an attribute
+    of the page's own object or of another page's, or None for another line
+    and for an object it cannot tell the type of."""
     assigned = _ASSIGNED_ATTRIBUTE.match(code)
     if assigned is None:
         return None
@@ -1693,9 +1604,7 @@ def _assigned_attribute(code: str, objects: ObjectNames):
     type_name = (objects.pages.get(page) or {}).get(name)
     if type_name is None:
         return None
-    owner = "the page %s" % name if type_name == "page" else "%s's %s %s" % (page, type_name,
-                                                                              name)
-    return type_name, attribute, owner
+    return type_name, attribute
 
 
 def _check_program_variables(code: str, variables: frozenset, number: int):
@@ -1737,18 +1646,17 @@ def _check_names_alone(code: str, objects: ObjectNames, variables: frozenset, nu
 
 def _name_alone_refusal(code: str, name: str, objects: ObjectNames, known: frozenset) -> str:
     """The words of _check_names_alone's refusal of `name`."""
-    words = "the Nextion Editor knows no %s: a name alone is an int of program.nx, a system " \
-            "variable, or a colour" % name
+    words = ("unknown name `%s`: not an int variable, a system variable, or a constant"
+             % name)
     if objects is not None and (name in objects.own or name in objects.pages):
         kind = "page" if name in objects.pages else "component"
-        words = ("%s names a %s, which the Nextion Editor refuses alone: name one of its "
-                 "attributes" % (name, kind))
+        words = "`%s` is a %s. Use one of its attributes." % (name, kind)
     else:
         written = next((other for other in sorted(known - _KEYWORDS)
                         if other.lower() == name.lower()), None)
         if written is not None:
-            words = "the Nextion Editor knows no %s, though it knows %s" % (name, written)
-    return "%s: %s (\"%s\")" % (code, words, INVALID_VARIABLES)
+            words = "unknown name `%s`. Did you mean `%s`?" % (name, written)
+    return "`%s`: %s" % (code, words)
 
 
 def _check_hex(code: str, number: int):
@@ -1761,26 +1669,26 @@ def _check_hex(code: str, number: int):
     for match in _HEX.finditer(bare):
         digits = match[1]
         if is_declaration(code):
-            raise NxwrightError("an int's starting value cannot be hex, as %s is"
-                                % match[0], line=number)
+            raise NxwrightError("`%s`: an int's initial value must be written in decimal, "
+                                "not in hex" % match[0], line=number)
         if not digits or len(digits) % 2:
             # A 0 before the digits keeps the value. A bare 0x holds none, and
             # one past 32 bits is refused padded too, so neither gets the fix.
             fix = None if not digits or int(digits, 16) > 0xFFFFFFFF else {
                 "kind": "hex-pairs", "text": match[0], "new": match[0][:2] + "0" + digits}
-            raise NxwrightError("%s: the Nextion Editor wants hex digits in pairs, a byte each"
-                                % match[0], line=number, fix=fix)
+            raise NxwrightError("`%s`: hex digits must be written in pairs" % match[0],
+                                line=number, fix=fix)
         before = bare[:match.start()].rstrip()
         if before.endswith("-") and minus_is_sign(before[:-1]):
             # The decimal number keeps the value, where 32 bits hold it.
             value = -int(digits, 16)
             fix = None if value < -0x80000000 else {
                 "kind": "hex-sign", "text": "-" + match[0], "new": str(value)}
-            raise NxwrightError("-%s: the Nextion Editor refuses a sign on a hex constant"
-                                % match[0], line=number, fix=fix)
+            raise NxwrightError("`-%s`: a hex number cannot have a sign" % match[0],
+                                line=number, fix=fix)
         if int(digits, 16) > 0xFFFFFFFF:
-            raise NxwrightError("%s: the Nextion Editor refuses a hex constant past 32 bits"
-                                % match[0], line=number)
+            raise NxwrightError("`%s`: a hex number must be at most `0xFFFFFFFF`" % match[0],
+                                line=number)
 
 
 def check_labels(lines: list):
@@ -1795,25 +1703,23 @@ def check_labels(lines: list):
             # The Editor compiled {a:, }a:, {:, and }: as labels, but
             # nxwright's readers of blocks take a line starting with a brace
             # for one of a block's.
-            raise NxwrightError("%s: a label cannot start with { or } in nxwright, which reads "
-                                "such a line as a block's brace, though the Nextion Editor "
-                                "takes it" % code[:-1], line=number)
+            raise NxwrightError("`%s`: a label cannot start with `{` or `}`" % code,
+                                line=number)
         if _LABEL_LIKE.fullmatch(code) and not LABEL.fullmatch(code):
-            raise NxwrightError("%s: the Nextion Editor refuses this label (\"the make is "
-                                "invalid\"): a label cannot start with a digit, or hold "
-                                "+ - * / %% = , . [ ] & ' \\ or \"" % code[:-1], line=number)
+            raise NxwrightError("`%s`: a label cannot start with a digit, or contain any of "
+                                "`+ - * / %% = , . [ ] & ' \\ \"`" % code, line=number)
     for number, code in lines:
         label = LABEL.fullmatch(code)
         if label and label[1] in labels:
-            raise NxwrightError("%s: the Nextion Editor refuses a label twice in one event"
-                                % label[1], line=number)
+            raise NxwrightError("label `%s` is already defined in this event" % label[1],
+                                line=number)
         if label:
             labels.add(label[1])
     for number, code in lines:
         label = goto_label(code)
         if label is not None and label not in labels:
-            raise NxwrightError("%s: the Nextion Editor finds no label %s in this event"
-                                % (code, label), line=number)
+            raise NxwrightError("`%s`: this event has no label `%s`" % (code, label),
+                                line=number)
 
 
 def first_word_refusal(code: str):

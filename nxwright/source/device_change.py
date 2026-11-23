@@ -114,7 +114,7 @@ def device_change_files(source_folder: Path, screen: str = None, rotation: int =
         # not know. It exists only so that an extracted project keeps its own
         # encoding. nxwright does not change a folder to an unknown encoding.
         if is_unknown_encoding(encoding):
-            raise NxwrightError("unknown character encoding %r" % encoding)
+            raise NxwrightError("unknown encoding `%s`" % encoding)
         encoding_code(encoding)
     source_folder = Path(source_folder)
     app = read_app(source_folder)

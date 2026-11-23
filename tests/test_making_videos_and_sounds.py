@@ -567,7 +567,7 @@ class SoundWarningTest(MediaCommandTestCase):
         add_sound(self.source, SOURCES / "short11k-stereo8.wav")
         (self.source / "sounds" / "short11k-stereo8.wav").unlink()
         self.assertEqual([(found.severity, found.message) for found in self.check()],
-                         [("error", "sounds/short11k-stereo8.wav is missing")])
+                         [("error", "sounds/short11k-stereo8.wav does not exist")])
 
     def test_nxwright_check_shows_it(self):
         add_sound(self.source, SOURCES / "short11k-stereo8.wav")

@@ -60,32 +60,36 @@ class AddPageTest(FolderTestCase):
         self.assertEqual(after, before)
 
     def test_a_name_the_folder_has_in_any_case_is_refused(self):
-        self.assertRefused("the folder has a page named second already", "Second")
+        self.assertRefused("page `second` already exists (page names are case insensitive)",
+                           "Second")
 
     def test_names_the_folder_or_the_editor_refuses_are_refused(self):
         self.assertRefused("is not a valid page name", "sub/page")
         self.assertRefused("is not a valid page name", "two words")
-        self.assertRefused("has 15 characters; the Nextion Editor keeps 14", "averylongpage15")
-        self.assertRefused("the Nextion Editor refuses this name", "dim")
+        self.assertRefused("the name `averylongpage15` has 15 characters, and the limit is 14",
+                           "averylongpage15")
+        self.assertRefused("`dim` is a reserved name", "dim")
         # The Nextion Editor refused a project with such a page as it opened it.
-        self.assertRefused('the Nextion Editor refuses a name that starts with a digit, saying '
-                           '"First character of a Name can not be number": 2page', "2page")
+        self.assertRefused("`2page`: a name cannot start with a digit", "2page")
 
     def test_a_folder_of_251_pages_is_refused(self):
         add_pages_up_to(self.root, 251)
-        self.assertRefused('the folder has 251 pages, the most the Nextion Editor compiles '
-                           '("Too many pages"). Remove a page first.', None)
+        self.assertRefused("the project already has 251 pages, which is the limit. Remove a page "
+                           "first.", None)
 
     def test_a_file_already_there_is_refused(self):
         self.write("pages/settings.nx", "")
-        self.assertRefused("is already there, though app.toml does not list it", "settings")
+        self.assertRefused("settings.nx already exists. Choose another name, or remove the file.",
+                           "settings")
 
     def test_a_folder_without_screen_settings_is_refused(self):
         app = self.text("app.toml")
         self.write("app.toml", "\n".join(line for line in app.split("\n")
                                          if not line.startswith(("screen", "rotation",
                                                                  "encoding"))))
-        self.assertRefused("app.toml gives no screen settings", "settings")
+        self.assertRefused("app.toml has no screen settings, so the size of the new page is "
+                           "unknown. Add `screen`, `rotation`, and `encoding` to app.toml.",
+                           "settings")
 
 
 class NewPageCommandTest(FolderTestCase):
@@ -117,7 +121,7 @@ class AddPageRequestTest(FolderTestCase):
         self.assertEqual(self.request()["result"]["page"], "page1")
 
     def test_a_refusal_is_the_requests_error(self):
-        self.assertIn("the folder has a page named second already",
+        self.assertIn("page `second` already exists",
                       self.request(name="second")["error"]["message"])
 
 

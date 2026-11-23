@@ -46,31 +46,35 @@ def check_series_components(page: PageBlock, screen: ScreenModel, where: str):
     costs = memory_table().series[screen.series]
     for index, page_object in enumerate(page.objects):
         type_name = TYPE_NAMES.get(int.from_bytes(page_object.attribute("type") or b"", "little"))
+        label = object_label(page_object, index)
         if type_name in costs.refused:
-            problem = ("the %s lacks the type %s, and the Nextion Editor refuses to compile it "
-                       "(\"Unsupported component was found for this series device\")"
-                       % (screen.name, type_name))
+            # The Nextion Editor refuses to compile such a component
+            # ("Unsupported component was found for this series device").
+            problem = ("%s is of type `%s`, which is not available on the %s"
+                       % (label, type_name, screen.name))
         else:
             problem = (_refused_choice(page_object, type_name,
-                                       costs.refused_values.get(type_name, {}), screen.name)
+                                       costs.refused_values.get(type_name, {}), label,
+                                       screen.name)
                        or _refused_choice(page_object, type_name,
                                           CHOICES_REFUSED_BY_SERIES.get(screen.series, {}),
-                                          screen.name)
+                                          label, screen.name)
                        or _outside_range(page_object, type_name,
                                          ranges_on_series(type_name or "", screen.series),
-                                         screen.name))
+                                         label, screen.name))
         if problem is not None:
-            error = NxwrightError("%s: %s: %s" % (where, object_label(page_object, index),
-                                                  problem))
+            error = NxwrightError("%s: %s" % (where, problem))
             error.table = index
             raise error
 
 
-def _refused_choice(page_object, type_name: str, refused: dict, model: str):
+def _refused_choice(page_object, type_name: str, refused: dict, label: str, model: str):
     """Returns why `page_object`, of the type `type_name`, holds a choice
     the series refuses, among `refused`, {attribute: (values refused)}; or
     None. Only an attribute with choices, as nxwright's descriptions of the
-    attributes list them, and only a value among them, is taken."""
+    attributes list them, and only a value among them, is taken. `label` is
+    the object as a message gives it (editor_limits.object_label), and
+    `model` the screen's model."""
     for attribute, values in refused.items():
         described = describe(type_name, attribute)
         stored = page_object.attribute(attribute)
@@ -78,17 +82,19 @@ def _refused_choice(page_object, type_name: str, refused: dict, model: str):
             continue
         value = int.from_bytes(stored, "little")
         if value in described.choices and value in values:
-            return ("its %s of %d is refused on the %s, as the Nextion Editor's compile refuses "
-                    "it (\"Out of range\")" % (attribute, value, model))
+            # The Nextion Editor's compile refuses such a value ("Out of range").
+            return ("attribute `%s` of %s cannot be %d on the %s"
+                    % (attribute, label, value, model))
     return None
 
 
-def _outside_range(page_object, type_name: str, ranges: dict, model: str):
+def _outside_range(page_object, type_name: str, ranges: dict, label: str, model: str):
     """Returns why `page_object`, of the type `type_name`, holds a value
     outside its range on the series, among `ranges`, {attribute: (lowest,
     highest)}; or None. An attribute the object lacks by its choices
     (editor_limits.PRESENT_WHILE) is not checked: a slider has a ch only
-    with a colour behind its track, and no probe tried another."""
+    with a colour behind its track, and no probe tried another. `label` and
+    `model` are as _refused_choice takes them."""
     if not ranges:
         return None
     lacked = object_lacked_attributes(page_object, type_name)
@@ -98,7 +104,7 @@ def _outside_range(page_object, type_name: str, ranges: dict, model: str):
             continue
         value = number_from_bytes(stored)
         if not lowest <= value <= highest:
-            return ("its %s of %d is refused on the %s, as the Nextion Editor's compile takes "
-                    "from %d to %d on that screen (\"Out of range\")"
-                    % (attribute, value, model, lowest, highest))
+            # The Nextion Editor's compile refuses such a value ("Out of range").
+            return ("attribute `%s` of %s must be between %d and %d on the %s"
+                    % (attribute, label, lowest, highest, model))
     return None

@@ -1493,8 +1493,8 @@ def _log_line(time: int, text: str) -> str:
 def _with_full_path(message: str, file: str, line, path: Path) -> str:
     """Returns an error's `message` with the file and line at its start
     rewritten in the form the Debug Console turns into a link. For example,
-    "pages/home.nx line 12: unknown name speed" becomes
-    "E:\\app\\pages\\home.nx:12: unknown name speed", where `path` is the
+    "pages/home.nx line 12: unknown name `speed`" becomes
+    "E:\\app\\pages\\home.nx:12: unknown name `speed`", where `path` is the
     file's full path. If the message gives no line after the file, only the
     file is rewritten. If `message` does not start with `file`, it is
     returned unchanged."""

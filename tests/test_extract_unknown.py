@@ -224,18 +224,17 @@ class ExtractUnknownTest(PatchedDemoTestCase):
         text = app.read_text(encoding="utf-8")
         app.write_text(text.replace("encoding = 238", 'encoding = "encoding-238"'),
                        encoding="utf-8", newline="\n")
-        with self.assertRaisesRegex(NxwrightError, "give an encoding nxwright does not know "
-                                                   "by its number, 238"):
+        with self.assertRaisesRegex(NxwrightError, "app.toml: unknown encoding `encoding-238`"):
             build(self.target("encoding"), built)
         app.write_text(text, encoding="utf-8", newline="\n")
         # A command that writes app.toml again keeps the number.
         add_page(self.target("encoding"), "second")
         self.assertIn("encoding = 238", app.read_text(encoding="utf-8"))
         build(self.target("encoding"), built)
-        with self.assertRaisesRegex(NxwrightError, "unknown character encoding 'encoding-37'"):
+        with self.assertRaisesRegex(NxwrightError, "unknown encoding `encoding-37`"):
             change_device(self.target("encoding"), encoding="encoding-37")
         settings = DeviceSettings(model_named("NX4832T035"), 0, "encoding-37")
-        with self.assertRaisesRegex(NxwrightError, "unknown character encoding 'encoding-37'"):
+        with self.assertRaisesRegex(NxwrightError, "unknown encoding `encoding-37`"):
             new_source_folder(self.folder / "new-encoding", settings, "nextion")
 
     def test_a_manifest_header_of_another_size_asks_first(self):

@@ -595,14 +595,13 @@ class HiddenAttributesTest(PlayingFolderTestCase):
         # The Nextion Editor's compile refused each: "Assignment operation
         # failed". It compiled a sound's dis.
         code = self.source / "pages" / "page0.nx"
-        for number, (line, what) in enumerate((("video0.fps=24", "fps of page0's video video0"),
-                                               ("wav0.fps=24", "fps of page0's audio wav0"),
-                                               ("wav0.qty=7", "qty of page0's audio wav0"))):
+        for number, (line, what) in enumerate((("video0.fps=24", "fps"),
+                                               ("wav0.fps=24", "fps"), ("wav0.qty=7", "qty"))):
             with self.subTest(line=line):
                 code.write_text(COUNTING.replace("sys0=sys0+1", "sys0=sys0+1\n  " + line),
                                 encoding="utf-8", newline="\n")
-                with self.assertRaisesRegex(NxwrightError, "the Nextion Editor refuses to "
-                                            "assign to %s, which code cannot change" % what):
+                with self.assertRaisesRegex(NxwrightError, "`%s`: attribute `%s` cannot be "
+                                            "changed in code" % (line, what)):
                     self.build("refused%d.HMI" % number)
         code.write_text(COUNTING.replace("sys0=sys0+1", "sys0=sys0+1\n  wav0.dis=50"),
                         encoding="utf-8", newline="\n")

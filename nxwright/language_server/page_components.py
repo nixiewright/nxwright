@@ -125,8 +125,7 @@ import tomli_w
 
 from nxwright import MissingFileError, NxwrightError
 from nxwright.project.editor_language import NAMES_THE_EDITOR_REFUSES
-from nxwright.project.editor_limits import (LEAST_SIDE, NAME_LIMIT, SERIES_NEW_COMPONENT_VALUES,
-                                           least_size_words)
+from nxwright.project.editor_limits import LEAST_SIDE, NAME_LIMIT, SERIES_NEW_COMPONENT_VALUES
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.source.definitions import dotted_names
 from nxwright.source.folder_index import line_tokens
@@ -653,13 +652,12 @@ def place_components(index, read, page: str, places: dict) -> list:
     "h"}}. Raises NxwrightError for a width or height under the Editor's
     least, which the build refuses too, and as setting each attribute would
     (page_edits.attribute_edits)."""
-    named = _components_named(index, page, list(places), "placed")
+    _components_named(index, page, list(places), "placed")
     edits = []
     for name, place in places.items():
         if place["w"] < LEAST_SIDE or place["h"] < LEAST_SIDE:
-            raise NxwrightError("%s would be %d by %d; %s"
-                                % (name, place["w"], place["h"],
-                                   least_size_words(named[name].type, place["w"], place["h"])))
+            raise NxwrightError("`%s` would be %d by %d. It must be at least %d by %d."
+                                % (name, place["w"], place["h"], LEAST_SIDE, LEAST_SIDE))
         edits += attribute_edits(index, read, page, name,
                                  {key: place[key] for key in ("x", "y", "w", "h")})
     return edits

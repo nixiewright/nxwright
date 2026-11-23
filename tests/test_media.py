@@ -209,33 +209,34 @@ class NamesTest(MediaFolderTestCase):
 
     def test_a_vid_naming_another_kind_is_refused(self):
         edit_text(self.source / "pages" / "page0.page.toml", 'vid = "blink"', 'vid = "chirp"')
-        with self.assertRaisesRegex(NxwrightError, "vid: no animation is named chirp"):
+        with self.assertRaisesRegex(NxwrightError, "vid: unknown animation `chirp`"):
             self.build()
 
     def test_a_vid_naming_nothing_is_refused(self):
         edit_text(self.source / "pages" / "page0.page.toml", 'vid = "chirp"', 'vid = "nosuch"')
-        with self.assertRaisesRegex(NxwrightError, "vid: no sound is named nosuch"):
+        with self.assertRaisesRegex(NxwrightError, "vid: unknown sound `nosuch`"):
             self.build()
 
     def test_a_name_listed_twice_is_refused(self):
         self.edit_app(sounds=["beep", "Beep"])
-        with self.assertRaisesRegex(NxwrightError, "sounds: beep and Beep are the same name"):
+        with self.assertRaisesRegex(NxwrightError, r"app.toml: sound `beep` already exists "
+                                                   r"\(resources are case insensitive\)"):
             self.build()
 
     def test_an_invalid_name_is_refused(self):
         self.edit_app(videos=["a clip"])
-        with self.assertRaisesRegex(NxwrightError, "videos: 'a clip' is not a valid name"):
+        with self.assertRaisesRegex(NxwrightError, "app.toml: `a clip` is not a valid video name"):
             self.build()
 
     def test_a_missing_file_is_refused_and_reported(self):
         (self.source / "animations" / "blink.screen.gmov").unlink()
-        with self.assertRaisesRegex(NxwrightError, "blink.screen.gmov is missing"):
+        with self.assertRaisesRegex(NxwrightError, "blink.screen.gmov does not exist"):
             self.build()
 
         findings = check_folder(folder_reader(self.source),
                                 lambda path: (self.source / path).exists()).findings()
         self.assertEqual([finding.message for finding in findings],
-                         ["animations/blink.screen.gmov is missing"])
+                         ["animations/blink.screen.gmov does not exist"])
 
 
 class DumpTest(MediaFolderTestCase):

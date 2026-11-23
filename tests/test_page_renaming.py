@@ -72,10 +72,12 @@ class PageRenamingTest(unittest.TestCase):
         for page, new_name, message in (
                 ("nowhere", "config", "no page named nowhere"),
                 ("settings", "settings", "named settings already"),
-                ("settings", "HOME", "a page named home already"),
+                ("settings", "HOME", r"page `home` already exists \(page names are case "
+                                     r"insensitive\)"),
                 ("settings", "two words", "not a valid page name"),
-                ("settings", "1st", "starts with a digit"),
-                ("settings", "a_name_too_long", "the Nextion Editor keeps 14")):
+                ("settings", "1st", "`1st`: a name cannot start with a digit"),
+                ("settings", "a_name_too_long", "the name `a_name_too_long` has 15 characters, "
+                                                "and the limit is 14")):
             with self.subTest(new_name=new_name):
                 with self.assertRaisesRegex(NxwrightError, message):
                     rename_page(self.source, page, new_name)

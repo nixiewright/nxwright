@@ -23,7 +23,7 @@ attribute whose part it did not measure, set away from the value it was
 measured at, make a component's memory unknown (Unmeasured), rather than
 guessed. page_memory and global_memory, which the memory probe compares
 with the compile, raise it. A value longer than the attribute bounding it,
-where the compile takes one (editor_limits.check_page_limits), costs what
+where the build allows one (editor_limits.check_page_limits), costs what
 its bound costs, as the compile counted it.
 
 project_memory then does what the compile does with the pages' memory: it

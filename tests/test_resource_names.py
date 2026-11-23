@@ -20,9 +20,14 @@ class NameRuleTest(unittest.TestCase):
 
     def test_refusals(self):
         cases = {
-            "not a valid name": [["a b"], ["../a"], ["a/"], ["a/con"], ["NUL"], ["com1/x"], [""]],
-            "are the same name": [["toast", "Toast"], ["a/b", "A/B"]],
-            "folder of another name": [["a", "a/b"], ["A", "a/b/c"], ["a/b", "a/b/c"]],
+            r"is not a valid picture name\. Use only letters": [["a b"], ["../a"], ["a/"], [""]],
+            # A reserved name anywhere in the path, as the file or as a folder.
+            "is not a valid picture name, because Windows reserves it": [["NUL"], ["a/con"],
+                                                                         ["com1/x"]],
+            r"already exists \(resources are case insensitive\)": [["toast", "Toast"],
+                                                                   ["a/b", "A/B"]],
+            "cannot be both a picture and a folder": [["a", "a/b"], ["A", "a/b/c"],
+                                                      ["a/b", "a/b/c"]],
         }
         for message, name_lists in cases.items():
             for names in name_lists:
@@ -38,7 +43,7 @@ class LookupTest(unittest.TestCase):
         self.assertEqual((names.id_of(PICTURE, "b"), names.id_of(FONT, "Impact16")), (1, 0))
         self.assertEqual((names.name_of(PICTURE, 0), names.name_of(PICTURE, 2),
                           names.name_of(PICTURE, 65535)), ("a", None, None))
-        with self.assertRaisesRegex(NxwrightError, "no font is named a"):
+        with self.assertRaisesRegex(NxwrightError, "unknown font `a`"):
             names.id_of(FONT, "a")
 
 

@@ -68,9 +68,10 @@ class RuleTest(unittest.TestCase):
 
     def test_a_first_word_that_is_no_command(self):
         # The Editor's commands are listed (editor_language.EDITOR_COMMANDS):
-        # any other first word is refused, with the Editor's words.
-        for line, words in (("somecommand a , b c", "Invalid command"),
-                            ("doevent", "Invalid command"), ("Cls BLACK", "Invalid Variables")):
+        # any other first word is refused.
+        for line, words in (("somecommand a , b c", "unknown command `somecommand`$"),
+                            ("doevent", "unknown command `doevent`$"),
+                            ("Cls BLACK", r"unknown command `Cls`\. Did you mean `cls`\?")):
             with self.subTest(line=line), self.assertRaisesRegex(NxwrightError, words):
                 run(line)
 
@@ -99,9 +100,10 @@ class RuleTest(unittest.TestCase):
             "pic_toast = @pic(mono-dark/toast)", "t0.font=@font( Impact16 )",
             'x = "@pic(a)" // @pic(zzz)', "int pic_a = @pic(a)"], start=1)), names),
             ["pic_toast=1", "t0.font=0", 'x="@pic(a)" // @pic(zzz)', "int pic_a = 0"])
-        with self.assertRaisesRegex(NxwrightError, "line 2: no picture is named zzz"):
+        with self.assertRaisesRegex(NxwrightError, "line 2: unknown picture `zzz`"):
             preprocess([(1, "x=1"), (2, "x=@pic(zzz)")], names)
-        with self.assertRaisesRegex(NxwrightError, "line 1: @font\\(a\\) needs the app's"):
+        with self.assertRaisesRegex(NxwrightError,
+                                    "line 1: `@font\\(a\\)` requires the argument `names`"):
             run("x=@font(a)")
 
     def test_hex_constants(self):
@@ -115,19 +117,18 @@ class RuleTest(unittest.TestCase):
                          ["n0.val=0x0123", "n1.val=0x0000000001", "n2.val=5-0x10",
                           't0.txt="-0x1"', "int dow=6"])
         for lines, message in ((("sys0=1", "n0.val=0x123"),
-                                "line 2: 0x123: the Nextion Editor wants hex digits in pairs"),
+                                "line 2: `0x123`: hex digits must be written in pairs"),
                                (("int dow=0x06",),
-                                "line 1: an int's starting value cannot be hex, as 0x06 is"),
+                                "line 1: `0x06`: an int's initial value must be written in decimal, not in "
+                                "hex"),
                                (("n0.val=0x0100000000",),
-                                "line 1: 0x0100000000: the Nextion Editor refuses a hex constant "
-                                "past 32 bits"),
+                                "line 1: `0x0100000000`: a hex number must be at most `0xFFFFFFFF`"),
                                (("n0.val = -0x10",),
-                                "line 1: -0x10: the Nextion Editor refuses a sign on a "
-                                "hex constant"),
-                               (("n0.val=5*-0x10",), "line 1: -0x10: the Nextion Editor "
-                                                     "refuses a sign"),
+                                "line 1: `-0x10`: a hex number cannot have a sign"),
+                               (("n0.val=5*-0x10",), "line 1: `-0x10`: a hex number cannot have a "
+                                                     "sign"),
                                (("if (n0.val == -0x10) {", "}"),
-                                "line 1: -0x10: the Nextion Editor refuses a sign")):
+                                "line 1: `-0x10`: a hex number cannot have a sign")):
             with self.subTest(lines=lines):
                 with self.assertRaisesRegex(NxwrightError, message):
                     run(*lines)
@@ -136,12 +137,12 @@ class RuleTest(unittest.TestCase):
         # An upper-case X, which the Editor compiled and read as a lower-case
         # one, and refused alike.
         self.assertEqual(run("n0.val = 0X0123"), ["n0.val=0X0123"])
-        for line, message in (("n0.val=0X123", "0X123: the Nextion Editor wants hex digits in "
-                                               "pairs"),
-                              ("n0.val=0X0100000000", "0X0100000000: the Nextion Editor refuses "
-                                                      "a hex constant past 32 bits"),
-                              ("n0.val=5*-0X10", "-0X10: the Nextion Editor refuses a sign"),
-                              ("int dow=0X06", "an int's starting value cannot be hex, as 0X06")):
+        for line, message in (("n0.val=0X123", "`0X123`: hex digits must be written in pairs"),
+                              ("n0.val=0X0100000000", "`0X0100000000`: a hex number must be at "
+                                                      "most `0xFFFFFFFF`"),
+                              ("n0.val=5*-0X10", "`-0X10`: a hex number cannot have a sign"),
+                              ("int dow=0X06", "`0X06`: an int's initial value must be written "
+                                               "in decimal, not in hex")):
             with self.subTest(line=line):
                 with self.assertRaisesRegex(NxwrightError, "line 1: " + message):
                     run(line)
@@ -156,15 +157,13 @@ class RuleTest(unittest.TestCase):
                          ["up:", "  sys0+=1", "  goto up  // again", "end: // done", "return",
                           "label_twenty_two_chars:", "goto label_twenty_two_chars"])
         for lines, message in ((("sys0=1", "goto end"),
-                                "line 2: goto end: the Nextion Editor finds no label end in "
-                                "this event"),
-                               (("up:", "goto Up"), "line 2: goto Up: the Nextion Editor finds no "
-                                                    "label Up"),
+                                "line 2: `goto end`: this event has no label `end`"),
+                               (("up:", "goto Up"), "line 2: `goto Up`: this event has no label "
+                                                    "`Up`"),
                                (("up:", "sys0=1", "up:"),
-                                "line 3: up: the Nextion Editor refuses a label twice in "
-                                "one event"),
+                                "line 3: label `up` is already defined in this event"),
                                (("if (sys0 == 1) {", "  up:", "}", "up:"),
-                                "line 4: up: the Nextion Editor refuses a label twice")):
+                                "line 4: label `up` is already defined in this event")):
             with self.subTest(lines=lines):
                 with self.assertRaisesRegex(NxwrightError, message):
                     run(*lines)
@@ -179,21 +178,22 @@ class RuleTest(unittest.TestCase):
         self.assertEqual(run(*lines), lines)
         for label in ("1abc", "a-b", "a+", "a%", "a=", "a,", "a.", "a[", "a&", "a'", "a\\"):
             with self.subTest(label=label):
-                with self.assertRaisesRegex(NxwrightError, "line 1: %s: the Nextion Editor "
-                                            "refuses this label" % re.escape(label)):
+                with self.assertRaisesRegex(NxwrightError, "line 1: `%s:`: a label cannot "
+                                            "start with a digit, or contain" % re.escape(label)):
                     run("%s:" % label, "goto %s" % label)
         # It compiled a label starting with a brace too, but nxwright reads a
         # line starting with one as a block's brace, so it refuses it.
         for label in ("{a", "}a", "{", "}"):
             with self.subTest(label=label):
-                with self.assertRaisesRegex(NxwrightError, "line 1: %s: a label cannot start "
-                                            "with \\{ or \\} in nxwright" % re.escape(label)):
+                with self.assertRaisesRegex(NxwrightError, "line 1: `%s:`: a label cannot "
+                                            "start with `\\{` or `\\}`" % re.escape(label)):
                     run("%s:" % label)
         # It refused a " in a label too, which nxwright reads as a text not
         # closed.
         for label in ('a"b', '"ab'):
             with self.subTest(label=label):
-                with self.assertRaisesRegex(NxwrightError, "line 1: a string is not closed"):
+                with self.assertRaisesRegex(NxwrightError,
+                                            "line 1: string is missing a terminating quote"):
                     run("%s:" % label, "goto %s" % label)
 
     def test_a_form_naming_no_attribute(self):
@@ -202,20 +202,21 @@ class RuleTest(unittest.TestCase):
         # every line's: '& val &' is '&val&', in an event of n0.
         for line in ("sys0='&1a&'", "sys0='&a-b&'"):
             with self.subTest(line=line):
-                with self.assertRaisesRegex(NxwrightError, "line 1: %s: the Nextion Editor "
-                                            "reads no attribute" % re.escape(line)):
+                with self.assertRaisesRegex(NxwrightError, "line 1: `%s`: `'&.*&'` is not "
+                                            "valid" % re.escape(line)):
                     run(line)
         self.assertEqual(preprocess([(1, "sys0='& v al &'+1")], owner=Owner("n0", 1)),
                          ["sys0='&val&'+1"])
 
     def test_a_form_with_spaces_where_no_event_holds_the_line(self):
         # Refused as '&val&' is there: the Editor drops the spaces first.
-        with self.assertRaisesRegex(NxwrightError, r"line 1: sys0='&val&'\+1: the form '&name&' "
-                                                   r"stands for an attribute"):
+        with self.assertRaisesRegex(NxwrightError, r"line 1: `sys0='&val&'\+1`: the form "
+                                                   r"`'&name&'` can only be used in an object's "
+                                                   r"event"):
             run("sys0='& v al &'+1")
 
     def test_refusals(self):
-        for lines, message in ((('x = "open',), "line 1: a string is not closed"),
+        for lines, message in ((('x = "open',), "line 1: string is missing a terminating quote"),
                                (("sys0 = 1", "x = 1 {"), "line 2: .* can only end")):
             with self.subTest(lines=lines):
                 with self.assertRaisesRegex(NxwrightError, message):

@@ -68,7 +68,7 @@ def macros_from_block(block: bytes) -> tuple:
             raise NxwrightError("the macros' block is cut short, in macro %s" % name)
         kept = [line for line in body if line.strip()]
         if len(kept) < len(body):
-            warnings.append(blank_lines_dropped("macro %s" % name, len(body) - len(kept)))
+            warnings.append(blank_lines_dropped("macro `%s`" % name, len(body) - len(kept)))
         check_macro_name(name)
         if name in (taken for taken, _ in macros):
             raise NxwrightError("the macros' block holds the macro %s twice" % name)

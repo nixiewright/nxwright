@@ -15,9 +15,6 @@ from nxwright.testing.simulation import SYSTEM_START, Simulation
 from tests.test_build_checks import add_component
 from tests.test_folder_check import FolderTestCase
 
-# The declaration the Editor's new project has, which the message names.
-DECLARATION = "int sys0=0,sys1=0,sys2=0"
-
 
 class UndeclaredProgramVariableTest(FolderTestCase):
     """In nxlang (FolderTestCase's language); the class below, in the
@@ -26,8 +23,7 @@ class UndeclaredProgramVariableTest(FolderTestCase):
     def assert_refused(self, file: str, line: int, name: str):
         [finding] = self.findings()
         self.assertEqual((finding.file, finding.line, finding.severity), (file, line, ERROR))
-        self.assertIn(name, finding.message)
-        self.assertIn(DECLARATION, finding.message)
+        self.assertEqual(finding.message, "unknown variable `%s`" % name)
 
     def test_a_page_naming_one_undeclared(self):
         self.write("program.nx", "page 0\n")
@@ -70,8 +66,8 @@ class UndeclaredProgramVariableEditorLanguageTest(UndeclaredProgramVariableTest)
         self.write("pages/page0.nx", "on page0.load:\n  count = 1\n")
         [finding] = self.findings()
         self.assertEqual((finding.file, finding.line, finding.severity), ("program.nx", 2, ERROR))
-        self.assertIn("a tab after int", finding.message)
-        with self.assertRaisesRegex(NxwrightError, "a tab after int"):
+        self.assertEqual(finding.message, "`int` must be followed by a space, not a tab")
+        with self.assertRaisesRegex(NxwrightError, "`int` must be followed by a space"):
             Simulation(self.root)
 
     def test_its_program_is_read_as_the_editor_reads_it(self):

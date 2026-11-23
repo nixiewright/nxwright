@@ -20,8 +20,6 @@ screen's arithmetic screen_arithmetic.py's."""
 from dataclasses import dataclass
 
 from nxwright import NxwrightError
-from nxwright.project.attribute_values import number_from_bytes
-from nxwright.project.component_defaults import nxwright_defaults
 from nxwright.project.editor_language import NAMES_THE_EDITOR_REFUSES
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.page_block import Attribute, PageBlock
@@ -40,7 +38,8 @@ NAME_LIMIT = 14
 LONGEST_LINES = {"T": 767, "K": 767, "F": 767, "P": 4095, "E": 4095}
 # The least width and height the Editor takes for a component: narrower or
 # lower, it says "Width can not be less than 2" as it opens the project, and
-# sets the side back to its type's default (least_size_words).
+# sets the side back to its type's default. It did so for every type with a
+# place, on an Intelligent screen.
 LEAST_SIDE = 2
 # The values the Editor gives a component it adds on a screen of each
 # series, by the series' letter, where they differ from nxwright's component
@@ -69,11 +68,10 @@ MOST_PAGES = 251
 class PageCap:
     """A cap of the Editor's compile on one page's components: at most
     `most` of the types `types` together, which the build's messages call
-    `words`, and the Editor's message past it starts with `editor_words`."""
+    `words`."""
     types: frozenset           # type numbers
     most: int
     words: str
-    editor_words: str
 
 
 # The Editor's caps on a page's components. Past one, its compile fails,
@@ -84,24 +82,15 @@ class PageCap:
 # timer events: 11 timers beside 2 of each compiled. Every other kind
 # compiled 20 to a page, where memory allowed.
 PAGE_CAPS = (
-    PageCap(frozenset({TYPES_BY_NAME["waveform"]}), 5, "waveforms", "Waveform components"),
+    PageCap(frozenset({TYPES_BY_NAME["waveform"]}), 5, "waveforms"),
     PageCap(frozenset({TYPES_BY_NAME["gmov"], TYPES_BY_NAME["video"]}), 16,
-            "animations and videos", "Gmov and video components"),
+            "animations and videos"),
     PageCap(frozenset({TYPES_BY_NAME["timer"], TYPES_BY_NAME["scrolling-text"]}), 12,
-            "timers and scrolling texts", "Timer events"),
+            "timers and scrolling texts"),
 )
 # The attributes named `X_m` that bound no `X`'s length (bounded_attributes),
 # by (type number, name).
 _NOT_BOUNDS = {(TYPES_BY_NAME["sliding-text"], "path_m")}
-# The bounds the Editor's compile takes a longer value past, up to the room
-# the screen sets aside for it, by (type number, name). That room is the
-# bound plus 1, rounded up to a multiple of 4, as the memory table counts it.
-# The compile took a data record's `format` or `dir` 1 byte shorter than its
-# room, and the screen showed all of it. It refused 1 byte more ("The length
-# exceeds the maximum value"). Code storing a longer one still keeps only
-# its first bytes. (Editor 1.68.2.)
-_BOUNDS_COMPILED_TO_THEIR_ROOM = {(TYPES_BY_NAME["data-record"], "format_m"),
-                                  (TYPES_BY_NAME["data-record"], "dir_m")}
 # The attributes a component has only under some values of one of its
 # choices, as its page file gives them: {type: {attribute: (the choice, the
 # values under which the attribute exists)}}. Under any other value the
@@ -161,13 +150,15 @@ PRESENT_WHILE = {
     # A number in `val` (`sta` 0), or a text in `txt` (1).
     "variable": {"val": ("sta", {0}), "txt": ("sta", {1}), "txt_maxl": ("sta", {1})},
 }
-# Why a component lacks an attribute, in words, where a choice's value says
-# more than "has its sta at 1": {(type, choice, value): words}.
+# When a component lacks an attribute, in words, where a choice's value
+# says more than "while `{name}.sta` is 1": {(type, choice, value): words}.
+# `{name}` stands for the component's name (lacked_attributes).
 _LACKED_WORDS = {
-    ("variable", "sta", 0): "holds a number",
-    ("variable", "sta", 1): "holds a text",
-    **{(kind, "from", 0): "plays an internal file (its from is 0)" for kind in ("video", "audio")},
-    **{(kind, "from", 1): "plays a file of an SD card (its from is 1)"
+    ("variable", "sta", 0): "while `{name}` contains a number",
+    ("variable", "sta", 1): "while `{name}` contains text",
+    **{(kind, "from", 0): "while `{name}` plays an internal file (its `from` is 0)"
+       for kind in ("video", "audio")},
+    **{(kind, "from", 1): "while `{name}` plays a file of an SD card (its `from` is 1)"
        for kind in ("video", "audio")},
 }
 # Where a type is EVERY_TYPE, the attributes of every type that has them.
@@ -189,8 +180,11 @@ SERIES_LACKED_ATTRIBUTES = {
 
 
 def lacked_attributes(type_name: str, value_of, screen: ScreenModel = None) -> dict:
-    """Returns {attribute: why, in words} of the attributes a component of
-    the type `type_name`, as page files name types ("video"), lacks: under
+    """Returns {attribute: when, in words} of the attributes a component of
+    the type `type_name`, as page files name types ("video"), lacks. The
+    words end the sentence "t0.pic cannot be used", such as "while
+    `{name}.sta` is 1" or "on the NX4832T035", with `{name}` where the
+    component's name goes. A component lacks an attribute under
     its choices (PRESENT_WHILE), `value_of(attribute)` giving the number one
     of its attributes holds, or None; and, given the folder's `screen`, on
     its series (SERIES_LACKED_ATTRIBUTES). The build's code checks, its
@@ -204,12 +198,12 @@ def lacked_attributes(type_name: str, value_of, screen: ScreenModel = None) -> d
         value = value_of(choice)
         if value is not None and value not in values:
             lacked[attribute] = _LACKED_WORDS.get((type_name, choice, value),
-                                                  "has its %s at %d" % (choice, value))
+                                                  "while `{name}.%s` is %d" % (choice, value))
     if screen is not None:
         by_type = SERIES_LACKED_ATTRIBUTES[screen.series]
         for attribute in by_type.get(EVERY_TYPE, frozenset()) | by_type.get(type_name,
                                                                              frozenset()):
-            lacked[attribute] = "is on an %s" % screen.name
+            lacked[attribute] = "on the %s" % screen.name
     return lacked
 
 
@@ -278,40 +272,11 @@ def screen_holds(type_name: str, attribute: str, series: str) -> bool:
                 or attribute in by_type.get(type_name, frozenset()))
 
 
-def least_size_words(type_name: str, width: int, height: int) -> str:
-    """Says what the Nextion Editor does with a component of the type
-    `type_name`, `width` by `height`, a side or both under LEAST_SIDE: as it
-    opens the project, it says so of each side, and sets it back to its
-    type's default, as it did for every type with a place, on an Intelligent
-    screen. The defaults are nxwright's own, which the Editor's matched; on
-    the other series, its new components' sizes are taken alike
-    (SERIES_NEW_COMPONENT_VALUES). A type nxwright does not know, or one
-    without a default size, is told without the number."""
-    type_defaults = nxwright_defaults().get(TYPES_BY_NAME.get(type_name))
-    defaults = dict(type_defaults.attributes) if type_defaults is not None else {}
-    short = [(word, defaults.get(key))
-             for word, key, side in (("Width", "w", width), ("Height", "h", height))
-             if side < LEAST_SIDE]
-    said = " and ".join('"%s can not be less than %d"' % (word, LEAST_SIDE) for word, _ in short)
-    if any(default is None for _, default in short):
-        back = "%s back to its type's default" % ("each" if len(short) == 2
-                                                  else "the " + short[0][0].lower())
-    elif len(short) == 2:
-        back = "them back to %d by %d, its type's default" % tuple(
-            number_from_bytes(value) for _, value in short)
-    else:
-        back = "the %s back to %d, its type's default" % (short[0][0].lower(),
-                                                            number_from_bytes(short[0][1]))
-    return ("the Nextion Editor says %s as it opens the project, and sets %s; make it at least "
-            "%d by %d" % (said, back, LEAST_SIDE, LEAST_SIDE))
-
-
 def check_page_limits(page: PageBlock, where: str):
     """Raises NxwrightError, starting with `where` (the file at fault), when a
     name of the page or of one of its components is longer than NAME_LIMIT or
     is one the Editor refuses (NAMES_THE_EDITOR_REFUSES), or a text is longer
-    than the Editor's compile takes for the attribute bounding it
-    (bounded_attributes, _most_compiled), both counting stored bytes; or
+    than its bound (bounded_attributes), both counting stored bytes; or
     when the page holds more components of some kinds than the Editor's
     compile takes (PAGE_CAPS). The error's `table` is the place in the page
     of the object at fault, from 0 for the page: past a cap, the first
@@ -357,11 +322,9 @@ def check_component_places(page: PageBlock, screen: ScreenModel, page_size: tupl
             continue
         x, y, w, h = (int.from_bytes(value, "little") for value in place)
         if x + w > width or y + h > height:
-            error = NxwrightError("%s: %s: it reaches past the screen, %d by %d at its rotation, "
-                                  "and the Nextion Editor refuses to compile it on the %s "
-                                  "(\"Position Invalid\")"
-                                  % (where, object_label(page_object, index), width, height,
-                                     screen.name))
+            error = NxwrightError("%s: %s reaches past the screen, which is %d by %d at this "
+                                  "rotation"
+                                  % (where, object_label(page_object, index), width, height))
             error.table = index
             raise error
 
@@ -411,35 +374,32 @@ def check_component_count(names: list, generated: int, where: str):
     first, and the last `generated` of them are the components nxlang adds
     to run the page's code.
 
-    When the page file's own components are too many, the message gives the
-    first past the limit, and the error's `table` is that component's place
-    in the page. When only nxlang's components take the page past the
-    limit, the message says so, and the `table` is the page's own, 0."""
+    When the page file's own components are too many, the error's `table` is
+    the place in the page of the first component past the limit. When only
+    nxlang's components take the page past the limit, the message says so,
+    and the `table` is the page's own, 0."""
     components = len(names) - 1
     own = components - generated
     if own > MOST_COMPONENTS:
-        error = NxwrightError("%s: component %s: the page has %d components. %s"
-                              % (where, names[MOST_COMPONENTS + 1], own,
-                                 _too_many_components(own)))
+        error = NxwrightError("%s: the page has %d components, and the limit is %d. %s"
+                              % (where, own, MOST_COMPONENTS, _components_to_remove(own)))
         error.table = MOST_COMPONENTS + 1
         raise error
     if components > MOST_COMPONENTS:
-        error = NxwrightError("%s: nxlang adds %d %s to run this page's code, which brings the "
-                              "page to %d components. %s"
-                              % (where, generated, "component" if generated == 1 else "components",
-                                 components, _too_many_components(components)))
+        error = NxwrightError("%s: the page has %d components, and the limit is %d. nxlang adds "
+                              "%d of them to run the page's code. %s"
+                              % (where, components, MOST_COMPONENTS, generated,
+                                 _components_to_remove(components)))
         error.table = 0
         raise error
 
 
-def _too_many_components(components: int) -> str:
+def _components_to_remove(components: int) -> str:
     """Returns the end of the refusal of a page of `components` components:
-    the Nextion Editor's limit, and how many components to remove."""
+    how many components to remove."""
     past = components - MOST_COMPONENTS
-    return ("The Nextion Editor's compile refuses more than %d on a page (\"Too many "
-            "components\"). Remove %d %s, or move %s to another page."
-            % (MOST_COMPONENTS, past, "component" if past == 1 else "components",
-               "it" if past == 1 else "them"))
+    return ("Remove %d %s, or move %s to another page."
+            % (past, "component" if past == 1 else "components", "it" if past == 1 else "them"))
 
 
 def page_count_refusal(pages: int, whose: str):
@@ -449,23 +409,22 @@ def page_count_refusal(pages: int, whose: str):
     if pages <= MOST_PAGES:
         return None
     past = pages - MOST_PAGES
-    return ("%s has %d pages, and the Nextion Editor's compile refuses more than %d (\"Too many "
-            "pages\"). Remove %d %s." % (whose, pages, MOST_PAGES, past,
-                                         "page" if past == 1 else "pages"))
+    return ("%s has %d pages, and the limit is %d. Remove %d %s."
+            % (whose, pages, MOST_PAGES, past, "page" if past == 1 else "pages"))
 
 
 def check_room_for_a_page(pages: int):
     """Raises NxwrightError when a folder of `pages` pages has no room for
     another one, as the Nextion Editor's compile takes at most MOST_PAGES."""
     if pages >= MOST_PAGES:
-        raise NxwrightError("the folder has %d pages, the most the Nextion Editor compiles (\"Too "
-                            "many pages\"). Remove a page first." % pages)
+        raise NxwrightError("the project already has %d pages, which is the limit. Remove a page "
+                            "first." % pages)
 
 
 def object_label(page_object, index: int) -> str:
-    """How a refusal names an object of a page: "page home", or "component t0"."""
+    """How a refusal names an object of a page: "page `home`", or "component `t0`"."""
     name = (page_object.attribute("objname") or b"").decode("latin-1")
-    return "%s %s" % ("page" if index == 0 else "component", name)
+    return "%s `%s`" % ("page" if index == 0 else "component", name)
 
 
 def _check_page_caps(page: PageBlock, where: str):
@@ -478,13 +437,9 @@ def _check_page_caps(page: PageBlock, where: str):
     for cap in PAGE_CAPS:
         held = [index for index, kind in enumerate(types) if kind in cap.types]
         if len(held) > cap.most:
-            past = held[cap.most]
-            name = (page.objects[past].attribute("objname") or b"").decode("latin-1")
-            error = NxwrightError(
-                "%s: component %s: the page holds %d %s; the Nextion Editor's compile takes %d "
-                'on a page, saying "%s exceed maximum in page:%d"'
-                % (where, name, len(held), cap.words, cap.most, cap.editor_words, cap.most))
-            error.table = past
+            error = NxwrightError("%s: the page has %d %s, and the limit is %d"
+                                  % (where, len(held), cap.words, cap.most))
+            error.table = held[cap.most]
             raise error
 
 
@@ -492,28 +447,33 @@ def _check_object_limits(page_object, index: int, where: str):
     name = page_object.attribute("objname") or b""
     label = object_label(page_object, index)
     if len(name) > NAME_LIMIT:
-        raise NxwrightError("%s: %s: its name has %d bytes; the Nextion Editor keeps %d"
+        raise NxwrightError("%s: the name of %s has %d bytes, and the limit is %d"
                             % (where, label, len(name), NAME_LIMIT))
+    # The Nextion Editor says "Illegal name" for such a name.
     if name.decode("latin-1") in NAMES_THE_EDITOR_REFUSES:
-        raise NxwrightError('%s: %s: the Nextion Editor refuses this name, saying "Illegal name"'
-                            % (where, label))
-    # The Nextion Editor refuses such a page or component as it opens the project.
+        raise NxwrightError("%s: %s has a reserved name" % (where, label))
+    # The Nextion Editor refuses such a page or component as it opens the
+    # project ("First character of a Name can not be number").
     if name[:1].isdigit():
-        raise NxwrightError('%s: %s: the Nextion Editor refuses a name that starts with a digit, '
-                            'saying "First character of a Name can not be number"'
-                            % (where, label))
+        raise NxwrightError("%s: the name of %s cannot start with a digit" % (where, label))
     kind = page_object.attribute("type")
     object_type = kind[0] if kind else None
+    # An attribute the component lacks is not checked (lacked_attributes).
+    # The Editor's compile does not check it either: it compiled a video's or
+    # a sound's `path` longer than its `path_m` while their `from` was 0, and
+    # a variable's `txt` longer than its `txt_maxl` while it contained a
+    # number (Editor 1.68.2). It is taken to do the same for an animation's
+    # or a video's `vid`, which has no bound.
+    lacked = object_lacked_attributes(page_object, TYPE_NAMES.get(object_type))
+    # Every other text longer than its bound is refused. That includes a data
+    # record's `format` and `dir`, which the Editor's compile took up to 3
+    # bytes longer than their bound (Editor 1.68.2). The screen has that much
+    # spare room for them, but the room is not documented, so it may differ
+    # between screens or change.
     for attribute, length, bound, limit in _values_past_bounds(page_object):
-        most = _most_compiled(page_object, object_type, attribute, bound, limit)
-        if most is None or length <= most:
-            continue
-        if most == limit:
-            raise NxwrightError("%s: %s: its %s has %d bytes; its %s is %d"
-                                % (where, label, attribute, length, bound, limit))
-        raise NxwrightError("%s: %s: its %s has %d bytes; its %s of %d holds %d at most, and the "
-                            "Nextion Editor refuses more (\"The length exceeds the maximum value\")"
-                            % (where, label, attribute, length, bound, limit, most))
+        if attribute not in lacked:
+            raise NxwrightError("%s: attribute `%s` of %s has %d bytes, and its limit, `%s`, is %d"
+                                % (where, attribute, label, length, bound, limit))
 
 
 def _values_past_bounds(page_object) -> list:
@@ -532,34 +492,15 @@ def _values_past_bounds(page_object) -> list:
     return found
 
 
-def _most_compiled(page_object, object_type, attribute: str, bound: str, limit: int):
-    """The most bytes the Editor's compile takes of `page_object`'s
-    `attribute`, of type number `object_type`, whose `bound`
-    (bounded_attributes) is `limit`: the limit itself, or for one of
-    _BOUNDS_COMPILED_TO_THEIR_ROOM, 1 byte less than its room. None for any
-    length. It checks none of an attribute the component lacks
-    (lacked_attributes): it compiled a video's or a sound's `path` longer
-    than its `path_m` while their `from` was 0, and a variable's `txt`
-    longer than its `txt_maxl` while it held a number (Editor 1.68.2). It
-    is taken to do alike for an animation's or a video's `vid`, which has
-    no bound."""
-    if attribute in object_lacked_attributes(page_object, TYPE_NAMES.get(object_type)):
-        return None
-    if (object_type, bound) in _BOUNDS_COMPILED_TO_THEIR_ROOM:
-        room = (limit + 1 + 3) // 4 * 4
-        return room - 1
-    return limit
-
-
 def bounded_attributes(object_type, names) -> list:
     """Returns (attribute, the attribute holding the most bytes it takes) of
     an object of type number `object_type`, among its attributes' `names`:
     a `txt` and its `txt_maxl`, and each `X_m` with its `X`, such as a
     `path_m` with its `path`. The screen keeps no more of a value code
     stores (the test machine's "text limits"). The Editor refuses to compile
-    a longer one ("The length exceeds the maximum value"), but where
-    _most_compiled says otherwise. Seen for every `X_m` of every type
-    (Editor 1.68.2). A sliding text's `path_m` is none: its hint says it
+    a longer one ("The length exceeds the maximum value"), with the
+    exceptions _check_object_limits gives. Seen for every `X_m` of every
+    type (Editor 1.68.2). A sliding text's `path_m` is none: its hint says it
     sets aside room for the text's lines."""
     return [("txt", "txt_maxl")] + [
         (name[:-2], name) for name in names

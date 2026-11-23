@@ -150,12 +150,12 @@ def event_blocks(text: str, file_name: str, preamble: list = None, end: list = N
         event = read_event_heading(line)
         if event:
             # Errors give the event as `save.up`: its label without "on ".
-            return (event.name, event.event), event_label(event.name, event.event)[3:]
+            return (event.name, event.event), "event", event_label(event.name, event.event)[3:]
         function = FUNCTION_HEADING.fullmatch(line) if preamble is not None else None
         if function:
-            return (None, function[1]), "function " + function[1]
+            return (None, function[1]), "function", function[1]
         return None
-    return _blocks(text, file_name, heading_of, "an 'on <name>.<event>:' heading", preamble,
+    return _blocks(text, file_name, heading_of, "an `on <name>.<event>:` heading", preamble,
                    end)
 
 
@@ -164,15 +164,16 @@ def macro_blocks(text: str, file_name: str, end: list = None) -> dict:
     as event_blocks says."""
     def heading_of(line: str):
         macro = MACRO_HEADING.fullmatch(line)
-        return (macro[1], "macro " + macro[1]) if macro else None
-    return _blocks(text, file_name, heading_of, "a 'macro <name>:' heading", None, end)
+        return (macro[1], "macro", macro[1]) if macro else None
+    return _blocks(text, file_name, heading_of, "a `macro <name>:` heading", None, end)
 
 
 def _blocks(text: str, file_name: str, heading_of, heading: str, preamble: list,
             end: list) -> dict:
     """Returns {key: EventBlock} for a file of blocks under headings, in file
-    order. `heading_of(line)` returns (the block's key, its name in errors)
-    for a heading line, else None. `heading` names the file's headings, in
+    order. `heading_of(line)` returns (the block's key, its kind, its name
+    in errors) for a heading line, else None. The kind is "event",
+    "function", or "macro". `heading` names the file's headings, in
     errors. `preamble` and `end`, as event_blocks says."""
     blocks, current, what = {}, None, None
     # The comment lines since the last other line, and before them, the
@@ -181,9 +182,12 @@ def _blocks(text: str, file_name: str, heading_of, heading: str, preamble: list,
     for number, line in enumerate(text.split("\n"), start=1):
         found = heading_of(line)
         if found:
-            key, what = found
+            key, kind, name = found
             if key in blocks:
-                raise NxwrightError("%s appears twice" % what, file=file_name, line=number)
+                raise NxwrightError("%s `%s` is already defined" % (kind, name), file=file_name,
+                                    line=number)
+            # The block, as the error about a misplaced comment gives it.
+            what = "%s `%s`" % (kind, name)
             current = blocks[key] = EventBlock(heading=line, number=number, comment=list(comment),
                                                detached=list(detached))
             comment.clear()
@@ -203,12 +207,12 @@ def _blocks(text: str, file_name: str, heading_of, heading: str, preamble: list,
                 current.lines.append((number, line))
         elif current is not None and line.startswith(CODE_INDENT):
             if comment or detached:
-                raise NxwrightError("a comment at the start of a line, inside the code of %s: "
-                                    "indent it as its code, or move it right above a heading"
+                raise NxwrightError("this comment is not indented, but it is inside the code of "
+                                    "%s. Indent it, or move it right above a heading."
                                     % what, file=file_name, line=(detached or comment)[0][0])
             current.lines.append((number, line))
         else:
-            raise NxwrightError("expected %s or a code line indented by two spaces" % heading,
+            raise NxwrightError("expected %s, or code indented by two spaces" % heading,
                                 file=file_name, line=number)
     if preamble is not None and current is None:
         preamble.extend(comment)
@@ -297,8 +301,8 @@ def read_nx_file(path: str, text: str) -> NxFile:
             if match[2]:
                 words[match[2]].add(included)
         elif code.startswith("include"):
-            raise NxwrightError('an include is written include "<path>.nx", include '
-                                '"<path>.nx" partial, or include "<path>.nx" strict',
+            raise NxwrightError('invalid include. Use `include "<path>.nx"`, `include '
+                                '"<path>.nx" partial`, or `include "<path>.nx" strict`.',
                                 file=path, line=number)
         else:
             kept.append((number, line))
@@ -313,13 +317,17 @@ def resolve(including: str, written: str, number: int) -> str:
     that stays inside the source folder.
     """
     if not written.endswith(".nx"):
-        raise NxwrightError("%s does not end in .nx" % written, file=including, line=number)
-    if written.startswith("/") or "\\" in written or ":" in written:
-        raise NxwrightError("%s must be a relative path with /"
-                            % written, file=including, line=number)
+        raise NxwrightError("included files must use the `.nx` extension", file=including,
+                            line=number)
+    if "\\" in written:
+        raise NxwrightError("`%s` must use `/`, not `\\`" % written, file=including, line=number)
+    if written.startswith("/") or ":" in written:
+        raise NxwrightError("`%s` must be a relative path" % written, file=including,
+                            line=number)
     path = posixpath.normpath(posixpath.join(posixpath.dirname(including), written))
     if path == ".." or path.startswith("../"):
-        raise NxwrightError("%s leaves the source folder" % written, file=including, line=number)
+        raise NxwrightError("`%s` is outside the source folder" % written, file=including,
+                            line=number)
     return path
 
 
@@ -343,8 +351,9 @@ def read_page_files(page_path: str, page_text: str, read) -> PageFiles:
         files.append(nx_file)
         for key in nx_file.blocks:
             if key in homes:
-                what = "function " + key[1] if key[0] is None else event_label(*key)[3:]
-                raise NxwrightError("%s is also defined in %s" % (what, homes[key].path),
+                what = ("function `%s`" % key[1] if key[0] is None
+                        else "event `%s`" % event_label(*key)[3:])
+                raise NxwrightError("%s is already defined in %s" % (what, homes[key].path),
                                     file=nx_file.path, line=nx_file.blocks[key].number)
             homes[key] = nx_file
     visit(read_nx_file(page_path, page_text))
@@ -355,9 +364,9 @@ def blank_lines_dropped(where: str, count: int) -> str:
     """Returns the warning that extracting dropped `count` blank lines, of
     only spaces and tabs or of nothing, from the code that `where` names. The
     Nextion Editor 1.68.2 compiled such lines to nothing."""
-    lines, them = ("line", "it") if count == 1 else ("lines", "them")
-    return "%s: %d blank %s dropped; the Nextion Editor compiles %s to nothing" % (
-        where, count, lines, them)
+    if count == 1:
+        return "%s: 1 blank line was dropped, since it has no effect" % where
+    return "%s: %d blank lines were dropped, since they have no effect" % (where, count)
 
 
 def with_code_added(text: str, code: str) -> str:

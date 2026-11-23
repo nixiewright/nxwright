@@ -140,7 +140,7 @@ def preprocess_with_places(lines: list, names: ResourceNames = None,
         except NxwrightError as error:
             if read == code:
                 raise
-            raise type(error)("%s, as the Nextion Editor reads it: %s" % (code, error.reason),
+            raise type(error)(message_with_both_lines(code, read, error.reason),
                               line=number) from None
         if is_declaration(code):
             out.append([indent, code, comment, number])
@@ -177,12 +177,27 @@ def with_own_attributes(text: str, owner: Owner) -> str:
     return OWN_ATTRIBUTE.sub(replace, text)
 
 
+def message_with_both_lines(written: str, read: str, reason: str) -> str:
+    """Returns the message for an error in a line whose form '&name&' was
+    replaced (with_own_attributes). `written` is the line's code as the user
+    wrote it, `read` is the code after the replacement, and `reason` is the
+    message of the error found in `read`. The message gives both lines, then
+    the reason. A reason that starts with the line `read` does not give it a
+    second time. That includes the line without its spaces, which is how a
+    check gives it (code_lines.compact)."""
+    for own_line in ("`%s`: " % read, "`%s`: " % compact(read), "%s: " % read):
+        if reason.startswith(own_line):
+            reason = reason[len(own_line):]
+            break
+    return "`%s`, read as `%s`: %s" % (written, read, reason)
+
+
 def _resolve_references(code: str, names, number: int) -> str:
     """Replaces "@pic(name)" and the other resources' names outside strings
     with IDs."""
     def resolve(match) -> str:
         if names is None:
-            raise NxwrightError("%s needs the app's resource names" % match[0], line=number)
+            raise NxwrightError("`%s` requires the argument `names`" % match[0], line=number)
         try:
             return str(names.id_of(match[1], match[2].strip()))
         except NxwrightError as error:

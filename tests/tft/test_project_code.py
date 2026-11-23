@@ -64,9 +64,9 @@ class ProjectCodeTest(unittest.TestCase):
     def test_a_text_is_not_split_at_a_character_splitlines_splits_at(self):
         # U+0085, byte 0x85 in iso-8859-1, the base folder's encoding, which
         # str.splitlines would take for a line's end.
-        project = project_of(program=('t0.txt="\x85" // y',), strict=True)
+        project = project_of(program=('print "\x85" // y',), strict=True)
         self.assertEqual(project.settings.encoding, "iso-8859-1")
-        self.assertIn('t0.txt="\x85"', self._program_lines(project))
+        self.assertIn('print "\x85"', self._program_lines(project))
 
 
 if __name__ == "__main__":

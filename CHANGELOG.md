@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.5.0] - 2026-11-15
+
+- A number of error messages have been reworded as part of a codebase wide audit.
+
 ### [0.4.9] - 2026-11-15
 
 - A data record whose file is missing now creates or finds it when next drawn, matching physical screens.

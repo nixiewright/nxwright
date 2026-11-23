@@ -111,30 +111,28 @@ class ErrorPlaceTest(FolderTestCase):
     def test_a_page_file(self):
         self.write("pages/page0.nx", "on page0.load:\n  sys0 = 1\n  bogus.txt = 1\n")
         self.assertEqual(self.findings(), [Finding("pages/page0.nx", 3, ERROR,
-                                                   "bogus is neither a component of this page "
-                                                   "nor a page")])
+                                                   "`bogus` is neither a page nor a component of "
+                                                   "this page")])
 
     def test_an_included_file(self):
         self.write("pages/lib/show.nx", "function show():\n  bogus.txt = 1\n")
         self.write("pages/page0.nx", 'include "lib/show.nx"\non page0.load:\n  show()\n')
         self.assertEqual(self.findings(), [Finding("pages/lib/show.nx", 2, ERROR,
-                                                   "bogus is neither a component of this page "
-                                                   "nor a page")])
+                                                   "`bogus` is neither a page nor a component of "
+                                                   "this page")])
 
     def test_program_nx(self):
         self.write("program.nx", "int counter=0\nint __bad=0\n")
         [finding] = self.findings()
         self.assertEqual((finding.file, finding.line), ("program.nx", 2))
-        self.assertTrue(finding.message.startswith("int __bad may not start with '__'"))
+        self.assertTrue(finding.message.startswith("int `__bad` may not start with `__`"))
 
     def test_a_system_variable_the_series_lacks(self):
         self.use_screen("NX4832K035")
         self.write("pages/page0.nx", "on page0.load:\n  sys0 = 1\n  sys0 = volume\n")
         self.assertEqual(self.findings(), [Finding(
-            "pages/page0.nx", 3, ERROR, "sys0=volume: the NX4832K035 lacks volume, and the "
-                                        "Nextion Editor refuses to compile it for its series "
-                                        "(\"Do not support such variable for this series "
-                                        "device\")")])
+            "pages/page0.nx", 3, ERROR,
+            "`sys0=volume`: `volume` is not available on the NX4832K035")])
 
     def test_a_table_of_a_page_file(self):
         self.write("pages/second.page.toml", self.text("pages/second.page.toml").replace(
@@ -184,7 +182,8 @@ class ErrorPlaceTest(FolderTestCase):
                           enumerate(self.text("pages/page0.page.toml").split("\n"), start=1)
                           if line == "[[component]]")
         self.assertEqual((finding.file, finding.line), ("pages/page0.page.toml", last_header))
-        self.assertIn("component s5: the page holds 6 waveforms", finding.message)
+        self.assertIn("page0.page.toml: the page has 6 waveforms, and the limit is 5",
+                      finding.message)
 
     def test_a_type_the_series_refuses(self):
         # At the component's table, as the page's other limits.
@@ -197,7 +196,8 @@ class ErrorPlaceTest(FolderTestCase):
                           enumerate(self.text("pages/page0.page.toml").split("\n"), start=1)
                           if line == "[[component]]")
         self.assertEqual((finding.file, finding.line), ("pages/page0.page.toml", last_header))
-        self.assertIn("component gm0: the NX4832F035 lacks the type gmov", finding.message)
+        self.assertIn("page0.page.toml: component `gm0` is of type `gmov`, which is not available "
+                      "on the NX4832F035", finding.message)
 
     def test_a_line_the_editors_compile_refuses(self):
         # nxlang hands an escape and a variable's attribute on as written, and
@@ -205,10 +205,11 @@ class ErrorPlaceTest(FolderTestCase):
         with open(self.root / "pages" / "page0.page.toml", "a", encoding="utf-8",
                   newline="\n") as file:
             file.write('\n[[component]]\nname = "va0"\ntype = "variable"\nsta = 1\n')
-        for code, words in (('title.txt = "a\\nb"', "Improper use of escape characters"),
-                            ("sys0 = va0.val", "Invalid Variables"),
-                            ("cls 1, 2", "Invalid number of arguments"),
-                            ("zork 1", "Invalid command")):
+        for code, words in (('title.txt = "a\\nb"', "`\\n` is not a valid escape"),
+                            ("sys0 = va0.val", "`va0.val` cannot be used while `va0` contains "
+                                               "text"),
+                            ("cls 1, 2", "`cls` takes 1 argument, not 2"),
+                            ("zork 1", "unknown command `zork`")):
             with self.subTest(code=code):
                 self.write("pages/page0.nx", "on page0.load:\n  sys0 = 1\n  %s\n" % code)
                 [finding] = self.findings()
@@ -264,7 +265,7 @@ class CheckTest(FolderTestCase):
         self.assertEqual([finding.file for finding in findings],
                          ["pages/page0.page.toml", "pages/second.nx"])
         self.assertEqual((findings[1].line, findings[1].message),
-                         (4, "nothing is neither a component of this page nor a page"))
+                         (4, "`nothing` is neither a page nor a component of this page"))
 
     def test_an_error_every_page_depends_on_comes_alone(self):
         self.write("pages/page0.nx", "on page0.load:\n  one.txt = 1\n")
@@ -311,8 +312,8 @@ class CommandTest(FolderTestCase):
         self.write("pages/page0.nx", "const UNUSED = 1\n\non page0.load:\n  bogus.txt = 1\n")
         code, output, errors = self.run_check()
         self.assertEqual(code, 1)
-        self.assertEqual(output, "pages/page0.nx line 4: error: bogus is neither a component "
-                                 "of this page nor a page\npages/page0.nx line 1: warning: "
+        self.assertEqual(output, "pages/page0.nx line 4: error: `bogus` is neither a page nor "
+                                 "a component of this page\npages/page0.nx line 1: warning: "
                                  "constant UNUSED is not used\n")
         self.assertEqual(errors, "nxwright check: 1 errors, 1 warnings\n")
 
@@ -830,9 +831,9 @@ class TextCutTest(FolderTestCase):
         self.assertEqual(self.cuts('on page0.load:\n  if (title.txt == "a" + big.txt) {\n'
                                    '    sys0 = 1\n  }\n'), [Finding(
             "pages/page0.nx", 2, WARNING,
-            "this text can be up to 1001 bytes long, since big.txt has room for 1000 bytes. "
-            "nxlang keeps it in a variable with room for 255 bytes here, so it may be cut. To "
-            "keep it whole, put it in a variable component whose txt_maxl is at least 1001",
+            "this text may be cut. It can be up to 1001 bytes long, since `big.txt` has room for "
+            "1000 bytes, and nxlang keeps it in a variable with room for 255 bytes. To keep it "
+            "whole, put it in a variable component whose `txt_maxl` is at least 1001.",
             "text-cut")])
 
     def test_a_local_given_a_components_text(self):
@@ -877,9 +878,9 @@ class TextCutTest(FolderTestCase):
             'function show(words: text):\n  var copy = words\n  title.txt = copy\n\n'
             'on page0.load:\n  show("%s")\n' % ("a" * 400)), [Finding(
             "pages/page0.nx", 2, WARNING,
-            "this text can be up to 400 bytes long, since words has room for 400 bytes. "
-            "nxlang keeps it in a variable with room for 255 bytes here, so it may be cut. To "
-            "keep it whole, put it in a variable component whose txt_maxl is at least 400",
+            "this text may be cut. It can be up to 400 bytes long, since `words` has room for "
+            "400 bytes, and nxlang keeps it in a variable with room for 255 bytes. To keep it "
+            "whole, put it in a variable component whose `txt_maxl` is at least 400.",
             "text-cut")])
 
     def test_none_for_a_short_local_sharing_a_long_ones_variable(self):

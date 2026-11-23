@@ -240,8 +240,8 @@ class NameMeantFixTest(QuickFixTestCase):
 
     def test_a_name_that_differs_by_a_capital_letter(self):
         problem, [action] = self.problem_and_fixes('Title.txt="a"')
-        self.assertEqual(problem["message"], "Title is neither a component of this page nor "
-                                             "a page. Did you mean title?")
+        self.assertEqual(problem["message"], "`Title` is neither a page nor a component of "
+                                             "this page. Did you mean `title`?")
         self.assertEqual(action["title"], "Change Title to title")
         self.assertFalse(action.get("isPreferred", False))
         self.assertEqual(self.applied(action),
@@ -252,20 +252,20 @@ class NameMeantFixTest(QuickFixTestCase):
         for name in ("titel", "Titel"):
             with self.subTest(name=name):
                 problem, [action] = self.problem_and_fixes('%s.txt="a"' % name)
-                self.assertTrue(problem["message"].endswith("Did you mean title?"),
+                self.assertTrue(problem["message"].endswith("Did you mean `title`?"),
                                 problem["message"])
                 self.assertEqual(self.applied(action),
                                  {self.CODE: 'on page0.load:\n  title.txt="a"\n'})
 
     def test_a_page_s_name(self):
         problem, [action] = self.problem_and_fixes('Second.title.txt="a"')
-        self.assertTrue(problem["message"].endswith("Did you mean second?"), problem["message"])
+        self.assertTrue(problem["message"].endswith("Did you mean `second`?"), problem["message"])
         self.assertEqual(self.applied(action),
                          {self.CODE: 'on page0.load:\n  second.title.txt="a"\n'})
 
     def test_a_command_s_component(self):
         problem, [action] = self.problem_and_fixes("vis Title,1")
-        self.assertTrue(problem["message"].endswith("Did you mean title?"), problem["message"])
+        self.assertTrue(problem["message"].endswith("Did you mean `title`?"), problem["message"])
         self.assertEqual(self.applied(action), {self.CODE: "on page0.load:\n  vis title,1\n"})
 
     def test_a_command_s_component_given_as_a_variable(self):
@@ -273,7 +273,7 @@ class NameMeantFixTest(QuickFixTestCase):
         # program.nx.
         self.write("program.nx", "int count=0\n" + self.text("program.nx"))
         problem, [action] = self.problem_and_fixes("vis cout,1")
-        self.assertTrue(problem["message"].endswith("Did you mean count?"), problem["message"])
+        self.assertTrue(problem["message"].endswith("Did you mean `count`?"), problem["message"])
         self.assertEqual(self.applied(action), {self.CODE: "on page0.load:\n  vis count,1\n"})
 
     def test_a_name_close_to_no_other_gets_no_hint(self):
@@ -283,7 +283,7 @@ class NameMeantFixTest(QuickFixTestCase):
             with self.subTest(name=name):
                 problem, fixes = self.problem_and_fixes('%s.txt="a"' % name)
                 self.assertEqual(problem["message"],
-                                 "%s is neither a component of this page nor a page" % name)
+                                 "`%s` is neither a page nor a component of this page" % name)
                 self.assertEqual(fixes, [])
 
 
@@ -293,7 +293,7 @@ class NxlangNameMeantFixTest(QuickFixTestCase):
     def test_a_name_that_differs_by_a_capital_letter(self):
         self.open("pages/page0.nx", 'on page0.load:\n  Title.txt = "a"\n')
         [problem] = self.errors("pages/page0.nx")
-        self.assertTrue(problem["message"].endswith("Did you mean title?"), problem["message"])
+        self.assertTrue(problem["message"].endswith("Did you mean `title`?"), problem["message"])
         [action] = self.fixes("pages/page0.nx", problem)
         self.assertEqual(self.applied(action),
                          {"pages/page0.nx": 'on page0.load:\n  title.txt = "a"\n'})

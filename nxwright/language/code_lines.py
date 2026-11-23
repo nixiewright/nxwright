@@ -226,7 +226,7 @@ def split_line(text: str, number: int) -> tuple:
             return indent, code, rest[len(code):]
         position += 1
     if in_string:
-        raise NxwrightError("a string is not closed", line=number)
+        raise NxwrightError("string is missing a terminating quote", line=number)
     return indent, rest.rstrip(" \t"), rest[len(rest.rstrip(" \t")):]
 
 

@@ -89,15 +89,14 @@ class RoundTripTest(SourceFolderTestCase):
 
     def test_refuses_dump_missing_a_folder(self):
         (self.dump / "fonts").rename(self.folder / "fonts-elsewhere")
-        with self.assertRaisesRegex(NxwrightError, "no fonts folder"):
+        with self.assertRaisesRegex(NxwrightError, "dump has no `fonts` folder"):
             import_dump(self.dump, self.folder / "other")
 
     def test_a_blank_line_in_program_is_dropped_with_a_warning(self):
         # As in an event: the Nextion Editor compiled such lines to nothing.
         (self.dump / "program.s").write_bytes(b"sys0=1\r\n\r\n  \r\nsys1=2\r\n")
         self.assertEqual(import_dump(self.dump, self.folder / "other"),
-                         ["program.s: 2 blank lines dropped; the Nextion Editor compiles them to "
-                          "nothing"])
+                         ["program.s: 2 blank lines were dropped, since they have no effect"])
         self.assertEqual((self.folder / "other" / "program.nx").read_text(encoding="utf-8"),
                          "sys0=1\nsys1=2\n")
 
@@ -114,8 +113,8 @@ class RoundTripTest(SourceFolderTestCase):
         with redirect_stdout(io.StringIO()), redirect_stderr(errors):
             self.assertEqual(main(["extract", str(project), str(self.folder / "other")]), 0)
         self.assertEqual(errors.getvalue(),
-                         "nxwright extract: warning: program.s: 1 blank line dropped; the Nextion "
-                         "Editor compiles it to nothing\n")
+                         "nxwright extract: warning: program.s: 1 blank line was dropped, since "
+                         "it has no effect\n")
         self.assertEqual((self.folder / "other" / "program.nx").read_text(encoding="utf-8"),
                          "sys0=1\nsys1=2\n")
 
@@ -123,15 +122,17 @@ class RoundTripTest(SourceFolderTestCase):
         other = self.folder / "other"
         other.mkdir()
         (other / "notes.txt").write_text("keep", encoding="utf-8")
-        with self.assertRaisesRegex(NxwrightError, "the folder is not empty"):
+        with self.assertRaisesRegex(NxwrightError,
+                                    r"other is not empty\. Choose a new or empty folder\."):
             import_dump(self.dump, other)
         self.assertEqual([path.name for path in other.iterdir()], ["notes.txt"])
 
     def test_refuses_a_source_folder_in_strict_nextion_syntax(self):
         before = {path: path.read_bytes() for path in self.source.rglob("*") if path.is_file()}
-        with self.assertRaisesRegex(NxwrightError, "the folder is not empty"):
+        refusal = r"source is not empty\. Choose a new or empty folder\."
+        with self.assertRaisesRegex(NxwrightError, refusal):
             import_dump(self.dump, self.source)
-        with self.assertRaisesRegex(NxwrightError, "the folder is not empty"):
+        with self.assertRaisesRegex(NxwrightError, refusal):
             extract(self.project, self.source)
         self.assertEqual({path: path.read_bytes() for path in self.source.rglob("*")
                           if path.is_file()}, before)
@@ -139,7 +140,8 @@ class RoundTripTest(SourceFolderTestCase):
     def test_refuses_a_path_that_is_a_file(self):
         file = self.folder / "file.txt"
         file.write_text("keep", encoding="utf-8")
-        with self.assertRaisesRegex(NxwrightError, "the folder is not empty"):
+        with self.assertRaisesRegex(NxwrightError,
+                                    r"file\.txt is not a folder\. Choose a new or empty folder\."):
             import_dump(self.dump, file)
         self.assertEqual(file.read_text(encoding="utf-8"), "keep")
 
@@ -165,7 +167,7 @@ class BuildRefusalTest(SourceFolderTestCase):
     def test_build_names_the_file_of_an_event_given_twice(self):
         (self.source / "pages" / "first.nx").write_text(
             "on first.down:\n  sys0=1\n\non first.down:\n  sys0=2\n", encoding="utf-8", newline="\n")
-        self.assert_export_refused("pages/first.nx line 4: first.down appears twice")
+        self.assert_export_refused("pages/first.nx line 4: event `first.down` is already defined")
 
 
 class TrailingSpacesTest(SourceFolderTestCase):
@@ -558,20 +560,28 @@ class SourceRefusalTest(SourceFolderTestCase):
         app = self.source / "app.toml"
         # A trailing space tells apart two cases expecting the same message.
         cases = {
-            "format must be": ("format = 1", 'format = "2"'),
-            "needs a newer nxwright": ("format = 1", "format = 3"),
-            "format must be ": ("format = 1", "format = true"),
-            "language must be": ('language = "nextion_do_not_change_manually"', ""),
-            "not a valid name": ('"font-00"', '"../font-00"'),
+            "app.toml: `format` must be 1": ("format = 1", 'format = "2"'),
+            r"app.toml uses source format 3, but this version of nxwright only reads format 1\. "
+            r"Update nxwright\.": ("format = 1", "format = 3"),
+            "app.toml: `format` must be 1 ": ("format = 1", "format = true"),
+            "app.toml: `language` must be": ('language = "nextion_do_not_change_manually"', ""),
+            "app.toml: `../font-00` is not a valid font name": ('"font-00"', '"../font-00"'),
             "unknown key": ("format = 1", "format = 1\ncolour = 1"),
-            "are the same name": ('"font-01"', '"font-00"'),
-            "same name": ('"font-01"', '"FONT-00"'),
-            "folder of another name": ('"picture-0001"', '"picture-0000/x"'),
-            "not a valid name ": ('"font-01"', '"con"'),
-            "name must be": ("format = 1", 'format = 1\nname = ""'),
-            "name must be ": ("format = 1", 'format = 1\nname = " Clock"'),
-            "name must be  ": ("format = 1", 'format = 1\nname = "a\\nb"'),
-            "name must be   ": ("format = 1", "format = 1\nname = 3"),
+            "app.toml: font `font-00` already exists$": ('"font-01"', '"font-00"'),
+            r"app.toml: font `font-00` already exists \(resources are case insensitive\)":
+                ('"font-01"', '"FONT-00"'),
+            "app.toml: `picture-0000` cannot be both a picture and a folder":
+                ('"picture-0001"', '"picture-0000/x"'),
+            "app.toml: `con` is not a valid font name, because Windows reserves it as a file "
+            "name, and fonts are written as files": ('"font-01"', '"con"'),
+            "app.toml: `name` must be a non-empty string of one line, without leading or "
+            "trailing spaces": ("format = 1", 'format = 1\nname = ""'),
+            "app.toml: `name` must be a non-empty string of one line, without leading or "
+            "trailing spaces ": ("format = 1", 'format = 1\nname = " Clock"'),
+            "app.toml: `name` must be a non-empty string of one line, without leading or "
+            "trailing spaces  ": ("format = 1", 'format = 1\nname = "a\\nb"'),
+            "app.toml: `name` must be a non-empty string of one line, without leading or "
+            "trailing spaces   ": ("format = 1", "format = 1\nname = 3"),
         }
         original = app.read_text(encoding="utf-8")
         for message, (old, new) in cases.items():
@@ -613,7 +623,7 @@ class SourceRefusalTest(SourceFolderTestCase):
         events = self.source / "pages" / "first.nx"
         cases = {
             "not an event listed": "on first.slide:\n  sys0=1\n",
-            "appears twice": "on first.load:\n  sys0=1\non first.load:\n  sys1=1\n",
+            "is already defined": "on first.load:\n  sys0=1\non first.load:\n  sys1=1\n",
             "indented by two spaces": "on first.load:\nsys0=1\n",
         }
         for message, text in cases.items():
@@ -676,7 +686,7 @@ class PageSourceTest(unittest.TestCase):
         for line in ('pic = "dot"', "picc = 65535", "pic2 = 5", 'font = "Impact16"'):
             self.assertIn(line, source.toml)
         self.assertEqual(page_from_source(source, "first", names, NO_DEFAULTS), page)
-        with self.assertRaisesRegex(NxwrightError, "pic: no picture is named grid"):
+        with self.assertRaisesRegex(NxwrightError, "pic: unknown picture `grid`"):
             page_from_source(PageSource(source.toml.replace('"dot"', '"grid"'), ""), "first", names,
                              NO_DEFAULTS)
 
@@ -708,10 +718,9 @@ class PageSourceTest(unittest.TestCase):
         self.assertEqual(source.events, "on first.down:\n  x=1\n  y=2\n")
         self.assertEqual(tomllib.loads(source.toml)["page"]["events"], ["down", "up"])
         self.assertEqual(source.warnings, (
-            "page first, event first.down: 2 blank lines dropped; the Nextion Editor compiles "
-            "them to nothing",
-            "page first, event first.up: 1 blank line dropped; the Nextion Editor compiles it to "
-            "nothing"))
+            "page `first`, event `first.down`: 2 blank lines were dropped, since they have no "
+            "effect",
+            "page `first`, event `first.up`: 1 blank line was dropped, since it has no effect"))
 
     def test_refuses_what_it_cannot_read(self):
         cases = {

@@ -262,8 +262,8 @@ class ExpressionTest(unittest.TestCase):
 
     def test_a_text_constant_in_an_ints_starting_value(self):
         lines = _numbered('const UNIT = "mm"\nint count=UNIT')
-        with self.assertRaisesRegex(NxwrightError, "int count=UNIT: the constant UNIT is a text. "
-                                                   "An int's starting value must be a "
+        with self.assertRaisesRegex(NxwrightError, "`int count=UNIT`: the constant `UNIT` is text. "
+                                                   "An int's initial value must be a "
                                                    "number") as refusal:
             compile_program(lines, read_program_names(lines))
         self.assertEqual(refusal.exception.line, 2)
@@ -273,20 +273,20 @@ class ExpressionTest(unittest.TestCase):
         # a number with a fraction, a text, and nothing after the "=".
         lines = "const LIMIT = 5\nint first=1\n"
         for value, said in (
-                ("first", "first is not a constant"), ("dim", "dim is not a constant"),
-                ("LIMT", "LIMT is not a constant"), ("-first", "first is not a constant"),
-                ("LIMIT+1", "the starting value of a must be a whole number or a constant"),
-                ("1+2", "the starting value of a must be a whole number or a constant"),
-                ("1.5", "the starting value of a must be a whole number or a constant"),
+                ("first", "`first` is not a constant"), ("dim", "`dim` is not a constant"),
+                ("LIMT", "`LIMT` is not a constant"), ("-first", "`first` is not a constant"),
+                ("LIMIT+1", "the initial value of `a` must be a whole number or a constant"),
+                ("1+2", "the initial value of `a` must be a whole number or a constant"),
+                ("1.5", "the initial value of `a` must be a whole number or a constant"),
                 # In nxlang, a hex number starts with 0x. A capital X is not
                 # accepted.
-                ("0X10", "the starting value of a must be a whole number or a constant"),
-                ('"x"', "the starting value of a must be a whole number or a constant"),
-                ("", "the starting value of a must be a whole number or a constant")):
+                ("0X10", "the initial value of `a` must be a whole number or a constant"),
+                ('"x"', "the initial value of `a` must be a whole number or a constant"),
+                ("", "the initial value of `a` must be a whole number or a constant")):
             with self.subTest(value=value):
                 numbered = _numbered(lines + "int a=%s, b=2" % value)
                 with self.assertRaisesRegex(NxwrightError, re.escape(
-                        "int a=%s, b=2: %s" % (value, said))) as refusal:
+                        "`int a=%s, b=2`: %s" % (value, said))) as refusal:
                     compile_program(numbered, read_program_names(numbered))
                 self.assertEqual(refusal.exception.line, 3)
         # The forms of a decimal number that the Nextion Editor compiled are
@@ -327,7 +327,7 @@ class ExpressionTest(unittest.TestCase):
         self.assertEqual(run("x.val = a.val & 3 | 8")["x.val"], 7 & 3 | 8)
         # C's order: comparisons bind tighter than bitwise operators.
         self.assertEqual(run("if ((a.val & 1) == 1) {\n  r.val = 1\n}")["r.val"], 1)
-        with self.assertRaisesRegex(NxwrightError, "a comparison can only be a condition"):
+        with self.assertRaisesRegex(NxwrightError, "a comparison can only be used as a condition"):
             compile_lines("if (a.val & 1 == 1) {\n  r.val = 1\n}")
     def test_no_temporary_when_left_to_right_is_right(self):
         self.assertEqual(compile_lines("x.val = a.val * b.val + c.val"), ["x.val=a.val*b.val+c.val"])
@@ -642,9 +642,9 @@ class ConstantAndLocalTest(unittest.TestCase):
                          ["x.val=40+-2", 't0.txt="hi"', "covx 40,t0.txt,0,0"])
 
     def test_constant_refusals(self):
-        with self.assertRaisesRegex(NxwrightError, "line 1: unknown name LIMIT"):
+        with self.assertRaisesRegex(NxwrightError, "line 1: unknown name `LIMIT`"):
             compile_lines("x.val = LIMIT")
-        with self.assertRaisesRegex(NxwrightError, "line 2: TWO is already a constant"):
+        with self.assertRaisesRegex(NxwrightError, "line 2: `TWO` already exists as a constant, it cannot be redefined"):
             compile_lines("x.val = TWO", preamble="const TWO = 2\nconst TWO = 3")
         with self.assertRaisesRegex(NxwrightError, "line 1: a constant cannot be assigned"):
             compile_lines("TWO = 3", preamble="const TWO = 2")
@@ -671,27 +671,27 @@ class ConstantAndLocalTest(unittest.TestCase):
         self.assertEqual(compiled.globals, ["__g0_0", "__g0_1"])
 
     def test_local_refusals(self):
-        with self.assertRaisesRegex(NxwrightError, "line 2: local n is declared twice"):
+        with self.assertRaisesRegex(NxwrightError, "line 2: local `n` is already declared"):
             compile_lines("var n = 1\nvar n = 2")
-        with self.assertRaisesRegex(NxwrightError, "line 1: local dim has the name of a component"):
+        with self.assertRaisesRegex(NxwrightError, "line 1: local `dim` has the name of a component"):
             compile_lines("var dim = 1")
-        with self.assertRaisesRegex(NxwrightError, "line 1: local __n may not start with"):
+        with self.assertRaisesRegex(NxwrightError, "line 1: local `__n` may not start with"):
             compile_lines("var __n = 1")
-        with self.assertRaisesRegex(NxwrightError, "line 1: unknown name n"):
+        with self.assertRaisesRegex(NxwrightError, "line 1: unknown name `n`"):
             compile_lines("var n = n")
 
     def test_the_editors_system_variables(self):
         # Its own list, which a probe of its refused names gave in full.
         self.assertEqual(compile_lines("eq0 = 3\nx.val = usize + appid"),
                          ["eq0=3", "x.val=usize+appid"])
-        with self.assertRaisesRegex(NxwrightError, "line 1: unknown name eqlb"):
+        with self.assertRaisesRegex(NxwrightError, "line 1: unknown name `eqlb`"):
             compile_lines("x.val = eqlb")
 
     def test_program_code(self):
         program = read_program_names(_numbered("const START = 2\nint g=0"))
         lines = compile_program(_numbered("const START = 2\nint g=0\ng = START * 3 + 1"), program)
         self.assertEqual(preprocess(lines, NO_NAMES), ["int g=0", "g=2*3+1"])
-        with self.assertRaisesRegex(NxwrightError, "line 1: this needs a temporary"):
+        with self.assertRaisesRegex(NxwrightError, "line 1: this line requires a temporary"):
             compile_program(_numbered("g = 1 - 2 * 3"), program)
 
 
@@ -700,15 +700,15 @@ class RefusalTest(unittest.TestCase):
     def test_syntax_errors_name_the_line(self):
         for code, message in [("x.val = 1\nx.val = (a.val + ", "line 2:"),
                               ("if (a.val == 1 {\n}", "line 1:"),
-                              ("x.val = a.val == 1", "line 1: a comparison can only be a condition"),
+                              ("x.val = a.val == 1", "line 1: a comparison can only be used as a condition"),
                               ('x.val = "a"', "line 1: text cannot be put in a number"),
                               ("if (a.val == 1) {\n  x.val = 1", "a block is not closed"),
-                              ("x.val = !a.val", "line 1: ! can only be in a condition")]:
+                              ("x.val = !a.val", "line 1: `!` can only be used in a condition")]:
             with self.subTest(code=code), self.assertRaisesRegex(NxwrightError, message):
                 compile_lines(code)
 
     def test_generated_prefix_is_refused_for_components(self):
-        with self.assertRaisesRegex(NxwrightError, "component __x starts with"):
+        with self.assertRaisesRegex(NxwrightError, "component `__x` may not start with"):
             compile_lines("x.val = 1", components=COMPONENTS + ["__x"])
 
 
@@ -770,9 +770,9 @@ class DataRecordCallTest(unittest.TestCase):
 
     def test_refusals(self):
         for code, pattern in (
-                ("d.delete(t0.txt, 1)", "argument 1 of d.delete is a number, not a text"),
-                ("d.delete(1)", "d.delete takes 2 arguments, as the Nextion Editor compiles it"),
-                ("d.clear(1)", "d.clear takes no arguments, as the Nextion Editor compiles it")):
+                ("d.delete(t0.txt, 1)", "argument 1 of `d.delete` must be a number, not text"),
+                ("d.delete(1)", "`d.delete` takes 2 arguments"),
+                ("d.clear(1)", "`d.clear` takes no arguments")):
             with self.subTest(code=code), self.assertRaisesRegex(NxwrightError,
                                                                   "line 1: " + pattern):
                 self.compiled(code)
@@ -1278,8 +1278,10 @@ class NxlangSourceFolderTest(NxlangFolderTestCase):
                 file.write('\n[[component]]\nname = "v%d"\ntype = "variable"\n' % number)
         self.write_text_join()
         # The page's 250 components, and the text temporary.
-        self.assert_export_refused(r"^first\.page\.toml: nxlang adds 1 component to run this "
-                                   r"page's code, which brings the page to 251 components")
+        self.assert_export_refused(
+            r"^first\.page\.toml: the page has 251 components, and the limit is 250\. nxlang "
+            r"adds 1 of them to run the page's code\. Remove 1 component, or move it to another "
+            r"page\.$")
 
     def test_globals_of_two_pages(self):
         switch_to_nxlang(self.source)
@@ -1305,8 +1307,9 @@ class NxlangSourceFolderTest(NxlangFolderTestCase):
     def test_unknown_language_is_refused(self):
         edit_text(self.source / "app.toml", 'language = "nextion_do_not_change_manually"',
                   'language = "fancy"')
-        self.assert_export_refused("app.toml: language must be 'nextion_do_not_change_manually' "
-                                   "or 'nxlang_do_not_change_manually'")
+        self.assert_export_refused("app.toml: `language` must be "
+                                   "`nextion_do_not_change_manually` or "
+                                   "`nxlang_do_not_change_manually`")
 
 
 FUNCTIONS = """function twice(n: number) -> number:
@@ -1336,7 +1339,7 @@ class ExtractingOverNxlangTest(NxlangFolderTestCase):
     """A project cannot be extracted or imported over a folder in nxlang, and
     can be extracted into a new one."""
 
-    REFUSAL = "the folder is not empty. Choose a new or empty folder"
+    REFUSAL = "source is not empty. Choose a new or empty folder."
 
     def setUp(self):
         super().setUp()
@@ -1352,15 +1355,15 @@ class ExtractingOverNxlangTest(NxlangFolderTestCase):
         dump = self.folder / "built-dump"
         ProjectDumper(self.built, dump).dump()
         before = self.files()
-        with self.assertRaisesRegex(NxwrightError, "^failed to write into %s: %s$"
-                                    % (re.escape(str(self.source)), re.escape(self.REFUSAL))):
+        with self.assertRaisesRegex(NxwrightError, "^%s$" % re.escape(
+                "%s is not empty. Choose a new or empty folder." % self.source)):
             import_dump(dump, self.source)
         self.assertEqual(self.files(), before)
 
     def test_extract_changes_nothing(self):
         before = self.files()
-        with self.assertRaisesRegex(NxwrightError, "^failed to write into %s: %s$"
-                                    % (re.escape(str(self.source)), re.escape(self.REFUSAL))):
+        with self.assertRaisesRegex(NxwrightError, "^%s$" % re.escape(
+                "%s is not empty. Choose a new or empty folder." % self.source)):
             extract(self.built, self.source)
         self.assertEqual(self.files(), before)
 
@@ -1506,7 +1509,7 @@ class ConditionalTest(unittest.TestCase):
         self.assertEqual(compile_lines('newfile a.val > 1 ? "sd0/a" : "sd0/b",10'),
                          ["if(a.val>1)", "{", '  __s0.txt="sd0/a"', "}else", "{",
                           '  __s0.txt="sd0/b"', "}", "newfile __s0.txt,10"])
-        with self.assertRaisesRegex(NxwrightError, r"Write the command in an if and an else"):
+        with self.assertRaisesRegex(NxwrightError, r"line 1: `\? :` cannot be used here$"):
             compile_lines('wepo a.val > 1 ? "x" : "y",10')
 
     def test_in_a_data_record_call(self):
@@ -1524,19 +1527,23 @@ class ConditionalTest(unittest.TestCase):
                                  expected)
 
     def test_refusals(self):
-        for code, message in (('x.val = a.val > 1 ? 1 : "one"', r"both sides of \? : must be "
+        for code, message in (('x.val = a.val > 1 ? 1 : "one"', r"both sides of `\? :` must be "
                                                                r"numbers, or both texts"),
                               # substr writes its result to its second argument.
                               ("substr t0.txt,a.val > 1 ? t1.txt : t0.txt,0,1",
-                               r"\? : cannot be used here: nxlang passes this line on as "
-                               r"written\. Write the command in an if and an else, once with "
-                               r"each value")):
+                               r"`\? :` cannot be used here$")):
             with self.subTest(code=code):
                 with self.assertRaisesRegex(NxwrightError, r"line 1: " + message):
                     compile_lines(code)
-        with self.assertRaisesRegex(NxwrightError, r"a case holds a number, a text, or a constant"):
+        # program.nx has no temporaries, so even an argument that a command
+        # only reads cannot have a `? :`.
+        with self.assertRaisesRegex(NxwrightError,
+                                    r"line 1: `\? :` cannot be used in program\.nx$"):
+            compile_program([(1, "page dp > 1 ? 1 : 0")], ProgramNames())
+        with self.assertRaisesRegex(NxwrightError,
+                                    r"a case must be a number, text, or a constant"):
             compile_lines("switch (a.val) {\n  case a.val > 1 ? 1 : 2:\n    x.val = 1\n}")
-        with self.assertRaisesRegex(NxwrightError, r"a constant's value must be a number or a "
+        with self.assertRaisesRegex(NxwrightError, r"a constant's value must be a number or "
                                                    r"text"):
             compile_lines("x.val = LIMIT", preamble="const LIMIT = 1 ? 2 : 3")
         lines = [(1, "int counter=0, other=0"), (2, "counter = other > 1 ? 1 : 2")]
@@ -1599,15 +1606,15 @@ class FunctionTest(unittest.TestCase):
         self.assertEqual((values["x.val"], values["a.val"]), (12, 7))
         # Program variables, system variables, constants, and functions stay refused.
         program = read_program_names(_numbered("int count=0"))
-        for code, message in [("var count = 1", "local count has the name of a component"),
-                              ("var dim = 1", "local dim has the name of a component")]:
+        for code, message in [("var count = 1", "local `count` has the name of a component"),
+                              ("var dim = 1", "local `dim` has the name of a component")]:
             with self.subTest(code=code):
                 with self.assertRaisesRegex(NxwrightError, message):
                     compile_lines(code, program=program)
         for page, message in [
-                ("const K = 1\n\non p.down:\n  var K = 2\n", "line 4: K is already a constant"),
+                ("const K = 1\n\non p.down:\n  var K = 2\n", "line 4: `K` already exists as a constant, it cannot be redefined"),
                 ("function g():\n  x.val = 1\n\nfunction f(g: number):\n  x.val = g\n",
-                 "line 4: g is already a function")]:
+                 "line 4: `g` already exists as a function, it cannot be redefined")]:
             with self.subTest(page=page):
                 with self.assertRaisesRegex(NxwrightError, message):
                     run_page(page)
@@ -1666,43 +1673,43 @@ class FunctionTest(unittest.TestCase):
 
     def test_refusals(self):
         for code, message in [
-                ("x.val = nothing(1)", ": unknown function nothing"),
-                ("x.val = twice(1, 2)", ": twice takes 1 arguments, not 2"),
-                ("x.val = greet(\"a\")", ": function greet has no result"),
-                ("x.val = twice(\"a\")", ": twice takes a number, not text"),
-                ("return 1", ": return can only be in a function"),
+                ("x.val = nothing(1)", ": unknown function `nothing`"),
+                ("x.val = twice(1, 2)", ": `twice` takes 1 argument, not 2"),
+                ("x.val = greet(\"a\")", ": function `greet` has no result"),
+                ("x.val = twice(\"a\")", ": `twice` must be called with a number, not text"),
+                ("return 1", ": `return` can only be used in a function"),
                 # A call as a statement, half typed: a line that starts with a
                 # name and "(" is a call, never an Editor command.
                 ("bump(", ": the line ends too early"),
-                ("greet(\"a\"", ": expected '\\)'"),
-                ("bump() 1", ": unexpected '1'"),
-                ("bump(#)", ": cannot read '#\\)'")]:
+                ("greet(\"a\"", ": expected `\\)`"),
+                ("bump() 1", ": unexpected `1`"),
+                ("bump(#)", ": `#\\)` is not valid code")]:
             with self.subTest(code=code), self.assertRaisesRegex(NxwrightError, message):
                 self.run_code(code)
         for text, message in [
-                ("function f() -> number:\n  return f()\n", "function f calls itself \\(f -> f\\)"),
+                ("function f() -> number:\n  return f()\n", "function `f` calls itself \\(f -> f\\)\\. nxlang forbids recursion\\."),
                 ("function f() -> number:\n  return g()\n\nfunction g() -> number:\n  return f()\n",
-                 "function f calls itself \\(f -> g -> f\\)"),
+                 "function `f` calls itself \\(f -> g -> f\\)\\. nxlang forbids recursion\\."),
                 # An event run again while it runs, by a click, or a click in a call.
                 ("on t0.down:\n  click t0,1\n",
-                 "line 2: the calls and clicks t0.down -> t0.down come back to t0.down, which "
-                 "has one set of variables"),
+                 "line 2: event `t0.down` calls itself \\(t0.down -> t0.down\\)\\. nxlang forbids "
+                 "recursion\\."),
                 ("function f():\n  click t0,1\n\non t0.down:\n  f()\n",
-                 "line 5: the calls and clicks t0.down -> f -> t0.down come back to t0.down"),
-                ("function f() -> number:\n  return 1\n  x.val = 2\n", "line 2: return must be the last"),
+                 "line 5: event `t0.down` calls itself \\(t0.down -> f -> t0.down\\)"),
+                ("function f() -> number:\n  return 1\n  x.val = 2\n", "line 2: `return` must be the last"),
                 ("function f() -> number:\n  if (a.val == 1) {\n    return 1\n  }\n",
-                 "line 3: return must be the last"),
-                ("function f() -> number:\n  x.val = 1\n", "line 1: function f must end with return"),
-                ("function f():\n  return 1\n", "line 2: function f has no result to return"),
-                ("function a():\n  x.val = 1\n", "line 1: function a has the name of a component"),
-                ("const K = 1\nfunction K():\n  x.val = 1\n", "line 2: K is already a constant"),
+                 "line 3: `return` must be the last"),
+                ("function f() -> number:\n  x.val = 1\n", "line 1: function `f` must end with `return`"),
+                ("function f():\n  return 1\n", "line 2: function `f` has no result to return"),
+                ("function a():\n  x.val = 1\n", "line 1: function `a` has the name of a component"),
+                ("const K = 1\nfunction K():\n  x.val = 1\n", "line 2: `K` already exists as a constant, it cannot be redefined"),
                 ("function f():\n  x.val = 1\n\nfunction f():\n  x.val = 2\n",
-                 "line 4: function f appears twice"),
-                ("function f(n: number, n: text):\n  x.val = 1\n", "line 1: parameter n appears twice"),
+                 "line 4: function `f` is already defined"),
+                ("function f(n: number, n: text):\n  x.val = 1\n", "line 1: parameter `n` is already declared"),
                 ("function f(n: list):\n  x.val = 1\n", "line 1: a parameter is written"),
                 ("function f(g: number):\n  x.val = 1\n\nfunction g():\n  x.val = 2\n",
-                 "line 1: g is already a function"),
-                ("function f():\n  var f = 1\n", "line 2: f is already a function")]:
+                 "line 1: `g` already exists as a function, it cannot be redefined"),
+                ("function f():\n  var f = 1\n", "line 2: `f` already exists as a function, it cannot be redefined")]:
             with self.subTest(text=text), self.assertRaisesRegex(NxwrightError, message):
                 run_page(text + "\non p.down:\n  x.val = 1\n")
 
@@ -1730,11 +1737,12 @@ class FunctionTest(unittest.TestCase):
                      "on p.down:\n  f()\n  g()\n",
                      "function f():\n  goto again\n\non p.down:\n  again:\n  f()\n"):
             with self.subTest(text=text), self.assertRaisesRegex(
-                    NxwrightError, "line 2: function f has no label"):
+                    NxwrightError, "line 2: function `f` has no label"):
                 run_page(text)
 
     def test_a_label_twice_in_a_function(self):
-        with self.assertRaisesRegex(NxwrightError, "line 3: done: function f holds this label twice"):
+        with self.assertRaisesRegex(NxwrightError,
+                                    "line 3: function `f` already has the label `done`"):
             run_page("function f():\n  done:\n  done:\n\non p.down:\n  f()\n")
 
     def test_a_label_named_as_a_local_or_a_constant(self):
@@ -1779,8 +1787,10 @@ class FunctionSourceFolderTest(NxlangFolderTestCase):
             for number in range(248):
                 file.write('\n[[component]]\nname = "v%d"\ntype = "variable"\n' % number)
         # The page's 250 components, and the function's hotspot.
-        self.assert_export_refused(r"^first\.page\.toml: nxlang adds 1 component to run this "
-                                   r"page's code, which brings the page to 251 components")
+        self.assert_export_refused(
+            r"^first\.page\.toml: the page has 251 components, and the limit is 250\. nxlang "
+            r"adds 1 of them to run the page's code\. Remove 1 component, or move it to another "
+            r"page\.$")
 
 
 class EventCommentTest(NxlangFolderTestCase):
@@ -1870,9 +1880,9 @@ class EventCommentTest(NxlangFolderTestCase):
                      "on first.down:\n  x.val=1\n// inside\n\n  x.val=2\n"]:
             with self.subTest(text=text):
                 self.write_events(text)
-                self.assert_export_refused("a comment at the start of a line, inside the code "
-                                           "of first.down: indent it as its code, or move it "
-                                           "right above a heading")
+                self.assert_export_refused(
+                    r"pages/first\.nx line 3: this comment is not indented, but it is inside the "
+                    r"code of event `first\.down`\. Indent it, or move it right above a heading\.")
 
 
 def block(code: str) -> str:
@@ -2079,19 +2089,19 @@ switch (a.val) {
     def test_refusals(self):
         for code, message in [
                 # Line 1 is the event's heading.
-                ("break", "line 2: break can only be in a loop or a switch"),
-                ("switch (a.val) {\n  case 1:\n    continue\n}", "line 4: continue can only be in a loop"),
-                ("case 1:", "line 2: case and default can only be in a switch"),
-                ("switch (a.val) {\n  x.val = 1\n  case 1:\n}", "line 3: code before the first case"),
-                ("switch (a.val) {\n  case 1:\n  case 1:\n}", "line 4: case 1 appears twice"),
-                ("switch (a.val) {\n  case 1:\n  case 0x1:\n}", "line 4: case 0x1 appears twice"),
+                ("break", "line 2: `break` can only be used in a loop or a switch"),
+                ("switch (a.val) {\n  case 1:\n    continue\n}", "line 4: `continue` can only be used in a loop"),
+                ("case 1:", "line 2: `case` and `default` can only be used in a switch"),
+                ("switch (a.val) {\n  x.val = 1\n  case 1:\n}", "line 3: code before the first `case` of a switch is not allowed"),
+                ("switch (a.val) {\n  case 1:\n  case 1:\n}", "line 4: case `1` is already in this switch"),
+                ("switch (a.val) {\n  case 1:\n  case 0x1:\n}", "line 4: case `0x1` is already in this switch"),
                 # In 32 bits, as C compares them.
                 ("switch (a.val) {\n  case -1:\n  case 0xFFFFFFFF:\n}",
-                 "line 4: case 0xFFFFFFFF appears twice"),
-                ("switch (a.val) {\n  case 7:\n  case 007:\n}", "line 4: case 007 appears twice"),
-                ("switch (a.val) {\n  default:\n  default:\n}", "line 4: a switch has one default"),
-                ("switch (a.val) {\n  case b.val:\n}", "line 3: a case holds a number, a text"),
-                ("switch (a.val) {\n  case \"x\":\n}", "line 3: the case's value is not of the switch's kind")]:
+                 "line 4: case `0xFFFFFFFF` is already in this switch"),
+                ("switch (a.val) {\n  case 7:\n  case 007:\n}", "line 4: case `007` is already in this switch"),
+                ("switch (a.val) {\n  default:\n  default:\n}", "line 4: a switch has at most one `default`"),
+                ("switch (a.val) {\n  case b.val:\n}", "line 3: a case must be a number, text"),
+                ("switch (a.val) {\n  case \"x\":\n}", "line 3: the case's value and the switch's value must both be numbers, or both texts")]:
             with self.subTest(code=code), self.assertRaisesRegex(NxwrightError, message):
                 run_page("on p.down:\n" + block(code) + "\n")
 
@@ -2115,13 +2125,13 @@ while (x.val < 5) {
     def test_program_cannot_jump(self):
         program = ProgramNames()
         for code, message in [
-                ("while (sys0 < 3) {\n  break\n}", "line 1: program.nx cannot use break or continue"),
-                ("switch (sys0) {\n  case 1:\n}", "line 1: program.nx cannot use switch")]:
+                ("while (sys0 < 3) {\n  break\n}", "line 1: `break` and `continue` cannot be used in program.nx"),
+                ("switch (sys0) {\n  case 1:\n}", "line 1: `switch` cannot be used in program.nx")]:
             with self.subTest(code=code), self.assertRaisesRegex(NxwrightError, message):
                 compile_program(_numbered(code), program)
 
     def test_names_of_keywords(self):
-        with self.assertRaisesRegex(NxwrightError, "local case has the name of a component, "
+        with self.assertRaisesRegex(NxwrightError, "local `case` has the name of a component, "
                                                    "variable, or keyword"):
             run_page("on p.down:\n  var case = 1\n")
         # A component may keep such a name.
@@ -2170,7 +2180,7 @@ class FewerObjectsTest(unittest.TestCase):
         self.assertEqual(compiled.globals, ["__g0_0"])
 
     def test_program_int_names_may_not_start_with_the_prefix(self):
-        with self.assertRaisesRegex(NxwrightError, "line 2: int __x may not start with"):
+        with self.assertRaisesRegex(NxwrightError, "line 2: int `__x` may not start with"):
             read_program_names(_numbered("int a=0\nint __x=0"))
 
     def test_caller_temporaries_survive_a_call(self):
@@ -2205,8 +2215,9 @@ class FewerObjectsTest(unittest.TestCase):
         # f0 calls f1, and so on to f8. Cut after f6, the calls nest 7 deep;
         # cut after f7, 8 deep.
         run_page(functions.replace("f7() + 1", "1") + "on p.down:\n  x.val = f0()\n")
-        with self.assertRaisesRegex(NxwrightError, "the calls f0 -> f1 -> f2 -> f3 -> f4 -> f5 "
-                                                   "-> f6 -> f7 nest 8 deep; at most 7"):
+        with self.assertRaisesRegex(NxwrightError, "too many calls in a chain: 8, and the limit "
+                                                   "is 7 \\(f0 -> f1 -> f2 -> f3 -> f4 -> f5 -> f6 "
+                                                   "-> f7\\)"):
             run_page(functions.replace("f8() + 1", "1") + "on p.down:\n  x.val = f0()\n")
 
 
@@ -2307,9 +2318,9 @@ class SharedVariablesTest(unittest.TestCase):
                             for name, following in zip(names, names[1:] + [None]))
         run_page(functions + "on t0.down:\n  c.val += 1\n\non p.down:\n  x.val = f0()\n")
         deeper = "on t0.down:\n  click t1,1\n\non t1.down:\n  c.val += 1\n\non p.down:\n  x.val = f0()\n"
-        with self.assertRaisesRegex(NxwrightError, "the calls and clicks p.down -> f0 -> f1 -> f2 -> f3 "
-                                                   "-> f4 -> f5 -> t0.down -> t1.down nest 8 deep; "
-                                                   "at most 7"):
+        with self.assertRaisesRegex(NxwrightError, "too many calls and clicks in a chain: 8, and the "
+                                                   "limit is 7 \\(p.down -> f0 -> f1 -> f2 -> f3 -> f4 "
+                                                   "-> f5 -> t0.down -> t1.down\\)"):
             run_page(functions + deeper)
 
     def test_a_cycle_through_clicks_is_refused(self):
@@ -2402,7 +2413,7 @@ class IncludeTest(unittest.TestCase):
                           for number in range(1, 8))
         page = 'include "deep.nx"\n\nfunction f0() -> number:\n  return f1()\n\non p.down:\n  x.val = f0()\n'
         # The error names f7, the eighth deep, at its heading: line 19 of deep.nx.
-        with self.assertRaisesRegex(NxwrightError, "pages/deep.nx line 19: the calls f0 -> f1 .* -> f7 nest 8 deep"):
+        with self.assertRaisesRegex(NxwrightError, "pages/deep.nx line 19: too many calls in a chain: 8, and the limit is 7 \\(f0 -> f1 .* -> f7\\)"):
             run_page(page, files={"pages/deep.nx": library})
 
     def test_refusals(self):
@@ -2411,20 +2422,22 @@ class IncludeTest(unittest.TestCase):
         for page, message in [
                 ('include "lib/none.nx"\non p.up:\n  r.val = 1\n',
                  "pages/p.nx line 1: pages/lib/none.nx is missing"),
-                ('include "../../outside.nx"\non p.up:\n  r.val = 1\n', "leaves the source folder"),
-                ('include "bad.txt"\non p.up:\n  r.val = 1\n', "bad.txt does not end in .nx"),
+                ('include "../../outside.nx"\non p.up:\n  r.val = 1\n',
+                 r"pages/p\.nx line 1: `\.\./\.\./outside\.nx` is outside the source folder"),
+                ('include "bad.txt"\non p.up:\n  r.val = 1\n',
+                 r"pages/p\.nx line 1: included files must use the `\.nx` extension"),
                 ('include "a.nx"\n\non p.down:\n  r.val = 2\n',
-                 "pages/p.nx line 3: p.down is also defined in pages/a.nx"),
+                 "pages/p.nx line 3: event `p.down` is already defined in pages/a.nx"),
                 ('include "lib/fixed.nx"\ninclude "c.nx"\non p.up:\n  r.val = 1\n',
-                 "pages/c.nx line 1: SCALE is already a constant"),
+                 "pages/c.nx line 1: `SCALE` already exists as a constant, it cannot be redefined"),
                 ('include "lib/fixed.nx"\n\nfunction toFixed() -> number:\n  return 1\n',
-                 "function toFixed is also defined in pages/lib/fixed.nx"),
+                 "function `toFixed` is already defined in pages/lib/fixed.nx"),
                 ('on p.up:\n  r.val = 1\ninclude "lib/fixed.nx"\n', "pages/p.nx line 3: expected"),
                 ('include "lib/fixed.nx" all\non p.up:\n  r.val = 1\n',
-                 'pages/p.nx line 1: an include is written include "<path>.nx", '
-                 'include "<path>.nx" partial, or include "<path>.nx" strict'),
+                 'pages/p.nx line 1: invalid include. Use `include "<path>.nx"`, '
+                 '`include "<path>.nx" partial`, or `include "<path>.nx" strict`.'),
                 ('include "lib/fixed.nx" partial strict\non p.up:\n  r.val = 1\n',
-                 'pages/p.nx line 1: an include is written')]:
+                 'pages/p.nx line 1: invalid include')]:
             with self.subTest(page=page), self.assertRaisesRegex(NxwrightError, message):
                 compile_nxlang_page(page, "p", COMPONENTS, ProgramNames(), read=reader(files),
                                     page_events=None)

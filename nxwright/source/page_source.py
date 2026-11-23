@@ -58,7 +58,7 @@ from nxwright.project.component_defaults import DERIVED_ATTRIBUTES, PLACEMENT_AT
 from nxwright.project.device_settings import (DEFAULT_ENCODING, TextCodec, encoding_code,
                                               is_password_hash_text)
 from nxwright.project.editor_limits import (LEAST_SIDE, bounded_attributes, check_component_count,
-                                             check_page_limits, least_size_words)
+                                             check_page_limits)
 from nxwright.project.page_block import HEADER_SIZE, Attribute, Event, Marker, PageBlock, PageObject
 from nxwright.project.page_header import (HEADER_21, NO_LOCK_PASSWORD, SYSTEM_PAGES, PageHeader,
                                          header_16, header_40, page_header_of)
@@ -212,7 +212,8 @@ def page_to_source(page: PageBlock, names: ResourceNames, defaults: dict,
                 headings.append(text)
             if dropped:
                 warnings.append(blank_lines_dropped(
-                    "page %s, event %s.%s" % (page.name, content.name, event.name), dropped))
+                    "page `%s`, event `%s.%s`" % (page.name, content.name, event.name),
+                    dropped))
     return PageSource(page_file_text(tables), "\n".join(headings), tuple(warnings))
 
 
@@ -385,11 +386,11 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
                             % (page_file_stem(page_name),
                                next(name for name in object_names if object_names.count(name) > 1)))
     objects = []
+    file = "%s.page.toml" % page_file_stem(page_name)
     for index, table in enumerate(tables):
         try:
             objects.append(_object_from_table(table, index, code, names, defaults, codec,
-                                              "%s.page.toml, object %d"
-                                              % (page_file_stem(page_name), index)))
+                                              "%s, object %d" % (file, index), file))
         except NxwrightError as error:
             error.table = index
             raise
@@ -1066,11 +1067,11 @@ def _parse_events(text: str, page_name: str, names: ResourceNames, codec: TextCo
 
 def _object_from_table(table: dict, index: int, code: dict, names: ResourceNames,
                        defaults: dict, codec: TextCodec, where: str,
-                       whole_checks: bool = True) -> PageObject:
+                       file: str = None) -> PageObject:
     """Rebuilds one object, taking its event code out of `code`. With
-    `whole_checks`, it also refuses the object as a whole, as the build
-    does: a keyboard bound to a component of local scope, and a component
-    narrower or lower than LEAST_SIDE.
+    `file`, the page's file as a message gives it, it also refuses the
+    object as a whole, as the build does: a keyboard bound to a component of
+    local scope, and a component narrower or lower than LEAST_SIDE.
 
     A table marked "defaults = false" lists every attribute, in stored order.
     Any other table leaves out what equals its type's defaults; those are
@@ -1108,9 +1109,9 @@ def _object_from_table(table: dict, index: int, code: dict, names: ResourceNames
         attributes = [Attribute(key, given.get(key, value)) for key, value in defaults_order]
         if events is None:
             events = type_defaults.events
-    if whole_checks:
+    if file is not None:
         _check_keyboard_scope(attributes, name, where)
-        _check_least_size(attributes, TYPE_NAMES.get(object_type), name, where)
+        _check_least_size(attributes, name, file)
     if ("endx" in given or "endy" in given) and "h" not in given:
         raise NxwrightError("%s: endx and endy need h" % where)
     derived = _derived_values(index, name, given)
@@ -1186,7 +1187,8 @@ def page_components(text: str, page_name: str, names: ResourceNames, defaults: d
     components = []
     for index, table in enumerate(tables):
         where = "%s, %s" % (page_toml_path(page_name), table.get("name", "table %d" % index))
-        page_object = _object_from_table(table, index, {}, names, defaults, codec, where)
+        page_object = _object_from_table(table, index, {}, names, defaults, codec, where,
+                                         page_toml_path(page_name))
         object_type = page_object.attribute("type")[0]
         values = {}
         for item in page_object.items:
@@ -1220,8 +1222,7 @@ def component_properties(table: dict, index: int, names: ResourceNames, defaults
     for its keyboard's scope or its size, still gives its properties, so
     that they can be shown and changed."""
     codec = TextCodec(encoding)
-    page_object = _object_from_table(table, index, {}, names, defaults, codec, where,
-                                     whole_checks=False)
+    page_object = _object_from_table(table, index, {}, names, defaults, codec, where)
     object_type = page_object.attribute("type")[0]
     full = _table_header(table, where)[3]
     type_defaults = dict(defaults[object_type].attributes) if object_type in defaults else {}
@@ -1376,16 +1377,16 @@ def _value_to_bytes(key: str, value, object_type: int, names: ResourceNames, cod
     return allowed_number_bytes(object_type, key, value, width, "%s: %s" % (where, key))
 
 
-def _check_least_size(attributes: list, type_name: str, name: str, where: str):
-    """Raises NxwrightError for a component of the type `type_name`
-    narrower or lower than LEAST_SIDE, from its `attributes`, which the
-    Editor would not open as it is (editor_limits.least_size_words)."""
+def _check_least_size(attributes: list, name: str, file: str):
+    """Raises NxwrightError, starting with `file` (the page's file), for a
+    component named `name` that is narrower or lower than LEAST_SIDE, from
+    its `attributes`. The Editor would not open it as it is
+    (editor_limits.LEAST_SIDE)."""
     sides = {attribute.name: number_from_bytes(attribute.value) for attribute in attributes
              if attribute.name in ("w", "h")}
     if len(sides) == 2 and min(sides.values()) < LEAST_SIDE:
-        raise NxwrightError("%s: component %s is %d by %d; %s"
-                            % (where, name, sides["w"], sides["h"],
-                               least_size_words(type_name, sides["w"], sides["h"])),
+        raise NxwrightError("%s: component `%s` is %d by %d. It must be at least %d by %d."
+                            % (file, name, sides["w"], sides["h"], LEAST_SIDE, LEAST_SIDE),
                             fix={"kind": "least-size", "component": name})
 
 
