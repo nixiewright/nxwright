@@ -624,6 +624,10 @@ class Simulation:
         # {slider: its knob's start along its track} where a touch put it on
         # the page shown, until code stores its `val` (_slide).
         self._knobs = {}
+        # The external pictures of the page shown that the screen will draw
+        # again once the running code ends, in the order they were marked
+        # (_draw_marked_pictures).
+        self._pictures_to_draw = {}
         # Whether the page shown, entered while `ref_stop` held, waits for
         # `ref_star` to start its slides (page_changed).
         self._slides_wait = False
@@ -1735,6 +1739,20 @@ class Simulation:
         # The old page's event ends here: the code after the command does not run.
         raise _EventEnded()
 
+    def drawn_again(self, name: str):
+        """Marks external pictures for the screen to draw again once the code
+        ends (_draw_marked_pictures). `name` is the component or page given
+        to a `ref`, or the page that a file command draws again. If `name` is
+        the page shown, every external picture of that page is marked.
+        Otherwise `name` itself is marked, if it is an external picture."""
+        if self.page is None or self.loading:
+            return
+        if name == self.page:
+            self._pictures_to_draw.update(
+                dict.fromkeys(self._of_kind(self.page, "external-picture")))
+        elif self._kinds[self.page].get(name) == "external-picture":
+            self._pictures_to_draw[name] = None
+
     def stored(self, name: str, value, machine: EditorMachine, before=None):
         """Acts on a value the code stored, `before` being what the name
         held: the clock moves on during a `delay`, `sleep` sleeps or wakes, a
@@ -1744,6 +1762,11 @@ class Simulation:
         head = name.split(".", 1)[0] if "." in name else None
         if self._drawing_held is not None and head is not None:
             self._drawing_held.changed.add(head)
+        if self.page is not None and not self.loading:
+            # Values the load event stores mark no external picture, because
+            # the whole page, with its external pictures, is drawn after the
+            # event (_check_picture_files).
+            self._mark_pictures_stored(name, head, value, before, machine.values)
         if name == "%s.val" % head:
             # Its `val` places a slider's knob again, even storing the value it
             # had (_slide).
@@ -1816,13 +1839,6 @@ class Simulation:
                 self._schedule(timer, machine.values)
         if head in self._clocked:
             self._clocked[head].changed(name[len(head) + 1:], machine.values, self.clock)
-        if self.page is not None and name == "%s.path" % head and not self.loading and \
-                self._kinds[self.page].get(head) == "external-picture" and \
-                self._switched("vis", head):
-            # A `path` set while the page's load event runs is not checked
-            # here. _check_picture_files checks it after the event, with the
-            # page's other external pictures.
-            self._check_picture_file(head, value, machine.values)
         if head is not None and self.page is not None and name[len(head) + 1:] in _LIST_MOVED:
             self._worked(head, name[len(head) + 1:], machine.values)
 
@@ -2367,14 +2383,21 @@ class Simulation:
                              memory_file_storage_size=self._memory_file_storage_size)
 
     def _after_code(self, answer=None):
-        """What follows code the screen ran, an event's or a typed line's, its
-        values kept: the screen starts again if it ran `rest`; then
-        `answer()`, a typed line's answer, if given; then the serial
-        instructions held, if it ran `com_star`; then the moves it queued."""
+        """Finishes the code the screen ran, from an event or a typed line,
+        once the code's values are kept. In this order:
+
+        - the screen starts again, if the code ran `rest`;
+        - `answer()` sends a typed line's answer, if one is given;
+        - the external pictures the code marked are drawn
+          (_draw_marked_pictures);
+        - the serial instructions that were held run, if the code ran
+          `com_star`;
+        - the moves the code queued start."""
         if self._reset:
             self._start_again_by_rest()
         if answer is not None:
             answer()
+        self._draw_marked_pictures()
         self._resume_when_asked()
         self._start_moves()
 
@@ -2456,7 +2479,11 @@ class Simulation:
         of that name is replaced. If the card's folder or the disk rejects
         the write, for example because `path` is a folder, nothing is
         written, and the failure is recorded in "file errors". By then the
-        screen has already answered FD FF FF FF."""
+        screen has already answered FD FF FF FF.
+
+        Once the file is written, the screen draws its page again
+        (_draw_marked_pictures). A real NX8048P070 did so after it answered
+        FD FF FF FF."""
         try:
             write_card_file(self.cards, path, data, self.globals)
         except (CardRefusal, OSError):
@@ -2465,6 +2492,9 @@ class Simulation:
             record, entry = "file commands", ("twfile", path, len(data))
         self.globals.setdefault(record, []).append(entry)
         self._write_log(LOGGED[record](entry, self.encoding))
+        if record == "file commands" and self.page is not None:
+            self.drawn_again(self.page)
+            self._draw_marked_pictures()
 
     def _write_transferred(self, address: int, data: bytes):
         """Writes `data` to the EEPROM at `address`, and to its file, as
@@ -2722,8 +2752,10 @@ class Simulation:
         self._opening_due = None
         self._slid = {}
         self._slides_wait = False
-        # Its sliders' knobs are placed by `val` again.
+        # Its sliders' knobs are placed by `val` again. External pictures of
+        # the previous page that were waiting to be drawn again are dropped.
         self._knobs = {}
+        self._pictures_to_draw = {}
 
     def _start_opening(self, values: dict):
         """Starts the slides of the page shown as it is drawn, once its load
@@ -2814,14 +2846,60 @@ class Simulation:
             if self._switched("vis", name):
                 self._check_picture_file(name, fields.get(name + ".path", ""), card_values)
 
+    def _mark_pictures_stored(self, name: str, head, value, before, values: dict):
+        """Marks the external pictures on the page shown that the screen will
+        draw again because the code stored `name`. The screen draws them
+        once the code ends (_draw_marked_pictures). `head` is the component
+        that `name` is an attribute of, or None. `before` is the value `name`
+        held, and `values` are the values of the running code.
+
+        A real NX8048P070 drew an external picture again when code stored a
+        value in any of its attributes, even the value already there, and
+        when `vis` showed the picture while it was hidden. It did not draw
+        the picture again when `vis` showed a picture that was already
+        shown. It also did not draw it again when code set an attribute that
+        the picture's type lacks, such as `pco`, because the screen refused
+        that."""
+        kinds = self._kinds[self.page]
+        if head is not None:
+            if kinds.get(head) == "external-picture" and name in self.pages[self.page].start:
+                self._pictures_to_draw[head] = None
+            return
+        if not name.startswith("vis ") or value != 1:
+            return
+        target = name[4:]
+        if target == "255":
+            # Each component's own `vis` value has not changed since before
+            # `vis 255`.
+            hidden = [picture for picture in self._of_kind(self.page, "external-picture")
+                      if not values.get("vis " + picture, 1 if before is None else before)]
+        else:
+            was = values.get("vis 255", 1) if before is None else before
+            hidden = [target] if kinds.get(target) == "external-picture" and not was else []
+        self._pictures_to_draw.update(dict.fromkeys(hidden))
+
+    def _draw_marked_pictures(self):
+        """Draws the external pictures the code marked, each one once. This
+        runs after the code has ended (_after_code), because that is when a
+        real screen draws what the code changed. If a marked picture is
+        shown and its file is missing, the simulation answers 0x06
+        (_check_picture_file)."""
+        marked, self._pictures_to_draw = self._pictures_to_draw, {}
+        if self.page is None:
+            return
+        fields = self._fields_now()
+        for name in marked:
+            if self._switched("vis", name):
+                self._check_picture_file(name, fields.get(name + ".path", ""), self.globals)
+
     def _check_picture_file(self, component: str, path, card_values: dict):
         """Checks the file at `path`, which the external picture `component`
         shows, and writes to the log what stops the picture from showing.
         `card_values` contains the files kept in memory.
 
-        If the file is missing, the simulation answers 0x06 when `bkcmd` is 2
-        or 3. The Nextion Editor's simulator answered the same way. An empty
-        `path`, or one that is neither on a card nor in ram/, is not checked.
+        If the file is missing, the simulation answers 0x06, whatever `bkcmd`
+        is. A real NX8048P070 did the same. An empty `path`, or one that is
+        neither on a card nor in ram/, is not checked.
 
         If the file exists, and the screen does not show files of its kind
         (external_pictures.shown), the log lists the kinds of file the
@@ -2836,7 +2914,7 @@ class Simulation:
             data = None
         if data is None:
             self._write_log("%s cannot show %s: there is no such file" % (component, path))
-            self._return_code(INVALID_FILE_OPERATION, False)
+            self._send_logged(bytes([INVALID_FILE_OPERATION]) + END)
         else:
             kind = external_pictures.file_kind(data)
             if external_pictures.shown(kind, self._series) != external_pictures.PICTURE:

@@ -448,8 +448,11 @@ class EditorMachine:
     or to "waveform", `reason` being why the screen ignored a file command,
     or None; `screen.released(component, machine)` after a `click`'s
     Touch Release event; `screen.drawing_stopped(stopped, machine)` at a
-    `ref_stop` (True) and a `ref_star` (False); `screen.answer_typed_now()`
-    before the event a typed `click` runs, which the screen answers first;
+    `ref_stop` (True) and a `ref_star` (False); `screen.drawn_again(name)`
+    at a `ref` of the component or page `name`, and with the page's name
+    after a file command that draws the page again (_page_drawn_again);
+    `screen.answer_typed_now()` before the event a typed `click` runs,
+    which the screen answers first;
     `screen.refused(code, typed)` for a line it refuses (_refused); and
     `screen.by_index(name, machine)`, for a name of the screen's arrays, `p[1].b[5].txt`,
     `p[1].t0.txt`, or `b[5].txt`, which returns the name it stands for, or
@@ -1434,12 +1437,29 @@ class EditorMachine:
                    "deldir": lambda: self.cards.delete_folder(paths[0]),
                    "refile": lambda: self.cards.rename(paths[0], paths[1]),
                    "redir": lambda: self.cards.rename_folder(paths[0], paths[1])}[word]
-            self._on_folder(word, paths[0], act)
+
+            def carried_out() -> bool:
+                act()
+                return True
+            if self._on_folder(word, paths[0], carried_out, refused=False) or word == "delfile":
+                self._page_drawn_again(word)
             return
         if word == "newfile":
             contents.setdefault(paths[0], bytes(paths[1]))
         if word == "delfile":
             contents.pop(paths[0], None)
+        self._page_drawn_again(word)
+
+    def _page_drawn_again(self, word: str):
+        """Tells the simulation's screen, if any, to draw the page again when
+        `word`, the file command just carried out, is a `refile` or a
+        `delfile`. A real NX8048P070 drew its page again after both, even
+        after a `delfile` of a missing file, but not after a `newfile`. The
+        simulation draws the page after a `twfile` itself, once its transfer
+        ends (Simulation._write_transferred_file). Other file commands were
+        not tried."""
+        if word in ("delfile", "refile") and self.screen is not None and self.page is not None:
+            self.screen.drawn_again(self.page)
 
     def _ram_command(self, word: str, paths: list, contents: dict):
         """Runs `word`, a newfile, refile, or newdir whose first path is in
@@ -1459,6 +1479,7 @@ class EditorMachine:
             reason = ram_files.NO_FOLDERS       # newdir
         if reason is None:
             self._record("file commands", (word, *paths))
+            self._page_drawn_again(word)
         else:
             self._record("file errors", (word, paths[0]), reason)
             self._refused(INVALID_FILE_OPERATION)
@@ -1485,6 +1506,8 @@ class EditorMachine:
                 self._check_resource(PICTURE, computed[PICTURE_ARGUMENTS[command[1]]],
                                      _INVALID_PICTURE)
             self.values.setdefault("painted", []).append((command[1], *computed))
+            if command[1] == "ref" and self.screen is not None:
+                self.screen.drawn_again(computed[0])
             if command[1] == "xstr":
                 # Its background was painted when its font was found missing.
                 self._check_resource(FONT, computed[XSTR_FONT_ARGUMENT], _INVALID_FONT)

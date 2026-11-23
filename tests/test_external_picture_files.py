@@ -5,7 +5,8 @@ file kept in memory, and a file that is missing.
 The files that show, and the marker, are the ones a real NX8048P070
 (Intelligent) and a real NX4848E040 (Edge) showed. The answers for a
 missing file are the ones the Nextion Editor's simulator gave for an
-NX8048P050."""
+NX8048P050, and those a real NX8048P070 gave when it drew an external
+picture again (DrawnAgainTest)."""
 import base64
 import io
 from pathlib import Path
@@ -424,6 +425,15 @@ class MissingFileTest(ExternalPictureTestCase):
         Simulation(self.root, sending=self.sent.append)
         self.assertEqual(self.refusals(), 1)
 
+    def test_whatever_bkcmd_is(self):
+        # A real NX8048P070 answered 0x06 for a missing file even when bkcmd
+        # was 0. At 0, bkcmd stops every other error code from being sent.
+        simulation = self.started("sd0/missing.jpg")
+        self.refusals()
+        simulation.serial_input("bkcmd=0")
+        simulation.serial_input("ref p0")
+        self.assertEqual(self.refusals(), 1)
+
     def test_a_file_the_screen_does_not_show_is_logged_each_time(self):
         simulation = self.started("ram/bad.jpg", {"ram/bad.jpg": TEXT, "ram/p.jpg": RED})
         start = "p0 cannot show ram/bad.jpg: "
@@ -434,3 +444,113 @@ class MissingFileTest(ExternalPictureTestCase):
         self.assertEqual((logged(), self.refusals()), (2, 0))
         self.assertEqual([entry for entry in self.log(simulation)
                           if entry.startswith("p0 cannot show ram/p.jpg")], [])
+
+
+class DrawnAgainTest(ExternalPictureTestCase):
+    """The screen answers 0x06 each time it draws an external picture whose
+    file is missing. A real NX8048P070 did the same. The screen draws what
+    the code changed only once the code has ended and the screen has sent
+    its answer to the instruction. Then it draws each external picture
+    once, however many times the code changed it."""
+
+    def three_pictures(self, code: str = "") -> Simulation:
+        """Starts a simulation whose page has three external pictures, `p0`,
+        `p1`, and `p2`, each with a missing file, and a hotspot, `m0`. The
+        page's `code` is given in the form of a page's .nx file. The
+        answers of the page's opening are cleared."""
+        self.write("app.toml", edited_app(self.text("app.toml"),
+                                          lambda app: app.update(memory_file_storage_size=4096)))
+        self.page("page0", [table("p%d" % number, "external-picture", x=10, y=20 + 60 * number,
+                                  w=100, h=50, path="sd0/missing.jpg") for number in range(3)]
+                  + [table("m0", "hotspot", x=300, y=20, w=100, h=100)], code)
+        self.sent = []
+        simulation = Simulation(self.root, sending=self.sent.append)
+        self.assertEqual(self.refusals(), 3)
+        return simulation
+
+    def test_when_code_changes_it(self):
+        simulation = self.three_pictures()
+        for line in ("ref p0", "p0.aph=127", "p1.x=10"):
+            with self.subTest(line):
+                simulation.serial_input(line)
+                self.assertEqual(self.refusals(), 1)
+        simulation.serial_input("sys0=1")
+        self.assertEqual(self.refusals(), 0)
+
+    def test_not_for_an_attribute_its_type_lacks(self):
+        # A real screen answered p1.pco=0 with 0x1A only.
+        simulation = self.three_pictures()
+        simulation.serial_input("p1.pco=0")
+        self.assertEqual(self.sent, [bytes.fromhex("1a ff ff ff")])
+
+    def test_when_the_page_is_drawn_again(self):
+        simulation = self.three_pictures()
+        simulation.serial_input("ref 0")
+        self.assertEqual(self.refusals(), 3)
+
+    def test_after_a_file_command(self):
+        # newfile does not draw the page again. A refile that fails answers
+        # its own 0x06, and does not draw the page.
+        simulation = self.three_pictures()
+        for line, answers in (('newfile "ram/a.txt",10', 0),
+                              ('refile "ram/a.txt","ram/b.txt"', 3),
+                              ('delfile "ram/b.txt"', 3),
+                              ('delfile "ram/none.txt"', 3),
+                              ('refile "ram/none.txt","ram/x.txt"', 1)):
+            with self.subTest(line):
+                simulation.serial_input(line)
+                self.assertEqual(self.refusals(), answers)
+
+    def test_after_a_file_command_on_a_card_given_no_folder(self):
+        simulation = self.three_pictures()
+        simulation.serial_input('newfile "sd0/a.txt",10')
+        self.assertEqual(self.refusals(), 0)
+        simulation.serial_input('delfile "sd0/a.txt"')
+        self.assertEqual(self.refusals(), 3)
+
+    def test_not_after_the_event_leaves_its_page(self):
+        # The screen answers 0x06 once, for the second page's own p0, when
+        # that page opens.
+        self.page("second", [table("p0", "external-picture", x=10, y=20, w=100, h=50,
+                                   path="sd0/missing.jpg")])
+        simulation = self.three_pictures('on m0.up:\n  p0.aph=127\n  page second\n')
+        simulation.serial_input("click m0,0")
+        self.assertEqual(self.refusals(), 1)
+
+    def test_after_a_twfile(self):
+        simulation = self.three_pictures()
+        simulation.serial_input('twfile "ram/t.bin",4')
+        simulation.serial_received(b"".join(packets(b"abcd")))
+        self.assertEqual(self.sent, [bytes.fromhex("fe ff ff ff"), bytes.fromhex("fd ff ff ff")]
+                         + [IGNORED] * 3)
+
+    def test_a_hidden_one_is_drawn_when_vis_shows_it(self):
+        simulation = self.three_pictures()
+        simulation.serial_input("vis p0,0")
+        simulation.serial_input("ref p0")
+        simulation.serial_input("ref 0")
+        self.assertEqual(self.refusals(), 2)
+        simulation.serial_input("vis p0,1")
+        self.assertEqual(self.refusals(), 1)
+        simulation.serial_input("vis p0,1")
+        self.assertEqual(self.refusals(), 0)
+        simulation.serial_input("vis p1,0")
+        simulation.serial_input("vis 255,1")
+        self.assertEqual(self.refusals(), 1)
+
+    def test_after_the_answer_of_a_typed_line(self):
+        simulation = self.three_pictures()
+        simulation.serial_input("bkcmd=3")
+        self.sent.clear()
+        simulation.serial_input("p0.aph=127")
+        self.assertEqual(self.sent, [bytes.fromhex("01 ff ff ff"), IGNORED])
+
+    def test_once_when_an_event_ends(self):
+        # The event changes p0 and p1, then draws the page again with a
+        # delfile. Each picture is still drawn once, after everything the
+        # event sent.
+        simulation = self.three_pictures(
+            'on m0.up:\n  printh 0a\n  p0.path="sd0/other.jpg"\n  printh 0b\n'
+            '  p1.aph=127\n  printh 0c\n  delfile "ram/none.txt"\n  printh 0d\n')
+        simulation.serial_input("click m0,0")
+        self.assertEqual(b"".join(self.sent), bytes.fromhex("0a 0b 0c 0d") + IGNORED * 3)

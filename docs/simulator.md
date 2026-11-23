@@ -764,9 +764,14 @@ An external picture shows the picture file at its `path`. The file can be in `ra
 
 The kind of a file comes from its contents, so renaming a file does not change what shows. To make a PNG, a JPEG, or another picture show on every screen, convert it to a `.xi` file with `nxwright sd-picture`.
 
-The error marker is the text "Show Picture Error!" in red on blue, at the component's top left corner. A real screen draws the same text in a font of its own. When a file does not show, the log gives the reason.
+The error marker is the text "Show Picture Error!" in red on blue, at the component's top left corner. A real screen draws the same text in a font of its own. When a file that exists does not show, the log gives the reason, and the screen does not send an error code.
 
-If the file is missing, the external picture shows nothing. The screen then sends 0x06 when the page opens and when code sets the `path`, unless `vis` has hidden the external picture. For a file that exists, the screen does not send an error code, even when the file does not show.
+If the file is missing, the external picture shows nothing, and the screen sends 0x06 each time it draws the external picture, whatever `bkcmd` is. The screen draws an external picture that is not hidden:
+
+- when code runs `ref` on the external picture, sets any of its attributes, or shows it with `vis`;
+- whenever the whole page is drawn: when the page opens, when code runs `ref` on the page, and after a completed `twfile`, a `refile`, or a `delfile`, even a `delfile` of a missing file.
+
+Nothing is drawn until your code ends. Then each external picture is drawn once, however many times the code changed it. An event that changes an external picture three times therefore sends a single 0x06, after everything else the event sends.
 
 A file that shows is drawn this way:
 

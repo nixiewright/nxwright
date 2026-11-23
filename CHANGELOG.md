@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.4.5] - 2026-11-14
+
+- The simulator now sends 0x06 each time it draws an external picture whose file is missing.
+
 ### [0.4.4] - 2026-11-14
 
 - `nxwright compile` now compiles a gmov saved by Nextion Editor 1.60.1.
