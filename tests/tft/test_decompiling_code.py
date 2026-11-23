@@ -41,6 +41,11 @@ def _probes() -> list:
     piece."""
     found = []
     for module_info in pkgutil.iter_modules(probing.__path__):
+        # A module whose name does not end in "_probes" takes its probes
+        # from other modules. Skipping it keeps each probe from being found
+        # twice.
+        if not module_info.name.endswith("_probes"):
+            continue
         module = importlib.import_module("tools.tft.probing." + module_info.name)
         for probe in getattr(module, "PROBES", []):
             kept = probe.kept or probe.ours

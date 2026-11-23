@@ -52,10 +52,22 @@ Each run lists, by module, the probes that did not match and the probes that cou
 - A probe cannot run when the Nextion Editor refuses its project, or when the new release's folder lacks a firmware file that the probe's series needs.
 - When a probe that keeps fixtures matches the new release, it writes its fixtures again, so that nxwright's tests compare with the new release's bytes.
 
+### The Nextion Editor's bugs that nxwright matches
+
+In strict Nextion syntax, nxwright tries to do what the Nextion Editor does, even where that is a bug. `tools/tft/probing/matched_editor_bugs.py` lists each of the known bugs nxwright replicates, with the probes that show it and the code that matches it. Run its probes against every new release:
+
+```
+python -m tools.tft.probe run matched_editor_bugs --again
+```
+
+If one of these probes no longer matches, the new release may have fixed its bug, and nxwright should stop matching it. The bug's entry in the list gives the code to change.
+
+When you make nxwright match a bug in the Nextion Editor, add the bug to `matched_editor_bugs.py`.
+
 ### The steps
 
 1. Read the release notes that the check printed. Find each area they mention, such as the timers or a component type, in the [list of areas](#areas).
-2. Run the release sample, then the probe modules of each area the notes mention, each with `--again`. When the release has no notes, or the notes mention no area, run the sample alone.
+2. Run the release sample and the probes of the [bugs that nxwright matches](#the-nextion-editors-bugs-that-nxwright-matches), then the probe modules of each area the notes mention. Pass `--again` to each run. When the release has no notes, or the notes mention no area, run only the sample and the bugs' probes.
 3. If a probe does not match, run every probe module of its area too. File a bug for each probe that does not match or could not run, and fix the bugs.
 4. Once the sample and every module you ran match the new release, put the new release in place of the old one in `nxwright/tft/firmware_versions.py`:
    - In `MATCHED_VERSIONS`, give the SHA-256 hash of each firmware file, read from the new release's zip.
