@@ -18,19 +18,22 @@ of its page's memory, after the texts, as for a waveform on T.
 
 The Nextion Editor adds two lines of its own for each file stream: `init`
 and its ID in its page's load section, and a call of its close at the end
-of its page's unload event. A call of a method is its entry as an
-operand, then its arguments as a command's, between parentheses:
+of its page's unload event.
+
+A call of a method is the method's entry as an operand, then its
+arguments between parentheses, written the same way as a command's:
 `fs0.close()` is 01, close's entry, then `()` (statements.METHOD_CALL).
+This module's rule covers a call alone on its line (_call_covered). The
+statement encoder's rule covers a call used as a value, such as
+`sys0=fs0.open(t0.txt)`, and a method alone on its line, such as
+`fs0.close`. Both rules check a call's arguments against METHOD_ARGUMENTS.
 """
-import re
 import struct
 
-from nxwright.tft.component_types import P_DRAWN_ENTRIES, from_to, object_name, type_name
+from nxwright.tft.component_types import P_DRAWN_ENTRIES, object_name
 from nxwright.tft.instructions.undocumented_commands import init_block
 from nxwright.tft.matching import Rule
-from nxwright.tft.statements import (ATTRIBUTE, METHOD_CALL, NAME, TEXT, attributes_are_encoded,
-                                     encodable, expression, method_call_covered, named_component,
-                                     operand_pattern)
+from nxwright.tft.statements import TEXT, expression, method_call_covered, operand_pattern
 
 EVENTS = ()
 DRAWN = False
@@ -104,51 +107,17 @@ _NUMBER = expression(operand_pattern(("number",)))
 # Each method's arguments: open and find a path; read and write a txt, then
 # two numbers; close none. The Nextion Editor compiled a number, or a text,
 # where a path or a txt goes.
-_ARGUMENTS = {"open": _OPERAND, "find": _OPERAND,
-              "read": ",".join((_OPERAND, _NUMBER, _NUMBER)),
-              "write": ",".join((_OPERAND, _NUMBER, _NUMBER)), "close": ""}
-
-
-def _is_a_stream_method(need, method: str) -> bool:
-    """Whether `method`, as `fs0.close`, names a method of a file stream of
-    the line of code `need`'s page, one that `_ARGUMENTS` gives."""
-    page_object, name = named_component(need, method)
-    return (page_object is not None and type_name(page_object) == "file-stream"
-            and name in _ARGUMENTS)
+METHOD_ARGUMENTS = {"open": _OPERAND, "find": _OPERAND,
+                    "read": ",".join((_OPERAND, _NUMBER, _NUMBER)),
+                    "write": ",".join((_OPERAND, _NUMBER, _NUMBER)), "close": ""}
 
 
 def _call_covered(need) -> bool:
-    """Whether the line of code `need` is a call of a method of a file
-    stream of its page, of the arguments each method takes (_ARGUMENTS).
-    nxwright's build refuses another number of arguments. A call written
-    without its parentheses, as `fs0.close`, is one of a method that takes
-    no arguments: the Nextion Editor compiled it as the method's operand
-    alone, where `fs0.close()` gives the operand, then `()`."""
-    line = need.value.strip(" \t")
-    if METHOD_CALL.fullmatch(line) is not None:
-        return method_call_covered(need, "file-stream", _ARGUMENTS)
-    if re.fullmatch(ATTRIBUTE, line) is None or not _is_a_stream_method(need, line):
-        return False
-    return (_ARGUMENTS[line.rsplit(".", 1)[1]] == "" and encodable(line, "P")
-            and attributes_are_encoded(need, re.sub(TEXT, "", line)))
-
-
-def _value_call_covered(need) -> bool:
-    """Whether the line of code `need` sets a value to a call of a method of
-    a file stream of its page, as `sys0=fs0.open(t0.txt)`, of the arguments
-    each method takes (_ARGUMENTS). The Nextion Editor compiled one as the
-    target's operand, `=`, the method's operand, then its arguments between
-    parentheses, as a call of its own (_method_call_block)."""
-    line = need.value.strip(" \t")
-    target, equals, value = line.partition("=")
-    if not equals or re.fullmatch("%s|%s" % (ATTRIBUTE, NAME), target) is None:
-        return False
-    call = METHOD_CALL.fullmatch(value)
-    if call is None or not _is_a_stream_method(need, call.group("method")):
-        return False
-    return (re.fullmatch(_ARGUMENTS[call.group("method").rsplit(".", 1)[1]],
-                         call.group("arguments")) is not None
-            and encodable(line, "P") and attributes_are_encoded(need, re.sub(TEXT, "", line)))
+    """Whether the line of code `need` is a call of a file stream's method,
+    with arguments that match the method's pattern (METHOD_ARGUMENTS). The
+    file stream must be on the line's page. nxwright's build rejects a call
+    with the wrong number of arguments."""
+    return method_call_covered(need, "file-stream", METHOD_ARGUMENTS)
 
 
 # The series this module's probes matched (matching.py): P in p_probes.py,
@@ -175,7 +144,4 @@ MATCHED = [
          "of 1 to 4 bytes, program.s's int variables, system variables, colours' names, or an "
          "attribute other than a txt of a component on its page; and close; the arguments "
          "between commas without spaces; in an event; on P and E", _call_covered),
-    Rule("code", None, "an assignment whose value is a call of a method of a file stream of the "
-         "line's page, as `sys0=fs0.open(t0.txt)`, of the arguments that method takes; in an "
-         "event; on P and E", _value_call_covered),
 ]

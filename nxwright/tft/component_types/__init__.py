@@ -97,6 +97,12 @@ A module may also have:
   - p_memory_extras(page_object, project, place) -> dict: the bytes of its
     memory on P that no entry gives, {where in its memory: bytes}, as where
     a file stream's buffer lies, place.buffer_place;
+  - METHOD_ARGUMENTS, for a type that has methods: {method: the pattern its
+    arguments must match}, with an empty pattern for a method that takes no
+    arguments. A method is an attribute that code calls, such as a file
+    stream's open. The type's own rule uses the table to check a call alone
+    on its line, and the statement encoder's rule uses it to check a call
+    in a value (statements._call_covered);
   - unload_lines(page_object) -> list: the lines of code the Nextion Editor
     adds for the object at the end of its page's unload event, after the
     page's own code, in the order of the page's components, as a file

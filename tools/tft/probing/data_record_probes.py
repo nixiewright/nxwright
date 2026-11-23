@@ -5,7 +5,9 @@ compared with the Nextion Editor's whole file. Run them on P with
 `tools.tft.probe run e_probes`.
 
 The probes of a data record at its defaults and of one on each of two pages
-keep the user code as their fixtures (kept), in p_probes.py's folder.
+keep the user code as their fixtures (kept), in p_probes.py's folder. The
+probe of a data record's calls as values keeps the blocks of its event in
+the same folder.
 
 The Nextion Editor keeps one virtual SD card for every project it opens. A
 data record whose file is already there with another lenth, maxval, or dez
@@ -14,11 +16,13 @@ So each probe that changes those gives its data record a path of its own,
 and the probe of a mode of 0 follows the probe at its defaults, of mode 1,
 whose file the Nextion Editor creates on its card.
 """
+from tools.tft.probing.attribute_probes import with_attributes
 from tools.tft.probing.component_probes import (editor_file, on_pages, user_code_kept, whole_file,
                                             with_components)
 from tools.tft.probing.picture_probes import BACKGROUNDS, with_a_background
 from tools.tft.probing.probe_runner import Probe
 from tools.tft.probing.number_probes import number_component
+from tools.tft.probing.statement_probes import ours_in_event, theirs_in_event
 from tools.tft.probing.text_probes import text_component
 
 
@@ -117,6 +121,15 @@ PROBES = [
             "on page0.up:\n  data0.insert(n0.val)\n  data0.insert(5)\n"
             "  data0.up(t0.txt,n0.val)\n  data0.up(5,0)\n")),
         whole_file, editor_file),
+    # Each method's call as a value, then each method alone on its line,
+    # without its parentheses, in page0's Touch Release event. The probe
+    # keeps the event's blocks.
+    Probe("data-record-calls-as-values", "P", with_attributes(
+        ['sys0=data0.insert("a^b")', "sys0=data0.delete(0,1)", 'sys0=data0.up("a^b",0)',
+         "sys0=data0.clear()", "sys0=1+data0.clear()", "data0.insert", "data0.delete",
+         "data0.up", "data0.clear"],
+        [text_component(), data_record_component(path="sd0/nxtft_calls.data")]),
+        ours_in_event, theirs_in_event, kept=ours_in_event),
     # With a crop of a picture, a picture, or nothing behind it, its
     # sta 0, 2, and 3, where its default is 1, a colour.
 ] + [Probe("data-record-with-%s-behind" % background, "P",

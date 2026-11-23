@@ -6,11 +6,14 @@ compared with the Nextion Editor's whole file. Run them on P with
 
 The probes of a file stream at its defaults and of two file streams beside
 a text keep the user code as their fixtures (kept), in p_probes.py's
-folder.
+folder. The probe of a file stream's calls as values keeps the blocks of its
+event in the same folder.
 """
+from tools.tft.probing.attribute_probes import with_attributes
 from tools.tft.probing.component_probes import editor_file, user_code_kept, whole_file, with_components
 from tools.tft.probing.number_probes import number_component
 from tools.tft.probing.probe_runner import Probe
+from tools.tft.probing.statement_probes import ours_in_event, theirs_in_event
 from tools.tft.probing.text_probes import text_component
 
 
@@ -35,6 +38,17 @@ def _under_later_rooms(folder):
 _CALLS = ['fs0.open("sd0/a.txt")', "fs0.open(t0.txt)", "fs0.read(t0.txt,0,3)",
           "fs0.read(t0.txt,sys0+1,2)", "fs0.write(t0.txt,0,3)", "fs0.close()",
           'fs0.find("sd0/a.txt")', "sys0=fs0.open"]
+# Each method's call as a value: as the whole value, put in a number's
+# val, after `+=`, joined with other operands, and with its component
+# named through its page. Then each method alone on its line, without its
+# parentheses.
+_CALLS_AS_VALUES = [
+    "sys0=fs0.open(t0.txt)", 'sys0=fs0.open("sd0/a.txt")', 'sys0=fs0.find("sd0/a.txt")',
+    "sys0=fs0.read(t0.txt,0,3)", "sys0=fs0.write(t0.txt,0,3)", "sys0=fs0.close()",
+    "n0.val=fs0.open(t0.txt)", "sys0+=fs0.open(t0.txt)", "sys0=fs0.open(t0.txt)+1",
+    "sys0=1+fs0.close()", "sys0=fs0.open(t0.txt)+fs0.find(t0.txt)",
+    "sys0=page0.fs0.open(t0.txt)", "fs0.open", "fs0.read", "fs0.write", "fs0.close",
+    "fs0.find", "page0.fs0.close"]
 
 PROBES = [
     # A file stream at its defaults: its memory, entries, record, buffer,
@@ -72,4 +86,9 @@ PROBES = [
             "on page0.up:\n  fs0.open(5)\n  fs0.find(n0.val)\n  fs0.read(\"abc\",0,3)\n"
             "  fs0.write(n0.val,0,3)\n")),
         whole_file, editor_file),
+    # A file stream's calls as values, and its methods alone on a line, in
+    # page0's Touch Release event. The probe keeps the event's blocks.
+    Probe("file-stream-calls-as-values", "P", with_attributes(
+        _CALLS_AS_VALUES, [text_component(), number_component(y=60), file_stream_component()]),
+        ours_in_event, theirs_in_event, kept=ours_in_event),
 ]

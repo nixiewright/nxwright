@@ -66,9 +66,9 @@ class ProbesTest(unittest.TestCase):
                 self.assertEqual(encode_code(lines, place, CompileContext(project)), blocks)
                 checked += 1
         # The 191 runs of T, K, and F, 64 of them with control statements,
-        # and the 53 of P. P writes code as T does. Only its numbers for
+        # and the 56 of P. P writes code as T does. Only its numbers for
         # commands, system variables, and colours differ.
-        self.assertEqual(checked, 244)
+        self.assertEqual(checked, 247)
 
 
 class FormsTest(unittest.TestCase):

@@ -172,7 +172,9 @@ In strict Nextion syntax, the build refuses these hexadecimal numbers, written w
 In strict Nextion syntax, the build refuses a line the Nextion Editor cannot read:
 
 - A value that is not operands joined by operators, such as `n0.val=2+`, `n0.val=+2`, or `n0.val=(1+2)` ("Invalid Variables"). After an operator, a minus can start a number, as in `n0.val=2*-16`, but not a name: `n0.val=2*-n1.val` is refused.
+- A call of a name that is not a method, such as `n0.val()`, or a call that has another call among its arguments. A method call is also rejected in the last part of a `for`, and when its result is put in a text, as in `t0.txt=fs0.open(t0.txt)`. A valid call can be part of a value, as in `n0.val=fs0.open(t0.txt)+1`.
 - An assignment with no value: `n0.val=` ("Invalid command").
+- A line that is only an attribute, such as `n0.val` ("Invalid command"). A method can be alone on a line, as in `fs0.close`.
 - Where a command takes a number ([Texts and numbers](#texts-and-numbers)), an operand the Nextion Editor does not read, as in `cls 5a`, `cls 1_000`, `cls RED+*1`, or `cls -n0.val` ("Invalid Variables").
   - The build refuses these in nxlang too, with one exception. nxlang reads some operands that the Nextion Editor does not, such as a minus before a name. In a page's code, nxlang first computes such an operand into a temporary variable, so `cls -n0.val` builds ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)).
 - An `if`, `else if`, `while`, or `for` whose condition does not end with `)`.

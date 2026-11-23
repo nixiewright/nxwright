@@ -69,7 +69,7 @@ class RebuiltTest(unittest.TestCase):
                 rebuilt += count
         self.assertEqual([each for _, each in added], [_ADDED[name] for name, _ in added])
         # Components of each type.
-        self.assertEqual((rebuilt, {name for name, _ in added}), (47, set(_ADDED)))
+        self.assertEqual((rebuilt, {name for name, _ in added}), (48, set(_ADDED)))
 
 
 class RefusalsTest(unittest.TestCase):

@@ -159,6 +159,8 @@ def variant(page_object):
                              page_object)
 
 
+# Its method's arguments: up takes none.
+METHOD_ARGUMENTS = {"up": ""}
 # Each of its texts, and the attribute that gives its room. Each is written
 # as its bytes, whatever its characters (component_types.text_in_room).
 _TEXTS = (("dir", "dir_m"), ("filter", "filter_m"), ("txt", "txt_m"), ("vvs2", "vvs2_m"))
@@ -209,6 +211,7 @@ MATCHED = [
            "project's pictures, or another", from_to(0, 0xFFFF))
       for name in ("pic1", "pic2")],
     Rule("code", None, "a call of the up of a file browser of the line's page, `up()`, in an "
-         "event, on P and E", lambda need: method_call_covered(need, "file-browser", {"up": ""})),
+         "event, on P and E",
+         lambda need: method_call_covered(need, "file-browser", METHOD_ARGUMENTS)),
 ] + [Rule("attribute", "file-browser." + name, *value_rule(name))
      for name in ("bco", "pco", "pco2", "bco2", "xcen", "spax", "spay", "borderc", "borderw")]

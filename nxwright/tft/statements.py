@@ -56,9 +56,14 @@ them on the T series (ResearchNotes/tft/statements.md):
     other argument is a value, as an assignment's: `cls RED+1` is 09 06 04,
     RED's operand, then `+1`. A command that takes no argument is its three
     bytes alone: `doevents` is 09 21 08;
-  - a component's method's call, on P (METHOD_CALL): the method's operand,
-    as an attribute's, then its arguments, as a command's, between
-    parentheses: `fs0.close()` is 01, close's entry, then `()`.
+  - a call of a component's method, on P (METHOD_CALL): the method's
+    operand, written the same way as an attribute's, then the arguments
+    between parentheses, written the same way as a command's:
+    `fs0.close()` is 01, close's entry, then `()`. A call inside a value
+    is written the same way: `sys0=fs0.close()` is sys0's operand, `=`,
+    then the call's bytes. A method alone on its line, without
+    parentheses, is its operand alone: `fs0.close` is 01, then close's
+    entry.
 
 Spaces are dropped elsewhere. A line that gives no block, an int
 declaration, a comment, or one of spaces alone, gives None.
@@ -89,7 +94,7 @@ import struct
 
 from nxwright import NxwrightError
 from nxwright.language.code_lines import compact
-from nxwright.project.attribute_descriptions import code_cannot_change, describe, is_a_method
+from nxwright.project.attribute_descriptions import code_cannot_change, describe
 from nxwright.project.device_settings import TextCodec
 from nxwright.project.editor_language import NAMES_THE_EDITOR_REFUSES
 from nxwright.project.editor_limits import code_cannot_change_on_series
@@ -358,16 +363,18 @@ _CHECKING_CODEC = TextCodec("utf-8")
 # tables (_names_known). A name alone, outside an attribute.
 _KEYWORDS = frozenset({"if", "else", "while", "for"})
 _NAME_ALONE = re.compile(r"(?<![\w.])[A-Za-z_][A-Za-z0-9_]*(?![\w.\[])")
-# A line's parts: a hexadecimal number, a number, a reference through the
-# screen's arrays, a component's attribute, a name, a text, or an operator,
-# the longest first. A hexadecimal number comes before a number, which would
-# otherwise take its 0. A reference and an attribute come before a name,
-# which would otherwise take their first letters.
-# A call of a component's method, as `fs0.open(t0.txt)`: a dotted attribute,
-# then its arguments between parentheses. The Nextion Editor compiled one as
-# a value, as `sys0=fs0.open(t0.txt)`, as the method's operand, then `(`, its
-# arguments as a command's, and `)` (read from a reference TFT's code).
+# A call of a component's method among a line's parts, such as the
+# `fs0.open(t0.txt)` in `sys0=fs0.open(t0.txt)`: an attribute, then its
+# arguments between parentheses. The arguments cannot contain a
+# parenthesis, because the Nextion Editor rejected a call among another
+# call's arguments ("Invalid Variables").
 _CALL = r"%s\([^()]*\)" % ATTRIBUTE
+# A line's parts: a hexadecimal number, a number, a reference through the
+# screen's arrays, a method call, a component's attribute, a name, a text,
+# or an operator, the longest first. A hexadecimal number comes before a
+# number, which would otherwise take its 0. A reference, a call, and an
+# attribute come before a name, which would otherwise take their first
+# letters, and a call before the attribute it starts with.
 _PART = re.compile(r"\s*(?:(?P<hex>%s)(?![0-9A-Za-z_])" % HEX_NUMBER
                    + r"|(?P<number>\d+)|(?P<indirect>%s)" % INDIRECT
                    + r"|(?P<serial>%s)" % SERIAL_BUFFER
@@ -405,12 +412,26 @@ def encode_line(line: str, place: CodePlace, context) -> bytes:
         raise StatementError("%r: the Nextion Editor refuses an int declaration in an event "
                              "(\"Error:Global variable definitions must precede all code "
                              "in the program.c\")" % line)
+    if _ATTRIBUTE.fullmatch(line.strip(" \t")):
+        _reject_unless_a_method(line, place, context)
     # The names a command may give as its component: the page's own and its
     # components', none in program.s.
     components = () if place.page is None else context.component_names(place.page)
     return _block(line, series, context.program_variables,
                   lambda text: _attribute_entry(text, line, place, context), components,
                   context.page_names, project.codec)
+
+
+def _reject_unless_a_method(line: str, place: CodePlace, context):
+    """Raises StatementError for `line`, a line of `place` that is only an
+    attribute, unless the attribute is a method of its component's type,
+    such as `fs0.close`. The Nextion Editor rejects any other attribute
+    alone on a line ("Invalid command")."""
+    *page_name, object_name, name = line.strip(" \t").split(".")
+    number = context.page_number(page_name[0]) if page_name else place.page
+    found = None if number is None else context.component(number, object_name)
+    if found is None or not is_a_method_of(found, name):
+        raise StatementError("%r is not a method, so it cannot be alone on a line" % line)
 
 
 def encode_code(lines: list, place: CodePlace, context) -> list:
@@ -631,10 +652,13 @@ def _block(line: str, series: str, variables, attribute_entry=None, components=N
     call = METHOD_CALL.fullmatch(stripped)
     if call is not None:
         return _method_call_block(call, series, variables, attribute_entry, codec)
-    # A call written without its parentheses, as `fs0.close`, which the
-    # Nextion Editor compiled as the method's operand alone, where
-    # `fs0.close()` gives the operand then `()`.
-    if _ATTRIBUTE.fullmatch(stripped) and is_a_method(stripped.rsplit(".", 1)[1]):
+    # An attribute alone on its line is written as its operand alone. That is
+    # what the Nextion Editor compiled for a method without its parentheses:
+    # `fs0.close` gave close's operand, where `fs0.close()` gives the operand,
+    # then `()`. It rejected any other attribute alone ("Invalid command").
+    # encode_line raises StatementError for an attribute that is not a method,
+    # and the match check does not cover it (_method_alone_covered).
+    if _ATTRIBUTE.fullmatch(stripped):
         return _operand(("attribute", stripped), series, variables, attribute_entry, codec)
     return _assignment_block(_parts(stripped), series, variables, attribute_entry, codec)
 
@@ -696,6 +720,10 @@ def _covered_as_on_t(need, line: str) -> bool:
     # (component_types/file_stream.py).
     if METHOD_CALL.fullmatch(line):
         return False
+    if _ATTRIBUTE.fullmatch(line):
+        return _method_alone_covered(need, line)
+    if holds_a_call(line):
+        return _calls_in_a_value_covered(need, line, _parts(line))
     if not sets_only_changeable_attributes(need, line):
         return False
     if refers_through_arrays(line):
@@ -705,6 +733,80 @@ def _covered_as_on_t(need, line: str) -> bool:
     if _holds_a_text(line) or _TXT_TARGET.match(line) or _sets_a_text(need, line):
         return _text_assignment_covered(need, line)
     return attributes_are_numbers(need, line) and encodable(line)
+
+
+def holds_a_call(line: str) -> bool:
+    """Whether `line`, a line of code or a part of one, contains a method
+    call among its own parts (_CALL), such as `sys0=fs0.open(t0.txt)`.
+    Returns False for a line the encoder cannot read."""
+    try:
+        return any(kind == "call" for kind, _ in _parts(line))
+    except StatementError:
+        return False
+
+
+def is_a_method_of(page_object, name: str) -> bool:
+    """Whether `name` is a method of the type of `page_object`, a component
+    or a page's own object. A method is an attribute that code calls, such
+    as a file stream's open (nxwright's attribute_descriptions)."""
+    described = describe(component_types.type_name(page_object), name)
+    return described is not None and described.method
+
+
+def _method_alone_covered(need, line: str) -> bool:
+    """Whether the line `line` of the code `need`, which is an attribute
+    alone, is a method that the encoder encodes. The attribute must be a
+    method of the type of a component of the line's page, written with or
+    without the page's name. The method may take arguments: the Nextion
+    Editor compiled `fs0.open`, `d0.insert`, and `fb0.up` alone on a line.
+    It rejected an attribute that is not a method, such as `n0.val` or
+    `page0.up` ("Invalid command"). A page has no method `up`: only a data
+    record and a file browser have one."""
+    page_object, name = named_component(need, line)
+    return (page_object is not None and is_a_method_of(page_object, name)
+            and attribute_kind(need, line) is not None and encodable(line, "P"))
+
+
+def _calls_in_a_value_covered(need, line: str, parts: list) -> bool:
+    """Whether the line `line` of the code `need`, whose `parts` contain a
+    method call, has a form that the probes checked against the Nextion
+    Editor: an assignment to a variable, or to an attribute encoded as a
+    number, whose value joins calls and other operands.
+
+    _call_covered checks each call. T's rules then check the rest of the
+    line, with each call replaced by a number.
+
+    The Nextion Editor rejected a call whose result is put in a text, such as
+    `t0.txt=fs0.open(t0.txt)` ("Assignment operation failed"). It compiled a
+    call in a condition and among a command's arguments, but the encoder
+    does not encode a call in either place yet."""
+    target = parts[0]
+    if (len(parts) < 3 or parts[1] not in (("operator", assigning) for assigning in _ASSIGNING)
+            or (target[0] == "attribute" and attribute_kind(need, target[1]) != "number")):
+        return False
+    without_calls = "".join("0" if kind == "call" else text for kind, text in parts)
+    return (all(_call_covered(need, text) for kind, text in parts if kind == "call")
+            and _covered_as_on_t(need, without_calls) and encodable(line, "P"))
+
+
+def _call_covered(need, call: str) -> bool:
+    """Whether the encoder encodes `call`, a method call among the parts of
+    the line of code `need`. The name called must be a method of the type of
+    a component of the line's page. The arguments must match the pattern
+    that the type's module gives for the method (METHOD_ARGUMENTS). The
+    Nextion Editor rejected a call of a name that is not a method, such as
+    `n0.val()` ("Invalid Variables"), and a call with the wrong number of
+    arguments ("Invalid number of arguments")."""
+    found = METHOD_CALL.fullmatch(call)
+    page_object, method = named_component(need, found.group("method"))
+    if page_object is None or not is_a_method_of(page_object, method):
+        return False
+    # Read the type's own module, because a variant of it does not have
+    # METHOD_ARGUMENTS.
+    module = component_types.type_module(component_types.type_name(page_object))
+    pattern = getattr(module, "METHOD_ARGUMENTS", {}).get(method)
+    return (pattern is not None and re.fullmatch(pattern, found.group("arguments")) is not None
+            and attributes_are_encoded(need, re.sub(TEXT, "", call)))
 
 
 def _holds_a_text(line: str) -> bool:
@@ -905,7 +1007,7 @@ def _part_kind(need, part: tuple):
         return "text"
     if kind == "attribute":
         return attribute_kind(need, text)
-    return "any" if kind in ("indirect", "call") else None
+    return "any" if kind == "indirect" else None
 
 
 def attribute_kind(need, attribute: str):
@@ -1130,18 +1232,22 @@ MATCHED = [Rule("code", None, "assignments, with `=`, or with an arithmetic oper
                 "beside texts and txts joined by `+` when it sets a txt, or cutting a txt with "
                 "`-=`; among `page`'s operands, any name but txt, without a space; in an "
                 "event, and in program.s as "
-                "`p[i].b[j]` or `page1.b[i]` alone",
+                "`p[i].b[j]` or `page1.b[i]` alone; and, on P and E, in an event, a line that "
+                "is only a method of a component of the line's page, such as `fs0.close`, "
+                "and a method call with the arguments its method takes, used as an operand "
+                "of the value given to a variable or to an attribute encoded as a number, as "
+                "in `sys0=fs0.open(t0.txt)+1`",
                 _covered)]
 
 
 def _parts(line: str) -> list:
-    """Returns the parts of `line`, as (kind, text): "hex", "number",
-    "indirect" (INDIRECT), "serial" (SERIAL_BUFFER), "attribute", "name",
-    "text", or "operator". A
-    minus right after an assigning operator, such as `=` or `*=`, after an
-    arithmetic operator, as in `2*-16`, or after `,`, starts a number, which
-    the Nextion Editor writes as written. Raises StatementError for anything
-    else."""
+    """Returns the parts of `line`, each as (kind, text). The kind is "hex",
+    "number", "indirect" (INDIRECT), "serial" (SERIAL_BUFFER), "call"
+    (_CALL), "attribute", "name", "text", or "operator". A minus starts a
+    number when it comes right after an assigning operator, such as `=` or
+    `*=`, after an arithmetic operator, as in `2*-16`, or after `,`. The
+    Nextion Editor writes that number as written. Raises StatementError
+    when some of the line is none of these parts."""
     parts, at = [], 0
     while at < len(line):
         found = _PART.match(line, at)

@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.5.2] - 2026-11-23
+
+- The build and `nxwright compile` now report an error for invalid method calls, such as `n0.val()`.
+- The build now reports an error for a line that is only an attribute, such as `n0.val`.
+
 ### [0.5.1] - 2026-11-23
 
 - A method call can now be used as a value, as in `sys0=fs0.open(t0.txt)`.

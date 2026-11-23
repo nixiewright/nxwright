@@ -174,15 +174,16 @@ _RECORD = r"(?:%s|%s)" % (operand_pattern(("number", "text")), TEXT)
 _NUMBER = expression(operand_pattern(("number",)))
 # Each method's arguments: insert a record; delete where to start and how
 # many; up a record and its place; clear none.
-_ARGUMENTS = {"insert": _RECORD, "delete": ",".join((_NUMBER, _NUMBER)),
-              "up": ",".join((_RECORD, _NUMBER)), "clear": ""}
+METHOD_ARGUMENTS = {"insert": _RECORD, "delete": ",".join((_NUMBER, _NUMBER)),
+                    "up": ",".join((_RECORD, _NUMBER)), "clear": ""}
 
 
 def _call_covered(need) -> bool:
-    """Whether the line of code `need` is a call of a method of a data record
-    of its page, of the arguments each method takes (_ARGUMENTS). nxwright's
-    build refuses another number of arguments."""
-    return method_call_covered(need, "data-record", _ARGUMENTS)
+    """Whether the line of code `need` is a call of a data record's method,
+    with arguments that match the method's pattern (METHOD_ARGUMENTS). The
+    data record must be on the line's page. nxwright's build rejects a call
+    with the wrong number of arguments."""
+    return method_call_covered(need, "data-record", METHOD_ARGUMENTS)
 
 
 # The series this module's probes matched (matching.py): P in p_probes.py,

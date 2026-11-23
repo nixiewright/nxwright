@@ -40,6 +40,8 @@ from nxwright.project.editor_language import (EDITOR_COLOURS, EDITOR_COMMANDS,
                                               UNDECLARED_PROGRAM_VARIABLE)
 from nxwright.project.editor_limits import (ATTRIBUTES_CODE_CANNOT_CHANGE_ON_SERIES,
                                             LONGEST_LINES, code_cannot_change_on_series)
+from nxwright.project.object_types import TYPES_BY_NAME
+from nxwright.project.page_text import is_string_attribute
 from nxwright.project.screen_arithmetic import int32
 from nxwright.project.screen_models import ScreenModel
 
@@ -180,8 +182,18 @@ DATA_RECORD_CALL = re.compile(r"([A-Za-z_]\w*)\.(insert|delete|up|clear)\((.*)\)
 # Editor 1.68.2's compile refused any other number, "Invalid number of
 # arguments".
 FILE_STREAM_ARGUMENTS = {"open": 1, "read": 3, "write": 3, "close": 0, "find": 1}
-# A call of one of those methods: its component's name, the method, and its arguments.
-_FILE_STREAM_CALL = re.compile(r"([A-Za-z_]\w*)\.(open|read|write|close|find)\((.*)\)$")
+# How many arguments a file browser's method takes. The Nextion Editor
+# rejected `fb0.up(1)` ("Invalid number of arguments").
+FILE_BROWSER_ARGUMENTS = {"up": 0}
+# The types whose calls are checked only for how many arguments they have.
+# A data record's calls are also checked for the kind of each argument
+# (DATA_RECORD_ARGUMENTS).
+_ARGUMENT_COUNTS = {"file-stream": FILE_STREAM_ARGUMENTS, "file-browser": FILE_BROWSER_ARGUMENTS}
+# What comes just before the parenthesis that opens a call: the component,
+# named with or without its page, then the name called.
+_CALL_OPENING = re.compile(r"((?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*)\.([A-Za-z_]\w*)$")
+# A line that is only an attribute, such as `n0.val` or `first.n0.val`.
+_ATTRIBUTE_ALONE = re.compile(r"((?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*)\.([A-Za-z_]\w*)")
 # Where a drawing command's arguments give a picture's ID, and xstr its
 # font's, counted from 0 (the vendor's instruction set).
 PICTURE_ARGUMENTS = {"pic": 2, "picq": 4, "xpic": 6}
@@ -327,8 +339,8 @@ def check_line(code: str, objects: ObjectNames, variables: frozenset, macros: fr
             _check_macro_references(code, objects, number)
         else:
             _check_references(code, objects, number)
-        _check_data_record_call(code, objects, number)
-        _check_file_stream_call(code, objects, number)
+        _check_method_calls(code, objects, number)
+        _check_attribute_alone(code, objects, number)
         _check_assigned_attribute(code, objects, number)
     if program_pages is not None:
         _check_program_names(code, program_pages, number)
@@ -497,8 +509,8 @@ def _check_value_and_head(code: str, number: int):
         raise NxwrightError("`%s`: the assignment has no value" % code, line=number)
     if chain_parts(assignment[3]) is None:
         raise NxwrightError("`%s`: the value is not valid. A value is made of numbers, texts, "
-                            "and names joined by operators, without parentheses." % code,
-                            line=number)
+                            "names, and method calls, joined by operators. Parentheses are only "
+                            "valid around a call's arguments." % code, line=number)
 
 
 def check_own_forms(code: str, number: int):
@@ -1051,40 +1063,167 @@ def _check_call(code: str, macros: frozenset, number: int):
             raise NxwrightError("`%s`: `%s` is not a valid macro" % (code, name), line=number)
 
 
-def _check_data_record_call(code: str, objects: ObjectNames, number: int):
-    """Raises NxwrightError for a call of a data record of the page that the
-    Editor refuses as it compiles (DATA_RECORD_ARGUMENTS). A text is a
-    string, or a `txt`, which is a text on every type. Other attributes are
-    left to the Editor: one stored as text may be a number in code, as a
-    scrolling text's `dir`."""
-    call = DATA_RECORD_CALL.fullmatch(code)
-    if call is None or (objects.pages.get(objects.page) or {}).get(call[1]) != "data-record":
+@dataclass(frozen=True)
+class _MethodCall:
+    """A call found in a line of code (_calls).
+
+    `component` is the component whose method is called, written the way
+    the line writes it: `fs0`, or `first.fs0` with its page. `method` is the
+    name called, and `arguments` is the text between the parentheses.
+    `inside` is set only for a call among another call's arguments, to the
+    name of that other call, such as `fs0.open`."""
+    component: str
+    method: str
+    arguments: str
+    inside: str = None
+
+    @property
+    def name(self) -> str:
+        return "%s.%s" % (self.component, self.method)
+
+
+def _calls(code: str) -> list:
+    """Returns the calls in `code`, outside its texts, in the order their
+    closing parentheses come. A call is a component, a dot, and a name, then
+    parentheses, such as `fs0.open(t0.txt)`. A parenthesis after anything
+    else, such as the one after `if`, does not open a call."""
+    hidden = _with_texts_hidden(code)
+    calls, opened = [], []
+    for place, character in enumerate(hidden):
+        if character == "(":
+            opening = _CALL_OPENING.search(hidden[:place])
+            opened.append(None if opening is None else (opening[1], opening[2], place + 1))
+        elif character == ")" and opened:
+            call = opened.pop()
+            if call is not None:
+                component, method, start = call
+                outer = next((each for each in reversed(opened) if each is not None), None)
+                calls.append(_MethodCall(component, method, code[start:place],
+                                         None if outer is None else "%s.%s" % outer[:2]))
+    return calls
+
+
+def _with_texts_hidden(code: str) -> str:
+    """Returns `code` with each character inside its texts replaced, so that
+    a parenthesis or a semicolon in a text is not taken for one in the code.
+    The result is as long as `code`, so a position in one is the same
+    position in the other."""
+    return STRING.sub(lambda text: '"%s"' % ("_" * (len(text[0]) - 2)), code)
+
+
+def _object_type(named: str, objects: ObjectNames):
+    """Returns the type of the object that a line of code writes as `named`.
+    The type is given by its name in page files, such as "file-stream". `named` is a
+    component of the line's own page (`fs0`), a component given with its
+    page (`first.fs0`), or a page's name. Returns None when the object or
+    its page is unknown."""
+    page, _, name = named.rpartition(".")
+    if page:
+        return (objects.pages.get(page) or {}).get(name)
+    own = objects.pages.get(objects.page) or {}
+    return own.get(name) or (objects.pages.get(name) or {}).get(name)
+
+
+def _is_method(type_name: str, attribute: str) -> bool:
+    """Whether `attribute` is a method of the type `type_name`. A method is
+    an attribute that code calls, such as a file stream's `open`."""
+    described = describe(type_name, attribute)
+    return described is not None and described.method
+
+
+def _check_method_calls(code: str, objects: ObjectNames, number: int):
+    """Raises NxwrightError for a call that the Nextion Editor rejects when it
+    compiles. The call can be anywhere in the line: alone, in a value, in a
+    condition, or among a command's arguments. The Nextion Editor rejects a
+    call in these cases:
+      - The name called is not a method of its component's type, as in
+        `n0.val()` ("Invalid Variables", or "Invalid command" when the call
+        is alone on its line).
+      - The arguments are too few or too many, or, for a data record, of the
+        wrong kind (_check_method_arguments).
+      - The call is among another call's arguments ("Invalid Variables").
+      - The result is put in a text ("Assignment operation failed", or
+        "Invalid variable operation" with `+=`).
+      - The call is in the step of a `for` ("Invalid Variables"). A call in
+        the for's start compiles.
+    A call of a component whose type is unknown is left to the Nextion
+    Editor."""
+    calls = _calls(code)
+    for call in calls:
+        type_name = _object_type(call.component, objects)
+        if type_name is None:
+            continue
+        if not _is_method(type_name, call.method):
+            raise NxwrightError("`%s`: `%s` is not a method, it cannot be called"
+                                % (code, call.name), line=number)
+        if call.inside is not None:
+            raise NxwrightError("`%s`: an argument of `%s` cannot be a call. Put the call's "
+                                "result in a variable first." % (code, call.inside), line=number)
+        _check_method_arguments(call, type_name, number)
+    assignment = ASSIGNMENT.match(code)
+    if calls and assignment is not None and _target_is_text(assignment[1], objects):
+        raise NxwrightError("`%s`: the result of a call cannot be put in text" % code,
+                            line=number)
+    head = _BLOCK_HEAD.match(code)
+    if calls and head is not None and head[1] == "for" and code.endswith(")"):
+        step = _with_texts_hidden(code)[head.end():-1].rpartition(";")[2]
+        if _calls(step):
+            raise NxwrightError("`%s`: the step of a `for` cannot contain a call. Use a `while` "
+                                "loop." % code, line=number)
+
+
+def _target_is_text(target: str, objects: ObjectNames) -> bool:
+    """Whether `target`, what an assignment sets, is a text: a `txt`, or
+    another attribute that is text on its component's type, such as an
+    audio's `path` (page_text.is_string_attribute). An attribute of a
+    component whose type is unknown is a text only when it is a `txt`."""
+    if _value_kind(target, None) == _TEXT:
+        return True
+    component, _, attribute = target.rpartition(".")
+    type_name = _object_type(component, objects) if component else None
+    return type_name in TYPES_BY_NAME and is_string_attribute(TYPES_BY_NAME[type_name], attribute)
+
+
+def _check_method_arguments(call: _MethodCall, type_name: str, number: int):
+    """Raises NxwrightError when `call`, a call of a method of the type
+    `type_name`, has arguments that the Nextion Editor rejects when it
+    compiles: the wrong number of them ("Invalid number of arguments"), or,
+    for a data record, one of the wrong kind (DATA_RECORD_ARGUMENTS). For
+    the kind of an argument, only a quoted text or a `txt` counts as a text,
+    because a `txt` is a text on every type. Other attributes are left to the Nextion Editor, because an
+    attribute stored as text may be a number in code, such as a scrolling
+    text's `dir`."""
+    arguments = ARGUMENT.findall(call.arguments)
+    if type_name != "data-record":
+        count = _ARGUMENT_COUNTS.get(type_name, {}).get(call.method)
+        if count is not None and len(arguments) != count:
+            raise NxwrightError(method_count_refusal(call.name, count), line=number)
         return
-    name = "%s.%s" % (call[1], call[2])
-    arguments = ARGUMENT.findall(call[3])
-    places = DATA_RECORD_ARGUMENTS[call[2]]
+    places = DATA_RECORD_ARGUMENTS[call.method]
     if len(arguments) != len(places):
-        raise NxwrightError(method_count_refusal(name, len(places)), line=number)
+        raise NxwrightError(method_count_refusal(call.name, len(places)), line=number)
     for place, (argument, kind) in enumerate(zip(arguments, places), 1):
         if kind is str and not _ONE_OPERAND.fullmatch(argument):
             raise NxwrightError("argument %d of `%s` must be a single value. Put the expression "
-                                "in a variable first." % (place, name), line=number)
+                                "in a variable first." % (place, call.name), line=number)
         if kind is int and any(operand.startswith('"') or operand.endswith(".txt")
                                for operand in _ONE_OPERAND.findall(argument)):
-            raise NxwrightError("argument %d of `%s` must be a number, not text" % (place, name),
-                                line=number)
+            raise NxwrightError("argument %d of `%s` must be a number, not text"
+                                % (place, call.name), line=number)
 
 
-def _check_file_stream_call(code: str, objects: ObjectNames, number: int):
-    """Raises NxwrightError for a call of a file stream of the page given
-    another number of arguments than its method takes, which the Nextion
-    Editor refuses as it compiles (FILE_STREAM_ARGUMENTS)."""
-    call = _FILE_STREAM_CALL.fullmatch(code)
-    if call is None or (objects.pages.get(objects.page) or {}).get(call[1]) != "file-stream":
+def _check_attribute_alone(code: str, objects: ObjectNames, number: int):
+    """Raises NxwrightError for a line that is only an attribute, such as
+    `n0.val`, unless the attribute is a method of its component's type. The
+    Nextion Editor rejected `n0.val` alone ("Invalid command"), and
+    compiled `fs0.close` and `fs0.open` alone. An attribute of a
+    component whose type is unknown is left to the Nextion Editor."""
+    alone = _ATTRIBUTE_ALONE.fullmatch(code)
+    if alone is None:
         return
-    count = FILE_STREAM_ARGUMENTS[call[2]]
-    if len(ARGUMENT.findall(call[3])) != count:
-        raise NxwrightError(method_count_refusal("%s.%s" % (call[1], call[2]), count),
+    type_name = _object_type(alone[1], objects)
+    if type_name is not None and not _is_method(type_name, alone[2]):
+        raise NxwrightError("`%s` is not a method, so it cannot be alone on a line" % code,
                             line=number)
 
 

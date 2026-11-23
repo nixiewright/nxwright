@@ -5,11 +5,15 @@ compared with the Nextion Editor's whole file. Run them on P with
 `tools.tft.probe run e_probes`.
 
 The probes of a file browser at its defaults and of two beside a text keep
-the user code as their fixtures (kept), in p_probes.py's folder.
+the user code as their fixtures (kept), in p_probes.py's folder. The probe
+of a file browser's up as a value keeps the blocks of its event in the same
+folder.
 """
+from tools.tft.probing.attribute_probes import with_attributes
 from tools.tft.probing.component_probes import editor_file, user_code_kept, whole_file, with_components
 from tools.tft.probing.picture_probes import BACKGROUNDS, with_a_background, with_pictures
 from tools.tft.probing.probe_runner import Probe
+from tools.tft.probing.statement_probes import ours_in_event, theirs_in_event
 from tools.tft.probing.text_probes import text_component
 
 
@@ -89,6 +93,13 @@ PROBES = [
             "  fbrowser0.dir=t0.txt\n  fbrowser0.filter=\"*.txt\"\n  fbrowser0.pic1=2\n"
             "  sys2=fbrowser0.up\n  if(fbrowser0.val==1)\n  {\n    sys2=1\n  }\n")),
         whole_file, editor_file),
+    # A call of up as a value, then up alone on its line without
+    # parentheses, in page0's Touch Release event. The probe keeps the
+    # event's blocks.
+    Probe("file-browser-calls-as-values", "P", with_attributes(
+        ["sys0=fbrowser0.up()", "sys0=1+fbrowser0.up()", "fbrowser0.up"],
+        [text_component(), file_browser_component()]),
+        ours_in_event, theirs_in_event, kept=ours_in_event),
     # With a crop of a picture, a picture, or nothing behind it, its
     # sta 0, 2, and 3, where its default is 1, a colour.
 ] + [Probe("file-browser-with-%s-behind" % background, "P",

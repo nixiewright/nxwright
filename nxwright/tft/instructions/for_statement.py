@@ -22,7 +22,7 @@ from nxwright.tft.control_statements import (CLOSING, OPENING, braced_body,
                                       covers_condition, loop_blocks, threaded)
 from nxwright.tft.matching import Rule
 from nxwright.tft.statements import (INDIRECT, StatementError, attributes_are_numbers, covers_line,
-                              encodable, encode_line, f_takes, indirect_covered,
+                              encodable, encode_line, f_takes, holds_a_call, indirect_covered,
                               refers_through_arrays, p_takes, sets_only_changeable_attributes)
 
 # The statement's first line, with its parts between semicolons.
@@ -79,9 +79,14 @@ def covers(line: str, need=None) -> bool:
         first, condition, step = _parts(line)
     except StatementError:
         return False
+    # A for with a method call in its start or its step is not covered. The
+    # Nextion Editor wrote a start of `sys0=fs0.close()` as `sys0=fs0.close`,
+    # without the call's parentheses and arguments, and the encoder does not
+    # write that form yet. The Nextion Editor rejected a call in the step
+    # ("Invalid Variables").
     return covers_condition(condition, need) and all(
-        _ASSIGNMENT.fullmatch(part) is not None and encodable(part) and _part_covered(part, need)
-        for part in (first, step))
+        _ASSIGNMENT.fullmatch(part) is not None and not holds_a_call(part) and encodable(part)
+        and _part_covered(part, need) for part in (first, step))
 
 
 def _part_covered(part: str, need) -> bool:

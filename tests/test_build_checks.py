@@ -10,7 +10,7 @@ import unittest
 import tomli_w
 
 from nxwright import NxwrightError
-from nxwright.language.code_checks import check_line, misread_byte_by_byte
+from nxwright.language.code_checks import ObjectNames, check_line, misread_byte_by_byte
 from nxwright.language.code_lines import first_word
 from nxwright.project.editor_language import (EDITOR_COMMANDS, EDITOR_PROGRAM_DECLARATION,
                                               SERIES_LACKED_COMMANDS)
@@ -745,6 +745,128 @@ class FileStreamCallTest(_CodeOnFirstTestCase):
             export_dump(self.source, self.folder / "refused")
 
 
+class MethodCallAsValueTest(_CodeOnFirstTestCase):
+    """The lines with a method call in a value, or with a method alone,
+    that the Nextion Editor 1.68.2 compiled, and the ones it rejected. The
+    page `first` has a data record (d0), a file stream (fs0), a file browser
+    (fb0), and an audio that plays a file (wav0)."""
+
+    def setUp(self):
+        super().setUp()
+        with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8",
+                  newline="\n") as file:
+            file.write('\n[[component]]\nname = "fs0"\ntype = "file-stream"\n'
+                       '\n[[component]]\nname = "fb0"\ntype = "file-browser"\nx = 0\ny = 150\n'
+                       'w = 200\nh = 100\n'
+                       '\n[[component]]\nname = "wav0"\ntype = "audio"\nfrom = 1\n'
+                       'path = "sd0/a.wav"\n')
+
+    def rejected(self, cases: list):
+        """Checks that the build rejects each line of `cases`. Each case is
+        (line, message), where the message is the error's text after the file
+        and the line number."""
+        for number, (line, message) in enumerate(cases):
+            with self.subTest(line=line):
+                self.write_code(line)
+                with self.assertRaisesRegex(NxwrightError,
+                                            r"first\.nx:2: %s$" % re.escape(message)):
+                    export_dump(self.source, self.folder / ("rejected%d" % number))
+
+    def test_the_calls_the_nextion_editor_compiles(self):
+        self.write_code(
+            "n0.val=fs0.open(t0.txt)", 'n0.val=fs0.open("sd0/a.txt")',
+            'n0.val=fs0.find("sd0/a.txt")', "n0.val=fs0.read(t0.txt,0,3)",
+            "n0.val=fs0.write(t0.txt,0,3)", "n0.val=fs0.close()", "n0.val+=fs0.open(t0.txt)",
+            "n0.val=fs0.open(t0.txt)+1", "n0.val=1+fs0.close()",
+            "n0.val=fs0.open(t0.txt)+fs0.find(t0.txt)", 'n0.val=d0.insert("a^b")',
+            "n0.val=d0.delete(0,1)", 'n0.val=d0.up("a^b",0)', "n0.val=d0.clear()",
+            "n0.val=fb0.up()", "n0.val=first.fs0.open(t0.txt)")
+        export_dump(self.source, self.folder / "again")
+
+    def test_a_call_of_what_is_no_method_is_rejected(self):
+        self.rejected([
+            ("n0.val=n0.val()", "`n0.val=n0.val()`: `n0.val` is not a method, it cannot be called"),
+            ("n0.val=n0.val(5)+1",
+             "`n0.val=n0.val(5)+1`: `n0.val` is not a method, it cannot be called"),
+            ("n0.val=fs0.val(5)",
+             "`n0.val=fs0.val(5)`: `fs0.val` is not a method, it cannot be called"),
+            # `up` is a method of a data record and of a file browser, not
+            # of a page.
+            ("n0.val=first.up()",
+             "`n0.val=first.up()`: `first.up` is not a method, it cannot be called")])
+
+    def test_another_number_of_arguments_is_rejected(self):
+        self.rejected([("n0.val=fs0.close(1)", "`fs0.close` takes no arguments"),
+                      ("n0.val=fs0.open()", "`fs0.open` takes 1 argument"),
+                      ("n0.val=fs0.read(5)", "`fs0.read` takes 3 arguments"),
+                      ("n0.val=1+fs0.find()", "`fs0.find` takes 1 argument"),
+                      ("n0.val=d0.clear(1)", "`d0.clear` takes no arguments"),
+                      ("n0.val=d0.delete(t0.txt,1)",
+                       "argument 1 of `d0.delete` must be a number, not text"),
+                      ("n0.val=fb0.up(1)", "`fb0.up` takes no arguments"),
+                      ("fb0.up(1)", "`fb0.up` takes no arguments"),
+                      ("first.fs0.close(1)", "`first.fs0.close` takes no arguments")])
+
+    def test_a_call_among_a_command_s_arguments(self):
+        # The Nextion Editor compiled a method call there, and rejected the
+        # same calls as in a value.
+        self.write_code("cls fs0.close()", "vis t0,fs0.close()")
+        export_dump(self.source, self.folder / "again")
+        self.rejected([
+            ("cls fs0.close(1)", "`fs0.close` takes no arguments"),
+            ("cls n0.val()", "`cls n0.val()`: `n0.val` is not a method, it cannot be called"),
+            ("n0.val(5)", "`n0.val(5)`: `n0.val` is not a method, it cannot be called")])
+
+    def test_a_call_put_in_a_text_is_rejected(self):
+        self.rejected([
+            ("t0.txt=fs0.open(t0.txt)",
+             "`t0.txt=fs0.open(t0.txt)`: the result of a call cannot be put in text"),
+            ("t0.txt+=fs0.open(t0.txt)",
+             "`t0.txt+=fs0.open(t0.txt)`: the result of a call cannot be put in text"),
+            # A text other than a txt: an audio's path.
+            ("wav0.path=fs0.open(t0.txt)",
+             "`wav0.path=fs0.open(t0.txt)`: the result of a call cannot be put in text")])
+        self.write_code("wav0.path=t0.txt")
+        export_dump(self.source, self.folder / "again")
+
+    def test_a_call_among_a_call_s_arguments_is_rejected(self):
+        self.rejected([
+            ("fs0.open(fs0.find(t0.txt))",
+             "`fs0.open(fs0.find(t0.txt))`: an argument of `fs0.open` cannot be a call. "
+             "Put the call's result in a variable first."),
+            ("fs0.read(t0.txt,fs0.find(t0.txt),3)",
+             "`fs0.read(t0.txt,fs0.find(t0.txt),3)`: an argument of `fs0.read` cannot be a "
+             "call. Put the call's result in a variable first.")])
+
+    def test_a_call_in_the_step_of_a_for_is_rejected(self):
+        # The Nextion Editor rejected it ("Invalid Variables"). It compiled a
+        # call in a for's start, and in the condition of an if and of a while.
+        self.write_code("for(n0.val=fs0.close();n0.val<fs0.find(t0.txt);n0.val++)", "{", "}")
+        export_dump(self.source, self.folder / "again")
+        self.write_code("for(n0.val=0;n0.val<1;n0.val+=fs0.close())", "{", "}")
+        with self.assertRaisesRegex(NxwrightError, re.escape(
+                "first.nx:2: `for(n0.val=0;n0.val<1;n0.val+=fs0.close())`: the step of a `for` "
+                "cannot contain a call. Use a `while` loop.")):
+            export_dump(self.source, self.folder / "rejected")
+
+    def test_a_method_alone_on_a_line(self):
+        self.write_code("fs0.close", "fs0.open", "fs0.read", "d0.clear", "d0.up", "fb0.up",
+                        "first.fs0.close")
+        export_dump(self.source, self.folder / "again")
+
+    def test_another_attribute_alone_on_a_line_is_rejected(self):
+        self.rejected([(line, "`%s` is not a method, so it cannot be alone on a line" % line)
+                      for line in ("n0.val", "t0.txt", "fs0.val", "first.up", "first.n0.val")])
+
+    def test_on_a_page_without_a_type_that_has_methods(self):
+        # T, K, and F have no type with a method, so every call on those series
+        # is a call of a name that is not a method.
+        objects = ObjectNames(frozenset({"page0", "n0"}), {"page0": {"page0": "page",
+                                                                    "n0": "number"}}, "page0")
+        with self.assertRaisesRegex(NxwrightError, "`n0.val` is not a method"):
+            check_line("n0.val=n0.val()", objects, frozenset(), frozenset(), None, 1)
+
+
 class CommandArgumentTest(_CodeOnFirstTestCase):
     """The commands whose first argument the Editor takes as one operand
     alone, refusing arithmetic there as it compiles ("Invalid Variables"),
@@ -1441,8 +1563,9 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
 
     def test_a_value_or_a_head_the_editor_refuses(self):
         # As the Nextion Editor's compile refused each.
-        value = ("the value is not valid. A value is made of numbers, texts, and names joined "
-                 "by operators, without parentheses.")
+        value = ("the value is not valid. A value is made of numbers, texts, names, and "
+                 "method calls, joined by operators. Parentheses are only valid around a "
+                 "call's arguments.")
         end, semicolon = "this line must end with `)`", ("text in a `for` header cannot contain "
                                                          "a semicolon. Use a `while` loop.")
         cases = [("n0.val==2", value), ("n0.val=2+", value), ("n0.val=+2", value),
