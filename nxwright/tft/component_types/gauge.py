@@ -44,7 +44,7 @@ BACKGROUNDS = {_CROP: "picc", _COLOUR: "bco", _PICTURE: "pic"}
 _PLACES = {"sta": 0, "background": 2, "val": 4, "pco": 14, "wid": 20}
 # Each attribute's entry, within the type, and the entries its needle's
 # command gives that the gauge leaves empty.
-_ENTRY = {"type": 0, "id": 1, "vscope": 3, "aph": 6, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
+_ENTRY = {"type": 0, "id": 1, "vscope": 3, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
           "endy": 14, "sta": 19, "background": 20, "val": 21, "pco": 26, "wid": 29}
 _EMPTY_ENTRIES = (22, 27, 28)
 # The record's slots that give an entry, and which entry, but that of what

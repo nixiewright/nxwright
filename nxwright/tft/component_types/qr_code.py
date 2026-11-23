@@ -44,7 +44,7 @@ MEMORY_FORMAT = "<BBHHHH2xI"
 # Each attribute's entry, within the type, for a QR code without a logo.
 # One with a logo has its pic's entry where this one has its txt's, and its
 # txt's and txt_maxl's one later.
-_ENTRY = {"type": 0, "id": 1, "vscope": 3, "aph": 6, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
+_ENTRY = {"type": 0, "id": 1, "vscope": 3, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
           "endy": 14, "sta": 19, "dis": 20, "bco": 21, "pco": 22, "txt": 23, "txt_maxl": 24}
 # The record's slots that give an entry, and which entry. One with a logo
 # gives its pic in slot 6 too.

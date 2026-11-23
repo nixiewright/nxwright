@@ -35,7 +35,7 @@ EVENTS = ("down", "up")
 SERIES = ("T", "K", "P", "E", "F")
 
 # Each attribute's entry, within the type.
-_ENTRY = {"type": 0, "id": 1, "vscope": 3, "aph": 6, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
+_ENTRY = {"type": 0, "id": 1, "vscope": 3, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
           "endy": 14, "picc": 19, "vvs0": 20, "vvs1": 21}
 # The record's slots that give an entry, and which entry.
 _SLOTS = {1: "vscope", 5: "picc", 42: "x", 43: "y", 44: "endx", 45: "endy", 46: "w", 47: "h",

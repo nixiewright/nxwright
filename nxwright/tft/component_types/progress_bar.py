@@ -46,7 +46,7 @@ _PLACES = {"sta": 0, "dez": 1, "val": 2, "dis": 3, "empty": 4, "filled": 6}
 MEMORY_VALUES = ("sta", "dez", "val", "dis", "empty", "filled")
 MEMORY_FORMAT = "<BBBBHH"
 # Each attribute's entry, within the type, but those of its parts and dis.
-_ENTRY = {"type": 0, "id": 1, "vscope": 3, "aph": 6, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
+_ENTRY = {"type": 0, "id": 1, "vscope": 3, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
           "endy": 14, "sta": 19, "dez": 20, "val": 21}
 # The entries after its val's, in order, by what each gives, by its sta.
 _FOLLOWING = {_COLOURS: ("dis", "empty", "filled"), _PICTURES: ("empty", "filled")}

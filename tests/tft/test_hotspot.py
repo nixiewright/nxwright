@@ -63,17 +63,21 @@ class PiecesTest(TypePieces, CodePieces, unittest.TestCase):
 
 
 class PPiecesTest(PTypePieces, CodePieces, unittest.TestCase):
-    """Each hotspot of each of its probes on P that keeps its whole user
-    code, at its type's functions on P, and its probe of code, against the
-    probe's pieces (tests/tft/p_components.py). Its values after its record's
-    head are its effect's slot, its first, and its time, at their defaults.
-    Its entries give its drag's, aph's, and effect's defaults, 0, 127, and
-    0, and the others their places, from its base."""
+    """Compares what the hotspot's functions on P return with the pieces of
+    the hotspot's probes on P (tests/tft/p_components.py), for each hotspot
+    of each probe that keeps its whole user code. The code of the hotspot's
+    two probes of code is compared with their pieces too. One of the two
+    reads and sets a hotspot's aph.
+
+    A hotspot's values after its record's head are its effect's slot,
+    first, and time, at their defaults. Its entries for drag, aph, and
+    effect give those attributes' defaults, 0, 127, and 0. Each other entry
+    gives a place, counted from the hotspot's base."""
 
     TYPE = "hotspot"
     PROBES = [probe for probe in p_probes.PROBES if probe.name.startswith("p-hotspot-")]
     COUNT = 4
-    CODE_COUNT = 1
+    CODE_COUNT = 2
 
 
 class MatchedTest(unittest.TestCase):

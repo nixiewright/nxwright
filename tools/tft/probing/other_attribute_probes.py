@@ -46,32 +46,34 @@ _COMPONENTS = [
     timer_component(), variable_component(), text_variable_component("va1"),
     waveform_component(x=10, y=400, h=60), xfloat_component(x=220, y=10),
     touch_capture_component()]
-# The attributes each of them writes, by the component's name and type. A
-# txt is left out, as it is no number.
+# The attributes each of these components writes, by the component's name and
+# type. The aph of a component that has one is listed too, because code refers
+# to it by an entry's number even on T, where the component's type does not
+# write that entry. A txt is left out because it is not a number.
 ATTRIBUTES = {
-    ("t0", "text"): "type id vscope x y w h endx endy sta style font bco pco xcen ycen isbr "
+    ("t0", "text"): "type id vscope x y w h endx endy aph sta style font bco pco xcen ycen isbr "
                     "txt_maxl pw spax spay",
-    ("n0", "number"): "type id vscope x y w h endx endy sta style font bco pco xcen ycen val "
+    ("n0", "number"): "type id vscope x y w h endx endy aph sta style font bco pco xcen ycen val "
                       "lenth format isbr spax spay",
-    ("b0", "button"): "type id vscope x y w h endx endy sta style font bco bco2 pco pco2 xcen "
+    ("b0", "button"): "type id vscope x y w h endx endy aph sta style font bco bco2 pco pco2 xcen "
                       "ycen val txt_maxl isbr spax spay",
-    ("c0", "checkbox"): "type id vscope x y w h endx endy style bco pco val",
-    ("r0", "radio"): "type id vscope x y w h endx endy bco pco val",
-    ("bt0", "dual-state-button"): "type id vscope x y w h endx endy sta style font bco bco2 pco "
-                                  "pco2 xcen ycen val txt_maxl isbr spax spay",
-    ("z0", "gauge"): "type id vscope x y w h endx endy sta bco val pco wid",
-    ("m0", "hotspot"): "type id vscope x y w h endx endy",
-    ("j0", "progress-bar"): "type id vscope x y w h endx endy sta dez val dis bco pco",
-    ("qr0", "qr-code"): "type id vscope x y w h endx endy sta dis bco pco txt_maxl",
-    ("g0", "scrolling-text"): "type id vscope x y w h endx endy sta style font bco pco xcen ycen "
-                              "dir dis tim en txt_maxl isbr spax spay vvs0 vvs1 vvs2 vvs3",
-    ("h0", "slider"): "type id vscope x y w h endx endy mode sta psta wid hig bco bco1 pco val "
+    ("c0", "checkbox"): "type id vscope x y w h endx endy aph style bco pco val",
+    ("r0", "radio"): "type id vscope x y w h endx endy aph bco pco val",
+    ("bt0", "dual-state-button"): "type id vscope x y w h endx endy aph sta style font bco bco2 "
+                                  "pco pco2 xcen ycen val txt_maxl isbr spax spay",
+    ("z0", "gauge"): "type id vscope x y w h endx endy aph sta bco val pco wid",
+    ("m0", "hotspot"): "type id vscope x y w h endx endy aph",
+    ("j0", "progress-bar"): "type id vscope x y w h endx endy aph sta dez val dis bco pco",
+    ("qr0", "qr-code"): "type id vscope x y w h endx endy aph sta dis bco pco txt_maxl",
+    ("g0", "scrolling-text"): "type id vscope x y w h endx endy aph sta style font bco pco xcen "
+                              "ycen dir dis tim en txt_maxl isbr spax spay vvs0 vvs1 vvs2 vvs3",
+    ("h0", "slider"): "type id vscope x y w h endx endy aph mode sta psta wid hig bco bco1 pco val "
                       "maxval minval ch",
     ("tm0", "timer"): "type id vscope tim en",
     ("va0", "variable"): "type id vscope sta val",
     ("va1", "variable"): "type id vscope sta txt_maxl",
-    ("s0", "waveform"): "type id vscope x y w h endx endy sta dir ch bco gdc gdw gdh pco0 dis",
-    ("x0", "xfloat"): "type id vscope x y w h endx endy sta style font bco pco xcen ycen val "
+    ("s0", "waveform"): "type id vscope x y w h endx endy aph sta dir ch bco gdc gdw gdh pco0 dis",
+    ("x0", "xfloat"): "type id vscope x y w h endx endy aph sta style font bco pco xcen ycen val "
                       "vvs0 vvs1 isbr spax spay",
     ("tc0", "touch-capture"): "type id vscope val",
 }
@@ -83,10 +85,10 @@ _MORE_COMPONENTS = [
     picture_component(), crop_component(y=30), qr_code_component(x=150, y=10, sta=1, pic="red"),
     waveform_component(x=10, y=150, ch=4)]
 _MORE_ATTRIBUTES = {
-    ("p0", "picture"): "type id vscope x y w h endx endy pic",
-    ("q0", "crop"): "type id vscope x y w h endx endy picc vvs0 vvs1",
-    ("qr0", "qr-code"): "type id vscope x y w h endx endy sta dis bco pco pic txt_maxl",
-    ("s0", "waveform"): "type id vscope x y w h endx endy sta dir ch bco gdc gdw gdh pco0 pco1 "
+    ("p0", "picture"): "type id vscope x y w h endx endy aph pic",
+    ("q0", "crop"): "type id vscope x y w h endx endy aph picc vvs0 vvs1",
+    ("qr0", "qr-code"): "type id vscope x y w h endx endy aph sta dis bco pco pic txt_maxl",
+    ("s0", "waveform"): "type id vscope x y w h endx endy aph sta dir ch bco gdc gdw gdh pco0 pco1 "
                         "pco2 pco3 dis",
 }
 

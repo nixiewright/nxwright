@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.5.3] - 2026-11-23
+
+- `nxwright compile` now compiles code that reads or sets a hotspot's `aph`.
+
 ### [0.5.2] - 2026-11-23
 
 - The build and `nxwright compile` now report an error for invalid method calls, such as `n0.val()`.

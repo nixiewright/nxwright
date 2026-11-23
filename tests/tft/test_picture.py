@@ -126,8 +126,9 @@ class MatchedTest(unittest.TestCase):
 
 
 class CodeTest(unittest.TestCase):
-    """Code may use a picture's pic, and any other attribute it writes, which
-    an aph is not."""
+    """Code may use a picture's pic, any other attribute the picture writes,
+    and its aph. Code refers to the aph by entry 6, although a picture does
+    not write that entry on T."""
 
     @classmethod
     def setUpClass(cls):
@@ -138,11 +139,12 @@ class CodeTest(unittest.TestCase):
                                      CompileContext(self.project)),
                          b"\x01\x34\x00\x00\x00=1")
 
-    def test_its_aph(self):
-        # Its aph, entry 6: p0's first entry is 33, so its aph's is 39.
-        self.assertEqual(encode_line("p0.aph=64", CodePlace(0, "page0", "up"),
+    def test_a_read_of_its_aph(self):
+        # The aph is p0's entry 6, and p0's first entry is 33, so code refers
+        # to the aph by entry 39. On T, code can read an aph but cannot set one.
+        self.assertEqual(encode_line("sys0=p0.aph", CodePlace(0, "page0", "up"),
                                      CompileContext(self.project)),
-                         b"\x01\x27\x00\x00\x00=64")
+                         b"\x05\x00\x00\x00\x00=\x01\x27\x00\x00\x00")
 
     def test_the_check_lets_its_pic_through(self):
         project = probe_project(probe_named("picture-pic-in-code"))
@@ -172,6 +174,15 @@ class OnPTest(unittest.TestCase):
             with self.subTest(series):
                 self.assertEqual(unmatched([Need("type", "picture", series=series)],
                                            matched_rules()), [])
+
+    def test_code_sets_its_aph(self):
+        # On P, code can also set an aph. The aph is p0's entry 6, and p0's
+        # first entry is 33, so code refers to the aph by entry 39.
+        project = project_of(page(picture_probes.picture_component(), series="P",
+                                  pictures=("red",)), series="P", pictures=1)
+        self.assertEqual(encode_line("p0.aph=64", CodePlace(0, "page0", "up"),
+                                     CompileContext(project)),
+                         b"\x01\x27\x00\x00\x00=64")
 
 
 if __name__ == "__main__":

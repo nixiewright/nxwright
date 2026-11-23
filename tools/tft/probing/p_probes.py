@@ -353,6 +353,12 @@ _ATTRIBUTE_PROBES = [
         "if(t0.bco==1)", "{", "sys0=1", "}else if(n0.lenth>b0.pco2&&b0.bco2!=t0.pco)", "{",
         "sys0=2", "}", "while(n0.x<10)", "{", "n0.x++", "}",
         "for(t0.bco=0;t0.bco<n0.font;t0.bco+=1)", "{", "sys0++", "}"], _TYPES),
+          ours_in_event, theirs_in_event),
+    # A hotspot's aph, read and set. The entry for a hotspot's aph contains the
+    # value itself, but code still refers to the aph by that entry's number.
+    Probe("hotspot-aph-in-code", "P", with_attributes(
+        ["sys0=m0.aph", "m0.aph=50", "m0.aph=sys0"],
+        [hotspot_probes.hotspot_component(x=150, y=120)]),
           ours_in_event, theirs_in_event)]
 
 # Global components on P, and local texts whose rooms keep what lay in the

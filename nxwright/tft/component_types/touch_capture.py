@@ -34,7 +34,7 @@ EVENTS = ("down", "up")
 DRAWN = False
 
 # Each attribute's entry, within the type.
-_ENTRY = {"type": 0, "id": 1, "vscope": 3, "aph": 6, "val": 7}
+_ENTRY = {"type": 0, "id": 1, "vscope": 3, "val": 7}
 # The record's slots that give an entry, and which entry.
 _SLOTS = {1: "vscope", 20: "val", 49: "id", 62: "type"}
 # The most val a page file keeps, in its 1 byte.

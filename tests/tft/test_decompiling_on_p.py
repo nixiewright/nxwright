@@ -95,8 +95,8 @@ class DecodersTest(unittest.TestCase):
                 code, again, count = rebuilt_user_code(project, _values_of)
                 self.assertEqual(again, code)
                 rebuilt += count
-        # 3659 objects.
-        self.assertEqual(rebuilt, 3659)
+        # 3661 objects.
+        self.assertEqual(rebuilt, 3661)
 
     def test_each_page_s_events(self):
         pages = added = keys = 0

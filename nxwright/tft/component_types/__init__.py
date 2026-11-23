@@ -404,12 +404,23 @@ def code_entry(module, page_object, name: str, series: str) -> int:
     an attribute the type's attribute_place takes: raises KeyError for
     another.
 
-    On T and K, the number is attribute_place's. On P and E, a type that
+    On T, K, and F, the number is attribute_place's. On P and E, a type that
     gives P_ENTRIES numbers its entries as they do, after its effect moves
     them (with_p_effect). Most keep T's numbers there, but some do not, as
     a gauge's. An attribute its P_ENTRIES lacks takes its number from its
     P_CODE_ENTRIES, or is refused: its number on T would name another
-    entry there."""
+    entry there.
+
+    An aph is the exception: code refers to it by the same entry number on
+    every series, the one P_DRAWN_ENTRIES gives it. On T, K, and F, the
+    frame keeps the aph in the record's head and does not write that entry,
+    but the Nextion Editor still wrote the entry's number for code that
+    reads an aph on those series. Raises KeyError for a component that has
+    no aph, such as a timer."""
+    if name == "aph":
+        if page_object.attribute("aph") is None:
+            raise KeyError(name)
+        return _entry_named(P_DRAWN_ENTRIES, "aph")
     entry = module.attribute_place(name)
     if series not in SERIES_WRITTEN_AS_P or not hasattr(module, "P_ENTRIES"):
         return entry
