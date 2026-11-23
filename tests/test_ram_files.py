@@ -171,6 +171,40 @@ class RefileOnACardInMemoryTest(unittest.TestCase):
                          [("refile", "sd0/no.txt")] + [("refile", "sd0/a.txt")] * 3)
 
 
+class RedirOnACardInMemoryTest(unittest.TestCase):
+    """On a card given no folder, the machine keeps the files in memory,
+    and a redir renames a folder with the files under it
+    (docs/simulator.md, What the file commands do)."""
+
+    def test_a_folder_is_renamed_with_its_files(self):
+        files = {"sd0/d/a.txt": b"a", "sd0/d/e/b.txt": b"b", "sd0/c.txt": b"c"}
+        values = run(['redir "sd0/d/","sd0/f/"'], files=files)
+        self.assertEqual(values["file contents"],
+                         {"sd0/f/a.txt": b"a", "sd0/f/e/b.txt": b"b", "sd0/c.txt": b"c"})
+        self.assertEqual(values["file commands"], [("redir", "sd0/d/", "sd0/f/")])
+        self.assertNotIn("file errors", values)
+
+    def test_what_is_refused_renames_nothing(self):
+        # Paths that do not both end with /, a folder that contains no file, the
+        # card itself, a name that exists already as a folder or as a file, a
+        # name on another card or in ram/, and a name inside the folder.
+        files = {"sd0/d/a.txt": b"a", "sd0/e/b.txt": b"b", "sd0/f": b"f"}
+        refused = ['redir "sd0/d","sd0/g"', 'redir "sd0/no/","sd0/g/"', 'redir "sd0/","sd0/g/"',
+                   'redir "sd0/d/","sd0/e/"', 'redir "sd0/d/","sd0/f/"', 'redir "sd0/d/","sd1/d/"',
+                   'redir "sd0/d/","ram/d/"', 'redir "sd0/d/","sd0/d/g/"']
+        values = run(refused, files=files)
+        self.assertEqual(values["file contents"], files)
+        self.assertEqual(values["file errors"],
+                         [("redir", "sd0/d"), ("redir", "sd0/no/"), ("redir", "sd0/")]
+                         + [("redir", "sd0/d/")] * 5)
+
+    def test_a_path_on_no_card_is_still_only_recorded(self):
+        files = {"d/a.txt": b"a", "ram/a.txt": b"r"}
+        values = run(['redir "d/","e/"'], files=files)
+        self.assertEqual(values["file contents"], files)
+        self.assertNotIn("file errors", values)
+
+
 class TwfileInATestTest(unittest.TestCase):
     """A test has no serial line, so it records a twfile the screen takes."""
 

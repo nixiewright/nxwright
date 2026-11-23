@@ -1394,8 +1394,9 @@ class EditorMachine:
             the screen answers 0x06.
           - In every other case, the files are in `contents`, which is
             "file contents". newfile adds a file of its size, all zero
-            bytes, delfile removes one, and refile renames one
-            (_renamed_in_memory).
+            bytes, delfile removes one, refile renames one
+            (_renamed_in_memory), and a redir on a card renames a folder
+            (_folder_renamed_in_memory).
 
         Wherever the path is, the machine also records these commands in
         "file errors" instead of "file commands":
@@ -1451,6 +1452,9 @@ class EditorMachine:
             contents.pop(paths[0], None)
         if word == "refile" and not self._renamed_in_memory(contents, paths[0], paths[1]):
             return
+        if word == "redir" and isinstance(paths[0], str) and card_of(paths[0]) is not None:
+            self._folder_renamed_in_memory(contents, paths[0], paths[1])
+            return
         self._page_drawn_again(word)
 
     def _renamed_in_memory(self, contents: dict, path: str, new_path) -> bool:
@@ -1479,6 +1483,49 @@ class EditorMachine:
         if code is not None:
             self._refused(code)
         return False
+
+    def _folder_renamed_in_memory(self, contents: dict, path: str, new_path):
+        """Renames the folder `path` to `new_path` for a `redir` on a card
+        given no folder. The machine keeps the files of that card in memory,
+        in `contents`, where a folder exists only as the start of its files'
+        paths. Renaming the folder therefore moves every file whose path
+        starts with `path`.
+
+        The screen ignores the redir, and answers 0x06, when:
+          - the two paths do not both end with "/".
+          - `path` is the card itself, or no file is under it.
+          - `new_path` is on another card, or in ram/.
+          - `new_path` is inside `path`.
+          - a file is under `new_path` already, or `new_path` without its
+            last "/" is a file.
+        The machine records an ignored redir in "file errors", with the
+        reason for the simulator's log.
+
+        `contents` has no entries for folders, so two redirs end differently
+        than on a card given a folder (sd_cards.FolderCards.rename_folder):
+          - An empty folder cannot exist in memory, so a redir of one is
+            ignored, the same way as a redir of a missing folder.
+          - The parent folder of `new_path` cannot be checked, so a redir
+            into a missing parent folder is carried out."""
+        moved = [name for name in contents if name.startswith(path)]
+        if not (isinstance(new_path, str) and path.endswith("/") and new_path.endswith("/")):
+            reason = "%s and %s do not both end with /" % (path, new_path)
+        elif path == card_of(path):
+            reason = "%s is the card itself" % path
+        elif not moved:
+            reason = "%s holds no file" % path
+        elif card_of(new_path) != card_of(path):
+            reason = "%s is not on %s's card" % (new_path, path)
+        elif new_path.startswith(path):
+            reason = "%s is inside %s" % (new_path, path)
+        elif new_path[:-1] in contents or any(name.startswith(new_path) for name in contents):
+            reason = "%s exists already" % new_path
+        else:
+            for name in moved:
+                contents[new_path + name[len(path):]] = contents.pop(name)
+            return
+        self._record("file errors", ("redir", path), reason)
+        self._refused(INVALID_FILE_OPERATION)
 
     def _page_drawn_again(self, word: str):
         """Tells the simulation's screen, if any, to draw the page again when

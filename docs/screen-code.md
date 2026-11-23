@@ -315,7 +315,7 @@ The file commands act on the SD card's files: `findfile`, `finddir`, `newfile`, 
 
 ### `newfile`
 
-- `newfile` makes a file of the size it is given, all zero bytes.
+- `newfile` makes a file of the size it is given. The simulator fills it with zero bytes, but a real screen may not. On an NX8048P070, a new file in `ram/` kept whatever was in that memory before. Write a file before you read it.
 - If the size is not a number, `newfile` does not create a file, and answers 0x1B, whatever its path.
 - If the size is below 0, `newfile` does not create a file, and answers 0x06, an invalid file operation.
 - If a file in `ram/`, the screen's memory, does not fit in the space your project sets aside, `newfile` does not create it, and answers 0x06 ([Files in `ram/`](simulator.md#files-in-ram)).
