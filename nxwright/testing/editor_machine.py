@@ -1394,7 +1394,8 @@ class EditorMachine:
             the screen answers 0x06.
           - In every other case, the files are in `contents`, which is
             "file contents". newfile adds a file of its size, all zero
-            bytes, and delfile removes one.
+            bytes, delfile removes one, and refile renames one
+            (_renamed_in_memory).
 
         Wherever the path is, the machine also records these commands in
         "file errors" instead of "file commands":
@@ -1448,7 +1449,36 @@ class EditorMachine:
             contents.setdefault(paths[0], bytes(paths[1]))
         if word == "delfile":
             contents.pop(paths[0], None)
+        if word == "refile" and not self._renamed_in_memory(contents, paths[0], paths[1]):
+            return
         self._page_drawn_again(word)
+
+    def _renamed_in_memory(self, contents: dict, path: str, new_path) -> bool:
+        """Renames the file `path` to `new_path` for a `refile` on a card
+        given no folder, whose files are kept in memory in `contents`.
+        Returns whether the file was renamed.
+
+        The rename is refused, and recorded in "file errors" with its reason
+        for the simulator's log, when:
+          - `path` does not exist. The screen answers 0x06.
+          - `new_path` is on another card, or in ram/. The screen does not
+            answer with an error code.
+          - `new_path` exists already. The screen answers 0x06.
+        These are the cases that sd_cards.FolderCards.rename refuses, except
+        a missing folder, because files kept in memory have no folders."""
+        if path not in contents:
+            reason, code = "%s does not exist" % path, INVALID_FILE_OPERATION
+        elif not isinstance(new_path, str) or card_of(new_path) != card_of(path):
+            reason, code = "%s is not on %s's card" % (new_path, path), None
+        elif new_path in contents:
+            reason, code = "%s exists already" % new_path, INVALID_FILE_OPERATION
+        else:
+            contents[new_path] = contents.pop(path)
+            return True
+        self._record("file errors", ("refile", path), reason)
+        if code is not None:
+            self._refused(code)
+        return False
 
     def _page_drawn_again(self, word: str):
         """Tells the simulation's screen, if any, to draw the page again when

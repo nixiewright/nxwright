@@ -148,6 +148,29 @@ class RefileTest(unittest.TestCase):
         self.assertEqual(values.get("file commands", []), [])
 
 
+class RefileOnACardInMemoryTest(unittest.TestCase):
+    """On a card given no folder, the machine keeps the files in memory,
+    and a refile follows the same rules as on a card given a folder
+    (docs/simulator.md, What the file commands do)."""
+
+    def test_a_file_is_renamed_with_its_bytes(self):
+        values = run(['refile "sd0/a.txt","sd0/b.txt"'], files={"sd0/a.txt": b"hello"})
+        self.assertEqual(values["file contents"], {"sd0/b.txt": b"hello"})
+        self.assertEqual(values["file commands"], [("refile", "sd0/a.txt", "sd0/b.txt")])
+        self.assertNotIn("file errors", values)
+
+    def test_what_is_refused_renames_nothing(self):
+        # A file that does not exist, a name that exists already, and a name
+        # on another card or in ram/.
+        files = {"sd0/a.txt": b"a", "sd0/b.txt": b"b"}
+        values = run(['refile "sd0/no.txt","sd0/c.txt"', 'refile "sd0/a.txt","sd0/b.txt"',
+                      'refile "sd0/a.txt","sd1/a.txt"', 'refile "sd0/a.txt","ram/a.txt"'],
+                     files=files)
+        self.assertEqual(values["file contents"], files)
+        self.assertEqual(values["file errors"],
+                         [("refile", "sd0/no.txt")] + [("refile", "sd0/a.txt")] * 3)
+
+
 class TwfileInATestTest(unittest.TestCase):
     """A test has no serial line, so it records a twfile the screen takes."""
 

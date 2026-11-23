@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.4.7] - 2026-11-14
+
+- `refile` now renames a file on an SD card that is simulated in memory.
+
 ### [0.4.6] - 2026-11-14
 
 - The simulator now draws nothing for a file of 32 bytes or fewer that is not a picture, matching physical screens.

@@ -73,7 +73,7 @@ class TestMachineTest(unittest.TestCase):
                          'delfile "%sb.bin"' % card, 'refile "%sa.bin","%sc.bin"' % (card, card),
                          'newdir "%sd/"' % card, 'deldir "%sd/"' % card, 'deldir "%s"' % card[:-1]]
                 values = run(lines)
-                self.assertEqual(values["file contents"], {card + "a.bin": bytes(3)})
+                self.assertEqual(values["file contents"], {card + "c.bin": bytes(3)})
                 self.assertEqual([entry[0] for entry in values["file commands"]],
                                  ["newfile", "newfile", "delfile", "refile", "newdir", "deldir",
                                   "deldir"])
