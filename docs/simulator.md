@@ -760,7 +760,8 @@ An external picture shows the picture file at its `path`. The file can be in `ra
 | --- | --- | --- |
 | PictureBox's `.xi` file ([format.md, Pictures for the SD card](format.md#pictures-for-the-sd-card)) | the picture | the picture |
 | A JPEG | the picture | an error marker |
-| Any other file, such as a PNG | an error marker | nothing |
+| Any other file of more than 32 bytes, such as a PNG | an error marker | nothing |
+| Any other file of 32 bytes or fewer | nothing | nothing |
 
 The kind of a file comes from its contents, so renaming a file does not change what shows. To make a PNG, a JPEG, or another picture show on every screen, convert it to a `.xi` file with `nxwright sd-picture`.
 
@@ -779,7 +780,7 @@ A file that shows is drawn this way:
 - The screen draws a picture file the way it is stored. If your app's `rotation` is not 0, the file must be stored rotated to show upright, so a JPEG you saved upright shows rotated. `nxwright sd-picture --rotation` writes a `.xi` file that is stored rotated.
 - The picture starts at the component's top left corner. The part that does not fit in the component is not drawn.
 
-The table comes from one real screen of each series, an NX8048P070 and an NX4848E040. The NX4848E040 was tried with files in `ram/` only.
+The table comes from one real screen of each series, an NX8048P070 and an NX4848E040. Only files in `ram/` were tried on the NX4848E040. The limit of 32 bytes was found on the NX8048P070 with text files in `ram/`, and no file smaller than 8 bytes was tried.
 
 ### What the file commands do
 

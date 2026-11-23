@@ -49,7 +49,10 @@ BLUE = _saved(BLUE_COLOUR, "JPEG")
 RED_XI = _xi(RED_COLOUR)
 RED_PNG = write_png(4, 2, bytes([255, 0, 0, 255]) * 8)
 RED_GIF = _saved(RED_COLOUR, "GIF")
-TEXT = b"not a picture"
+TEXT = b"not a picture, but a text of more than 32 bytes"
+# The largest text that shows nothing on a real NX8048P070, and one byte more.
+TEXT_32 = b"textfile" * 4
+TEXT_33 = TEXT_32 + b"!"
 CUT_XI = b"hmipicxi" + bytes(30)
 IGNORED = bytes.fromhex("06 ff ff ff")
 XI = Path(__file__).resolve().parent / "fixtures" / "media" / "xi" / "odd-96-0.xi"
@@ -114,12 +117,16 @@ class WhatEachFileShowsTest(ExternalPictureTestCase):
     of a file comes from its bytes, whatever its name."""
 
     def test_the_kind_of_a_file_comes_from_its_bytes(self):
-        kinds = [file_kind(data) for data in (RED_XI, RED, RED_PNG, RED_GIF, TEXT, b"")]
+        kinds = [file_kind(data) for data in (RED_XI, RED, RED_PNG, RED_GIF, TEXT)]
         self.assertEqual(len(set(kinds[:2])), 2)
         self.assertEqual(len(set(kinds[2:])), 1)
         # A file that starts as a JPEG or a .xi file, and cannot be read.
         self.assertEqual(file_kind(CUT_XI), file_kind(RED[:20]))
         self.assertNotIn(file_kind(CUT_XI), kinds)
+        # A file of 32 bytes or fewer that does not start as a picture.
+        self.assertEqual(file_kind(TEXT_32), file_kind(b""))
+        self.assertNotIn(file_kind(TEXT_32), kinds + [file_kind(CUT_XI)])
+        self.assertEqual(file_kind(TEXT_33), file_kind(TEXT))
 
     def test_what_each_series_shows(self):
         files = (RED_XI, RED, RED_PNG, RED_GIF, TEXT, CUT_XI, RED[:20])
@@ -142,6 +149,18 @@ class WhatEachFileShowsTest(ExternalPictureTestCase):
             with self.subTest(name=name):
                 simulation = self.started("ram/" + name, {"ram/" + name: data})
                 self.marker_of(self.drawing(simulation))
+
+    def test_a_small_file_shows_nothing(self):
+        # A real NX8048P070 showed nothing for a text file of 32 bytes or
+        # fewer, and the error marker for one of 33 bytes or more.
+        for series in ("P", "E", None):
+            with self.subTest(series=series):
+                self.assertEqual(shown(file_kind(TEXT_32), series), NOTHING)
+        simulation = self.started("ram/s.png", {"ram/s.png": TEXT_32})
+        self.assertEqual(self.shapes(self.drawing(simulation)), [])
+        self.assertEqual(self.refusals(), 0)
+        simulation = self.started("ram/s.png", {"ram/s.png": TEXT_33})
+        self.marker_of(self.drawing(simulation))
 
     def test_on_an_edge_screen(self):
         simulation = self.started("ram/p.xi", {"ram/p.xi": RED_XI}, screen=EDGE)

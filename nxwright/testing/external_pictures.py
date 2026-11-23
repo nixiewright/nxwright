@@ -4,14 +4,21 @@ A real screen does not show every kind of picture file, and the two series
 that have external pictures differ. An NX8048P070, of the Intelligent
 series, and an NX4848E040, of the Edge series, showed this:
 
-    the file            Intelligent         Edge
-    a .xi file          the picture         the picture
-    a JPEG              the picture         the error marker
-    another file        the error marker    nothing
+    the file                            Intelligent         Edge
+    a .xi file                          the picture         the picture
+    a JPEG                              the picture         the error marker
+    another file, of 33 bytes or more   the error marker    nothing
+    another file, of 32 bytes or fewer  nothing             nothing
 
 A .xi file is a picture file in the form PictureBox writes
 (media_files.card_picture_file). nxwright decides the kind of a file from
 its bytes, whatever the file's name, because the NX4848E040 did.
+
+On the NX8048P070, text files of 8, 30, and 32 bytes showed nothing, and
+ones of 33 bytes and more showed the marker. A file of fewer than 8 bytes,
+including an empty one, was not tried, and nxwright assumes that it shows
+nothing too. The NX4848E040 was tried with one text file only, of 184
+bytes.
 
 The error marker is the text "Show Picture Error!" in red on blue, from the
 component's top left. nxwright draws the text in a font of its own, so the
@@ -33,6 +40,8 @@ XI = ".xi"
 JPEG = "JPEG"
 DAMAGED = "damaged"     # a .xi file or a JPEG that cannot be read
 OTHER = "other"
+SMALL = "small"         # another file, of SMALL_FILE bytes or fewer
+SMALL_FILE = 32
 
 # What an external picture shows for a file that is there (shown).
 PICTURE = "picture"
@@ -54,9 +63,10 @@ _RED, _BLUE = (255, 0, 0, 255), (0, 0, 255, 255)
 
 
 def file_kind(data: bytes) -> str:
-    """Returns the kind of the file whose bytes are `data`: XI, JPEG,
-    DAMAGED for a file that starts like a .xi file or a JPEG and cannot be
-    read, or OTHER."""
+    """Returns the kind of the file whose bytes are `data`. The kind is XI or
+    JPEG for a picture that can be read, DAMAGED for a file that starts like
+    a .xi file or a JPEG and cannot be read, SMALL for any other file of
+    SMALL_FILE bytes or fewer, and OTHER for the rest."""
     try:
         if is_card_picture(data):
             read_card_picture(data)
@@ -66,7 +76,7 @@ def file_kind(data: bytes) -> str:
             return JPEG
     except (NxwrightError, OSError, ValueError):
         return DAMAGED
-    return OTHER
+    return SMALL if len(data) <= SMALL_FILE else OTHER
 
 
 def shown(kind: str, series) -> str:
@@ -81,6 +91,8 @@ def shown(kind: str, series) -> str:
         return PICTURE
     if kind == DAMAGED:
         return MARKER
+    if kind == SMALL:
+        return NOTHING
     if series == _EDGE:
         return MARKER if kind == JPEG else NOTHING
     return PICTURE if kind == JPEG else MARKER
