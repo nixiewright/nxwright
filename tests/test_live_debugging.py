@@ -189,13 +189,15 @@ class LiveDebuggingTest(LiveTestCase):
 
     def test_an_errors_file_is_written_as_its_full_path(self):
         path = Path("E:/app/pages/home.nx")
-        for message, line, written in (
-                ("pages/home.nx line 3 (go.down): no value", 3, "%s:3 (go.down): no value"),
-                ("pages/home.nx: not found", None, "%s: not found"),
-                ("pages/home.nxx line 3: no value", 3, "pages/home.nxx line 3: no value"),
-                ("Home page line 3: no value", 3, "Home page line 3: no value")):
+        for message, written in (
+                ("pages/home.nx:3 (go.down): no value", "%s:3 (go.down): no value"),
+                ("pages/home.nx: not found", "%s: not found"),
+                ("pages/home.nxx:3: no value", "pages/home.nxx:3: no value"),
+                ("Home page: no value", "Home page: no value"),
+                # A message that already starts with the full path.
+                ("%s:3: no value" % path, "%s:3: no value")):
             with self.subTest(message):
-                self.assertEqual(_with_full_path(message, "pages/home.nx", line, path),
+                self.assertEqual(_with_full_path(message, "pages/home.nx", path),
                                  written.replace("%s", str(path)))
 
     def test_a_breakpoint_in_a_press_then_stepping(self):
@@ -274,7 +276,8 @@ class LiveDebuggingTest(LiveTestCase):
         self.request("nxwright/startAgain")
         stop = self.wait_for("stopped")
         self.assertEqual(stop["reason"], "exception")
-        self.assertIn("pages/page0.nx line 2: `nowhere`", stop["description"])
+        self.assertIn("%s:2: `nowhere`" % (self.root.resolve() / "pages" / "page0.nx"),
+                      stop["description"])
         self.request("continue")
         self.request("nxwright/press", x=10, y=10)
         self.assertEqual(self.wait_for_log()[-1], "SIM SEND: 70 72 65 73 73 65 64")
@@ -510,7 +513,8 @@ class AgentRequestsTest(LiveTestCase):
         self.write("pages/page0.nx", "on go.down:\n  nowhere.val = 1\n")
         reply = self.reply_to(self.request_later("nxwright/startAgain", handled=True, agent=True))
         self.assertFalse(reply["success"])
-        self.assertIn("pages/page0.nx line 2: `nowhere`", reply["message"])
+        self.assertIn("%s:2: `nowhere`" % (self.root.resolve() / "pages" / "page0.nx"),
+                      reply["message"])
 
     def test_an_action_waiting_when_the_debugger_pauses_is_not_done(self):
         # The delay of hold's press keeps the press on go waiting in turn.

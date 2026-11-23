@@ -19,7 +19,7 @@ descriptions. The Editor's language is editor_language.py's, and the
 screen's arithmetic screen_arithmetic.py's."""
 from dataclasses import dataclass
 
-from nxwright import NxwrightError
+from nxwright import NxwrightError, after_start
 from nxwright.project.editor_language import NAMES_THE_EDITOR_REFUSES
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.page_block import Attribute, PageBlock
@@ -273,15 +273,19 @@ def screen_holds(type_name: str, attribute: str, series: str) -> bool:
 
 
 def check_page_limits(page: PageBlock, where: str):
-    """Raises NxwrightError, starting with `where` (the file at fault), when a
-    name of the page or of one of its components is longer than NAME_LIMIT or
-    is one the Editor refuses (NAMES_THE_EDITOR_REFUSES), or a text is longer
-    than its bound (bounded_attributes), both counting stored bytes; or
-    when the page holds more components of some kinds than the Editor's
-    compile takes (PAGE_CAPS). The error's `table` is the place in the page
-    of the object at fault, from 0 for the page: past a cap, the first
-    component past it; and when the page has more components than
-    MOST_COMPONENTS (check_component_count)."""
+    """Raises NxwrightError when:
+      - the name of the page or of one of its components is longer than
+        NAME_LIMIT, in stored bytes, starts with a digit, or is a name that
+        the Nextion Editor rejects (NAMES_THE_EDITOR_REFUSES);
+      - a text is longer than its bound, in stored bytes (bounded_attributes);
+      - the page has more components than MOST_COMPONENTS
+        (check_component_count);
+      - the page has more components of one kind than the Nextion Editor's
+        compile accepts (PAGE_CAPS).
+    The message starts with `where`, the file at fault, unless `where` is
+    empty (after_start). The error's `table` is the number of the object at
+    fault, counted from 0 for the page. When a kind has too many components,
+    the object at fault is the first component past the cap."""
     check_component_count([(page_object.attribute("objname") or b"").decode("latin-1")
                            for page_object in page.objects], 0, where)
     for index, page_object in enumerate(page.objects):
@@ -307,12 +311,13 @@ SERIES_REFUSING_PLACES_PAST_THE_SCREEN = frozenset({"T", "K", "F"})
 
 
 def check_component_places(page: PageBlock, screen: ScreenModel, page_size: tuple, where: str):
-    """Raises NxwrightError, starting with `where` (the file at fault), for
-    the first component of the page reaching past the screen, `page_size`
-    (width, height) at its rotation, on a series that refuses it
-    (SERIES_REFUSING_PLACES_PAST_THE_SCREEN), `screen` being the folder's
-    screen model. A component without a place is not checked. The error's
-    `table` is the component's place in the page."""
+    """Raises NxwrightError for the first component of the page that reaches
+    past the screen, if the series of `screen`, the folder's screen model,
+    does not allow it (SERIES_REFUSING_PLACES_PAST_THE_SCREEN). `page_size`
+    is the screen's (width, height) at its rotation. A component without a
+    place is not checked. The message starts with `where`, the file at
+    fault, unless `where` is empty (after_start), and the error's `table` is
+    the component's number in the page."""
     if screen.series not in SERIES_REFUSING_PLACES_PAST_THE_SCREEN:
         return
     width, height = page_size
@@ -322,9 +327,9 @@ def check_component_places(page: PageBlock, screen: ScreenModel, page_size: tupl
             continue
         x, y, w, h = (int.from_bytes(value, "little") for value in place)
         if x + w > width or y + h > height:
-            error = NxwrightError("%s: %s reaches past the screen, which is %d by %d at this "
-                                  "rotation"
-                                  % (where, object_label(page_object, index), width, height))
+            error = NxwrightError(after_start(
+                where, "%s reaches past the screen, which is %d by %d at this rotation"
+                % (object_label(page_object, index), width, height)))
             error.table = index
             raise error
 
@@ -368,28 +373,31 @@ def code_cannot_change_on_series(type_name: str, attribute: str, series: str) ->
 
 
 def check_component_count(names: list, generated: int, where: str):
-    """Raises NxwrightError, starting with `where` (the file at fault), when a
-    page has more components than the Nextion Editor's compile takes
-    (MOST_COMPONENTS). `names` are the names of the page's objects, the page
-    first, and the last `generated` of them are the components nxlang adds
-    to run the page's code.
+    """Raises NxwrightError when a page has more components than the Nextion
+    Editor's compile accepts (MOST_COMPONENTS). The message starts with
+    `where`, the file at fault, unless `where` is empty (after_start).
+    `names` are the names of the page's objects, the page first, and the
+    last `generated` of them are the components nxlang adds to run the
+    page's code.
 
     When the page file's own components are too many, the error's `table` is
-    the place in the page of the first component past the limit. When only
-    nxlang's components take the page past the limit, the message says so,
-    and the `table` is the page's own, 0."""
+    the number of the first component past the limit, counted from 0 for the
+    page. When only the components that nxlang adds take the page past the
+    limit, the message gives how many nxlang adds, and the error's `table`
+    is 0, the page's own table."""
     components = len(names) - 1
     own = components - generated
     if own > MOST_COMPONENTS:
-        error = NxwrightError("%s: the page has %d components, and the limit is %d. %s"
-                              % (where, own, MOST_COMPONENTS, _components_to_remove(own)))
+        error = NxwrightError(after_start(
+            where, "the page has %d components, and the limit is %d. %s"
+            % (own, MOST_COMPONENTS, _components_to_remove(own))))
         error.table = MOST_COMPONENTS + 1
         raise error
     if components > MOST_COMPONENTS:
-        error = NxwrightError("%s: the page has %d components, and the limit is %d. nxlang adds "
-                              "%d of them to run the page's code. %s"
-                              % (where, components, MOST_COMPONENTS, generated,
-                                 _components_to_remove(components)))
+        error = NxwrightError(after_start(
+            where, "the page has %d components, and the limit is %d. nxlang adds %d of them "
+            "to run the page's code. %s"
+            % (components, MOST_COMPONENTS, generated, _components_to_remove(components))))
         error.table = 0
         raise error
 
@@ -437,8 +445,9 @@ def _check_page_caps(page: PageBlock, where: str):
     for cap in PAGE_CAPS:
         held = [index for index, kind in enumerate(types) if kind in cap.types]
         if len(held) > cap.most:
-            error = NxwrightError("%s: the page has %d %s, and the limit is %d"
-                                  % (where, len(held), cap.words, cap.most))
+            error = NxwrightError(after_start(
+                where, "the page has %d %s, and the limit is %d"
+                % (len(held), cap.words, cap.most)))
             error.table = held[cap.most]
             raise error
 
@@ -447,15 +456,17 @@ def _check_object_limits(page_object, index: int, where: str):
     name = page_object.attribute("objname") or b""
     label = object_label(page_object, index)
     if len(name) > NAME_LIMIT:
-        raise NxwrightError("%s: the name of %s has %d bytes, and the limit is %d"
-                            % (where, label, len(name), NAME_LIMIT))
+        raise NxwrightError(after_start(
+            where, "the name of %s has %d bytes, and the limit is %d"
+            % (label, len(name), NAME_LIMIT)))
     # The Nextion Editor says "Illegal name" for such a name.
     if name.decode("latin-1") in NAMES_THE_EDITOR_REFUSES:
-        raise NxwrightError("%s: %s has a reserved name" % (where, label))
+        raise NxwrightError(after_start(where, "%s has a reserved name" % label))
     # The Nextion Editor refuses such a page or component as it opens the
     # project ("First character of a Name can not be number").
     if name[:1].isdigit():
-        raise NxwrightError("%s: the name of %s cannot start with a digit" % (where, label))
+        raise NxwrightError(after_start(
+            where, "the name of %s cannot start with a digit" % label))
     kind = page_object.attribute("type")
     object_type = kind[0] if kind else None
     # An attribute the component lacks is not checked (lacked_attributes).
@@ -472,8 +483,9 @@ def _check_object_limits(page_object, index: int, where: str):
     # between screens or change.
     for attribute, length, bound, limit in _values_past_bounds(page_object):
         if attribute not in lacked:
-            raise NxwrightError("%s: attribute `%s` of %s has %d bytes, and its limit, `%s`, is %d"
-                                % (where, attribute, label, length, bound, limit))
+            raise NxwrightError(after_start(
+                where, "attribute `%s` of %s has %d bytes, and its limit, `%s`, is %d"
+                % (attribute, label, length, bound, limit)))
 
 
 def _values_past_bounds(page_object) -> list:

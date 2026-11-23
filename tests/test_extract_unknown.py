@@ -224,7 +224,7 @@ class ExtractUnknownTest(PatchedDemoTestCase):
         text = app.read_text(encoding="utf-8")
         app.write_text(text.replace("encoding = 238", 'encoding = "encoding-238"'),
                        encoding="utf-8", newline="\n")
-        with self.assertRaisesRegex(NxwrightError, "app.toml: unknown encoding `encoding-238`"):
+        with self.assertRaisesRegex(NxwrightError, "app.toml:6: unknown encoding `encoding-238`"):
             build(self.target("encoding"), built)
         app.write_text(text, encoding="utf-8", newline="\n")
         # A command that writes app.toml again keeps the number.

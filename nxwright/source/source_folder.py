@@ -56,6 +56,7 @@ from nxwright.project.editor_limits import (MOST_PAGES, NAME_LIMIT, check_compon
                                             check_room_for_a_page, lacked_attributes,
                                             page_count_refusal)
 from nxwright.project.object_types import TYPES_BY_NAME
+from nxwright.project.toml_lines import error_line, key_line
 from nxwright.project.page_memory import measure_page, project_memory
 from nxwright.project.font_drawing import draw_font_block, drawn_codes, lacking_words
 from nxwright.project.media_files import sound_form_problem, video_rotation
@@ -76,7 +77,8 @@ from nxwright.project.resources import (COPIED_KINDS, FONTS, MEDIA, PICTURE_SUFF
                                         SOURCE_SUFFIX, decodes_picture)
 from nxwright.project.device_settings import (DEFAULT_ENCODING, ENCODINGS, DeviceSettings,
                                               TextCodec, encoding_name, is_unknown_encoding)
-from nxwright.source.defines import checked_defines, filled, placeholder_name
+from nxwright.source.defines import (declared_defines, filled, placeholder_name,
+                                     with_given_values)
 from nxwright.source.mcu_table import checked_mcu
 from nxwright.source.device_keys import (DEVICE_KEYS, app_encoding, device_keys, screen_model,
                                          settings_from_keys)
@@ -88,10 +90,10 @@ from nxwright.source.macros_source import (MACROS_PATH, block_of_compiled, calla
                                            compiled_macros, followed_macros,
                                            macros_from_block, macros_to_source,
                                            read_macros_text)
-from nxwright.source.page_source import (PAGE_FILE_SUFFIX, PageSource, code_text_limits,
-                                         editor_code_of_files, events_of_page_tables,
-                                         page_components, page_data, page_from_source,
-                                         page_nx_path, page_to_source, page_toml_path,
+from nxwright.source.page_source import (PageSource, code_text_limits, editor_code_of_files,
+                                         events_of_page_tables, page_components, page_data,
+                                         page_from_source, page_nx_path, page_to_source,
+                                         page_toml_error, page_toml_path, place_in_page_file,
                                          table_limits, table_types)
 from nxwright.source.asset_names_in_code import with_asset_names
 from nxwright.source.nxlang_switch import switch_events_to_nxlang
@@ -308,12 +310,11 @@ def _page_components(page_toml: str, page_name: str, defines: dict) -> tuple:
 def parsed_page_toml(page_toml: str, page_name: str, defines: dict) -> dict:
     """Parses a page's .page.toml file, and fills its placeholders in from
     app.toml's `defines` (page_source.page_data). Raises
-    NxwrightError naming the file when it is not TOML."""
+    NxwrightError, whose place is the file, when it is not TOML."""
     try:
         return page_data(page_toml, page_name, defines)
     except tomllib.TOMLDecodeError as error:
-        raise NxwrightError("%s%s: %s" % (page_file_stem(page_name), PAGE_FILE_SUFFIX,
-                                           error)) from None
+        raise page_toml_error(error, page_name) from None
 
 
 def _page_data_tables(data: dict) -> list:
@@ -1199,17 +1200,19 @@ class FolderSource:
 
     def build_page(self, page_id: int, globals_used: list, chain: list = None,
                    cut_texts: list = None) -> PageBlock:
-        """Returns the page `page_id`, built from its files as page_from_source
-        does, adding the program.s globals it uses to `globals_used`, and its
-        longest chain of calls and clicks to `chain` when given. In nxlang, each
-        text that a generated variable may cut is added to `cut_texts`, when
-        given, as (file, line, message). With the screen known, a component
-        reaching past it is refused where its
-        series refuses it (check_component_places); with `refuse_by_table`
-        too, its components are checked against what the screen's series
+        """Returns the page `page_id`, built from its files with
+        page_from_source. The program.s globals that the page uses are added
+        to `globals_used`, and its longest chain of calls and clicks is added
+        to `chain`, when given. In nxlang, each text that a generated variable
+        may cut is added to `cut_texts`, when given, as (file, line, message).
+
+        When the folder's screen is known, the page is also checked for a
+        component that reaches past the screen, on a series that does not
+        allow one (check_component_places). If `refuse_by_table` is set too,
+        the page's components are checked against what the screen's series
         refuses (check_series_components).
 
-        Raises NxwrightError naming the file at fault, which is also its `file`."""
+        Raises NxwrightError, whose place is the file at fault."""
         page_name = self.app["pages"][page_id]
         if page_name in self.broken_pages:
             raise self.broken_pages[page_name]
@@ -1225,14 +1228,14 @@ class FolderSource:
                                 defines=self.app["defines"], page_globals=self.page_globals)
         # Not a refusal by the memory table: the memory probe, which turns
         # those off, places every component inside the screen.
-        if self.screen is not None:
-            shown = "%s.page.toml" % page_file_stem(page_name)
-            _in_file(toml_path, lambda: check_component_places(page, self.screen, page_size,
-                                                               shown))
-        if self.refuse_by_table and self.screen is not None:
-            _in_file(toml_path, lambda: check_series_components(page, self.screen,
-                                                                "%s.page.toml"
-                                                                % page_file_stem(page_name)))
+        try:
+            if self.screen is not None:
+                check_component_places(page, self.screen, page_size, "")
+            if self.refuse_by_table and self.screen is not None:
+                check_series_components(page, self.screen, "")
+        except NxwrightError as error:
+            place_in_page_file(error, page_name, source.toml)
+            raise
         return page
 
     def build_program(self) -> bytes:
@@ -1309,8 +1312,7 @@ def read_folder_source(read, skip_broken_pages: bool = False,
     references to it are not checked. Without `refuse_by_table`, its pages
     are not checked against the memory table (FolderSource.refuse_by_table)."""
     app = _in_file("app.toml", lambda: parse_app(read("app.toml")))
-    defaults = _in_file("defaults.toml",
-                        lambda: folder_defaults(read("defaults.toml"), "defaults.toml"))
+    defaults = _in_file("defaults.toml", lambda: folder_defaults(read("defaults.toml")))
     program = _in_file("program.nx", lambda: read("program.nx"))
     declared = program_variables = None
     if app["language"] == NXLANG:
@@ -1359,8 +1361,7 @@ def read_page_toml(read, page_name: str) -> PageToml:
     .page.toml file alone: a page whose code does not build still has its
     components. Raises NxwrightError naming the file at fault."""
     app = _in_file("app.toml", lambda: parse_app(read("app.toml")))
-    defaults = _in_file("defaults.toml",
-                        lambda: folder_defaults(read("defaults.toml"), "defaults.toml"))
+    defaults = _in_file("defaults.toml", lambda: folder_defaults(read("defaults.toml")))
     path = page_toml_path(page_name)
     return PageToml(app, ResourceNames.of_app(app), defaults,
                     app.get("encoding", DEFAULT_ENCODING), _in_file(path, lambda: read(path)))
@@ -1375,8 +1376,7 @@ def read_page_components(read, page_name: str) -> tuple:
 
 def page_toml_components(page_toml: PageToml, page_name: str) -> list:
     """Returns the Components of the page `page_name`, from its PageToml.
-    Raises NxwrightError naming the page's file at fault."""
-    path = page_toml_path(page_name)
+    Raises NxwrightError, whose place is the page's file."""
     # The page has the screen's place and size, as the build gives it. An
     # app.toml whose screen settings are wrong is refused by the build and
     # the check, so here the page file's values are kept.
@@ -1385,14 +1385,16 @@ def page_toml_components(page_toml: PageToml, page_name: str) -> list:
     except NxwrightError:
         settings = None
     page_size = None if settings is None else settings.page_size
-    return _in_file(path, lambda: page_components(
-        page_toml.text, page_name, page_toml.names, page_toml.defaults, page_toml.encoding,
-        page_size, page_toml.app.get("defines")))
+    return page_components(page_toml.text, page_name, page_toml.names, page_toml.defaults,
+                           page_toml.encoding, page_size, page_toml.app.get("defines"))
 
 
 def _in_file(file: str, work):
-    """Returns work(). An NxwrightError it raises that names no file gets
-    `file` as its `file`."""
+    """Returns work(). If work() raises an NxwrightError that has no file,
+    the error gets `file` as its `file`. Its message does not change, so the
+    file is only data for a code editor. Two errors arrive without a file:
+    the error for a file that cannot be read, and the error about a value
+    that the running command gives a define."""
     try:
         return work()
     except NxwrightError as error:
@@ -1579,21 +1581,19 @@ def program_ints(program_s: bytes, encoding: str) -> int:
 
 
 def memory_refusal(page: str, why: str) -> NxwrightError:
-    """Returns the error of a page whose memory the Editor's compile refuses,
-    `why` saying how (page_memory.ProjectMemory.refusals), from its page file."""
-    error = NxwrightError("%s.page.toml: %s" % (page_file_stem(page), why))
-    error.file = page_toml_path(page)
-    return error
+    """Returns the error for the page `page`, whose memory the Nextion
+    Editor's compile does not accept. The error has `why` as its message
+    (page_memory.ProjectMemory.refusals), and the page's .page.toml file as
+    its place."""
+    return NxwrightError(why, file=page_toml_path(page))
 
 
 def check_globals_count(globals_used: list):
-    """Raises NxwrightError, with program.nx as its `file`, when the pages
-    need more program.s globals than were checked to work."""
+    """Raises NxwrightError, whose place is program.nx, when the pages need
+    more program.s globals than were checked to work."""
     if len(globals_used) > MOST_GLOBALS:
-        error = NxwrightError("nxlang needs %d program.s globals; at most %d were "
-                              "checked to work" % (len(globals_used), MOST_GLOBALS))
-        error.file = "program.nx"
-        raise error
+        raise NxwrightError("nxlang needs %d program.s globals; at most %d were checked to "
+                            "work" % (len(globals_used), MOST_GLOBALS), file="program.nx")
 
 
 def folder_device_settings(source_folder: Path):
@@ -1605,77 +1605,109 @@ def folder_device_settings(source_folder: Path):
 def parse_app(text: str) -> dict:
     """Returns the settings of an app.toml file as a dict, after checking them.
 
-    Raises NxwrightError naming the first problem.
+    Raises NxwrightError for the first problem. Its place is app.toml, with
+    the line of the key it is about when the text gives that key. If the
+    problem is a value that the running command gives a define, the error
+    has no place, and its message starts with where the value was given.
     """
-    try:
-        app = tomllib.loads(text)
-    except tomllib.TOMLDecodeError as error:
-        raise NxwrightError("app.toml: %s" % error) from None
+    with _placed_in_app_toml(text):
+        try:
+            app = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as error:
+            raise NxwrightError(str(error), line=error_line(error)) from None
+        declared = declared_defines(app.pop("defines", None))
+        # The [mcu] table is checked on its own. Its values are not filled
+        # from the defines.
+        mcu = checked_mcu(app.pop("mcu", None))
     # The other keys' placeholders take the defines' values before any check.
-    defines = checked_defines(app.pop("defines", None))
-    # The [mcu] table is checked on its own. Its values are not filled from
-    # the defines.
-    mcu = checked_mcu(app.pop("mcu", None))
-    app = filled(app, defines, ("format", "language"), "app.toml")
+    defines = with_given_values(declared)
+    with _placed_in_app_toml(text):
+        return _checked_app(filled(app, defines, ("format", "language"), ""), defines, mcu)
+
+
+@contextlib.contextmanager
+def _placed_in_app_toml(text: str):
+    """Gives an NxwrightError raised inside the `with` block its place, if
+    it has none. The place is app.toml, at the line that gives the error's
+    `key`. The line is found in `text`, app.toml's text: at the top level,
+    or in the table whose name is the error's `table` when the error has one
+    (toml_lines.key_line)."""
+    try:
+        yield
+    except NxwrightError as error:
+        if error.file is None:
+            line = error.line
+            if line is None and error.key is not None:
+                line = key_line(text, error.key, error.table) or None
+            error.at_place("app.toml", line)
+        raise
+
+
+def _checked_app(app: dict, defines: dict, mcu: dict) -> dict:
+    """Returns app.toml's settings `app` once checked, with its `defines`
+    and its [mcu] table `mcu` added. Raises NxwrightError for the first
+    problem, with the key it is about as its `key`."""
     found = app.get("format")
     # TOML's true is Python's True, which equals 1: only a real number counts.
     is_number = isinstance(found, int) and not isinstance(found, bool)
     if is_number and found > SOURCE_FORMAT:
-        raise NxwrightError("app.toml uses source format %d, but this version of nxwright only "
-                            "reads format %d. Update nxwright." % (found, SOURCE_FORMAT))
+        raise NxwrightError("the source format is %d, but this version of nxwright only reads "
+                            "format %d. Update nxwright." % (found, SOURCE_FORMAT), key="format")
     if is_number and 1 <= found < SOURCE_FORMAT:
-        raise NxwrightError("app.toml uses source format %d, and this version of nxwright reads "
+        raise NxwrightError("the source format is %d, and this version of nxwright reads "
                             "format %d. Run `nxwright upgrade` to convert it."
-                            % (found, SOURCE_FORMAT))
+                            % (found, SOURCE_FORMAT), key="format")
     if not is_number or found != SOURCE_FORMAT:
-        raise NxwrightError("app.toml: `format` must be %d" % SOURCE_FORMAT)
+        raise NxwrightError("`format` must be %d" % SOURCE_FORMAT, key="format")
     encoding = app.get("encoding")
     # app.toml gives an encoding nxwright does not know by its number. The
     # rest of nxwright uses the name that encoding_name makes from the
     # number, such as "encoding-37".
     if isinstance(encoding, int) and not isinstance(encoding, bool):
         if encoding in ENCODINGS:
-            raise NxwrightError("app.toml: `encoding = %d` is not valid. Use the encoding's "
-                                "name: `encoding = \"%s\"`." % (encoding, ENCODINGS[encoding]))
+            raise NxwrightError("`encoding = %d` is not valid. Use the encoding's name: "
+                                "`encoding = \"%s\"`." % (encoding, ENCODINGS[encoding]),
+                                key="encoding")
         if not 0 <= encoding < 256:
-            raise NxwrightError("app.toml: `encoding` must be the name of an encoding, such as "
-                                "`iso-8859-1`, or a number between 0 and 255")
+            raise NxwrightError("`encoding` must be the name of an encoding, such as "
+                                "`iso-8859-1`, or a number between 0 and 255", key="encoding")
         app["encoding"] = encoding_name(encoding)
     elif is_unknown_encoding(encoding):
         # The name nxwright itself makes for an encoding it does not know,
         # such as "encoding-37". app.toml gives such an encoding by its number.
-        raise NxwrightError("app.toml: unknown encoding `%s`" % encoding)
+        raise NxwrightError("unknown encoding `%s`" % encoding, key="encoding")
     pages = app.get("pages")
     if not isinstance(pages, list) or not all(isinstance(name, str) and _PAGE_NAME.fullmatch(name)
                                               for name in pages):
-        raise NxwrightError("app.toml: `pages` must be a list of page names. A page name cannot "
-                            "contain a double quote, a control character, or a character "
-                            "outside Latin-1.")
+        raise NxwrightError("`pages` must be a list of page names. A page name cannot contain "
+                            "a double quote, a control character, or a character outside "
+                            "Latin-1.", key="pages")
     if len(set(pages)) != len(pages):
-        raise NxwrightError("app.toml: page `%s` already exists"
-                            % next(name for name in pages if pages.count(name) > 1))
+        raise NxwrightError("page `%s` already exists"
+                            % next(name for name in pages if pages.count(name) > 1),
+                            key="pages")
     for kind in _OPTIONAL_LISTS:
         app.setdefault(kind, [])
     for kind in RESOURCE_FILES:
         if not isinstance(app.get(kind), list):
-            raise NxwrightError("app.toml: `%s` must be a list of names" % kind)
+            raise NxwrightError("`%s` must be a list of names" % kind, key=kind)
         try:
             check_names(app[kind], kind)
         except NxwrightError as error:
-            raise NxwrightError("app.toml: %s" % error) from None
+            raise NxwrightError(str(error), key=kind) from None
     extra = (set(app) - {"format", "name", "language", "pages"} - set(RESOURCE_FILES)
              - set(DEVICE_KEYS))
     if extra:
-        raise NxwrightError("app.toml: unknown key `%s`" % sorted(extra)[0])
+        raise NxwrightError("unknown key `%s`" % sorted(extra)[0], key=sorted(extra)[0])
     app["defines"] = defines
     if mcu:
         app["mcu"] = mcu
     if "name" in app and not _is_app_name(app["name"]):
-        raise NxwrightError("app.toml: `name` %s" % _APP_NAME_RULE)
+        raise NxwrightError("`name` %s" % _APP_NAME_RULE, key="name")
     app["language"] = language_of_value(app.get("language"))
     if app["language"] is None:
-        raise NxwrightError("app.toml: `language` must be `%s` or `%s`"
-                            % tuple(_LANGUAGE_VALUES.values()))
+        raise NxwrightError("`language` must be `%s` or `%s`"
+                            % tuple(_LANGUAGE_VALUES.values()), key="language")
     settings_from_keys(app)
     return app
 
@@ -1721,5 +1753,9 @@ def _program_from_source(text: str, names: ResourceNames, program: ProgramNames 
         if error.file is not None:
             raise   # a refusal at a line of macros.nx, which program.nx calls
         raise error.in_file("program.nx") from None
-    return TextCodec(encoding).encode(
-        "\r\n".join(lines) + ("\r\n" if ends_with_newline and lines else ""), "program.nx")
+    try:
+        return TextCodec(encoding).encode(
+            "\r\n".join(lines) + ("\r\n" if ends_with_newline and lines else ""), "")
+    except NxwrightError as error:
+        error.at_place("program.nx", None)
+        raise

@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 import re
 
-from nxwright import NxwrightError
+from nxwright import NxwrightError, after_start
 
 # A define's name: letters, digits, and _, not starting with a digit, the
 # same rule as for nxlang's constants.
@@ -95,25 +95,49 @@ def overriding_defines(overrides: dict, source: str = COMMAND_LINE):
 
 def checked_defines(table) -> dict:
     """Returns the defines of app.toml's [defines] table `table` as {name:
-    int or str}, with the new values of the running command applied.
-    `table` is None when app.toml has no [defines] table. Raises
-    NxwrightError for a name or a value the table cannot have, for a new
-    value whose name the table does not declare, and for a new value of the
-    wrong type."""
+    int or str}, with the new values of the running command applied
+    (declared_defines, then with_given_values)."""
+    return with_given_values(declared_defines(table))
+
+
+def declared_defines(table) -> dict:
+    """Returns the defines that app.toml's [defines] table `table` declares,
+    as {name: int or str}. `table` is None when app.toml has no [defines]
+    table. Raises NxwrightError for a name or a value the table cannot
+    have. The error's `key` is the define's name, and its `table` is
+    "defines"."""
     if table is None:
         table = {}
     if not isinstance(table, dict):
-        raise NxwrightError("app.toml: defines must be a table, as in [defines]")
+        raise NxwrightError("defines must be a table, as in [defines]", key="defines")
     defines = {}
     for name, value in table.items():
         if not is_define_name(name):
-            raise NxwrightError("app.toml: invalid define name: %s. Use letters, digits, and "
-                                "_, and do not start with a digit" % name)
+            raise _define_error("invalid define name: %s. Use letters, digits, and _, and do "
+                                "not start with a digit" % name, name)
         # TOML's true is Python's True, which is an int: only real numbers count.
         if isinstance(value, bool) or not isinstance(value, (int, str)):
-            raise NxwrightError("app.toml: the define %s must be a whole number or a text"
-                                % name)
+            raise _define_error("the define %s must be a whole number or a text" % name, name)
         defines[name] = value
+    return defines
+
+
+def _define_error(reason: str, name: str) -> NxwrightError:
+    """Returns an error with the message `reason` about the define `name`.
+    The error's `key` is `name` and its `table` is "defines", so that its
+    line can be found in app.toml (source_folder.parse_app)."""
+    error = NxwrightError(reason, key=name)
+    error.table = "defines"
+    return error
+
+
+def with_given_values(defines: dict) -> dict:
+    """Returns `defines`, {name: int or str}, with the new values of the
+    running command applied. Raises NxwrightError for a new value whose
+    name `defines` does not have, and for a new value of the wrong type. The
+    message starts with where the value was given, such as "--define
+    LIMIT"."""
+    defines = dict(defines)
     overrides, source = _OVERRIDES.get()
     for name, text in overrides.items():
         if name not in defines:
@@ -134,12 +158,13 @@ def placeholder_name(value):
 def filled(table: dict, defines: dict, fixed_keys: tuple, where: str) -> dict:
     """Returns the TOML table `table`, from app.toml or a page file, with
     each value that is a placeholder replaced by its define's value, from
-    `defines`. `where`, such as "app.toml", starts each message. Without
-    defines, a placeholder stays plain text, so that folders written before
-    defines keep their meaning.
+    `defines`. Without defines, a placeholder stays plain text, so that
+    folders written before defines keep their meaning.
     Raises NxwrightError for a placeholder in one of `fixed_keys`, the keys
     that identify a file or a table, and for one whose name `defines`
-    does not have."""
+    does not have. The message starts with `where`, which is the table's
+    name for a page file, such as "b0", and empty for app.toml
+    (after_start). The error's `key` is the key that has the placeholder."""
     if not defines:
         return table
     result = {}
@@ -147,11 +172,13 @@ def filled(table: dict, defines: dict, fixed_keys: tuple, where: str) -> dict:
         name = placeholder_name(value)
         if name is not None:
             if key in fixed_keys:
-                raise NxwrightError("%s: %s is %s, but %s cannot take a define's value"
-                                    % (where, key, value, key))
+                raise NxwrightError(after_start(
+                    where, "%s is %s, but %s cannot take a define's value" % (key, value, key)),
+                    key=key)
             if name not in defines:
-                raise NxwrightError("%s: %s is %s, and app.toml's [defines] does not declare %s"
-                                    % (where, key, value, name))
+                raise NxwrightError(after_start(
+                    where, "%s is %s, and app.toml's [defines] does not declare %s"
+                    % (key, value, name)), key=key)
             value = defines[name]
         result[key] = value
     return result

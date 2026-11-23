@@ -78,7 +78,7 @@ class StepTest(SourceFolderTestCase):
     def test_a_folder_in_an_older_format_points_to_upgrade(self):
         with mock.patch.object(source_folder, "SOURCE_FORMAT", 2):
             self.assert_export_refused(
-                r"app.toml uses source format 1, and this version of nxwright reads format 2\. "
+                r"app.toml:1: the source format is 1, and this version of nxwright reads format 2\. "
                 r"Run `nxwright upgrade` to convert it\.")
 
 

@@ -107,7 +107,7 @@ The build counts each page's memory the same way as the Nextion Editor's compile
 - A page's total is the project's global memory plus the page's own. The build refuses a page whose total is more than the screen's memory, and gives the Nextion Editor's numbers:
 
   ```
-  page0.page.toml: its memory, 16 + 4072 = 4088 bytes, passes the NX4832T035's 3584, and the Nextion Editor's compile refuses it ("Memory overflow")
+  app/pages/page0.page.toml: its memory, 16 + 4072 = 4088 bytes, passes the NX4832T035's 3584, and the Nextion Editor's compile refuses it ("Memory overflow")
   ```
 
 - The total counts the pages as built, including keyboard pages and the components nxlang generates. Global memory includes the number globals nxlang generates, at 4 bytes each.

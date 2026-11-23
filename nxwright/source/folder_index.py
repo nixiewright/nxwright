@@ -26,7 +26,8 @@ from nxwright.source.defines import checked_defines, filled, is_define_name
 from nxwright.source.macros_source import MACROS_PATH
 from nxwright.source.nx_files import (FUNCTION_HEADING, INCLUDE, MACRO_HEADING,
                                       read_event_heading, resolve)
-from nxwright.source.page_source import KEY_LINE, page_nx_path, page_toml_path
+from nxwright.project.toml_lines import KEY_LINE
+from nxwright.source.page_source import page_nx_path, page_toml_path
 from nxwright.source.source_folder import (NXLANG, RESOURCE_FILES, language_of_value,
                                            picture_file)
 

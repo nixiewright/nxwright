@@ -35,7 +35,6 @@ with the page's errors. The warnings that need several pages come
 afterwards, in a step of their own (lint.shared_warnings).
 """
 from dataclasses import dataclass, field
-import re
 
 from nxwright import NxwrightError
 from nxwright.project.page_memory import measure_page, project_memory
@@ -47,8 +46,6 @@ from nxwright.source.page_source import page_toml_path
 from nxwright.source.source_folder import (RESOURCE_FILES, check_globals_count,
                                            check_page_count, line_naming, memory_refusal,
                                            program_ints, read_folder_source, resource_problems)
-
-_TABLE_HEADER = re.compile(r"\s*\[")
 
 
 @dataclass
@@ -152,13 +149,13 @@ class FolderCheckSteps:
         try:
             self._folder = read_folder_source(self._read, skip_broken_pages=True)
         except NxwrightError as error:
-            self.result.folder_findings.append(_finding(error, self._read))
+            self.result.folder_findings.append(_finding(error))
             self.result.read_failed = True
             return False
         try:
             check_page_count(self._folder.app, self._read("app.toml"))
         except NxwrightError as error:
-            self.result.folder_findings.append(_finding(error, self._read))
+            self.result.folder_findings.append(_finding(error))
         self.result.pages, self.result.screen = list(self._folder.app["pages"]), self._folder.screen
         return True
 
@@ -171,7 +168,7 @@ class FolderCheckSteps:
             block = self._folder.build_page(self.result.pages.index(page), page_globals, chain,
                                             cut_texts)
         except NxwrightError as error:
-            self.result.page_findings[page] = [_finding(error, self._read)]
+            self.result.page_findings[page] = [_finding(error)]
             return
         self.result.page_findings[page] = [Finding(file, line, WARNING, message, "text-cut")
                                            for file, line, message in cut_texts]
@@ -223,7 +220,7 @@ class FolderCheckSteps:
             self.result.program_ints = program_ints(self._folder.build_program(),
                                                     self._folder.encoding)
         except NxwrightError as error:
-            self.result.folder_findings.append(_finding(error, self._read))
+            self.result.folder_findings.append(_finding(error))
         if every_page:
             self.result.memory_findings = memory_findings(self.result, self.result.measures)
 
@@ -231,7 +228,7 @@ class FolderCheckSteps:
         try:
             self._folder.build_macros()
         except NxwrightError as error:
-            self.result.folder_findings.append(_finding(error, self._read))
+            self.result.folder_findings.append(_finding(error))
 
     def _find_warnings(self):
         self.result.folder_findings += warnings(self._folder.app, self._read)
@@ -269,29 +266,13 @@ def memory_findings(check: FolderCheck, measures: dict) -> list:
         findings.append(Finding(page_toml_path(page) if page else "app.toml", 0, WARNING,
                                 memory.warning, "memory-not-checked"))
     errors = [memory_refusal(page, why) for page, why in memory.refusals]
-    return findings + [Finding(error.file, 0, ERROR, str(error)) for error in errors]
+    return findings + [Finding(error.file, 0, ERROR, error.reason) for error in errors]
 
 
-def _finding(error: NxwrightError, read) -> Finding:
+def _finding(error: NxwrightError) -> Finding:
     """Returns the Finding of an error the build raised."""
-    file = error.file or ""
-    line = error.line or 0
-    if error.table is not None:
-        try:
-            line = _table_line(read(file), error.table)
-        except NxwrightError:
-            pass    # the file cannot be read: the error stands without a line
-    # The place is part of the finding, so the message leaves it out when the
-    # error gave it apart.
-    message = error.reason if error.line is not None else str(error)
-    return Finding(file, line, ERROR, message, fix=error.fix)
-
-
-def _table_line(text: str, table: int) -> int:
-    """Returns the line, from 1, of the header of table `table` of a page's
-    .page.toml file, from 0 for [page]; 0 when there are fewer tables."""
-    headers = [number for number, line in enumerate(text.split("\n"), start=1)
-               if _TABLE_HEADER.match(line)]
-    return headers[table] if table < len(headers) else 0
+    # The finding gives the place in its file and line, so its message is the
+    # error's reason, without the place.
+    return Finding(error.file or "", error.line or 0, ERROR, error.reason, fix=error.fix)
 
 

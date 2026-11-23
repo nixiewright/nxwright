@@ -162,12 +162,12 @@ class BuildRefusalTest(SourceFolderTestCase):
     def test_build_names_the_line_of_code_it_cannot_preprocess(self):
         (self.source / "pages" / "first.nx").write_text("on first.down:\n  x = 1 {\n",
                                                          encoding="utf-8", newline="\n")
-        self.assert_export_refused("first.nx line 2:")
+        self.assert_export_refused("first.nx:2:")
 
     def test_build_names_the_file_of_an_event_given_twice(self):
         (self.source / "pages" / "first.nx").write_text(
             "on first.down:\n  sys0=1\n\non first.down:\n  sys0=2\n", encoding="utf-8", newline="\n")
-        self.assert_export_refused("pages/first.nx line 4: event `first.down` is already defined")
+        self.assert_export_refused("pages/first.nx:4: event `first.down` is already defined")
 
 
 class TrailingSpacesTest(SourceFolderTestCase):
@@ -560,27 +560,27 @@ class SourceRefusalTest(SourceFolderTestCase):
         app = self.source / "app.toml"
         # A trailing space tells apart two cases expecting the same message.
         cases = {
-            "app.toml: `format` must be 1": ("format = 1", 'format = "2"'),
-            r"app.toml uses source format 3, but this version of nxwright only reads format 1\. "
-            r"Update nxwright\.": ("format = 1", "format = 3"),
-            "app.toml: `format` must be 1 ": ("format = 1", "format = true"),
+            "app.toml:1: `format` must be 1": ("format = 1", 'format = "2"'),
+            r"app.toml:1: the source format is 3, but this version of nxwright only reads format "
+            r"1\. Update nxwright\.": ("format = 1", "format = 3"),
+            "app.toml:1: `format` must be 1 ": ("format = 1", "format = true"),
             "app.toml: `language` must be": ('language = "nextion_do_not_change_manually"', ""),
-            "app.toml: `../font-00` is not a valid font name": ('"font-00"', '"../font-00"'),
+            "app.toml:14: `../font-00` is not a valid font name": ('"font-00"', '"../font-00"'),
             "unknown key": ("format = 1", "format = 1\ncolour = 1"),
-            "app.toml: font `font-00` already exists$": ('"font-01"', '"font-00"'),
-            r"app.toml: font `font-00` already exists \(resources are case insensitive\)":
+            "app.toml:14: font `font-00` already exists$": ('"font-01"', '"font-00"'),
+            r"app.toml:14: font `font-00` already exists \(resources are case insensitive\)":
                 ('"font-01"', '"FONT-00"'),
-            "app.toml: `picture-0000` cannot be both a picture and a folder":
+            "app.toml:10: `picture-0000` cannot be both a picture and a folder":
                 ('"picture-0001"', '"picture-0000/x"'),
-            "app.toml: `con` is not a valid font name, because Windows reserves it as a file "
+            "app.toml:14: `con` is not a valid font name, because Windows reserves it as a file "
             "name, and fonts are written as files": ('"font-01"', '"con"'),
-            "app.toml: `name` must be a non-empty string of one line, without leading or "
+            "app.toml:2: `name` must be a non-empty string of one line, without leading or "
             "trailing spaces": ("format = 1", 'format = 1\nname = ""'),
-            "app.toml: `name` must be a non-empty string of one line, without leading or "
+            "app.toml:2: `name` must be a non-empty string of one line, without leading or "
             "trailing spaces ": ("format = 1", 'format = 1\nname = " Clock"'),
-            "app.toml: `name` must be a non-empty string of one line, without leading or "
+            "app.toml:2: `name` must be a non-empty string of one line, without leading or "
             "trailing spaces  ": ("format = 1", 'format = 1\nname = "a\\nb"'),
-            "app.toml: `name` must be a non-empty string of one line, without leading or "
+            "app.toml:2: `name` must be a non-empty string of one line, without leading or "
             "trailing spaces   ": ("format = 1", "format = 1\nname = 3"),
         }
         original = app.read_text(encoding="utf-8")
@@ -597,7 +597,7 @@ class SourceRefusalTest(SourceFolderTestCase):
             "colour": ('vscope = 0', 'vscope = 0\nbco = "white"'),
             "does not fit": ('vscope = 0', 'vscope = 300'),
             "gives the page the name": ('name = "first"', 'name = "other"'),
-            "can contain only": ("[page]", "[extra]\na = 1\n\n[page]"),
+            "tables are allowed": ("[page]", "[extra]\na = 1\n\n[page]"),
             "unknown type": ('type = "page"', 'type = "dial"'),
             "endx and endy need h": ('vscope = 0', 'vscope = 0\nendx = 5'),
             "unknown type \\[1\\]": ('type = "page"', 'type = [1]'),

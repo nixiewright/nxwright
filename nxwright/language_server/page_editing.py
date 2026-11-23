@@ -172,7 +172,7 @@ def object_events(index, read, page: str) -> list:
     none, when nxwright does not know its type, or when defaults.toml cannot
     be read."""
     try:
-        defaults = folder_defaults(read("defaults.toml"), "defaults.toml")
+        defaults = folder_defaults(read("defaults.toml"))
     except NxwrightError:
         defaults = {}
     found = []

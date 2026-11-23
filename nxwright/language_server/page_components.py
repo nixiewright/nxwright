@@ -139,8 +139,9 @@ from nxwright.source.component_groups import NO_GROUP, group_of, new_groupid0
 from nxwright.source.device_keys import screen_model, settings_from_keys
 from nxwright.source.folder_check import check_folder
 from nxwright.source.nx_files import event_heading, read_event_heading, with_code_added
-from nxwright.source.page_source import (KEY_LINE, attribute_value, component_properties,
-                                         page_data, page_nx_path, page_toml_path)
+from nxwright.project.toml_lines import KEY_LINE
+from nxwright.source.page_source import (attribute_value, component_properties, page_data,
+                                         page_nx_path, page_toml_error, page_toml_path)
 from nxwright.source.source_folder import folder_defines, folder_lister, read_page_toml
 
 
@@ -755,11 +756,11 @@ def _page_tables(read, page: str) -> list:
     """Returns the component tables of the page file of `page`, read through
     `read(path)`, their placeholders filled in (page_data). Raises
     NxwrightError for a file that does not read."""
-    path = page_toml_path(page)
     try:
-        return page_data(read(path), page, folder_defines(read)).get("component", [])
+        return page_data(read(page_toml_path(page)), page,
+                         folder_defines(read)).get("component", [])
     except tomllib.TOMLDecodeError as error:
-        raise NxwrightError("%s: %s" % (path, error)) from None
+        raise page_toml_error(error, page) from None
 
 
 def _key_of(line: str):
@@ -980,7 +981,5 @@ def _refuse_breaking(index, read, exists, page: str, texts: dict, what: str):
     errors = check_folder(lambda path: texts[path] if path in texts else read(path),
                           exists, [page], listed=listed).errors()
     if errors:
-        place = "%s line %d" % (errors[0].file, errors[0].line) if errors[0].line \
-            else errors[0].file
         raise NxwrightError("the page would not build after %s: %s: %s"
-                            % (what, place, errors[0].message))
+                            % (what, errors[0].place, errors[0].message))

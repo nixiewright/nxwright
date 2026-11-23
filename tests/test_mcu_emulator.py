@@ -30,7 +30,7 @@ class McuTableTest(FolderTestCase):
         self.with_table(table)
         with self.assertRaises(NxwrightError) as raised:
             read_app(self.root)
-        self.assertEqual(str(raised.exception), "app.toml: " + words)
+        self.assertEqual((raised.exception.file, raised.exception.reason), ("app.toml", words))
 
     def test_the_table_is_read(self):
         self.with_table('emulator = "../mcu/main.py"\n')
@@ -77,7 +77,7 @@ class McuTableTest(FolderTestCase):
         self.write("app.toml", 'mcu = "../mcu/main.py"\n' + self.text("app.toml"))
         with self.assertRaises(NxwrightError) as raised:
             read_app(self.root)
-        self.assertEqual(str(raised.exception), "app.toml: mcu must be a table, as in [mcu]")
+        self.assertEqual(str(raised.exception), "app.toml:1: mcu must be a table, as in [mcu]")
 
     def test_a_command_that_rewrites_app_toml_keeps_the_table(self):
         self.with_table('emulator = "../mcu/main.py"\nwait = 30\n')

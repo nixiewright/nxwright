@@ -7,7 +7,7 @@ It reads the attributes' choices from nxwright's descriptions
 (attribute_descriptions.py). project/ imports nothing of source/, so the
 check sits here, beside its one caller, source_folder.py, rather than with
 the other page checks, in project/editor_limits.py."""
-from nxwright import NxwrightError
+from nxwright import NxwrightError, after_start
 from nxwright.project.attribute_descriptions import describe
 from nxwright.project.attribute_ranges import ranges_on_series
 from nxwright.project.attribute_values import number_from_bytes
@@ -29,9 +29,8 @@ CHOICES_REFUSED_BY_SERIES = {series: {"sta": (3,), "psta": (2,)} for series in (
 
 
 def check_series_components(page: PageBlock, screen: ScreenModel, where: str):
-    """Raises NxwrightError, starting with `where` (the file at fault), for
-    the first object of the page, the page among them, that the series of
-    `screen`, the folder's screen model, refuses:
+    """Raises NxwrightError for the first object of the page, the page among
+    them, that the series of `screen`, the folder's screen model, refuses:
       - one of a type the series refuses ("Unsupported component was found
         for this series device");
       - one whose attribute with choices holds a choice the series was seen
@@ -41,8 +40,10 @@ def check_series_components(page: PageBlock, screen: ScreenModel, where: str):
       - one whose attribute is outside its range on the series
         (attribute_ranges.ranges_on_series, "Out of range").
     The memory table's other refused values, each a sample past an
-    attribute's range, are checked through the ranges. The error's `table`
-    is the object's place in the page, from 0 for the page."""
+    attribute's range, are checked through the ranges. The message starts
+    with `where`, the file at fault, unless `where` is empty (after_start).
+    The error's `table` is the object's number in the page, counted from 0
+    for the page."""
     costs = memory_table().series[screen.series]
     for index, page_object in enumerate(page.objects):
         type_name = TYPE_NAMES.get(int.from_bytes(page_object.attribute("type") or b"", "little"))
@@ -63,7 +64,7 @@ def check_series_components(page: PageBlock, screen: ScreenModel, where: str):
                                          ranges_on_series(type_name or "", screen.series),
                                          label, screen.name))
         if problem is not None:
-            error = NxwrightError("%s: %s" % (where, problem))
+            error = NxwrightError(after_start(where, problem))
             error.table = index
             raise error
 

@@ -219,13 +219,14 @@ class NamesTest(MediaFolderTestCase):
 
     def test_a_name_listed_twice_is_refused(self):
         self.edit_app(sounds=["beep", "Beep"])
-        with self.assertRaisesRegex(NxwrightError, r"app.toml: sound `beep` already exists "
+        with self.assertRaisesRegex(NxwrightError, r"app.toml:20: sound `beep` already exists "
                                                    r"\(resources are case insensitive\)"):
             self.build()
 
     def test_an_invalid_name_is_refused(self):
         self.edit_app(videos=["a clip"])
-        with self.assertRaisesRegex(NxwrightError, "app.toml: `a clip` is not a valid video name"):
+        with self.assertRaisesRegex(NxwrightError,
+                                    "app.toml:17: `a clip` is not a valid video name"):
             self.build()
 
     def test_a_missing_file_is_refused_and_reported(self):

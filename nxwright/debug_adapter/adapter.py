@@ -491,7 +491,7 @@ class DebugAdapter:
             output["source"] = {"name": path.name, "path": str(path)}
             if error.line is not None:
                 output["line"] = error.line
-            message = _with_full_path(message, error.file, error.line, path)
+            message = _with_full_path(message, error.file, path)
         output["output"] = "The simulation could not start: %s: %s\n" % (type(error).__name__,
                                                                          message)
         return output
@@ -1490,25 +1490,20 @@ def _log_line(time: int, text: str) -> str:
     return "%9.3f s  %s\n" % (time / 1000, text)
 
 
-def _with_full_path(message: str, file: str, line, path: Path) -> str:
-    """Returns an error's `message` with the file and line at its start
-    rewritten in the form the Debug Console turns into a link. For example,
-    "pages/home.nx line 12: unknown name `speed`" becomes
-    "E:\\app\\pages\\home.nx:12: unknown name `speed`", where `path` is the
-    file's full path. If the message gives no line after the file, only the
-    file is rewritten. If `message` does not start with `file`, it is
-    returned unchanged."""
+def _with_full_path(message: str, file: str, path: Path) -> str:
+    """Returns an error's `message` with `path`, the file's full path, in
+    place of `file` at its start. `file` is the file's path within the source
+    folder. The Debug Console turns the full path into a link. For example,
+    "pages/home.nx:12: unknown name `speed`" becomes
+    "E:\\app\\pages\\home.nx:12: unknown name `speed`". A message that does
+    not start with `file`, such as one that already starts with the full
+    path, is returned unchanged."""
     if not message.startswith(file):
         return message
     rest = message[len(file):]
     if rest[:1] not in ("", " ", ":"):
         return message      # another file whose name starts with `file`, such as home.nxx
-    located = str(path)
-    said_line = " line %d" % line if line is not None else None
-    if said_line is not None and rest.startswith(said_line):
-        located += ":%d" % line
-        rest = rest[len(said_line):]
-    return located + rest
+    return str(path) + rest
 
 
 def _joined_to(screen: str, simulator) -> str:

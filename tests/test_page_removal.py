@@ -112,7 +112,7 @@ class PageRemovalTest(unittest.TestCase):
         self.code("page second")
         before = self.files()
         with self.assertRaisesRegex(NxwrightError, "the page second is used, so it stays:\n"
-                                                   "  pages/page0.nx line 2: page second"):
+                                                   "  pages/page0.nx:2: page second"):
             remove_page(self.source, "second", checked=True)
         self.assertEqual(self.files(), before)
 
@@ -224,7 +224,7 @@ class PageRemovalTest(unittest.TestCase):
         with contextlib.redirect_stderr(errors):
             self.assertEqual(main(["remove", str(self.source), "page", "second", "--checked"]),
                              1)
-        self.assertIn("pages/page0.nx line 2: page 2", errors.getvalue())
+        self.assertIn("pages/page0.nx:2: page 2", errors.getvalue())
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
             self.assertEqual(main(["remove", str(self.source), "page", "second", "--keep-ids"]),

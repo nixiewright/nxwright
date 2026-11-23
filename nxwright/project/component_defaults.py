@@ -25,11 +25,12 @@ import tomllib
 
 import tomli_w
 
-from nxwright import NxwrightError
+from nxwright import NxwrightError, after_start
 from nxwright.project.attribute_values import number_from_bytes
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.page_block import Attribute, Event
 from nxwright.project.page_text import expected_width, is_string_attribute, text_form_number
+from nxwright.project.toml_lines import error_line
 
 # What the Editor names a newly added component of each type, followed by a
 # number, as in the page of tests/fixtures/every-component: t0 for a text,
@@ -125,40 +126,55 @@ def nxwright_defaults() -> dict:
     return defaults_from_toml(_nxwright_defaults_text(), str(DEFAULTS_FILE))
 
 
-def folder_defaults(text: str, source: str) -> dict:
+def folder_defaults(text: str) -> dict:
     """Returns the component defaults in `text`, the text of a source
-    folder's defaults.toml, in the form defaults_from_toml returns. `source`
-    is the file name that errors give. Extract and `nxwright new` copy
-    nxwright's own defaults file into the folder. When `text` is still that
-    copy, this returns the dict from nxwright_defaults(), which is parsed once
-    a run and shared by every caller, so a caller must not change it."""
+    folder's defaults.toml, in the form defaults_from_toml returns. Extract
+    and `nxwright new` copy nxwright's own defaults file into the folder.
+    When `text` is still that copy, this returns the dict from
+    nxwright_defaults(), which is parsed once a run and shared by every
+    caller, so a caller must not change it.
+
+    Raises NxwrightError when the text does not contain valid defaults. The
+    error's place is defaults.toml, at the line where the text stops being
+    TOML if the text is not TOML."""
     if text == _nxwright_defaults_text():
         return nxwright_defaults()
-    return defaults_from_toml(text, source)
+    try:
+        return defaults_from_toml(text, "")
+    except NxwrightError as error:
+        error.at_place("defaults.toml", error.line)
+        raise
 
 
 def defaults_from_toml(text: str, source: str) -> dict:
     """Returns {type number: TypeDefaults} read from TOML that defaults_to_toml
-    wrote. `source` names the file in errors.
+    wrote.
 
-    Raises NxwrightError when the text does not hold valid defaults.
+    Raises NxwrightError when the text does not contain valid defaults. Each
+    message starts with `source`, the file's name. A caller that sets the
+    error's place itself passes an empty `source`. The message is then the
+    problem alone, and if the text is not TOML, the error's `line` is the
+    line where the text stops being TOML.
     """
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
-        raise NxwrightError("%s: %s" % (source, error)) from None
+        raise NxwrightError(after_start(source, str(error)),
+                            line=None if source else error_line(error)) from None
     defaults = {}
     for name, table in data.items():
         object_type = TYPES_BY_NAME.get(name)
         if object_type is None or not isinstance(table, dict) or set(table) != {"events", "attributes"}:
-            raise NxwrightError("%s: [%s] is not a component type's defaults" % (source, name))
+            raise NxwrightError(after_start(
+                source, "[%s] is not a component type's defaults" % name))
         if not isinstance(table["attributes"], dict):
-            raise NxwrightError("%s: [%s] attributes must be a table" % (source, name))
+            raise NxwrightError(after_start(source, "[%s] attributes must be a table" % name))
         attributes = [(attribute, _bytes(attribute, value, object_type, source, name))
                       for attribute, value in table["attributes"].items()]
         events = table["events"]
         if not isinstance(events, list) or not all(isinstance(event, str) for event in events):
-            raise NxwrightError("%s: [%s] events must be a list of names" % (source, name))
+            raise NxwrightError(after_start(
+                source, "[%s] events must be a list of names" % name))
         defaults[object_type] = TypeDefaults(attributes, events)
     return defaults
 
@@ -188,7 +204,7 @@ def _text_bytes(text: str, where: str) -> bytes:
 
 def _bytes(attribute: str, value, object_type: int, source: str, type_name: str) -> bytes:
     """Returns an attribute's TOML value as its stored bytes: the reverse of _value."""
-    where = "%s: [%s.attributes] %s" % (source, type_name, attribute)
+    where = after_start(source, "[%s.attributes] %s" % (type_name, attribute))
     if is_string_attribute(object_type, attribute):
         if not isinstance(value, str):
             raise NxwrightError("%s must be a string" % where)

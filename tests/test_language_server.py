@@ -1365,9 +1365,8 @@ class LiveCheckTest(LiveCheckTestCase):
         self.change("pages/page0.page.toml", page + "".join(
             '\n[[component]]\nname = "t%d"\ntype = "text"\nx = 0\ny = 0\nw = 100\nh = 30\n'
             'txt_maxl = 1000\n' % number for number in range(4)), "textDocument/didOpen")
-        refused = (0, 1, "page0.page.toml: its memory, 16 + 4092 = 4108 bytes, passes the "
-                         "NX4832T035's 3584, and the Nextion Editor's compile refuses it "
-                         "(\"Memory overflow\")")
+        refused = (0, 1, "its memory, 16 + 4092 = 4108 bytes, passes the NX4832T035's 3584, "
+                         "and the Nextion Editor's compile refuses it (\"Memory overflow\")")
         self.assertEqual(self.published()[self.uri("pages/page0.page.toml")], [refused])
         self.change("pages/second.nx", "", "textDocument/didOpen")
         self.assertEqual(self.published()[self.uri("pages/page0.page.toml")], [refused])
@@ -1432,8 +1431,8 @@ class LiveCheckTest(LiveCheckTestCase):
         self.change("pages/page0.nx", "on page0.load:\n  bogus.txt = 2\n")
         self.assertEqual(self.published(), {
             self.uri("pages/page0.nx"): [],
-            self.uri("app.toml"): [(0, 1, "app.toml uses source format 9, but this version of "
-                                          "nxwright only reads format 1. Update nxwright.")]})
+            self.uri("app.toml"): [(0, 1, "the source format is 9, but this version of nxwright "
+                                          "only reads format 1. Update nxwright.")]})
 
     def request(self, method: str, path: str, **params) -> dict:
         self.connection.handle({"jsonrpc": "2.0", "id": 9, "method": method, "params": dict(

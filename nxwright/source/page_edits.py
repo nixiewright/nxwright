@@ -26,9 +26,10 @@ from nxwright.project.component_defaults import PLACEMENT_ATTRIBUTES
 from nxwright.project.device_settings import password_hash
 from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.screen_colours import nearest_screen_colour
-from nxwright.source.page_source import (COLOUR_ATTRIBUTES, KEY_LINE, attribute_value,
+from nxwright.project.toml_lines import KEY_LINE
+from nxwright.source.page_source import (COLOUR_ATTRIBUTES, attribute_value,
                                          component_properties, page_data, page_header_of_text,
-                                         page_toml_path, stored_value)
+                                         page_toml_error, page_toml_path, stored_value)
 from nxwright.source.defines import placeholder_name
 from nxwright.source.source_folder import read_page_toml
 
@@ -46,7 +47,7 @@ class ComponentTable:
         try:
             data = page_data(self.page_toml.text, page, self.page_toml.app.get("defines"))
         except tomllib.TOMLDecodeError as error:
-            raise NxwrightError("%s: %s" % (self.path, error)) from None
+            raise page_toml_error(error, page) from None
         tables = [data.get("page", {})] + list(data.get("component", []))
         ids = [number for number, table in enumerate(tables) if table.get("name") == name]
         found = [entry for entry in index.page_objects.get(page, []) if entry.name == name]

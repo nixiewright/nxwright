@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import tomllib
 
-from nxwright import NxwrightError
+from nxwright import NxwrightError, place_text
 from nxwright.language.code_lines import split_line
 from nxwright.language.resource_names import LISTS, NOUNS
 from nxwright.project.object_types import TYPES_BY_NAME
@@ -71,7 +71,7 @@ class ResourceUse:
     of: str
 
     def __str__(self):
-        return "%s line %d: %s" % (self.path, self.line, self.text)
+        return "%s: %s" % (place_text(self.path, self.line), self.text)
 
 
 def remove_resource(source_folder: Path, kind: str, name: str, checked: bool = False) -> tuple:

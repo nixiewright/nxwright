@@ -64,10 +64,10 @@ A run starts from:
 - the hidden variables that the nxlang compiler adds, at 0 or `""`;
 - `dp`, the current page's number.
 
-If the code reads a value that you did not give, the run stops with the error `ValueNotGiven`, even if your page file would normally set that value. The error gives the line that read it:
+If the code reads a value that you did not give, the run stops with the error `ValueNotGiven`, even if your page file would normally set that value. The error gives the file and the line of the code that read the value:
 
 ```
-pages/lib/room.nx line 50 (minutesNow): rtc3 has no value. In a test, give it in the run's values
+/home/me/thermostat/app/pages/lib/room.nx:50 (minutesNow): rtc3 has no value. In a test, give it in the run's values
 ```
 
 If you pass `blank_fields=True`, every `.val` and `.txt` of a component that the code uses, and that you did not give, starts at 0 or `""` instead of stopping the run. You must still give any system variable that the code reads, such as `dim` or the clock's `rtc3`.
@@ -184,11 +184,11 @@ A test never looks for an installed Nextion Editor, so its result does not depen
 
 ### What `run` and `compile` refuse
 
-If the build would refuse a page's code, such as code using a component the page does not have, `run` and `compile` stop with an error before any event runs. The test reports that error, with the file and the line the build refused, such as `pages/home.nx line 12:`.
+If the build would refuse a page's code, such as code using a component the page does not have, `run` and `compile` stop with an error before any event runs. The error starts with the file and the line of that code, such as `/home/me/thermostat/app/pages/home.nx:12:`.
 
 `run` and `compile` do not check the components used by code given as `text`, because that code may be an older version, with components the page no longer has.
 
-If nxwright refuses code as it runs, such as a loop that does not end, the run stops with the error `RefusedCode` ([screen-code.md](screen-code.md#code-that-stops-the-run)). Your test then shows as an error rather than a failure. The error starts with the line's file, number, and event, such as `pages/home.nx line 12 (home.load):`.
+If nxwright refuses code while the code runs, such as a loop that does not end, the run stops with the error `RefusedCode` ([screen-code.md](screen-code.md#code-that-stops-the-run)), and your test shows as an error rather than a failure. The message of `RefusedCode` starts with the file and the line where the run stopped, then the event or function that contains the line, such as `/home/me/thermostat/app/pages/home.nx:12 (home.load):`.
 
 ### `run_code(code, values=None, include=None)`
 

@@ -52,7 +52,12 @@ def _project_of(side: Path, built: Path, lock_pages: bool) -> Path:
     """Returns the project file of `side`: `side` itself, or the file `built`, which
     this function builds from the source folder `side`."""
     if (side / "app.toml").is_file():
-        build(side, built, refuse_by_table=False, lock_pages=lock_pages)
+        try:
+            build(side, built, refuse_by_table=False, lock_pages=lock_pages)
+        except NxwrightError as error:
+            # `nxwright diff` reads two folders, and the error's file is in
+            # this side's.
+            raise error.in_folder(side)
         return built
     if is_project_file(side):
         return side

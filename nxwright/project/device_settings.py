@@ -22,7 +22,7 @@ from dataclasses import dataclass
 import re
 import struct
 
-from nxwright import NxwrightError
+from nxwright import NxwrightError, after_start
 from nxwright.project.editor_version import CURRENT_VERSION
 from nxwright.project.screen_models import ScreenModel, model_with_id
 from nxwright.project.stamp import CRC_START, word_crc
@@ -222,22 +222,23 @@ class TextCodec:
 
     def encode_keeping_bytes(self, text: str, where: str) -> bytes:
         """Returns `text` as stored bytes, the reverse of decode_keeping_bytes.
-        Raises NxwrightError, starting with `where`, for a character this
-        encoding cannot store."""
+        Raises NxwrightError for a character this encoding cannot store. The
+        message starts with `where`, unless `where` is empty (after_start)."""
         try:
             return text.encode(self._codec, "surrogateescape")
         except UnicodeEncodeError as error:
-            raise NxwrightError("%s: %s cannot store %r" % (where, self.name,
-                                                            error.object[error.start])) from None
+            raise NxwrightError(after_start(where, "%s cannot store %r" % (
+                self.name, error.object[error.start]))) from None
 
     def encode(self, text: str, where: str) -> bytes:
-        """Returns `text` as stored bytes. Raises NxwrightError, starting with
-        `where`, for a character this encoding cannot store."""
+        """Returns `text` as stored bytes. Raises NxwrightError for a
+        character this encoding cannot store. The message starts with
+        `where`, unless `where` is empty (after_start)."""
         try:
             return text.encode(self._codec)
         except UnicodeEncodeError as error:
-            raise NxwrightError("%s: %s cannot store %r" % (where, self.name,
-                                                            error.object[error.start])) from None
+            raise NxwrightError(after_start(where, "%s cannot store %r" % (
+                self.name, error.object[error.start]))) from None
 
 
 # The name that nxwright gives an encoding it does not know: "encoding-" and

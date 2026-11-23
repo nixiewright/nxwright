@@ -88,10 +88,10 @@ class BasicScreenTest(MemoryTestCase):
         for number in range(4):
             self.add("page0", "text", "t%d" % number, txt_maxl=1000)
         message = OVERFLOW % (16, 4072, 4088, "NX4832T035", 3584)
-        with self.assertRaisesRegex(NxwrightError, "^page0.page.toml: " + re.escape(message)):
+        with self.assertRaisesRegex(NxwrightError,
+                                    "^pages/page0.page.toml: " + re.escape(message)):
             self.built()
-        self.assertEqual(self.findings(), [Finding("pages/page0.page.toml", 0, ERROR,
-                                                   "page0.page.toml: " + message)])
+        self.assertEqual(self.findings(), [Finding("pages/page0.page.toml", 0, ERROR, message)])
 
     def test_a_qr_codes_temporary_need(self):
         # The page leaves 3,336 of the screen's memory; a QR code of txt_maxl
@@ -185,10 +185,10 @@ class IntelligentScreenTest(MemoryTestCase):
         self.add("page0", "sliding-text", "st0", path="x")
         for number in range(9):
             self.add("page0", "text", "t%d" % number, txt_maxl=60000)
-        message = ("page0.page.toml: its memory, at least 16 + 540904 = 540920 bytes, passes the "
-                   "NX8048P050's 524288, and the Nextion Editor's compile refuses it (\"Memory "
-                   "overflow\")")
-        with self.assertRaisesRegex(NxwrightError, "^" + re.escape(message)):
+        message = ("its memory, at least 16 + 540904 = 540920 bytes, passes the NX8048P050's "
+                   "524288, and the Nextion Editor's compile refuses it (\"Memory overflow\")")
+        with self.assertRaisesRegex(NxwrightError,
+                                    "^pages/page0.page.toml: " + re.escape(message)):
             self.built()
         warning = ("memory counted without page0.st0, as the memory of a sliding-text whose "
                    "path is not '' was not measured")

@@ -250,7 +250,7 @@ You can change these in VS Code's Settings, where they are grouped by category.
 
 ## Running nxwright from a VS Code task
 
-A VS Code task can run any nxwright command. Errors from `nxwright check`, `nxwright build`, and `nxwright compile` show in the Problems panel with the `$nxwright` problem matcher. The errors give file paths inside the source folder, so tell the problem matcher where that folder is:
+A VS Code task can run any nxwright command. Errors from `nxwright check`, `nxwright build`, and `nxwright compile` show in the Problems panel with the `$nxwright` problem matcher:
 
 ```json
 {
@@ -261,10 +261,7 @@ A VS Code task can run any nxwright command. Errors from `nxwright check`, `nxwr
       "type": "process",
       "command": "nxwright",
       "args": ["check", "app"],
-      "problemMatcher": {
-        "base": "$nxwright",
-        "fileLocation": ["relative", "${workspaceFolder}/app"]
-      },
+      "problemMatcher": "$nxwright",
       "group": "build"
     }
   ]

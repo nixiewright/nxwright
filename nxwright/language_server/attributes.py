@@ -19,7 +19,7 @@ def type_defaults(index: FolderIndex) -> dict:
     lines = index.lines("defaults.toml")
     if lines is not None:
         try:
-            return folder_defaults("\n".join(lines), "defaults.toml")
+            return folder_defaults("\n".join(lines))
         except NxwrightError:
             pass    # a half-edited file: nxwright's own still name the attributes
     return nxwright_defaults()

@@ -32,23 +32,34 @@ def checked_mcu(table) -> dict:
     when `table` is None because app.toml has no such table. Raises
     NxwrightError if `table` is not a table, if it has a key other than
     `emulator` and `wait`, if `emulator` is missing or is not a path written
-    with forward slashes, or if `wait` is not a number of seconds."""
+    with forward slashes, or if `wait` is not a number of seconds. The
+    error's `key` is the key it is about, and its `table` is "mcu"."""
     if table is None:
         return {}
     if not isinstance(table, dict):
-        raise NxwrightError("app.toml: mcu must be a table, as in [mcu]")
+        raise NxwrightError("mcu must be a table, as in [mcu]", key="mcu")
     extra = set(table) - {EMULATOR, WAIT}
     if extra:
-        raise NxwrightError("app.toml: unknown key %s in [mcu]" % sorted(extra)[0])
+        raise _mcu_error("unknown key %s in [mcu]" % sorted(extra)[0], sorted(extra)[0])
     emulator = table.get(EMULATOR)
     if not isinstance(emulator, str) or not emulator or "\\" in emulator:
-        raise NxwrightError("app.toml: emulator in [mcu] must be the path of the emulator's "
-                            "Python file from the source folder, with forward slashes, such "
-                            "as \"../mcu/main.py\"")
+        raise _mcu_error("emulator in [mcu] must be the path of the emulator's Python file "
+                         "from the source folder, with forward slashes, such as "
+                         "\"../mcu/main.py\"", EMULATOR)
     if WAIT in table and not is_wait(table[WAIT]):
-        raise NxwrightError("app.toml: wait in [mcu] must be a number of seconds, 0 or more, "
-                            "such as 10")
+        raise _mcu_error("wait in [mcu] must be a number of seconds, 0 or more, such as 10",
+                         WAIT)
     return dict(table)
+
+
+def _mcu_error(reason: str, key: str) -> NxwrightError:
+    """Returns an error with the message `reason` about the key `key` of
+    app.toml's [mcu] table. The error's `key` is `key` and its `table` is
+    "mcu", so that its line can be found in app.toml
+    (source_folder.parse_app)."""
+    error = NxwrightError(reason, key=key)
+    error.table = "mcu"
+    return error
 
 
 def is_wait(value) -> bool:

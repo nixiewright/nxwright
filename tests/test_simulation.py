@@ -4,6 +4,7 @@ from collections import Counter
 from datetime import datetime
 import os
 from pathlib import Path
+import re
 import threading
 import tomllib
 import unittest
@@ -157,8 +158,8 @@ class StartTest(SimulationTestCase):
 
         before = state()
         self.write("pages/page0.nx", "on b0.down:\n  count=count+\n")
-        with self.assertRaisesRegex(NxwrightError,
-                                    "^pages/page0.nx line 2: the line ends too early$"):
+        file = re.escape(str(self.root.resolve() / "pages" / "page0.nx"))
+        with self.assertRaisesRegex(NxwrightError, "^%s:2: the line ends too early$" % file):
             simulation.start_again()
         # The clock too: rtc0 to rtc6 are among the values.
         self.assertEqual(state(), before)
@@ -179,7 +180,7 @@ class StartTest(SimulationTestCase):
         self.page("second", [])
         simulation = Simulation(self.root)
         self.write("pages/second.nx", "on second.load:\n  count=count+\n")
-        with self.assertRaisesRegex(NxwrightError, "pages/second.nx line 2"):
+        with self.assertRaisesRegex(NxwrightError, r"second\.nx:2: "):
             simulation.press("b0", 10, 10)
         self.assertEqual((simulation.page, simulation.globals["count"]), ("page0", 1))
         self.assertIn("b0", screen_text(simulation.drawing_inputs(), []))

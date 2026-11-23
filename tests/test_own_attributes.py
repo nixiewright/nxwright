@@ -83,7 +83,7 @@ class OwnAttributeTest(SourceFolderTestCase):
     def test_a_refusal_names_the_line_as_written_and_as_read(self):
         # Refused as n0.val="a" is.
         self.write_events("on n0.down:\n  '&val&'=\"a\"\n")
-        self.assert_export_refused(r"first\.nx line 2: `'&val&'=\"a\"`, read as `n0\.val=\"a\"`: "
+        self.assert_export_refused(r"first\.nx:2: `'&val&'=\"a\"`, read as `n0\.val=\"a\"`: "
                                    r"text cannot be put in a number")
         with self.assertRaisesRegex(NxwrightError,
                                     r"`'&val&'=\"a\"`, read as `n0\.val=\"a\"`: text cannot"):
@@ -91,23 +91,23 @@ class OwnAttributeTest(SourceFolderTestCase):
         # The check drops the spaces of the line it reads. The message still
         # gives that line only once.
         self.write_events("on n0.down:\n  '&val&' = \"a\"\n")
-        self.assert_export_refused(r"first\.nx line 2: `'&val&' = \"a\"`, read as "
+        self.assert_export_refused(r"first\.nx:2: `'&val&' = \"a\"`, read as "
                                    r"`n0\.val = \"a\"`: text cannot be put in a number")
 
     def test_a_form_with_spaces_is_read_as_the_editor_drops_them(self):
         # In an event, checked as n0.val; in program.nx, refused as '&id&' is.
         self.write_events("on n0.down:\n  '& val &'=\"a\"\n")
-        self.assert_export_refused(r"first\.nx line 2: `'& val &'=\"a\"`, read as "
+        self.assert_export_refused(r"first\.nx:2: `'& val &'=\"a\"`, read as "
                                    r"`n0\.val=\"a\"`: text cannot")
         self.write_events("")
         program = self.source / "program.nx"
         start = program.read_text(encoding="utf-8")
         program.write_text(start + "\nsys2='& id &'\n", encoding="utf-8", newline="\n")
-        self.assert_export_refused(r"program\.nx line 3: `sys2='&id&'`: " + NO_OWNER)
+        self.assert_export_refused(r"program\.nx:3: `sys2='&id&'`: " + NO_OWNER)
         program.write_text(start, encoding="utf-8", newline="\n")
         (self.source / "macros.nx").write_text("macro probe:\n  '& val &'=1\n", encoding="utf-8",
                                                newline="\n")
-        self.assert_export_refused(r"macros\.nx line 2: `'&val&'=1`: " + NO_OWNER)
+        self.assert_export_refused(r"macros\.nx:2: `'&val&'=1`: " + NO_OWNER)
 
     def test_code_of_no_event_refuses_it(self):
         # Outside a quoted text, as the Editor refused it in program.s and in a
@@ -116,13 +116,13 @@ class OwnAttributeTest(SourceFolderTestCase):
         program = self.source / "program.nx"
         start = program.read_text(encoding="utf-8")
         program.write_text(start + "\nsys2='&id&'\n", encoding="utf-8", newline="\n")
-        self.assert_export_refused(r"program\.nx line 3: `sys2='&id&'`: " + NO_OWNER)
+        self.assert_export_refused(r"program\.nx:3: `sys2='&id&'`: " + NO_OWNER)
         program.write_text(start + "\nprints \"'&id&'\",0\n", encoding="utf-8", newline="\n")
         export_dump(self.source, self.folder / "quoted")
         program.write_text(start, encoding="utf-8", newline="\n")
         (self.source / "macros.nx").write_text("macro probe:\n  '&val&'=1\n", encoding="utf-8",
                                                newline="\n")
-        self.assert_export_refused(r"macros\.nx line 2: `'&val&'=1`: " + NO_OWNER)
+        self.assert_export_refused(r"macros\.nx:2: `'&val&'=1`: " + NO_OWNER)
         (self.source / "macros.nx").write_text("macro probe:\n  prints \"'&id&'\",0\n",
                                                encoding="utf-8", newline="\n")
         export_dump(self.source, self.folder / "quoted in a macro")
@@ -292,7 +292,7 @@ class NxlangTest(unittest.TestCase):
         with self.assertRaises(NxwrightError) as written:
             compile_event("'&val&' = \"a\"")
         self.assertEqual(str(written.exception),
-                         "p.nx line 1: `'&val&' = \"a\"`, read as `a.val = \"a\"`: %s"
+                         "p.nx:1: `'&val&' = \"a\"`, read as `a.val = \"a\"`: %s"
                          % refused.exception.reason)
         # A refusal's quick fix stays: here, declaring sys0 in program.nx.
         with self.assertRaises(NxwrightError) as refused:
@@ -310,19 +310,19 @@ class NxlangTest(unittest.TestCase):
         # A function's body runs from a hotspot nxlang adds, whose
         # attributes the form would name.
         functions = {"f": ("p.nx", 1, "function f():", [(2, "  '&val&' = 1")])}
-        with self.assertRaisesRegex(NxwrightError, r"p\.nx line 2: " + IN_A_FUNCTION):
+        with self.assertRaisesRegex(NxwrightError, r"p\.nx:2: " + IN_A_FUNCTION):
             compile_event("f()", functions=functions)
 
     def test_a_constant_refuses_it(self):
         # Its text reaches every line naming it, a function's too.
-        with self.assertRaisesRegex(NxwrightError, r"p\.nx line 1: " + IN_A_CONSTANT):
+        with self.assertRaisesRegex(NxwrightError, r"p\.nx:1: " + IN_A_CONSTANT):
             compile_event("t0.txt = greeting", preamble="const greeting = \"'&val&'\"")
 
     def test_code_of_no_object_refuses_it(self):
         # An event without an owner, and program.nx.
         for code in ("'&val&' = 1", "t0.txt = \"'&val&'\""):
             with self.subTest(code=code):
-                with self.assertRaisesRegex(NxwrightError, r"p\.nx line 1: " + IN_NO_EVENT):
+                with self.assertRaisesRegex(NxwrightError, r"p\.nx:1: " + IN_NO_EVENT):
                     compile_event(code, owner=None)
         lines = [(1, "int counter=0"), (2, "counter = '&id&'")]
         with self.assertRaisesRegex(NxwrightError, r"line 2: " + IN_NO_EVENT):

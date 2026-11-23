@@ -73,7 +73,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import tomllib
 
-from nxwright import NxwrightError, listed_in_words
+from nxwright import NxwrightError, listed_in_words, place_text
 from nxwright.language.code_lines import command_word, minus_is_sign, split_line
 from nxwright.language.editor_code import hex_written_0x, keep_editor_meaning
 from nxwright.language.nxlang import BYTE_COMMANDS, editor_number, is_constant_line, token_spans
@@ -82,6 +82,7 @@ from nxwright.project.media_files import VIDEO_HEAD_SIZE, sound_file_problem, so
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.pictures import picture_problem
 from nxwright.project.screen_arithmetic import int32
+from nxwright.project.toml_lines import key_line
 from nxwright.source.nx_files import (FUNCTION_HEADING, PageFiles, event_blocks,
                                       read_event_heading, read_nx_file, read_page_files)
 from nxwright.source.device_keys import settings_from_keys
@@ -116,9 +117,9 @@ class Finding:
 
     @property
     def place(self) -> str:
-        """Where it is, as messages name it: "pages/home.nx line 3", or the
-        file alone when the problem has no line."""
-        return "%s line %d" % (self.file, self.line) if self.line else self.file
+        """Where the problem is, in the form that messages use (place_text):
+        "pages/home.nx:3", or the file alone when the problem has no line."""
+        return place_text(self.file, self.line)
 
 
 def warnings(app: dict, read) -> list:
@@ -213,25 +214,11 @@ def _page_place_warnings(app: dict, read, page: str, size) -> list:
         # build uses the screen's in its place.
         if key in table and table[key] != built:
             found.append(Finding(
-                path, _page_table_line(text, key), WARNING,
+                path, key_line(text, key, "page"), WARNING,
                 "%s's %s is %s, but the Nextion Editor makes every page fill its screen, "
                 "%d by %d at 0, 0, so the build uses %d"
                 % (page, key, table[key], width, height, built), "page-place"))
     return found
-
-
-def _page_table_line(text: str, key: str) -> int:
-    """Returns the line, from 1, of the page file `text` that gives `key` in
-    its [page] table, or 0."""
-    in_page = False
-    for number, line in enumerate(text.split("\n"), start=1):
-        stripped = line.strip()
-        if stripped.startswith("["):
-            # A table's header may end with a comment, as in "[page]  # main".
-            in_page = stripped.split("#", 1)[0].strip() == "[page]"
-        elif in_page and stripped.split("=", 1)[0].strip() == key:
-            return number
-    return 0
 
 
 def sound_warnings(app: dict, read, read_bytes) -> list:
@@ -453,15 +440,17 @@ def _events_never_run_on_page(app: dict, read, page: str, defaults: dict) -> lis
     return found
 
 
-def left_out_event_warnings(app: dict, read) -> list:
+def left_out_event_warnings(app: dict, read, folder=None) -> list:
     """Returns the event-left-out and event-unused warnings of the
-    folder whose settings are `app` and whose files `read(path)` returns, as
-    texts that give the place and the message, such as "pages/lib/shared.nx
-    line 4: ...". The commands that build a project from a folder print
-    them, since a left-out event changes what the project contains."""
+    folder whose settings are `app` and whose files `read(path)` returns.
+    Each warning is text that gives its place and its message, such as
+    "demo\\pages\\lib\\shared.nx:4: ...", and each place starts with `folder`,
+    the source folder as the user gave it (place_text). The commands that
+    build a project from a folder print the warnings, since a left-out event
+    changes what the project contains."""
     if app["language"] != "nxlang":
         return []
-    return ["%s: %s" % (finding.place, finding.message)
+    return ["%s: %s" % (place_text(finding.file, finding.line, folder), finding.message)
             for finding in _left_out_events(app, read)]
 
 

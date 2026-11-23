@@ -234,7 +234,7 @@ class FolderDefaultsTest(unittest.TestCase):
 
     def test_nxwright_s_own_file_gives_its_defaults_parsed_once(self):
         own = DEFAULTS_FILE.read_text(encoding="utf-8")
-        self.assertIs(folder_defaults(own, "defaults.toml"), nxwright_defaults())
+        self.assertIs(folder_defaults(own), nxwright_defaults())
         with tempfile.TemporaryDirectory() as name:
             folder = Path(name) / "app"
             new_source_folder(folder, DeviceSettings(model_named("NX4832T035"), 0, "iso-8859-1"),
@@ -245,14 +245,21 @@ class FolderDefaultsTest(unittest.TestCase):
         text = DEFAULTS_FILE.read_text(encoding="utf-8")
         self.assertIn("[text.attributes]\nvscope = 0\n", text)
         text = text.replace("[text.attributes]\nvscope = 0\n", "[text.attributes]\nvscope = 1\n")
-        read = folder_defaults(text, "defaults.toml")
+        read = folder_defaults(text)
         self.assertEqual(read, defaults_from_toml(text, "defaults.toml"))
         self.assertNotEqual(read, nxwright_defaults())
 
     def test_errors_give_the_folder_s_file(self):
         with self.assertRaisesRegex(NxwrightError, r"^defaults\.toml: \[text\] is not a component "
                                                    r"type's defaults"):
-            folder_defaults("[text]\nevents = []\n", "defaults.toml")
+            folder_defaults("[text]\nevents = []\n")
+
+    def test_a_file_that_is_not_toml_gives_the_line(self):
+        with self.assertRaises(NxwrightError) as raised:
+            folder_defaults("[text]\nevents = = []\n")
+        self.assertEqual((raised.exception.file, raised.exception.line), ("defaults.toml", 2))
+        self.assertTrue(str(raised.exception).startswith("defaults.toml:2: Invalid value"),
+                        str(raised.exception))
 
 
 if __name__ == "__main__":

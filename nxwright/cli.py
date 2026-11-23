@@ -21,7 +21,7 @@ from pathlib import Path
 import sys
 import unittest
 
-from nxwright import NxwrightError, installed_version
+from nxwright import NxwrightError, installed_version, place_text
 from nxwright.project.device_settings import (DEFAULT_ENCODING, ENCODINGS, DeviceSettings,
                                               password_hash)
 from nxwright.project.dump_folder import is_dump_folder
@@ -76,7 +76,8 @@ def _run_build(arguments) -> str:
                        keep_backup=not arguments.no_backup, lock_pages=not arguments.no_lock)
         kept_copies = kept_screen_copy_warnings(arguments.source_folder)
         left_out = left_out_event_warnings(read_app(arguments.source_folder),
-                                           folder_reader(arguments.source_folder))
+                                           folder_reader(arguments.source_folder),
+                                           arguments.source_folder)
     if memory.warning is not None:
         print("nxwright build: warning: %s" % memory.warning, file=sys.stderr)
     for warning in left_out + kept_copies:
@@ -165,8 +166,11 @@ def _run_check(arguments) -> str:
                           read_bytes=folder_byte_reader(folder), listed=folder_lister(folder))
     findings = result.findings()
     for finding in findings:
-        print("%s: %s" % (finding.place, finding.severity) if finding.place
-              else finding.severity, finding.message, sep=": ")
+        # The place is under the folder as the user gave it, so that a
+        # terminal or a code editor can open the file.
+        place = place_text(finding.file, finding.line, folder) if finding.file else ""
+        print("%s: %s" % (place, finding.severity) if place else finding.severity,
+              finding.message, sep=": ")
     errors = sum(finding.severity == ERROR for finding in findings)
     summary = "%d errors, %d warnings" % (errors, len(findings) - errors)
     if errors:
@@ -1081,6 +1085,13 @@ def main(arguments: list = None) -> int:
     try:
         message = parsed.run(parsed)
     except (NxwrightError, OSError) as error:
+        # An error from a file of the command's source folder shows that file
+        # under the folder as the user gave it. A command that reads other
+        # folders, such as `nxwright diff`, has already called in_folder with
+        # the right one, and the error keeps that folder.
+        folder = getattr(parsed, "source_folder", None)
+        if isinstance(error, NxwrightError) and folder is not None:
+            error.in_folder(folder)
         print("nxwright %s: %s" % (parsed.subcommand, error), file=sys.stderr)
         return getattr(error, "exit_code", 1)
     if message:

@@ -96,8 +96,8 @@ class BuildTest(DefinesTestCase):
     def test_a_text_with_a_line_break_is_refused(self):
         code, errors = self.build("--define", "TITLE=two\nlines")
         self.assertEqual(code, 1)
-        self.assertIn("app.toml in `[defines]`, `TITLE`: a quoted text cannot contain a "
-                      "line break", errors)
+        self.assertIn("%s: in `[defines]`, `TITLE`: a quoted text cannot contain a line break"
+                      % (self.source / "app.toml"), errors)
 
     def test_the_values_last_only_for_the_command(self):
         self.built_page("--define", "LIMIT=40")
@@ -124,8 +124,8 @@ class BuildTest(DefinesTestCase):
                            encoding="utf-8", newline="\n")
         code, errors = self.build()
         self.assertEqual(code, 1)
-        self.assertIn("app.toml in `[defines]`, `LIMIT`: `LIMIT` already exists as a constant, it "
-                      "cannot be redefined", errors)
+        self.assertIn("%s: in `[defines]`, `LIMIT`: `LIMIT` already exists as a constant, it "
+                      "cannot be redefined" % (self.source / "app.toml"), errors)
 
     def test_a_number_past_32_bits_keeps_its_low_32_bits_as_a_constant_does(self):
         self.app.write_text(self.app.read_text(encoding="utf-8").replace(
@@ -177,9 +177,9 @@ class TableTest(unittest.TestCase):
 
     def test_other_values_and_names_are_refused(self):
         for table, message in [
-                ("A = true\n", "app.toml: the define A must be a whole number or a text"),
-                ("A = 1.5\n", "app.toml: the define A must be a whole number or a text"),
-                ("A = [1]\n", "app.toml: the define A must be a whole number or a text"),
+                ("A = true\n", "app.toml:11: the define A must be a whole number or a text"),
+                ("A = 1.5\n", "app.toml:11: the define A must be a whole number or a text"),
+                ("A = [1]\n", "app.toml:11: the define A must be a whole number or a text"),
                 ('"1A" = 1\n', "app.toml: invalid define name: 1A. Use letters, digits, and "
                                "_, and do not start with a digit"),
                 ('"A-B" = 1\n', "app.toml: invalid define name: A-B. Use letters, digits, "
@@ -257,8 +257,8 @@ class PlaceholderTest(DefinesTestCase):
         self.edit("pages/page0.page.toml", ('bco = "%BCOLOR%"', 'bco = "%BCOLOUR%"'))
         code, errors = self.build()
         self.assertEqual(code, 1)
-        self.assertIn("pages/page0.page.toml, t0: bco is %BCOLOUR%, and app.toml's [defines] "
-                      "does not declare BCOLOUR", errors)
+        self.assertIn("%s:9: t0: bco is %%BCOLOUR%%, and app.toml's [defines] does not declare "
+                      "BCOLOUR" % (self.source / "pages" / "page0.page.toml"), errors)
 
     def test_without_defines_a_placeholder_is_plain_text(self):
         self.app.write_text(self.app.read_text(encoding="utf-8").split("\n[defines]")[0]
@@ -276,7 +276,7 @@ class PlaceholderTest(DefinesTestCase):
                 ("pages/page0.page.toml", 'name = "t0"', 'name = "%TITLE%"',
                  "name is %TITLE%, but name cannot take a define's value"),
                 ("app.toml", "format = 1", 'format = "%LIMIT%"',
-                 "app.toml: format is %LIMIT%, but format cannot take a define's value")]:
+                 "app.toml:1: format is %LIMIT%, but format cannot take a define's value")]:
             with self.subTest(key=old):
                 self.edit(path, (old, new))
                 code, errors = self.build()

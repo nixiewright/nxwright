@@ -926,11 +926,11 @@
         "source": "nxwright",
         "severity": "error",
         "fileLocation": [
-          "relative",
+          "autoDetect",
           "${workspaceFolder}"
         ],
         "pattern": {
-          "regexp": "^(?:nxwright \\w+: )?(.+?\\.(?:nx|toml)) line (\\d+): (?:(error|warning): )?(.*)$",
+          "regexp": "^(?:nxwright \\w+: )?(.+?\\.(?:nx|toml))(?::| line )(\\d+): (?:(error|warning): )?(.*)$",
           "file": 1,
           "line": 2,
           "severity": 3,

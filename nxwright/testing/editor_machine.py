@@ -220,9 +220,6 @@ class ValueNotGiven(NxwrightError, KeyError):
         super().__init__("%s has no value. In a test, give it in the run's values" % name)
         self.name = name
 
-    # A KeyError's own would quote the message.
-    __str__ = BaseException.__str__
-
 
 def _located(error: NxwrightError, place):
     """Gives `error` the place of the line it stopped at, `place`. Its file
@@ -233,8 +230,7 @@ def _located(error: NxwrightError, place):
     changed, not copied, so that it keeps its kind and what that holds, as
     a CompileRefusal's code."""
     if error.file is None:
-        error.file, error.line = place.file, place.line
-        error.args = ("%s line %d (%s): %s" % (place.file, place.line, place.owner, error),)
+        error.at_place(place.file, place.line, place.owner)
 
 
 def _placed(error: NxwrightError, place) -> NxwrightError:

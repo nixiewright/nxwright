@@ -157,6 +157,10 @@ def main(arguments: list) -> int:
         print("nxwright compile: %s" % error, file=sys.stderr)
         return 1
     except (NxwrightError, OSError) as error:
+        # An error from a file of the source folder shows that file under
+        # the folder as the user gave it.
+        if isinstance(error, NxwrightError) and options.source.is_dir():
+            error.in_folder(options.source)
         print("nxwright compile: %s" % error, file=sys.stderr)
         return 1
     for warning in compiled.warnings:
@@ -216,7 +220,7 @@ def compile_folder(source: Path, output: Path, firmware_file: Path = None,
     if source.is_dir():
         with overriding_defines(defines or {}):
             project, built = project_and_file_of_folder(source, lock_pages)
-            warnings = left_out_event_warnings(read_app(source), folder_reader(source))
+            warnings = left_out_event_warnings(read_app(source), folder_reader(source), source)
     elif is_project_file(source):
         if project_file is not None:
             raise NxwrightError("--project-file writes the project file built from a source "

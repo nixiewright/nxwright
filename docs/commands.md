@@ -250,10 +250,10 @@ These three commands show what is inside a TFT file, whether nxwright or the Nex
 nxwright check app
 ```
 
-`check` runs every check the build makes, and writes nothing. It prints each problem with its place, and exits with 1 when there is an error:
+`check` runs every check the build makes, and writes nothing. It prints each problem with its file and line, and exits with 1 when there is an error:
 
 ```
-pages/home.nx line 12: error: unknown name `speed`
+app/pages/home.nx:12: error: unknown name `speed`
 ```
 
 - The build stops at the first error. The check reports the first error of each page.

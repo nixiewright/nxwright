@@ -50,12 +50,12 @@ class MalformedPageFileTest(SourceFolderTestCase):
 
     def test_a_page_that_is_not_a_table(self):
         (self.source / "pages" / "second.page.toml").write_text('page = "x"\n', encoding="utf-8")
-        self.assert_export_refused(r"second\.page\.toml has no \[page\] table")
+        self.assert_export_refused(r"pages/second\.page\.toml: the \[page\] table is missing")
 
     def test_components_that_are_not_tables(self):
         edit_text(self.source / "pages" / "second.page.toml", "[page]", "component = 5\n\n[page]")
-        self.assert_export_refused(r"second\.page\.toml can contain only \[page\] and "
-                                   r"\[\[component\]\] tables")
+        self.assert_export_refused(r"pages/second\.page\.toml: only \[page\] and "
+                                   r"\[\[component\]\] tables are allowed")
 
 
 class SourceFolderLimitTest(SourceFolderTestCase):
@@ -65,7 +65,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
 
     def test_a_name_longer_than_the_editor_keeps(self):
         self.add_text_component("abcdefghijklmno", "x")
-        self.assert_export_refused(r"first\.page\.toml: the name of component `abcdefghijklmno` "
+        self.assert_export_refused(r"pages/first\.page\.toml:9: the name of component `abcdefghijklmno` "
                                    r"has 15 bytes, and the limit is 14")
 
     def test_names_the_editor_refuses(self):
@@ -76,7 +76,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         for name in ("audio0", "dim", "eq9", "scache", "bcpu", "aph", "BLACK"):
             with self.subTest(name=name):
                 self.add_text_component(name, "x")
-                self.assert_export_refused(r"first\.page\.toml: component `%s` has a reserved "
+                self.assert_export_refused(r"pages/first\.page\.toml:9: component `%s` has a reserved "
                                            r"name" % name)
                 page_file.write_bytes(page)
 
@@ -84,7 +84,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         # The Nextion Editor refused a project with such a component, or such
         # a page, as it opened it, each probed alone.
         self.add_text_component("1t", "x")
-        self.assert_export_refused(r"first\.page\.toml: the name of component `1t` cannot start "
+        self.assert_export_refused(r"pages/first\.page\.toml:9: the name of component `1t` cannot start "
                                    r"with a digit")
 
     def test_a_page_name_that_starts_with_a_digit(self):
@@ -94,7 +94,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         for path in (self.source / "app.toml", pages / "2nd.page.toml"):
             path.write_text(path.read_text(encoding="utf-8").replace('"second"', '"2nd"'),
                             encoding="utf-8")
-        self.assert_export_refused(r"2nd\.page\.toml: the name of page `2nd` cannot start with a "
+        self.assert_export_refused(r"pages/2nd\.page\.toml:1: the name of page `2nd` cannot start with a "
                                    r"digit")
 
     def test_names_like_them_that_the_editor_takes(self):
@@ -113,7 +113,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         for path in (self.source / "app.toml", pages / "dim.page.toml"):
             path.write_text(path.read_text(encoding="utf-8").replace('"second"', '"dim"'),
                             encoding="utf-8")
-        self.assert_export_refused(r"dim\.page\.toml: page `dim` has a reserved name")
+        self.assert_export_refused(r"pages/dim\.page\.toml:1: page `dim` has a reserved name")
 
     def test_a_name_of_14_bytes(self):
         self.add_text_component("abcdefghijklmn", "x")
@@ -122,7 +122,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
     def test_a_text_longer_than_its_field(self):
         # A text component's field holds 10 bytes unless txt_maxl says otherwise.
         self.add_text_component("t0", "abcdefghijk")
-        self.assert_export_refused(r"first\.page\.toml: attribute `txt` of component `t0` has 11 "
+        self.assert_export_refused(r"pages/first\.page\.toml:9: attribute `txt` of component `t0` has 11 "
                                    r"bytes, and its limit, `txt_maxl`, is 10")
 
     def test_a_text_that_fits_its_field(self):
@@ -137,7 +137,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
                   newline="\n") as file:
             file.write('\n[[component]]\nname = "xp0"\ntype = "external-picture"\nx = 0\ny = 0\n'
                        'w = 50\nh = 50\npath = "sd0/abcdefghij.xi"\npath_m = 8\n')
-        self.assert_export_refused(r"first\.page\.toml: attribute `path` of component `xp0` has "
+        self.assert_export_refused(r"pages/first\.page\.toml:9: attribute `path` of component `xp0` has "
                                    r"17 bytes, and its limit, `path_m`, is 8")
         edit_text(self.source / "pages" / "first.page.toml", "path_m = 8", "path_m = 17")
         export_dump(self.source, self.folder / "again")
@@ -158,7 +158,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
             with self.subTest(kind=kind):
                 edit_text(page_file, 'type = "%s"\n' % kind, 'type = "%s"\nfrom = 1\n' % kind)
                 self.assert_export_refused(
-                    r"first\.page\.toml: attribute `path` of component `%s` has %d bytes, and "
+                    r"pages/first\.page\.toml:\d+: attribute `path` of component `%s` has %d bytes, and "
                     r"its limit, `path_m`, is 8" % (name, length))
                 page_file.write_bytes(page)
 
@@ -183,7 +183,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
                 export_dump(self.source, self.folder / attribute)
                 with_record(attribute, 9, 8)
                 self.assert_export_refused(
-                    r"first\.page\.toml: attribute `%s` of component `d0` has 9 bytes, and its "
+                    r"pages/first\.page\.toml:9: attribute `%s` of component `d0` has 9 bytes, and its "
                     r"limit, `%s_m`, is 8" % (attribute, attribute))
 
     def test_a_text_of_a_buttons_style(self):
@@ -192,7 +192,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         self.add_text_component("t0", "x")
         with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8") as file:
             file.write("style = 4\n")
-        self.assert_export_refused(r"first\.page\.toml, object 1: style must be from 0 to 3")
+        self.assert_export_refused(r"pages/first\.page\.toml:9: object 1: style must be from 0 to 3")
         edit_text(self.source / "pages" / "first.page.toml", "style = 4", "style = 3")
         export_dump(self.source, self.folder / "again")
 
@@ -204,7 +204,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         with open(page_file, "a", encoding="utf-8") as file:
             file.write('\n[[component]]\nname = "s0"\ntype = "select"\nx = 0\ny = 0\n'
                        'w = 120\nh = 120\nstyle = 2\n')
-        self.assert_export_refused(r"first\.page\.toml, object 1: style must be from 0 to 1")
+        self.assert_export_refused(r"pages/first\.page\.toml:9: object 1: style must be from 0 to 1")
         edit_text(page_file, "style = 2", "style = 1")
         export_dump(self.source, self.folder / "again")
 
@@ -215,7 +215,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         # which the build would not match.
         self.add_text_component("t0", "x")
         edit_text(self.source / "pages" / "first.page.toml", 'h = 30\ntxt = "x"', 'h = 1\ntxt = "x"')
-        self.assert_export_refused(r"first\.page\.toml: component `t0` is 100 by 1\. It must be "
+        self.assert_export_refused(r"pages/first\.page\.toml:9: component `t0` is 100 by 1\. It must be "
                                    r"at least 2 by 2\.")
         edit_text(self.source / "pages" / "first.page.toml", 'h = 1\ntxt = "x"', 'h = 2\ntxt = "x"')
         export_dump(self.source, self.folder / "again")
@@ -227,7 +227,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8") as file:
             file.write('\n[[component]]\nname = "zone"\ntype = "hotspot"\ndefaults = false\n'
                        + tomli_w.dumps(values))
-        self.assert_export_refused(r"first\.page\.toml: component `zone` is 0 by 0\. It must be "
+        self.assert_export_refused(r"pages/first\.page\.toml:9: component `zone` is 0 by 0\. It must be "
                                    r"at least 2 by 2\.")
 
     def test_a_gauge_past_360_degrees(self):
@@ -236,7 +236,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8") as file:
             file.write('\n[[component]]\nname = "dial"\ntype = "gauge"\nx = 0\ny = 0\nw = 100\n'
                        'h = 100\nval = 361\n')
-        self.assert_export_refused(r"first\.page\.toml, object 1: val must be from 0 to 360")
+        self.assert_export_refused(r"pages/first\.page\.toml:9: object 1: val must be from 0 to 360")
         edit_text(self.source / "pages" / "first.page.toml", "val = 361", "val = 360")
         export_dump(self.source, self.folder / "again")
 
@@ -256,7 +256,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
                 page_file.write_text(original + '\n[[component]]\nname = "c0"\ntype = "%s"\n'
                                      % kind + place + line % past, encoding="utf-8")
                 attribute = line.split(" ")[0]
-                self.assert_export_refused(r"first\.page\.toml, object 1: %s must be from 0 to %d"
+                self.assert_export_refused(r"pages/first\.page\.toml:9: object 1: %s must be from 0 to %d"
                                            % (attribute, bound))
         page_file.write_text(original + "".join(
             '\n[[component]]\nname = "c%d"\ntype = "%s"\n' % (number, kind) + place + line % bound
@@ -269,7 +269,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8") as file:
             file.write('\n[[component]]\nname = "dial"\ntype = "gauge"\nx = 0\ny = 0\nw = 140\n'
                        'h = 140\nleft = 1025\n')
-        self.assert_export_refused(r"first\.page\.toml, object 1: left must be from 0 to 1024")
+        self.assert_export_refused(r"pages/first\.page\.toml:9: object 1: left must be from 0 to 1024")
         edit_text(self.source / "pages" / "first.page.toml", "left = 1025", "left = 1024")
         export_dump(self.source, self.folder / "again")
 
@@ -289,7 +289,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
                     with open(page_file, "a", encoding="utf-8") as file:
                         file.write('\n[[component]]\nname = "c0"\ntype = "%s"\nx = 0\ny = 0\n'
                                    'w = %d\nh = %d\n%s = %d\n' % (kind, w, h, attribute, value))
-                    self.assert_export_refused(r"first\.page\.toml, object 1: %s must be from "
+                    self.assert_export_refused(r"pages/first\.page\.toml:9: object 1: %s must be from "
                                                r"%d to %d" % (attribute, low, high))
                     edit_text(page_file, "%s = %d" % (attribute, value),
                               "%s = %d" % (attribute, high))
@@ -301,7 +301,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         # probe found (memory_costs.toml); it stores 127.
         page_file = self.source / "pages" / "first.page.toml"
         edit_text(page_file, "vscope = 0", "vscope = 0\naph = 128")
-        self.assert_export_refused(r"first\.page\.toml, object 0: aph must be from 0 to 127")
+        self.assert_export_refused(r"pages/first\.page\.toml:1: object 0: aph must be from 0 to 127")
         edit_text(page_file, "aph = 128", "aph = 127")
         export_dump(self.source, self.folder / "taken")
 
@@ -313,7 +313,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         for refused, allowed in ((79, 80), (65535, 65534)):
             with self.subTest(tim=refused):
                 edit_text(self.source / "pages" / "first.page.toml", "tim = 79", "tim = %d" % refused)
-                self.assert_export_refused(r"first\.page\.toml, object 1: tim must be from 80 "
+                self.assert_export_refused(r"pages/first\.page\.toml:9: object 1: tim must be from 80 "
                                            r"to 65534")
                 edit_text(self.source / "pages" / "first.page.toml", "tim = %d" % refused,
                           "tim = %d" % allowed)
@@ -328,7 +328,7 @@ class SourceFolderLimitTest(SourceFolderTestCase):
         self.add_text_component("t0", "x")
         with open(self.source / "pages" / "first.page.toml", "a", encoding="utf-8") as file:
             file.write("key = 2\n")
-        self.assert_export_refused(r"first\.page\.toml, object 1: a keyboard is bound \(key 2\), "
+        self.assert_export_refused(r"pages/first\.page\.toml:9: object 1: a keyboard is bound \(key 2\), "
                                    r"so vscope must be 1, global, as the Nextion Editor requires")
         edit_text(self.source / "pages" / "first.page.toml", "key = 2\n", "key = 2\nvscope = 1\n")
         export_dump(self.source, self.folder / "again")
@@ -360,7 +360,7 @@ class PageCapTest(SourceFolderTestCase):
         export_dump(self.source, self.folder / "five")
         self.add("waveform", 1)
         self.assert_export_refused(
-            r"^first\.page\.toml: the page has 6 waveforms, and the limit is 5$")
+            r"^pages/first\.page\.toml:49: the page has 6 waveforms, and the limit is 5$")
         # The page's whole count.
         self.add("waveform", 2)
         self.assert_export_refused(r"the page has 8 waveforms, and the limit is 5")
@@ -370,7 +370,7 @@ class PageCapTest(SourceFolderTestCase):
         export_dump(self.source, self.folder / "twelve")
         self.add("scrolling-text", 1)
         self.assert_export_refused(
-            r"^first\.page\.toml: the page has 13 timers and scrolling texts, and the limit is "
+            r"^pages/first\.page\.toml:57: the page has 13 timers and scrolling texts, and the limit is "
             r"12$")
 
     def test_a_mix_of_timers_and_scrolling_texts(self):
@@ -383,7 +383,7 @@ class PageCapTest(SourceFolderTestCase):
         self.add("gmov", 15)
         self.add("video", 2)
         self.assert_export_refused(
-            r"^first\.page\.toml: the page has 17 animations and videos, and the limit is 16$")
+            r"^pages/first\.page\.toml:137: the page has 17 animations and videos, and the limit is 16$")
 
     def test_the_build_of_a_dump(self):
         # A dump past a cap, as one of a project the Editor saved but cannot
@@ -425,7 +425,7 @@ class ComponentCountTest(SourceFolderTestCase):
     or scope (Nextion Editor 1.68.2). The build refuses one too, at the
     first component past 250."""
 
-    REFUSED = (r"^first\.page\.toml: the page has %d components, and the limit is 250\. "
+    REFUSED = (r"^pages/first\.page\.toml:1009: the page has %d components, and the limit is 250\. "
                r"Remove %s, or move %s to another page\.$")
 
     def setUp(self):
@@ -508,7 +508,7 @@ class PageCountTest(SourceFolderTestCase):
         export_dump(self.source, self.folder / "most")
         add_pages_up_to(self.source, 252)
         line = self.page_line("more251")
-        self.assert_export_refused(r"^app\.toml line %d: %s$" % (line, self.REFUSED))
+        self.assert_export_refused(r"^app\.toml:%d: %s$" % (line, self.REFUSED))
 
     def test_check_gives_the_line(self):
         add_pages_up_to(self.source, 252)
@@ -589,7 +589,7 @@ class ReferenceTest(SourceFolderTestCase):
             with self.subTest(line=line):
                 self.write_code(line)
                 self.assert_export_refused(
-                    r"first\.nx line 2: `second\.t1`: `t1` has local scope, so it cannot be used "
+                    r"first\.nx:2: `second\.t1`: `t1` has local scope, so it cannot be used "
                     r"in another page\. Give `t1` global scope \(`vscope = 1`\)\.")
 
     def test_another_pages_own_attribute(self):
@@ -600,38 +600,38 @@ class ReferenceTest(SourceFolderTestCase):
             with self.subTest(line=line):
                 self.write_code(line)
                 self.assert_export_refused(
-                    r"first\.nx line 2: `second\.bco`: the attributes of a page can only be "
+                    r"first\.nx:2: `second\.bco`: the attributes of a page can only be "
                     r"used in that page")
 
     def test_another_pages_component_of_local_scope_in_nxlang(self):
         switch_to_nxlang(self.source)
         self.write_code("second.t1.txt = t0.txt")
-        self.assert_export_refused(r"first\.nx line 2: `second\.t1`: `t1` has local scope")
+        self.assert_export_refused(r"first\.nx:2: `second\.t1`: `t1` has local scope")
         self.write_code("second.t2.txt = t0.txt")
         export_dump(self.source, self.folder / "nxlang")
 
     def test_an_unknown_component(self):
         self.write_code('t0.txt=""', 't9.txt=""')
-        self.assert_export_refused(r"first\.nx line 3: `t9` is neither a page nor a component "
+        self.assert_export_refused(r"first\.nx:3: `t9` is neither a page nor a component "
                                    r"of this page")
 
     def test_an_unknown_page(self):
         self.write_code("t0.txt=third.t1.txt")
-        self.assert_export_refused(r"first\.nx line 2: `third` is neither a page nor a "
+        self.assert_export_refused(r"first\.nx:2: `third` is neither a page nor a "
                                    r"component of this page")
 
     def test_an_unknown_component_of_another_page(self):
         self.write_code("t0.txt=second.t9.txt")
-        self.assert_export_refused(r"first\.nx line 2: page `second` has no component `t9`")
+        self.assert_export_refused(r"first\.nx:2: page `second` has no component `t9`")
 
     def test_another_pages_component_without_its_page(self):
         self.write_code('t1.txt=""')
-        self.assert_export_refused(r"first\.nx line 2: `t1` is neither a page nor a component "
+        self.assert_export_refused(r"first\.nx:2: `t1` is neither a page nor a component "
                                    r"of this page")
 
     def test_an_unknown_component_in_a_command(self):
         self.write_code("vis t9,1")
-        self.assert_export_refused(r"first\.nx line 2: `vis t9,1`: `t9` is neither a variable "
+        self.assert_export_refused(r"first\.nx:2: `vis t9,1`: `t9` is neither a variable "
                                    r"nor a component of this page")
 
     def test_the_runner_refuses_what_the_build_refuses(self):
@@ -640,12 +640,12 @@ class ReferenceTest(SourceFolderTestCase):
                            ("sys0=second.bco", r"`second\.bco`: the attributes of a page")):
             with self.subTest(line=line):
                 self.write_code(line)
-                with self.assertRaisesRegex(NxwrightError, r"line 2: " + said):
+                with self.assertRaisesRegex(NxwrightError, r":2: " + said):
                     SourceFolderRunner(self.source).run("first", [("first", "down")])
         switch_to_nxlang(self.source)
         self.write_code("second.t1.txt = t0.txt")
         with self.assertRaisesRegex(NxwrightError,
-                                    r"line 2: `second\.t1`: `t1` has local scope"):
+                                    r":2: `second\.t1`: `t1` has local scope"):
             SourceFolderRunner(self.source).run("first", [("first", "down")])
 
     def test_the_runner_does_not_check_code_given_as_text(self):
@@ -697,7 +697,7 @@ class DataRecordCallTest(_CodeOnFirstTestCase):
         for number, (line, message) in enumerate(cases):
             with self.subTest(line=line):
                 self.write_code(line)
-                with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: " + message):
+                with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: " + message):
                     export_dump(self.source, self.folder / ("refused%d" % number))
 
 
@@ -732,7 +732,7 @@ class FileStreamCallTest(_CodeOnFirstTestCase):
             with self.subTest(line=line):
                 self.write_code(line)
                 with self.assertRaisesRegex(NxwrightError,
-                                            r"first\.nx line 2: %s$" % re.escape(message)):
+                                            r"first\.nx:2: %s$" % re.escape(message)):
                     export_dump(self.source, self.folder / ("refused%d" % number))
 
     def test_in_nxlang(self):
@@ -740,7 +740,7 @@ class FileStreamCallTest(_CodeOnFirstTestCase):
         switch_to_nxlang(self.source)
         (self.source / "pages" / "first.nx").write_text("on first.down:\n  fs0.read(t0.txt, 0)\n",
                                                          encoding="utf-8", newline="\n")
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: `fs0\.read` takes 3 "
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: `fs0\.read` takes 3 "
                                                    r"arguments"):
             export_dump(self.source, self.folder / "refused")
 
@@ -762,7 +762,7 @@ class CommandArgumentTest(_CodeOnFirstTestCase):
             with self.subTest(line=line):
                 self.write_code(line)
                 with self.assertRaisesRegex(
-                        NxwrightError, r"first\.nx line 2: `%s`: the first argument of `%s` must "
+                        NxwrightError, r"first\.nx:2: `%s`: the first argument of `%s` must "
                                        r"be a single value\. Put the expression in a variable "
                                        r"first\.$" % (re.escape(line), line.split()[0])):
                     export_dump(self.source, self.folder / ("refused%d" % number))
@@ -776,7 +776,7 @@ class CommandArgumentTest(_CodeOnFirstTestCase):
             with self.subTest(text=text):
                 self.write_code(head + text)
                 with self.assertRaisesRegex(
-                        NxwrightError, r"first\.nx line 2: `%s`: the text of `xstr` must be a "
+                        NxwrightError, r"first\.nx:2: `%s`: the text of `xstr` must be a "
                                        r"single value" % re.escape(head + text)):
                     export_dump(self.source, self.folder / ("refused%d" % number))
         self.write_code(head + "t0.txt", head + '"a+b"')
@@ -841,12 +841,12 @@ class CommandComponentTest(_CodeOnFirstTestCase):
                                        "setlayer n0,t0.txt")):
             with self.subTest(line=line):
                 self.write_code(line)
-                self.assert_refused(r"first\.nx line 2", line,
+                self.assert_refused(r"first\.nx:2", line,
                                     "must be called with a component, not text",
                                     "refused%d" % number)
         self.switch_to_nxlang()
         self.write_code("vis t0.txt, 0")
-        self.assert_refused(r"first\.nx line 2", "vis t0.txt,0",
+        self.assert_refused(r"first\.nx:2", "vis t0.txt,0",
                             "`vis` must be called with a component, not text", "nxlang")
 
     def test_a_variable_as_a_component_in_an_event(self):
@@ -864,7 +864,7 @@ class CommandComponentTest(_CodeOnFirstTestCase):
                                                           "int sys1=0,sys2=0"),
                                 encoding="utf-8", newline="\n")
         self.write_code("vis sys0, 0")
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: .*sys0"):
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: .*sys0"):
             export_dump(self.source, self.folder / "undeclared")
 
     def test_a_name_that_is_no_component_and_no_variable(self):
@@ -873,7 +873,7 @@ class CommandComponentTest(_CodeOnFirstTestCase):
                                        "setlayer zz,n0")):
             with self.subTest(line=line):
                 self.write_code(line)
-                self.assert_refused(r"first\.nx line 2", line, "`zz` is neither a variable nor "
+                self.assert_refused(r"first\.nx:2", line, "`zz` is neither a variable nor "
                                     "a component of this page", "event%d" % number)
         self.write_code("n0.val=0")
         for number, line in enumerate(("vis zz,0", "tsw zz,1", "click zz,0", "ref zz",
@@ -881,7 +881,7 @@ class CommandComponentTest(_CodeOnFirstTestCase):
                                        "move t0,0,0,10,10,0,100", "setlayer zz,n0")):
             with self.subTest(line=line):
                 line_number = self.write_program_line(line)
-                self.assert_refused(r"program\.nx line %d" % line_number, line,
+                self.assert_refused(r"program\.nx:%d" % line_number, line,
                                     "must be called with a component's ID or a variable",
                                     "program%d" % number)
         self.write_program_line("vis dim,0")
@@ -889,12 +889,12 @@ class CommandComponentTest(_CodeOnFirstTestCase):
         # nxlang refuses a name it does not know, as anywhere.
         self.switch_to_nxlang()
         self.write_code("vis zz, 0")
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: unknown name `zz`"):
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: unknown name `zz`"):
             export_dump(self.source, self.folder / "nxlang")
         self.write_code("n0.val = 0")
         line_number = self.write_program_line("vis zz, 0")
         with self.assertRaisesRegex(NxwrightError,
-                                    r"program\.nx line %d: unknown name `zz`" % line_number):
+                                    r"program\.nx:%d: unknown name `zz`" % line_number):
             export_dump(self.source, self.folder / "nxlang-program")
 
     def test_the_screen_s_arrays_in_program_nx(self):
@@ -904,7 +904,7 @@ class CommandComponentTest(_CodeOnFirstTestCase):
                                        "setlayer b[1],n0")):
             with self.subTest(line=line):
                 line_number = self.write_program_line(line)
-                self.assert_refused(r"program\.nx line %d" % line_number, line,
+                self.assert_refused(r"program\.nx:%d" % line_number, line,
                                     "cannot be used in program.nx. Use the component's ID or a "
                                     "variable.", "refused%d" % number)
         # In program.nx, nxlang turns `vis b[1], 0` into `vis 1,0`. The
@@ -926,25 +926,25 @@ class CommandComponentTest(_CodeOnFirstTestCase):
         # component, is not written as the component: the build refuses
         # `b[...]` there.
         line_number = self.write_program_line("vis b[sys0+1], 0")
-        self.assert_refused(r"program\.nx line %d" % line_number, "vis b[sys0+1],0",
+        self.assert_refused(r"program\.nx:%d" % line_number, "vis b[sys0+1],0",
                             "`b[sys0+1]` cannot be used in program.nx", "nxlang-index")
         # The name written in place of `b[i]` is checked as any other.
         line_number = self.write_program_line("vis b[zz], 0")
         with self.assertRaisesRegex(NxwrightError,
-                                    r"program\.nx line %d: unknown name `zz`" % line_number):
+                                    r"program\.nx:%d: unknown name `zz`" % line_number):
             export_dump(self.source, self.folder / "nxlang-unknown")
         line_number = self.write_program_line("vis p[0].b[1], 0")
-        self.assert_refused(r"program\.nx line %d" % line_number, "vis p[0].b[1],0",
+        self.assert_refused(r"program\.nx:%d" % line_number, "vis p[0].b[1],0",
                             "`p[0].b[1]` cannot be used in program.nx", "nxlang-refused")
 
     def test_page_given_a_text(self):
         self.write_code('page "first"')
-        self.assert_refused(r"first\.nx line 2", 'page "first"',
+        self.assert_refused(r"first\.nx:2", 'page "first"',
                             "`page` must be called with a page's name without quotes, or its ID",
                             "refused")
         self.switch_to_nxlang()
         self.write_code('page "first"')
-        self.assert_refused(r"first\.nx line 2", 'page "first"',
+        self.assert_refused(r"first\.nx:2", 'page "first"',
                             "`page` must be called with a page's name without quotes, or its ID",
                             "nxlang")
 
@@ -975,7 +975,7 @@ class CommandComponentTest(_CodeOnFirstTestCase):
             for number, (line, words) in enumerate(refused):
                 with self.subTest(language=language, line=line):
                     self.write_code(line)
-                    self.assert_refused(r"first\.nx line 2", line, words,
+                    self.assert_refused(r"first\.nx:2", line, words,
                                         "%s-refused%d" % (language, number))
             for number, line in enumerate(taken):
                 with self.subTest(language=language, line=line):
@@ -992,7 +992,7 @@ class CommandComponentTest(_CodeOnFirstTestCase):
             self.program.write_text(self.program_text, encoding="utf-8", newline="\n")
             self.write_code("n0.val=0")
             line_number = self.write_program_line("page zz")
-            self.assert_refused(r"program\.nx line %d" % line_number, "page zz",
+            self.assert_refused(r"program\.nx:%d" % line_number, "page zz",
                                 "`zz` is not a page, " + program_values,
                                 "%s-program" % language)
             self.write_program_line("page second")
@@ -1011,7 +1011,7 @@ class NumberArgumentTest(_CodeOnFirstTestCase):
     builds."""
 
     def assert_refused(self, line: str, words: str, built: str):
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: `%s`: %s$"
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: `%s`: %s$"
                                     % (re.escape(line), re.escape(words))):
             export_dump(self.source, self.folder / built)
 
@@ -1073,7 +1073,7 @@ class NumberArgumentTest(_CodeOnFirstTestCase):
         text = program.read_text(encoding="utf-8")
         text += "" if text.endswith("\n") else "\n"
         program.write_text(text + "cls -sys0\n", encoding="utf-8", newline="\n")
-        with self.assertRaisesRegex(NxwrightError, r"program\.nx line %d: `cls -sys0`: `-sys0` is "
+        with self.assertRaisesRegex(NxwrightError, r"program\.nx:%d: `cls -sys0`: `-sys0` is "
                                     r"not a valid value" % len(text.split("\n"))):
             export_dump(self.source, self.folder / "program")
 
@@ -1135,7 +1135,7 @@ class OneOperandArgumentTest(_CodeOnFirstTestCase):
         # A command of ONE_OPERAND_FIRST says "the first argument of `get`
         # must be a single value", the others "`getv` must be called with a
         # single value".
-        with self.assertRaisesRegex(NxwrightError, r"%s line %d: `%s`: .*`%s` must be (called "
+        with self.assertRaisesRegex(NxwrightError, r"%s:%d: `%s`: .*`%s` must be (called "
                                     r"with )?a single value"
                                     % (file, place, re.escape(line), line.split()[0])):
             export_dump(self.source, self.folder / built)
@@ -1277,7 +1277,7 @@ class OneOperandArgumentTest(_CodeOnFirstTestCase):
         # the build checks the line.
         program.write_text(text + "xstr 0,0,100,30,0,RED,BLACK,0,0,1,-sys0\n", encoding="utf-8",
                            newline="\n")
-        with self.assertRaisesRegex(NxwrightError, r"program\.nx line %d: this line requires a temporary "
+        with self.assertRaisesRegex(NxwrightError, r"program\.nx:%d: this line requires a temporary "
                                     r"variable, which program\.nx cannot have"
                                     % len(text.split("\n"))):
             export_dump(self.source, self.folder / "program-xstr")
@@ -1303,7 +1303,7 @@ class FullyListedComponentTest(_CodeOnFirstTestCase):
         export_dump(self.source, self.folder / "taken")
         # One its type lacks, which its table lists.
         self.write_code("extra.val=5")
-        self.assert_export_refused(r"first\.nx line 2: `extra\.val=5`: text `extra` has no "
+        self.assert_export_refused(r"first\.nx:2: `extra\.val=5`: text `extra` has no "
                                    r"attribute `val`")
 
 
@@ -1361,7 +1361,7 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
                     self.write_code(line)
                     number += 1
                     with self.assertRaisesRegex(
-                            NxwrightError, r"first\.nx line 2: `%s`: .*%s$"
+                            NxwrightError, r"first\.nx:2: `%s`: .*%s$"
                             % (re.escape(line), re.escape(words))):
                         export_dump(self.source, self.folder / ("refused%d" % number))
 
@@ -1379,7 +1379,7 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
                 ('vd.txt="a"', "`vd.txt` cannot be used while `vd` contains a number"))):
             with self.subTest(line=line):
                 self.write_code(line)
-                with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: .*%s$"
+                with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: .*%s$"
                                             % re.escape(words)):
                     export_dump(self.source, self.folder / ("refused%d" % number))
 
@@ -1406,7 +1406,7 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
             with self.subTest(line=line):
                 self.write_code(line)
                 with self.assertRaisesRegex(
-                        NxwrightError, r"first\.nx line 2: `%s`: `%s` takes (no|\d+) arguments?, "
+                        NxwrightError, r"first\.nx:2: `%s`: `%s` takes (no|\d+) arguments?, "
                         r"not \d+$" % (re.escape(line), line.split()[0])):
                     export_dump(self.source, self.folder / ("refused%d" % number))
         # Its own number, a quoted comma within one, a command the table
@@ -1459,12 +1459,12 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
             with self.subTest(line=line):
                 block = [line, "{", "}"] if "(" in line and not line.startswith("n0") else [line]
                 self.write_code(*block)
-                with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: `%s`: %s$"
+                with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: `%s`: %s$"
                                             % (re.escape(line), re.escape(words))):
                     export_dump(self.source, self.folder / ("refused%d" % number))
         # An else if's head too, refused alike.
         self.write_code("if(n0.val==1)", "{", "}else if(n0.val==2", "{", "}")
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 4: `\}else if\(n0\.val==2`: "
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx:4: `\}else if\(n0\.val==2`: "
                                     r"this line must end with `\)`$"):
             export_dump(self.source, self.folder / "refused-else")
         # What the Nextion Editor compiled, a hexadecimal number written 0X too.
@@ -1496,11 +1496,11 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
             with self.subTest(line=line):
                 block = [line, "{", "}"] if line[:2] in ("if", "wh", "fo") else [line]
                 self.write_code(*block)
-                with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: `%s`: %s$"
+                with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: `%s`: %s$"
                                             % (re.escape(line), re.escape(words))):
                     export_dump(self.source, self.folder / ("refused%d" % number))
         self.write_code("if(sys0==1)", "{", "}else if(abc==1)", "{", "}")
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 4: `\}else if\(abc==1\)`: "
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx:4: `\}else if\(abc==1\)`: "
                                                    r"unknown name `abc`"):
             export_dump(self.source, self.folder / "refused-else")
         # What the Nextion Editor compiled: system variables, an int of
@@ -1514,7 +1514,7 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
 
     def test_an_escape_in_a_condition(self):
         self.write_code(r'if(t0.txt=="a\qb")', "{", "n0.val=1", "}")
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: .*`\\q` is not a valid "
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: .*`\\q` is not a valid "
                                                    r"escape"):
             export_dump(self.source, self.folder / "refused")
 
@@ -1533,7 +1533,7 @@ class CompileRefusalTest(_CodeOnFirstTestCase):
             with self.subTest(line=refused):
                 self.write_code(*lines)
                 with self.assertRaisesRegex(
-                        NxwrightError, r"first\.nx line %d: .*in a condition, text cannot end "
+                        NxwrightError, r"first\.nx:%d: .*in a condition, text cannot end "
                                        r"with an escaped backslash" % (lines.index(refused) + 2)):
                     export_dump(self.source, self.folder / ("refused%d" % number))
         # Each it compiled: the text in a for's first and last parts, other
@@ -1601,7 +1601,7 @@ class LackedAttributeTest(_CodeOnFirstTestCase):
             with self.subTest(line=line):
                 self.write_code(line)
                 with self.assertRaisesRegex(
-                        NxwrightError, r"first\.nx line 2: `%s`: %s$"
+                        NxwrightError, r"first\.nx:2: `%s`: %s$"
                                        % (re.escape(line), re.escape(why))):
                     export_dump(self.source, self.folder / ("refused%d" % number))
 
@@ -1635,7 +1635,7 @@ class TypeNameTest(_CodeOnFirstTestCase):
 
     def assert_refused(self, line: str, pattern: str, number: int):
         self.write_code(line)
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: `%s`: %s$"
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: `%s`: %s$"
                                     % (re.escape(line), pattern)):
             export_dump(self.source, self.folder / ("refused%d" % number))
 
@@ -1685,7 +1685,7 @@ class TypeNameTest(_CodeOnFirstTestCase):
         switch_to_nxlang(self.source)
         (self.source / "pages" / "first.nx").write_text("on first.down:\n  sys0 = n0.vall\n",
                                                          encoding="utf-8", newline="\n")
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: `sys0=n0\.vall`: number "
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: `sys0=n0\.vall`: number "
                                                    r"`n0` has no attribute `vall`"):
             export_dump(self.source, self.folder / "refused")
 
@@ -1736,7 +1736,7 @@ class EditorCommandTest(_CodeOnFirstTestCase):
                                                newline="\n")
 
     def assert_line_refused(self, line: str, problem: str, number: int,
-                            file: str = r"first\.nx line 2"):
+                            file: str = r"first\.nx:2"):
         with self.assertRaisesRegex(NxwrightError, r"%s: `%s`: %s" % (file, re.escape(line),
                                                                       problem)):
             export_dump(self.source, self.folder / ("refused%d" % number))
@@ -1776,7 +1776,7 @@ class EditorCommandTest(_CodeOnFirstTestCase):
         (self.source / "macros.nx").write_text("macro probe:\n  var total = 1\n",
                                                encoding="utf-8", newline="\n")
         self.assert_line_refused("var total = 1", r"unknown command `var`$", 0,
-                                 r"macros\.nx line 2")
+                                 r"macros\.nx:2")
 
     def test_every_command_of_the_editor_builds(self):
         self.assertEqual({first_word(line) for line in self.EVERY_COMMAND} - {None},
@@ -1835,7 +1835,7 @@ class EditorCommandTest(_CodeOnFirstTestCase):
             with self.subTest(line=line):
                 program.write_text(written + line + "\n", encoding="utf-8", newline="\n")
                 with self.assertRaisesRegex(
-                        NxwrightError, r"program\.nx line %d: `%s`: in program\.nx, `%s` must be "
+                        NxwrightError, r"program\.nx:%d: `%s`: in program\.nx, `%s` must be "
                         r"called with a component's ID or a variable$"
                         % (line_number, re.escape(line), line.split()[0])):
                     export_dump(self.source, self.folder / ("refused%d" % number))
@@ -1874,7 +1874,7 @@ class EditorCommandTest(_CodeOnFirstTestCase):
             with self.subTest(line=line):
                 program.write_text(written + line + "\n", encoding="utf-8", newline="\n")
                 with self.assertRaisesRegex(
-                        NxwrightError, r"program\.nx line %d: %s$"
+                        NxwrightError, r"program\.nx:%d: %s$"
                         % (line_number, re.escape(said))):
                     export_dump(self.source, self.folder / ("refused%d" % number))
         # A component of global scope with its page's name builds, as the
@@ -1933,7 +1933,7 @@ class EditorCommandTest(_CodeOnFirstTestCase):
                 with self.subTest(language=language, line=line):
                     program.write_text(written(line), encoding="utf-8", newline="\n")
                     with self.assertRaisesRegex(
-                            NxwrightError, r"program\.nx line %d: `%s`: %s, it cannot be "
+                            NxwrightError, r"program\.nx:%d: `%s`: %s, it cannot be "
                             r"redefined$" % (line_number, re.escape(line), re.escape(words))):
                         export_dump(self.source, self.folder / ("%s%d" % (language, number)))
             program.write_text(written("int abc=0,t1=2"), encoding="utf-8", newline="\n")
@@ -1947,7 +1947,7 @@ class EditorCommandTest(_CodeOnFirstTestCase):
         line_number = program.read_text(encoding="utf-8").split("\n").index(
             "int sys0=0,sys1=0,sys2=0") + 1
         with self.assertRaisesRegex(
-                NxwrightError, r"program\.nx line %d: `int sys0=0,sys1=0,sys2=0`: `sys0` already "
+                NxwrightError, r"program\.nx:%d: `int sys0=0,sys1=0,sys2=0`: `sys0` already "
                 r"exists as a component of page `first`, it cannot be redefined$"
                 % line_number):
             export_dump(self.source, self.folder / "refused")
@@ -1958,12 +1958,12 @@ class EditorCommandTest(_CodeOnFirstTestCase):
         written = text + ("" if text.endswith("\n") else "\n")
         program.write_text(written + "zork 1\n", encoding="utf-8", newline="\n")
         self.assert_line_refused("zork 1", r"unknown command `zork`$", 0,
-                                 r"program\.nx line %d" % len(written.split("\n")))
+                                 r"program\.nx:%d" % len(written.split("\n")))
         program.write_text(text, encoding="utf-8", newline="\n")
         (self.source / "macros.nx").write_text("macro probe:\n  CLS 1\n", encoding="utf-8",
                                                newline="\n")
         self.assert_line_refused("CLS 1", r"unknown command `CLS`\. Did you mean `cls`\?", 1,
-                                 r"macros\.nx line 2")
+                                 r"macros\.nx:2")
         (self.source / "macros.nx").unlink()
         switch_to_nxlang(self.source)
         (self.source / "pages" / "first.nx").write_text("on first.down:\n  zork 1\n",
@@ -1994,11 +1994,11 @@ class LabelTest(SourceFolderTestCase):
                       (self.folder / "again" / "pages" / "00-first.txt").read_text(encoding="utf-8"))
 
     def test_the_editor_refuses_a_missing_or_repeated_label(self):
-        cases = [(("sys0 = 1", "goto end"), r"first\.nx line 3: `goto end`: this event has no "
+        cases = [(("sys0 = 1", "goto end"), r"first\.nx:3: `goto end`: this event has no "
                                             r"label `end`"),
-                 (("end:", "sys0 = 1", "end:"), r"first\.nx line 4: label `end` is already "
+                 (("end:", "sys0 = 1", "end:"), r"first\.nx:4: label `end` is already "
                                                 r"defined in this event"),
-                 (("1abc:", "goto 1abc"), r"first\.nx line 2: `1abc:`: a label cannot start "
+                 (("1abc:", "goto 1abc"), r"first\.nx:2: `1abc:`: a label cannot start "
                                           r"with a digit")]
         for lines, message in cases:
             with self.subTest(lines=lines):
@@ -2026,7 +2026,7 @@ class ReadOnlyAttributeTest(SourceFolderTestCase):
                                                          encoding="utf-8", newline="\n")
 
     def assert_refused(self, line: str, attribute: str, number: int,
-                       file: str = r"first\.nx line 2"):
+                       file: str = r"first\.nx:2"):
         with self.assertRaisesRegex(NxwrightError, r"%s: `%s`: attribute `%s` cannot be "
                                                    r"changed in code$"
                                     % (file, re.escape(line), attribute)):
@@ -2156,7 +2156,7 @@ class ReadOnlyAttributeTest(SourceFolderTestCase):
     def test_the_runner_refuses_it_too(self):
         # Tests and the simulator build the page as the build does.
         self.write_code("t0.w=10")
-        with self.assertRaisesRegex(NxwrightError, r"line 2: `t0\.w=10`: attribute `w` cannot "
+        with self.assertRaisesRegex(NxwrightError, r":2: `t0\.w=10`: attribute `w` cannot "
                                                    r"be changed in code"):
             SourceFolderRunner(self.source).run("first", [("first", "down")])
 
@@ -2175,7 +2175,7 @@ class ReadOnlyAttributeTest(SourceFolderTestCase):
                                         newline="\n")
         (pages / "second.nx").write_text('include "lib/shared.nx"\n\non second.down:\n'
                                          "  widen()\n", encoding="utf-8", newline="\n")
-        self.assert_refused("t1.h=5", "h", 1, r"pages/lib/shared\.nx line 2")
+        self.assert_refused("t1.h=5", "h", 1, r"pages/lib/shared\.nx:2")
 
 
 class ScreenEdgeTest(SourceFolderTestCase):
@@ -2201,7 +2201,7 @@ class ScreenEdgeTest(SourceFolderTestCase):
 
     def assert_past(self, model: str, size: str):
         self.assert_export_refused(
-            r"^first\.page\.toml: component `c0` reaches past the screen, which is %s at this "
+            r"^pages/first\.page\.toml:9: component `c0` reaches past the screen, which is %s at this "
             r"rotation$" % size)
 
     def test_past_the_right_or_the_bottom_edge(self):
@@ -2266,7 +2266,7 @@ class SeriesTest(FirstDownTestCase):
     lacks, which the Editor 1.68.2 refused as it compiled."""
 
     def assert_refused(self, line: str, model: str, word: str, number: int,
-                       file: str = r"first\.nx line 2"):
+                       file: str = r"first\.nx:2"):
         with self.assertRaisesRegex(
                 NxwrightError, r"%s: `%s`: `%s` is not available on the %s$"
                                % (file, re.escape(line), word, model)):
@@ -2279,7 +2279,7 @@ class SeriesTest(FirstDownTestCase):
         self.use_screen(model)
         self.write_code(line)
         with self.assertRaisesRegex(
-                NxwrightError, r"first\.nx line 2: `%s`: on the %s, attribute `%s` cannot be "
+                NxwrightError, r"first\.nx:2: `%s`: on the %s, attribute `%s` cannot be "
                                r"changed in code$" % (re.escape(line), model, attribute)):
             export_dump(self.source, self.folder / ("refused%d" % number))
 
@@ -2306,7 +2306,7 @@ class SeriesTest(FirstDownTestCase):
                     self.write_code(line)
                     number += 1
                     with self.assertRaisesRegex(
-                            NxwrightError, r"first\.nx line 2: `%s`: `%s\.%s` cannot be used on "
+                            NxwrightError, r"first\.nx:2: `%s`: `%s\.%s` cannot be used on "
                                            r"the %s$" % (re.escape(line), name, attribute, model)):
                         export_dump(self.source, self.folder / ("refused%d" % number))
         self.write_code(*(line for line, _, _ in cases))
@@ -2317,8 +2317,10 @@ class SeriesTest(FirstDownTestCase):
 
     def assert_component_refused(self, refusal: str):
         """Asserts that the build refuses page first, its message going on
-        after "first.page.toml: " as the pattern `refusal` says."""
-        with self.assertRaisesRegex(NxwrightError, r"^first\.page\.toml: " + refusal + "$"):
+        after its place, such as "pages/first.page.toml:17: ", as the pattern
+        `refusal` says."""
+        with self.assertRaisesRegex(NxwrightError,
+                                    r"^pages/first\.page\.toml:\d+: " + refusal + "$"):
             export_dump(self.source, self.folder / "refused")
 
     def test_a_type_the_series_refuses(self):
@@ -2402,9 +2404,10 @@ class SeriesTest(FirstDownTestCase):
 
     def refused_with(self, number: int, pattern: str):
         """Asserts that the build refuses page first as the pattern `pattern`
-        says, its message going on after "first.page.toml", into a folder of
-        its own, `number`."""
-        with self.assertRaisesRegex(NxwrightError, r"first\.page\.toml" + pattern):
+        says, its message going on after the file and the line of its place,
+        such as "pages/first.page.toml:17", into a folder of its own,
+        `number`."""
+        with self.assertRaisesRegex(NxwrightError, r"pages/first\.page\.toml:\d+" + pattern):
             export_dump(self.source, self.folder / ("refused-%d" % number))
 
     def test_values_past_their_entry_on_every_series(self):
@@ -2425,7 +2428,7 @@ class SeriesTest(FirstDownTestCase):
                 self.use_screen(model)
                 (self.add_unplaced if kind == "timer" else self.add)("c0", kind, **values)
                 try:
-                    self.refused_with(number, ", object 2: " + refusal)
+                    self.refused_with(number, ": object 2: " + refusal)
                 finally:
                     page_file.write_bytes(page)
         # The ends of the ranges are built.
@@ -2486,7 +2489,7 @@ class SeriesTest(FirstDownTestCase):
                 self.use_screen(model)
                 self.add("c0", "text", **values)
                 try:
-                    self.refused_with(number, ", object 2: " + refusal)
+                    self.refused_with(number, ": object 2: " + refusal)
                 finally:
                     page_file.write_bytes(page)
         # Values among the choices are built: a page's effect of 10, which a
@@ -2612,7 +2615,7 @@ class SeriesTest(FirstDownTestCase):
             with self.subTest(line=line):
                 self.write_code(line)
                 with self.assertRaisesRegex(
-                        NxwrightError, r"first\.nx line 2: `%s`: `piccolor` takes 4 arguments, "
+                        NxwrightError, r"first\.nx:2: `%s`: `piccolor` takes 4 arguments, "
                         r"not \d$" % re.escape(line)):
                     export_dump(self.source, self.folder / ("refused%d" % number))
         self.write_code("piccolor 1,2,3,4")
@@ -2642,12 +2645,12 @@ class SeriesTest(FirstDownTestCase):
                            encoding="utf-8", newline="\n")
         line = len((text + ("" if text.endswith("\n") else "\n")).split("\n"))
         self.assert_refused("wepo 1,0", "NX4832T035", "wepo", 0,
-                            r"program\.nx line %d" % line)
+                            r"program\.nx:%d" % line)
         program.write_text(text, encoding="utf-8", newline="\n")
         (self.source / "macros.nx").write_text("macro probe:\n  sys1=rtc1\n", encoding="utf-8",
                                                newline="\n")
         self.assert_refused("sys1=rtc1", "NX4832T035", "rtc1", 1,
-                            r"macros\.nx line 2")
+                            r"macros\.nx:2")
 
     def test_in_nxlang(self):
         switch_to_nxlang(self.source)
@@ -2698,7 +2701,7 @@ class SharedFileReferenceTest(SourceFolderTestCase):
 
     def test_an_unknown_component_is_reported_in_the_shared_file(self):
         self.write_library("t9")
-        self.assert_export_refused(r"pages/lib/both\.nx line 2: `t9` is neither a page nor a "
+        self.assert_export_refused(r"pages/lib/both\.nx:2: `t9` is neither a page nor a "
                                    r"component of this page")
 
 
@@ -2720,7 +2723,7 @@ class LongLineTest(FirstDownTestCase):
     encoding, without the spaces the Editor drops: "The instructions are too
     long"."""
 
-    def assert_line_refused(self, size: int, number: int, where: str = r"first\.nx line 2",
+    def assert_line_refused(self, size: int, number: int, where: str = r"first\.nx:2",
                             what: str = "this line", encoding: str = "iso-8859-1"):
         with self.assertRaisesRegex(
                 NxwrightError, r"%s: %s is too long: %d bytes in %s, not counting spaces, and "
@@ -2784,7 +2787,7 @@ class LongLineTest(FirstDownTestCase):
     def test_the_runner_refuses_it_as_the_build_does(self):
         self.use_series("NX4832T035")
         self.write_code(_text_line(768))
-        with self.assertRaisesRegex(NxwrightError, r"line 2: this line is too long: 768 bytes"):
+        with self.assertRaisesRegex(NxwrightError, r":2: this line is too long: 768 bytes"):
             SourceFolderRunner(self.source).run("first", [("first", "down")])
 
     def test_in_program_nx_and_in_a_macro(self):
@@ -2792,11 +2795,11 @@ class LongLineTest(FirstDownTestCase):
         program = self.source / "program.nx"
         program.write_text("int sys0=0,sys1=0,sys2=0\n%s\npage 0\n" % _sum_line(768),
                            encoding="utf-8", newline="\n")
-        self.assert_line_refused(768, 0, r"program\.nx line 2")
+        self.assert_line_refused(768, 0, r"program\.nx:2")
         program.write_text("int sys0=0,sys1=0,sys2=0\npage 0\n", encoding="utf-8", newline="\n")
         (self.source / "macros.nx").write_text("macro long:\n  %s\n" % _sum_line(768),
                                                encoding="utf-8", newline="\n")
-        self.assert_line_refused(768, 1, r"macros\.nx line 2")
+        self.assert_line_refused(768, 1, r"macros\.nx:2")
 
     def test_nxlang_writes_a_long_print_and_number_assignment_in_lines_that_fit(self):
         # A long prints stays refused, as only print is split.
@@ -2841,7 +2844,7 @@ class LongComparisonTest(FirstDownTestCase):
         self.series = model[6]
 
     def assert_comparison_refused(self, start: str, size: int, number: int,
-                                  where: str = r"first\.nx line 2",
+                                  where: str = r"first\.nx:2",
                                   encoding: str = "iso-8859-1"):
         with self.assertRaisesRegex(
                 NxwrightError, r"%s: the comparison `%s…` is too long: it takes %d bytes in %s, "
@@ -2873,7 +2876,7 @@ class LongComparisonTest(FirstDownTestCase):
             with self.subTest(lines=lines[0][:12]):
                 self.write_code(*lines)
                 self.assert_comparison_refused('t0.txt=="' + "a" * 31, 768, number,
-                                               r"first\.nx line %d" % (4 if number == 0 else 2))
+                                               r"first\.nx:%d" % (4 if number == 0 else 2))
 
     def test_each_comparison_on_its_own(self):
         # A head longer than 767 builds when each comparison is shorter. Two
@@ -2918,7 +2921,7 @@ class LongComparisonTest(FirstDownTestCase):
         program.write_text('int sys0=0,sys1=0,sys2=0\nif ("%s" == "a") {\n  sys0 = 1\n}\npage 0\n'
                            % ("a" * 758), encoding="utf-8", newline="\n")
         self.write_code("sys0 = 1")
-        with self.assertRaisesRegex(NxwrightError, r"program\.nx line 2: .*770 bytes"):
+        with self.assertRaisesRegex(NxwrightError, r"program\.nx:2: .*770 bytes"):
             export_dump(self.source, self.folder / "program")
 
 
@@ -2959,7 +2962,7 @@ class TextBytesTest(FirstDownTestCase):
     def assert_refused(self, lines: list, words: str):
         refused = lines[0]
         self.write_code(*lines)
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 2: `%s`: %s"
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx:2: `%s`: %s"
                                     % (re.escape(refused), words)):
             export_dump(self.source, self.next_folder("refused"))
 
@@ -3007,7 +3010,7 @@ class TextBytesTest(FirstDownTestCase):
             with self.subTest(line=lines[0]):
                 self.assert_refused(lines, words)
         self.write_code("if(sys0==1)", *body, 'else if(t0.txt=="表")', *body)
-        with self.assertRaisesRegex(NxwrightError, r"first\.nx line 6: .*%s" % words):
+        with self.assertRaisesRegex(NxwrightError, r"first\.nx:6: .*%s" % words):
             export_dump(self.source, self.folder / "else-if")
         # Taken: the text ending a line or joined in an assignment, a 0x5C
         # that escapes a letter, and a for's first and last parts.
@@ -3071,7 +3074,7 @@ class TextBytesTest(FirstDownTestCase):
         # program.nx has no temporaries, so the text stays refused.
         switch_to_nxlang(self.source)
         edit_text(self.source / "program.nx", "page 0", 'prints "表",0\npage 0')
-        with self.assertRaisesRegex(NxwrightError, r"program\.nx line \d+: `prints \"表\",0`: "
+        with self.assertRaisesRegex(NxwrightError, r"program\.nx:\d+: `prints \"表\",0`: "
                                                    r"the last byte of `表` is read as a backslash"):
             export_dump(self.source, self.next_folder("program"))
 

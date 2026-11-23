@@ -45,8 +45,10 @@ class SourceFolderRunnerTest(SourceFolderTestCase):
         (self.source / "pages" / "first.nx").write_text(
             "on first.down:\n  sys0=1\n  again:\n  goto again\n", encoding="utf-8",
             newline="\n")
-        with self.assertRaisesRegex(RefusedCode, r"^pages/first\.nx line 4 \(first\.down\): the "
-                                                 r"loop does not end$"):
+        # The place is the file's full path, since a test has no command line.
+        file = re.escape(str(self.source.resolve() / "pages" / "first.nx"))
+        with self.assertRaisesRegex(RefusedCode, r"^%s:4 \(first\.down\): the loop does not "
+                                                 r"end$" % file):
             self.runner.run("first", [("first", "down")])
 
     def test_texts_are_cut_to_their_fields_size(self):
@@ -170,14 +172,16 @@ class SourceFolderRunnerTest(SourceFolderTestCase):
             self.runner.run("first", [("first", "down")], {"sys0": 0}, text)
         self.assertIsInstance(raised.exception, KeyError)
         self.assertIsInstance(raised.exception, NxwrightError)
-        self.assertEqual(str(raised.exception), "pages/first.nx line 3 (first.down): t0.txt has "
-                                                "no value. In a test, give it in the run's values")
+        self.assertEqual(str(raised.exception),
+                         "%s:3 (first.down): t0.txt has no value. In a test, give it in the "
+                         "run's values" % (self.source.resolve() / "pages" / "first.nx"))
 
     def test_a_refusal_of_the_pages_code_names_its_file(self):
         # As the build names it, so that the file to fix is known.
         (self.source / "pages" / "first.nx").write_text(
             "on first.down:\n  sys0=sys0+\n", encoding="utf-8", newline="\n")
-        with self.assertRaisesRegex(NxwrightError, r"^pages/first\.nx line 2: `sys0=sys0\+`: "):
+        file = re.escape(str(self.source.resolve() / "pages" / "first.nx"))
+        with self.assertRaisesRegex(NxwrightError, r"^%s:2: `sys0=sys0\+`: " % file):
             SourceFolderRunner(self.source).run("first", [("first", "down")], {"sys0": 0})
 
     def test_a_refusal_of_nxlang_code_names_its_file(self):
@@ -192,9 +196,9 @@ class SourceFolderRunnerTest(SourceFolderTestCase):
             with self.subTest(file=file):
                 (self.source / "pages" / "first.nx").write_text(code, encoding="utf-8",
                                                                  newline="\n")
-                with self.assertRaisesRegex(NxwrightError,
-                                            r"^pages/%s line %d: `nowhere` is neither"
-                                            % (re.escape(file), line)):
+                path = self.source.resolve() / "pages" / file
+                with self.assertRaisesRegex(NxwrightError, r"^%s:%d: `nowhere` is neither"
+                                            % (re.escape(str(path)), line)):
                     SourceFolderRunner(self.source).run("first", [("first", "down")])
 
     def test_refuses_a_missing_page_or_event(self):
@@ -1127,7 +1131,7 @@ class RunStoppedTest(unittest.TestCase):
                 with self.assertRaises(error) as raised:
                     EditorMachine({"t0.txt": "", "sys0": 0}).run(lines, places)
                 self.assertTrue(str(raised.exception).startswith(
-                    "pages/page0.nx line %d (b0.down): %s" % (number, message)),
+                    "pages/page0.nx:%d (b0.down): %s" % (number, message)),
                     str(raised.exception))
                 self.assertEqual((raised.exception.file, raised.exception.line),
                                  ("pages/page0.nx", number))
@@ -1144,7 +1148,7 @@ class RunStoppedTest(unittest.TestCase):
                                    for line in (8, 9, 10)]}
         machine = EditorMachine({"sys0": 0, "b1.val": 0, "b2.val": 0}, events, "page0",
                                 places=places, components=["page0", "b0", "b1", "b2"])
-        with self.assertRaisesRegex(RefusedCode, r"^pages/page0\.nx line 10 \(b2\.down\): the "
+        with self.assertRaisesRegex(RefusedCode, r"^pages/page0\.nx:10 \(b2\.down\): the "
                                                  r"loop does not end$"):
             machine.run(["click b1,1"], [Place("pages/page0.nx", 2, "b0.down")])
 

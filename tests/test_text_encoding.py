@@ -101,8 +101,8 @@ class TextEncodingTest(SourceFolderTestCase):
     def test_a_character_the_encoding_cannot_store_stops_the_build(self):
         edit_text(self.source / "pages" / "first.page.toml", 'txt = "hello"', 'txt = "温"')
         output = self.folder / "built.HMI"
-        with self.assertRaisesRegex(NxwrightError, "first.page.toml, object 0: txt: iso-8859-1 "
-                                                   "cannot store '温'"):
+        with self.assertRaisesRegex(NxwrightError, "pages/first.page.toml:1: object 0: txt: "
+                                                   "iso-8859-1 cannot store '温'"):
             build(self.source, output)
         self.assertFalse(output.exists())
 

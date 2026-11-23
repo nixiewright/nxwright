@@ -182,8 +182,7 @@ class ErrorPlaceTest(FolderTestCase):
                           enumerate(self.text("pages/page0.page.toml").split("\n"), start=1)
                           if line == "[[component]]")
         self.assertEqual((finding.file, finding.line), ("pages/page0.page.toml", last_header))
-        self.assertIn("page0.page.toml: the page has 6 waveforms, and the limit is 5",
-                      finding.message)
+        self.assertEqual(finding.message, "the page has 6 waveforms, and the limit is 5")
 
     def test_a_type_the_series_refuses(self):
         # At the component's table, as the page's other limits.
@@ -196,8 +195,8 @@ class ErrorPlaceTest(FolderTestCase):
                           enumerate(self.text("pages/page0.page.toml").split("\n"), start=1)
                           if line == "[[component]]")
         self.assertEqual((finding.file, finding.line), ("pages/page0.page.toml", last_header))
-        self.assertIn("page0.page.toml: component `gm0` is of type `gmov`, which is not available "
-                      "on the NX4832F035", finding.message)
+        self.assertEqual(finding.message, "component `gm0` is of type `gmov`, which is not "
+                                          "available on the NX4832F035")
 
     def test_a_line_the_editors_compile_refuses(self):
         # nxlang hands an escape and a variable's attribute on as written, and
@@ -217,17 +216,25 @@ class ErrorPlaceTest(FolderTestCase):
                 self.assertIn(words, finding.message)
 
     def test_a_file_problem_without_a_line(self):
-        self.write("pages/page0.page.toml", "[page]\nname = \"other\"\n")
+        self.write("pages/page0.page.toml", "name = \"other\"\n")
         [finding] = self.findings()
-        self.assertEqual((finding.file, finding.line), ("pages/page0.page.toml", 0))
+        self.assertEqual((finding.file, finding.line, finding.message),
+                         ("pages/page0.page.toml", 0, "the [page] table is missing"))
+
+    def test_a_problem_of_the_page_table(self):
+        self.write("pages/page0.page.toml", "# The page.\n[page]\nname = \"other\"\n")
+        [finding] = self.findings()
+        self.assertEqual((finding.file, finding.line, finding.message),
+                         ("pages/page0.page.toml", 2,
+                          "the [page] table gives the page the name 'other'"))
 
     def test_in_file_keeps_the_type_and_the_line(self):
         class Special(NxwrightError):
             pass
-        error = Special("no good", line=3).in_file("pages/a.nx", shown="a.nx")
+        error = Special("no good", line=3).in_file("pages/a.nx")
         self.assertIsInstance(error, Special)
         self.assertEqual((str(error), error.reason, error.file, error.line),
-                         ("a.nx line 3: no good", "no good", "pages/a.nx", 3))
+                         ("pages/a.nx:3: no good", "no good", "pages/a.nx", 3))
 
 
 class CheckTest(FolderTestCase):
@@ -312,9 +319,11 @@ class CommandTest(FolderTestCase):
         self.write("pages/page0.nx", "const UNUSED = 1\n\non page0.load:\n  bogus.txt = 1\n")
         code, output, errors = self.run_check()
         self.assertEqual(code, 1)
-        self.assertEqual(output, "pages/page0.nx line 4: error: `bogus` is neither a page nor "
-                                 "a component of this page\npages/page0.nx line 1: warning: "
-                                 "constant UNUSED is not used\n")
+        # Each place is under the folder as the command line gave it.
+        page = self.root / "pages" / "page0.nx"
+        self.assertEqual(output, "%s:4: error: `bogus` is neither a page nor a component of "
+                                 "this page\n%s:1: warning: constant UNUSED is not used\n"
+                                 % (page, page))
         self.assertEqual(errors, "nxwright check: 1 errors, 1 warnings\n")
 
 
@@ -602,8 +611,9 @@ class LeftOutEventTest(FolderTestCase):
                                      '  sys0 = 1\n')
         [finding] = self.findings()
         self.assertEqual((finding.severity, finding.message),
-                         (ERROR, "third.nx: title.down is not an event listed in the page's "
-                                 ".page.toml file"))
+                         (ERROR, "title.down is not an event listed in the page's .page.toml "
+                                 "file"))
+        self.assertEqual(finding.file, "pages/third.nx")
 
     def test_the_tests_and_the_simulator_leave_the_event_out(self):
         self.remove_title("third")
@@ -645,8 +655,9 @@ class LeftOutEventTest(FolderTestCase):
         code, _, errors = self.run_command(["build", str(self.root),
                                             str(self.root.parent / "app.HMI")])
         self.assertEqual(code, 0)
-        self.assertIn("nxwright build: warning: pages/lib/shared.nx line 4: %s\n"
-                      % self.LEFT_OUT, errors)
+        # The place is under the folder as the command line gave it.
+        self.assertIn("nxwright build: warning: %s:4: %s\n"
+                      % (self.root / "pages" / "lib" / "shared.nx", self.LEFT_OUT), errors)
 
     def test_compile_prints_the_warning(self):
         self.remove_title("third")
@@ -657,7 +668,7 @@ class LeftOutEventTest(FolderTestCase):
                 ["compile", str(self.root), str(self.root.parent / "app.tft"), "--firmware",
                  str(firmware), "--no-backup", "--json"])
         self.assertEqual(code, 0, errors)
-        expected = "pages/lib/shared.nx line 4: %s" % self.LEFT_OUT
+        expected = "%s:4: %s" % (self.root / "pages" / "lib" / "shared.nx", self.LEFT_OUT)
         self.assertIn("nxwright compile: warning: %s\n" % expected, errors)
         compiled = [json.loads(line) for line in output.splitlines()
                     if json.loads(line).get("event") == "compiled"]

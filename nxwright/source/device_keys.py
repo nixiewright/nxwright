@@ -58,37 +58,45 @@ def memory_file_storage_size(app: dict) -> int:
 
 
 def settings_from_keys(app: dict):
-    """Returns the DeviceSettings that `app`, the keys of an app.toml, holds,
-    or None when it holds none. Raises NxwrightError naming the first key
-    that is missing or wrong."""
+    """Returns the DeviceSettings that `app`, the keys of an app.toml,
+    contains, or None when it contains none. Raises NxwrightError for the
+    first key that is missing or wrong. The error's `key` is the wrong key.
+    For a missing key, it is the first device key that app.toml gives."""
     given = [key for key in DEVICE_KEYS if key in app]
     if not given:
         return None
     missing = [key for key in _REQUIRED if key not in app]
     if missing:
-        raise NxwrightError("app.toml: %s needs %s too" % (given[0], " and ".join(missing)))
+        raise NxwrightError("%s needs %s too" % (given[0], " and ".join(missing)),
+                            key=given[0])
     if not isinstance(app["screen"], str):
-        raise NxwrightError("app.toml: screen must be a model name, such as \"NX8048P050\"")
+        raise NxwrightError("screen must be a model name, such as \"NX8048P050\"",
+                            key="screen")
     try:
         model = model_named(app["screen"])
-        if not isinstance(app["encoding"], str):
-            raise NxwrightError("encoding must be a name, such as \"iso-8859-1\", or the "
-                                "number of one nxwright does not know")
+    except NxwrightError as error:
+        raise NxwrightError(str(error), key="screen") from None
+    if not isinstance(app["encoding"], str):
+        raise NxwrightError("encoding must be a name, such as \"iso-8859-1\", or the "
+                            "number of one nxwright does not know", key="encoding")
+    try:
         encoding_code(app["encoding"])
     except NxwrightError as error:
-        raise NxwrightError("app.toml: %s" % error) from None
+        raise NxwrightError(str(error), key="encoding") from None
     rotation = app["rotation"]
     if not _is_number(rotation) or rotation not in ROTATIONS:
-        raise NxwrightError("app.toml: rotation must be 0, 90, 180, or 270")
+        raise NxwrightError("rotation must be 0, 90, 180, or 270", key="rotation")
     for flag in _FLAGS:
         if not isinstance(app.get(flag, False), bool):
-            raise NxwrightError("app.toml: %s must be true or false" % flag)
+            raise NxwrightError("%s must be true or false" % flag, key=flag)
     size = app.get("memory_file_storage_size", 0)
     if not _is_number(size) or not 0 <= size < 2 ** 32:
-        raise NxwrightError("app.toml: memory_file_storage_size must be a number of bytes")
+        raise NxwrightError("memory_file_storage_size must be a number of bytes",
+                            key="memory_file_storage_size")
     password = app.get("password_hash", NO_PASSWORD.hex())
     if not is_password_hash_text(password):
-        raise NxwrightError("app.toml: password_hash must be 8 lower-case hexadecimal digits")
+        raise NxwrightError("password_hash must be 8 lower-case hexadecimal digits",
+                            key="password_hash")
     return DeviceSettings(model=model, rotation=rotation, encoding=app["encoding"],
                           one_time_update=app.get("one_time_update", False),
                           memory_file_storage_size=size,

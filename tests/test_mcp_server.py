@@ -336,7 +336,8 @@ class McpServerTest(unittest.TestCase):
         edited = self.agent.data("start_simulation", source_folder=str(app))["simulation"]
         (app / "pages" / "page0.nx").write_text("on b0.up:\n  n0.val=n0.val+\n",
                                                 encoding="utf-8")
-        self.assertIn("pages/page0.nx line 2: `n0.val=n0.val+`: the value is not valid",
+        self.assertIn("%s:2: `n0.val=n0.val+`: the value is not valid"
+                      % (app.resolve() / "pages" / "page0.nx"),
                       self.agent.refusal("start_again", simulation=edited))
         self.assertEqual([entry["page"] for entry in self.agent.data("list_simulations")],
                          ["page0", "page0"])

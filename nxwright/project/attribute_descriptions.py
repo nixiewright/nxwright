@@ -119,7 +119,7 @@ def allowed_number_bytes(object_type: int, attribute: str, value: int, width: in
     the value is outside the attribute's range (attribute_ranges.attribute_range)
     or its choices, or does not fit in `width` bytes. The error starts with
     `where`, which must end with the attribute's name, such as
-    "defaults.toml: [text.attributes] vscope"."""
+    "[text.attributes] vscope"."""
     allowed = attribute_range(object_type, attribute)
     if allowed is not None and value not in allowed:
         raise NxwrightError("%s must be from %d to %d" % (where, allowed.start, allowed.stop - 1))

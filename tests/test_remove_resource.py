@@ -134,7 +134,7 @@ class UsedByNameTest(RemoveResourceTestCase):
     def test_a_page_file_and_code(self):
         self.add("p0", "picture", pic="a")
         self.write_code("p0.pic=@pic(a)")
-        self.assert_refused("picture", "a", "pages/page0.page.toml line", "pages/page0.nx line 2")
+        self.assert_refused("picture", "a", "pages/page0.page.toml:", "pages/page0.nx:2")
 
     def test_it_is_removed_without_a_search_unless_checked(self):
         self.add("p0", "picture", pic="a")
@@ -161,12 +161,12 @@ class UsedByNumberTest(RemoveResourceTestCase):
         self.add("gm0", "gmov", vid="blink")
         self.write_code("p0.pic=1", "if(p0.pic==0)", "{", "}", "pic 0,0,1", "picq 0,0,8,8,1",
                         "xpic 0,0,8,8,0,0,1", 'xstr 0,0,8,8,0,0,1,0,0,2,"a"')
-        self.assert_refused("picture", "a", "line 2:", "line 3:", "line 6:", "line 7:",
-                            "line 8:", "line 9:")
+        self.assert_refused("picture", "a", ":2:", ":3:", ":6:", ":7:",
+                            ":8:", ":9:")
         self.write_code('xstr 0,0,8,8,1,0,0,0,0,1,"a"', "play 0,0,0", "gm0.vid=0")
-        self.assert_refused("font", "NotoSans24", "line 2:")
-        self.assert_refused("sound", "beep", "line 3:")
-        self.assert_refused("animation", "blink", "line 4:")
+        self.assert_refused("font", "NotoSans24", ":2:")
+        self.assert_refused("sound", "beep", ":3:")
+        self.assert_refused("animation", "blink", ":4:")
 
     def test_numbers_that_do_not_refuse(self):
         # Below its ID, past every ID, a name, not a picture, or in a quoted
@@ -183,19 +183,19 @@ class UsedByNumberTest(RemoveResourceTestCase):
         self.add("p0", "picture", pic="b", events=["down"])
         (self.source / "pages" / "page0.nx").write_text("on p0.down:\n  '&pic&'=1\n",
                                                          encoding="utf-8", newline="\n")
-        self.assert_refused("picture", "a", "pages/page0.nx line 2")
+        self.assert_refused("picture", "a", "pages/page0.nx:2")
 
     def test_an_nxlang_constant(self):
         self.add("p0", "picture", pic="b")
         switch_to_nxlang(self.source)
         (self.source / "pages" / "page0.nx").write_text(
             "const LOGO = 1\n\non page0.down:\n  p0.pic = LOGO\n", encoding="utf-8", newline="\n")
-        self.assert_refused("picture", "a", "pages/page0.nx line 4")
+        self.assert_refused("picture", "a", "pages/page0.nx:4")
 
     def test_a_page_file(self):
         # A number written there, and font 0 left to the defaults by a text.
         self.add("p0", "picture", pic=1)
-        self.assert_refused("picture", "a", "pages/page0.page.toml line")
+        self.assert_refused("picture", "a", "pages/page0.page.toml:")
         self.add("t0", "text")
         self.assert_refused("font", "NotoSans24", "t0")
 
@@ -313,7 +313,7 @@ class KeepIdsTest(RemoveResourceTestCase):
         self.write_code("p0.pic=0")
         self.add("p0", "picture")
         before = self.files()
-        with self.assertRaisesRegex(NxwrightError, "line 2"):
+        with self.assertRaisesRegex(NxwrightError, ":2"):
             remove_keeping_ids(self.source, "picture", "a", checked=True)
         self.assertEqual(self.files(), before)
         self.assertEqual(remove_keeping_ids(self.source, "picture", "a")[0], "empty-slot-1")
@@ -339,7 +339,7 @@ class CommandTest(RemoveResourceTestCase):
         with contextlib.redirect_stderr(errors):
             self.assertEqual(main(["remove", str(self.source), "picture", "b", "--checked"]),
                              1)
-        self.assertIn("pages/page0.nx line 2", errors.getvalue())
+        self.assertIn("pages/page0.nx:2", errors.getvalue())
         self.assertIn("pictures/b.png", self.files())
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(main(["remove", str(self.source), "picture", "b"]), 0)

@@ -69,10 +69,8 @@ def rename(index: FolderIndex, path: str, line: int, column: int, new_name: str,
         errors = check_folder(lambda file: texts[file] if file in texts else read(file),
                               exists, listed=listed).errors()
         if errors:
-            place = "%s line %d" % (errors[0].file, errors[0].line) if errors[0].line \
-                else errors[0].file
             raise NxwrightError("the folder would not build after the rename: %s: %s"
-                                % (place, errors[0].message))
+                                % (errors[0].place, errors[0].message))
     return {"edits": edits, "moves": []}
 
 

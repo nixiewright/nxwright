@@ -210,7 +210,7 @@ A `.nx` file can include others: a library of functions shared by pages, or part
 - If a page must have every component the file has events for, write `strict` after the path, as in `include "lib/buttons.nx" strict`. A missing `b0` then stops the build instead of giving a warning.
 - The same event in two of a page's files is refused. So is a constant or a function defined twice.
 - A page gets only the functions it calls, directly or through other functions, wherever they are defined. The rest of a library costs it nothing. Constants cost nothing either.
-- Every function is still checked, so a mistake in a library shows on every page that includes it. Errors give the file and line they come from, such as `pages/lib/fixed.nx line 12`.
+- Every function is still checked, so a mistake in a library shows on every page that includes it. The error gives the library's file and line, such as `app/pages/lib/fixed.nx:12`.
 - The build checks that components exist, but only in the code a page uses ([Names](#names)). One file can therefore contain a function for each page, using that page's components.
 - A library function that uses a constant only some pages define fails on the other pages. A library should define what it needs.
 - Each page runs its own copy of a function, with its own variables. State shared between pages goes in `program.nx`'s `int` variables.

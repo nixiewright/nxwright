@@ -36,7 +36,7 @@ After each change, run:
 nxwright check <source-folder>
 ```
 
-`nxwright check` runs every check the build makes, and writes nothing. It prints each problem with its file and line, such as `` pages/home.nx line 12: error: unknown name `speed` ``, and exits with 1 when there is an error.
+`nxwright check` runs every check the build makes, and writes nothing. It prints each problem with its file and line, such as `` app/pages/home.nx:12: error: unknown name `speed` ``, and exits with 1 when there is an error.
 
 - The check reports only the first error of each page, so run it again after a fix.
 - Warnings show likely mistakes that the build accepts, such as a line that strict Nextion syntax computes in an unusual order.

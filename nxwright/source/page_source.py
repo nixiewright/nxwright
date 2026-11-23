@@ -47,7 +47,8 @@ import tomllib
 
 import tomli_w
 
-from nxwright import NxwrightError
+from nxwright import NxwrightError, after_start
+from nxwright.project.toml_lines import error_line, table_line
 from nxwright.language.code_checks import ObjectNames
 from nxwright.language.code_preprocessor import Owner, preprocess, preprocess_with_places
 from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
@@ -79,9 +80,8 @@ from nxwright.language.nxlang import HOTSPOT, HOTSPOT_SIZE, TEXT, ProgramNames, 
 COLOUR_ATTRIBUTES = frozenset({"bco", "bco1", "bco2", "pco", "pco1", "pco2", "borderc"})
 # The ending of a page's file: an editor tells it from other TOML files by it.
 PAGE_FILE_SUFFIX = ".page.toml"
-# A TOML line `key = value`, of a page file or of app.toml: its key, then
-# its value.
-KEY_LINE = re.compile(r"\s*([A-Za-z0-9_]+)\s*=(.*)")
+# The message of a page file without a [page] table.
+_NO_PAGE_TABLE = "the [page] table is missing"
 # Attributes that hold a picture or font ID, written by name in <page>.page.toml.
 _REFERENCE_KINDS = {name: PICTURE for name in ("pic", "pic1", "pic2", "picc", "picc1", "picc2",
                                                "bpic", "ppic")}
@@ -268,9 +268,10 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
     event first, as "home.load", then each function or event that runs during
     the one before it.
 
-    Raises NxwrightError naming the file and the problem. Its `file` is the
-    file at fault, the page's .page.toml file unless the code is; for a table of
-    the .toml file, `table` says which.
+    Raises NxwrightError for the first problem. Its place is the page's
+    .page.toml file, or the .nx file when the code is at fault. When the
+    error is about one table of the .page.toml file, its `table` is that
+    table's number and its line is the table's header.
     """
     try:
         return _page_from_source(source, page_name, names, defaults, nxlang_program, page_id,
@@ -278,8 +279,27 @@ def page_from_source(source: PageSource, page_name: str, names: ResourceNames,
                                  program_variables, macros, absent_attributes, screen,
                                  page_size, text_limits, cut_texts, defines, page_globals)
     except NxwrightError as error:
-        error.file = error.file or page_toml_path(page_name)
+        place_in_page_file(error, page_name, source.toml)
         raise
+
+
+def place_in_page_file(error: NxwrightError, page_name: str, text: str):
+    """Gives `error` its place, if it has none. The place is the .page.toml
+    file of the page `page_name`, at the header of the table that the error
+    is about (its `table`). `text` is the file's text, in which the header's
+    line is found."""
+    if error.file is None:
+        line = error.line
+        if line is None and error.table is not None:
+            line = table_line(text, error.table) or None
+        error.at_place(page_toml_path(page_name), line)
+
+
+def page_toml_error(error: tomllib.TOMLDecodeError, page_name: str) -> NxwrightError:
+    """Returns the NxwrightError for a .page.toml file that is not TOML,
+    from the TOML reader's `error`. Its place is the file of the page
+    `page_name`, at the line where Python's TOML reader stopped."""
+    return NxwrightError(str(error), file=page_toml_path(page_name), line=error_line(error))
 
 
 # The keys that identify a page file's table. They cannot be placeholders,
@@ -292,23 +312,26 @@ def page_data(text: str, page_name: str, defines: dict) -> dict:
     """Parses the page file `text` of the page `page_name`, and returns it
     with each placeholder filled in from app.toml's `defines`
     (defines.filled). Every reader of a page file's values reads it through
-    this function. Raises tomllib.TOMLDecodeError if `text` is not TOML, so
-    that each caller can word its own message. Raises NxwrightError for a
-    placeholder that cannot be filled in. The error names the table, and its
-    `table` is the table's index, 0 for [page]."""
+    this function.
+
+    Raises tomllib.TOMLDecodeError if `text` is not TOML, and leaves it to
+    the caller to turn that error into an NxwrightError with its place
+    (page_toml_error). Raises NxwrightError for a placeholder that cannot be
+    filled in. That error's place is the page file, at the header of the
+    placeholder's table. Its message starts with the table's name, and its
+    `table` is the table's number, counted from 0 for [page]."""
     data = tomllib.loads(text)
     if not defines:
         return data
-    path = page_toml_path(page_name)
 
     def table_filled(table, index: int):
         if not isinstance(table, dict):
             return table
         try:
-            return filled(table, defines, _FIXED_KEYS,
-                          "%s, %s" % (path, table.get("name", "table %d" % index)))
+            return filled(table, defines, _FIXED_KEYS, table.get("name", "table %d" % index))
         except NxwrightError as error:
             error.table = index
+            place_in_page_file(error, page_name, text)
             raise
 
     if "page" in data:
@@ -330,18 +353,19 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
     try:
         data = page_data(source.toml, page_name, defines)
     except tomllib.TOMLDecodeError as error:
-        raise NxwrightError("%s.page.toml: %s" % (page_file_stem(page_name), error)) from None
+        raise page_toml_error(error, page_name) from None
     page_table, components = data.get("page"), data.get("component", [])
     if not isinstance(page_table, dict):
-        raise NxwrightError("%s.page.toml has no [page] table" % page_file_stem(page_name))
+        raise NxwrightError(_NO_PAGE_TABLE)
     if set(data) - {"page", "component"} or not isinstance(components, list):
-        raise NxwrightError("%s.page.toml can contain only [page] and [[component]] tables"
-                            % page_file_stem(page_name))
+        raise NxwrightError("only [page] and [[component]] tables are allowed")
     if page_table.get("name") != page_name:
-        raise NxwrightError("%s.page.toml gives the page the name %r"
-                            % (page_file_stem(page_name), page_table.get("name")))
+        error = NxwrightError("the [page] table gives the page the name %r"
+                              % page_table.get("name"))
+        error.table = 0
+        raise error
     page_table = page_table_at_screen(page_table, page_size, defaults)
-    header = _page_header(page_table, components, page_name)
+    header = _page_header(page_table, components)
     codec = TextCodec(encoding)
     tables = [page_table] + components
     page_file_tables = len(tables)
@@ -350,8 +374,7 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
     for index, table in enumerate(tables):
         if isinstance(table, dict) and not isinstance(table.get("name"), (str, type(None))):
             try:
-                _table_header(table, "%s.page.toml, object %d"
-                              % (page_file_stem(page_name), index))
+                _table_header(table, "object %d" % index)
             except NxwrightError as error:
                 error.table = index
                 raise
@@ -379,18 +402,15 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
     object_names = [table.get("name") for table in tables]
     # Checked before the objects are made, because making an object past ID
     # 255 fails.
-    check_component_count(object_names, len(tables) - page_file_tables,
-                          "%s.page.toml" % page_file_stem(page_name))
+    check_component_count(object_names, len(tables) - page_file_tables, "")
     if len(set(object_names)) != len(object_names):
-        raise NxwrightError("%s.page.toml: two objects are named %s"
-                            % (page_file_stem(page_name),
-                               next(name for name in object_names if object_names.count(name) > 1)))
+        raise NxwrightError("two objects are named %s" % next(
+            name for name in object_names if object_names.count(name) > 1))
     objects = []
-    file = "%s.page.toml" % page_file_stem(page_name)
     for index, table in enumerate(tables):
         try:
             objects.append(_object_from_table(table, index, code, names, defaults, codec,
-                                              "%s, object %d" % (file, index), file))
+                                              "object %d" % index, whole=True))
         except NxwrightError as error:
             error.table = index
             raise
@@ -398,14 +418,14 @@ def _page_from_source(source: PageSource, page_name: str, names: ResourceNames, 
         name, event = next(iter(code))
         if nxlang_program is not None and (name, event) == (page_name, "load"):
             # The build puts the functions' tsw lines there.
-            raise NxwrightError("%s.page.toml: functions need the page's load event, but the "
-                                "page's events do not include it" % page_file_stem(page_name))
-        raise NxwrightError("%s.nx: %s.%s is not an event listed in the page's .page.toml file"
-                            % (page_file_stem(page_name), name, event))
+            raise NxwrightError("functions need the page's load event, but the page's events "
+                                "do not include it")
+        raise NxwrightError("%s.%s is not an event listed in the page's .page.toml file"
+                            % (name, event), file=page_nx_path(page_name))
     page = PageBlock(name=page_name, header_size=HEADER_SIZE,
                      unknown_16=header_16(header),
                      unknown_40=header_40(encoding_code(encoding)), objects=objects)
-    check_page_limits(page, "%s.page.toml" % page_file_stem(page_name))
+    check_page_limits(page, "")
     _check_fonts(page, names, page_name)
     return page
 
@@ -421,9 +441,8 @@ def _check_fonts(page: PageBlock, names: ResourceNames, page_name: str):
         if font is None or font < len(names.fonts):
             continue
         error = NxwrightError(
-            "%s.page.toml: component %s: its font is number %d, and the project has %s; the "
-            "Nextion Editor refuses it, saying \"Invalid Font ID\". `nxwright font` adds one" % (
-                page_file_stem(page_name),
+            "component %s: its font is number %d, and the project has %s; the Nextion Editor "
+            "refuses it, saying \"Invalid Font ID\". `nxwright font` adds one" % (
                 (page_object.attribute("objname") or b"").decode("latin-1"), font,
                 "%d fonts" % len(names.fonts) if names.fonts else "no fonts"))
         error.table = index
@@ -732,8 +751,7 @@ def editor_code_of_block(block: EventBlock, page_name: str, names: ResourceNames
                                                    macros, screen, owner, codec=codec,
                                                    suggest_nxlang=True)
     except NxwrightError as error:
-        raise error.in_file(page_nx_path(page_name),
-                            shown="%s.nx" % page_file_stem(page_name)) from None
+        raise error.in_file(page_nx_path(page_name)) from None
 
 
 def table_types(tables: list) -> dict:
@@ -815,9 +833,21 @@ def _compile_nxlang_events(text: str, page_name: str, names: ResourceNames, comp
         objects = ObjectNames(own, page_objects, page_name, page_globals, absent_attributes)
     for key, lines in preprocess_compiled(compiled, page_name, names, objects=objects,
                                           screen=screen, codec=codec).items():
-        where = "%s: %s.%s" % (compiled.sources.get(key, page_nx_path(page_name)), *key)
-        code[key] = [codec.encode(line, where) for line in lines]
+        code[key] = _encoded_event(lines, codec, key,
+                                   compiled.sources.get(key, page_nx_path(page_name)))
     return code, compiled.generated, compiled.globals, compiled.deepest_chain, compiled.cut_texts
+
+
+def _encoded_event(lines: list, codec: TextCodec, key: tuple, file: str) -> list:
+    """Returns the code lines `lines` of the event `key`, (object name,
+    event), as stored bytes. Raises NxwrightError for a character that the
+    project's encoding cannot store. Its place is `file`, the .nx file that
+    the event comes from, and its message starts with the event."""
+    try:
+        return [codec.encode(line, "%s.%s" % key) for line in lines]
+    except NxwrightError as error:
+        error.at_place(file, None)
+        raise
 
 
 def editor_code_of_files(paths: list, page_name: str, events_text: str, names: ResourceNames,
@@ -1057,21 +1087,21 @@ def _parse_events(text: str, page_name: str, names: ResourceNames, codec: TextCo
     page's, in ID order, the page's first."""
     code = {}
     for key, block in event_blocks(text, page_nx_path(page_name)).items():
-        where = "%s.nx: %s.%s" % (page_file_stem(page_name), *key)
-        code[key] = [codec.encode(line, where)
-                     for line in editor_code_of_block(block, page_name, names,
-                                                      Owner.among(key[0], object_names), objects,
-                                                      variables, macros, screen, codec)]
+        lines = editor_code_of_block(block, page_name, names, Owner.among(key[0], object_names),
+                                     objects, variables, macros, screen, codec)
+        code[key] = _encoded_event(lines, codec, key, page_nx_path(page_name))
     return code
 
 
 def _object_from_table(table: dict, index: int, code: dict, names: ResourceNames,
                        defaults: dict, codec: TextCodec, where: str,
-                       file: str = None) -> PageObject:
-    """Rebuilds one object, taking its event code out of `code`. With
-    `file`, the page's file as a message gives it, it also refuses the
-    object as a whole, as the build does: a keyboard bound to a component of
-    local scope, and a component narrower or lower than LEAST_SIDE.
+                       whole: bool = False) -> PageObject:
+    """Rebuilds one object, taking its event code out of `code`. Each
+    message starts with `where`, the object's name or number in the page
+    file, such as "object 2". If `whole` is true, the object is also checked
+    as a whole, and NxwrightError is raised for a keyboard bound to a
+    component of local scope, and for a component narrower or lower than
+    LEAST_SIDE.
 
     A table marked "defaults = false" lists every attribute, in stored order.
     Any other table leaves out what equals its type's defaults; those are
@@ -1109,9 +1139,9 @@ def _object_from_table(table: dict, index: int, code: dict, names: ResourceNames
         attributes = [Attribute(key, given.get(key, value)) for key, value in defaults_order]
         if events is None:
             events = type_defaults.events
-    if file is not None:
+    if whole:
         _check_keyboard_scope(attributes, name, where)
-        _check_least_size(attributes, name, file)
+        _check_least_size(attributes, name)
     if ("endx" in given or "endy" in given) and "h" not in given:
         raise NxwrightError("%s: endx and endy need h" % where)
     derived = _derived_values(index, name, given)
@@ -1175,20 +1205,32 @@ def page_components(text: str, page_name: str, names: ResourceNames, defaults: d
     order, each table completed by its type's defaults as the build does.
     With `page_size`, the page has the screen's place and size, as the build
     gives it (page_table_at_screen). Placeholders take the values of
-    app.toml's `defines` (page_data). Raises NxwrightError, naming the
-    table, as the build does."""
+    app.toml's `defines` (page_data). Raises NxwrightError for a table that
+    the build would reject. The message starts with the table's name, and
+    the error's place is the page file."""
     try:
         data = page_data(text, page_name, defines)
     except tomllib.TOMLDecodeError as error:
-        raise NxwrightError("%s: %s" % (page_toml_path(page_name), error)) from None
+        raise page_toml_error(error, page_name) from None
+    try:
+        return _components_of_page_data(data, names, defaults, encoding, page_size)
+    except NxwrightError as error:
+        place_in_page_file(error, page_name, text)
+        raise
+
+
+def _components_of_page_data(data: dict, names: ResourceNames, defaults: dict, encoding: str,
+                             page_size: tuple) -> list:
+    """Does the work of page_components on `data`, the page file's parsed
+    tables."""
     tables = ([page_table_at_screen(data.get("page", {}), page_size, defaults)]
               + list(data.get("component", [])))
     codec = TextCodec(encoding)
     components = []
     for index, table in enumerate(tables):
-        where = "%s, %s" % (page_toml_path(page_name), table.get("name", "table %d" % index))
+        where = table.get("name", "table %d" % index)
         page_object = _object_from_table(table, index, {}, names, defaults, codec, where,
-                                         page_toml_path(page_name))
+                                         whole=True)
         object_type = page_object.attribute("type")[0]
         values = {}
         for item in page_object.items:
@@ -1336,13 +1378,15 @@ def _raw_bytes(key: str, value: dict, where: str) -> bytes:
     bytes that are not hexadecimal digits."""
     text = value.get(RAW_KEY)
     if set(value) != {RAW_KEY} or not isinstance(text, str):
-        raise NxwrightError("%s: %s must be a value, or its stored bytes as { %s = \"01\" }"
-                            % (where, key, RAW_KEY))
+        raise NxwrightError(after_start(
+            where, "%s must be a value, or its stored bytes as { %s = \"01\" }"
+            % (key, RAW_KEY)))
     try:
         return bytes.fromhex(text)
     except ValueError:
-        raise NxwrightError("%s: %s's bytes must be hexadecimal digits, two for each byte, such as "
-                            "\"01\": %s" % (where, key, text)) from None
+        raise NxwrightError(after_start(
+            where, "%s's bytes must be hexadecimal digits, two for each byte, such as "
+            "\"01\": %s" % (key, text))) from None
 
 
 def _value_to_bytes(key: str, value, object_type: int, names: ResourceNames, codec: TextCodec,
@@ -1377,16 +1421,15 @@ def _value_to_bytes(key: str, value, object_type: int, names: ResourceNames, cod
     return allowed_number_bytes(object_type, key, value, width, "%s: %s" % (where, key))
 
 
-def _check_least_size(attributes: list, name: str, file: str):
-    """Raises NxwrightError, starting with `file` (the page's file), for a
-    component named `name` that is narrower or lower than LEAST_SIDE, from
-    its `attributes`. The Editor would not open it as it is
-    (editor_limits.LEAST_SIDE)."""
+def _check_least_size(attributes: list, name: str):
+    """Raises NxwrightError if the component `name`, whose attributes are
+    `attributes`, is narrower or lower than LEAST_SIDE. The Nextion Editor
+    would not open the component at that size (editor_limits.LEAST_SIDE)."""
     sides = {attribute.name: number_from_bytes(attribute.value) for attribute in attributes
              if attribute.name in ("w", "h")}
     if len(sides) == 2 and min(sides.values()) < LEAST_SIDE:
-        raise NxwrightError("%s: component `%s` is %d by %d. It must be at least %d by %d."
-                            % (file, name, sides["w"], sides["h"], LEAST_SIDE, LEAST_SIDE),
+        raise NxwrightError("component `%s` is %d by %d. It must be at least %d by %d."
+                            % (name, sides["w"], sides["h"], LEAST_SIDE, LEAST_SIDE),
                             fix={"kind": "least-size", "component": name})
 
 
@@ -1424,55 +1467,53 @@ def _header_keys(header: PageHeader) -> dict:
 
 def page_header_of_text(text: str, page_name: str, defines: dict = None) -> PageHeader:
     """Returns the page header that the [page] table of the page file `text`
-    gives, after making the same checks as the build. Raises NxwrightError,
-    naming the page's file, if `text` is not TOML, has no [page] table, or
-    has an invalid value. Placeholders take the values of app.toml's
-    `defines` (page_data)."""
+    gives, after making the same checks as the build. Placeholders take the
+    values of app.toml's `defines` (page_data). Raises NxwrightError, whose
+    place is the page's file, if `text` is not TOML, has no [page] table, or
+    has an invalid value."""
     try:
         data = page_data(text, page_name, defines)
     except tomllib.TOMLDecodeError as error:
-        raise NxwrightError("%s.page.toml: %s" % (page_file_stem(page_name), error)) from None
+        raise page_toml_error(error, page_name) from None
     page_table, components = data.get("page"), data.get("component", [])
-    if not isinstance(page_table, dict):
-        raise NxwrightError("%s.page.toml has no [page] table" % page_file_stem(page_name))
-    return _page_header(page_table, components if isinstance(components, list) else [],
-                        page_name)
+    try:
+        if not isinstance(page_table, dict):
+            raise NxwrightError(_NO_PAGE_TABLE)
+        return _page_header(page_table, components if isinstance(components, list) else [])
+    except NxwrightError as error:
+        place_in_page_file(error, page_name, text)
+        raise
 
 
-def _page_header(page_table: dict, components: list, page_name: str) -> PageHeader:
+def _page_header(page_table: dict, components: list) -> PageHeader:
     """Returns the page header the [page] table gives, after checking the
     tables."""
-    shown = page_file_stem(page_name)
     for key in ("header_16", "header_40"):
         if key in page_table:
-            raise NxwrightError("%s.page.toml: [page] holds %s, which page files no longer keep; "
-                                "remove it" % (shown, key))
+            raise NxwrightError("[page] holds %s, which page files no longer keep; remove it"
+                                % key)
     for key in _HEADER_KEYS:
         if any(isinstance(table, dict) and key in table for table in components):
-            raise NxwrightError("%s.page.toml: only the [page] table can give %s"
-                                % (shown, key))
+            raise NxwrightError("only the [page] table can give %s" % key)
     # Extract writes a system page mark or a lock that nxwright has not seen
     # as its number (_header_keys), so the build accepts that number.
     system_page = page_table.get("system_page")
     unknown_mark = _is_byte(system_page) and system_page not in (0, *SYSTEM_PAGES.values())
     if system_page is not None and system_page not in SYSTEM_PAGES and not unknown_mark:
         names = ['"%s"' % name for name in SYSTEM_PAGES]
-        raise NxwrightError("%s.page.toml: system_page must be %s, or the number of a mark "
-                            "nxwright does not know" % (shown, ", ".join(names)))
+        raise NxwrightError("system_page must be %s, or the number of a mark nxwright does "
+                            "not know" % ", ".join(names))
     locked = page_table.get("locked", False)
     if not isinstance(locked, bool) and not (_is_byte(locked) and locked >= 2):
-        raise NxwrightError("%s.page.toml: locked must be true, false, or a number from 2 to 255"
-                            % shown)
+        raise NxwrightError("locked must be true, false, or a number from 2 to 255")
     password = page_table.get("lock_password_hash", NO_LOCK_PASSWORD.hex())
     if not is_password_hash_text(password):
-        raise NxwrightError("%s.page.toml: lock_password_hash must be 8 lower-case "
-                            "hexadecimal digits" % shown)
+        raise NxwrightError("lock_password_hash must be 8 lower-case hexadecimal digits")
     stored_21 = page_table.get("header_21", {RAW_KEY: HEADER_21.hex()})
-    header_21 = (_raw_bytes("header_21", stored_21, "%s.page.toml" % shown)
+    header_21 = (_raw_bytes("header_21", stored_21, "")
                  if isinstance(stored_21, dict) else None)
     if header_21 is None or len(header_21) != 2:
-        raise NxwrightError("%s.page.toml: header_21 must be 2 bytes, such as "
-                            "{ %s = \"4f21\" }" % (shown, RAW_KEY))
+        raise NxwrightError("header_21 must be 2 bytes, such as { %s = \"4f21\" }" % RAW_KEY)
     return PageHeader(system_page, locked, bytes.fromhex(password), header_21)
 
 

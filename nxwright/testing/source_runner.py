@@ -16,6 +16,7 @@ list components, as the simulator's does (EditorMachine.open_page); then
 the test's values are written again, as given, so that they win.
 """
 from dataclasses import dataclass, field
+import functools
 from pathlib import Path
 import re
 
@@ -101,6 +102,21 @@ class FolderPageTables:
                                 self.defaults, _encoding(self.app), self.texts[page])
 
 
+def _showing_the_folder(method):
+    """Returns `method`, a method of SourceFolderRunner, wrapped so that any
+    NxwrightError the method raises shows its file under the runner's source
+    folder. A command shows the folder as the user typed it on the command
+    line. A test has no command line, so the runner shows the folder's full
+    path."""
+    @functools.wraps(method)
+    def with_folder(self, *arguments, **options):
+        try:
+            return method(self, *arguments, **options)
+        except NxwrightError as error:
+            raise error.in_folder(self.source_folder)
+    return with_folder
+
+
 class SourceFolderRunner:
     """Runs the code of one source folder's pages.
 
@@ -138,6 +154,7 @@ class SourceFolderRunner:
         compiled = self.runnable_page(page, text, blank_fields)
         return compiled.code, compiled.start
 
+    @_showing_the_folder
     def folder_page_tables(self) -> FolderPageTables:
         """Returns the folder's FolderPageTables, read again only once one of
         its files has changed. Raises NxwrightError for one of them that is
@@ -145,6 +162,7 @@ class SourceFolderRunner:
         return _cached(("tables", self.source_folder), self.source_folder,
                        lambda read: _read_page_tables(self.source_folder, read))
 
+    @_showing_the_folder
     def macros(self) -> dict:
         """Returns the folder's macros as EditorMachine takes them: {name:
         (its Editor code lines, a Place or None per line)}, none when the
@@ -155,6 +173,7 @@ class SourceFolderRunner:
         return _cached(("macros", self.source_folder), self.source_folder,
                        lambda read: _compile_macros(tables, read), tables)
 
+    @_showing_the_folder
     def runnable_page(self, page: str, text: str = None,
                       blank_fields: bool = False) -> RunnablePage:
         """Returns `page` compiled as `compile` compiles it, with what the
@@ -165,6 +184,7 @@ class SourceFolderRunner:
                        lambda read: _compile_page(self.source_folder, tables, read, page, text,
                                                   blank_fields), tables)
 
+    @_showing_the_folder
     def run(self, page: str, events: list, values: dict = None, text: str = None,
             blank_fields: bool = False) -> dict:
         """Runs the `events` of `page`, a list of (component, event), in turn, and
@@ -223,6 +243,7 @@ class SourceFolderRunner:
         recorder.end(machine.values)
         return machine.values
 
+    @_showing_the_folder
     def run_code(self, code: str, values: dict = None, include: str = None) -> dict:
         """Runs nxlang `code` as the only event of a page of its own, and returns
         the values it leaves. The page includes the file `include` when given, a
@@ -318,7 +339,7 @@ def _read_page_tables(source_folder: Path, read) -> FolderPageTables:
     page files through `read`. Raises NxwrightError for a file that is
     missing or cannot be parsed."""
     app = _app(source_folder)
-    defaults = folder_defaults(read("defaults.toml"), "defaults.toml")
+    defaults = folder_defaults(read("defaults.toml"))
     texts, names, types, globals_, text_limits, system_pages = {}, {}, {}, {}, {}, {}
     absent_attributes, events = {}, {}
     screen = screen_model(app)
