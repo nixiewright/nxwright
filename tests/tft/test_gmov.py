@@ -13,9 +13,10 @@ tests/tft/test_whole_files.py.
 from dataclasses import replace
 import unittest
 
+from nxwright.project.page_block import Attribute
 from nxwright.tft import component_types
 from nxwright.tft.component_types import gmov
-from nxwright.tft.matching import Need, matched_rules, unmatched
+from nxwright.tft.matching import Need, matched_rules, project_needs, unmatched
 from tools.tft.probing import gmov_probes, p_probes
 from tests.tft.p_components import PTypePieces, p_entries, p_memory, p_probe, p_values
 from tests.tft.t_components import LoadSectionPieces
@@ -30,6 +31,22 @@ _PLACE = place(p_probe(_PROBE_AT_ITS_DEFAULTS), "page0-1")
 def _gmov(**attributes):
     """Returns the page object of a gmov of `attributes` on P."""
     return page(gmov_probes.gmov_component(**attributes), series="P").objects[1]
+
+
+def _with_sta(sta: int, keep_from: bool = False):
+    """Returns a Project on P with one page, whose gmov is stored the way the
+    Nextion Editor 1.60.1 saved one: it has no from, and has a sta of `sta`
+    right before its vid. If `keep_from` is true, the gmov also keeps its
+    from of 0."""
+    made = page(gmov_probes.gmov_component(), series="P")
+    gmov_object = made.objects[1] if keep_from else without_attribute(made.objects[1], "from")
+    items = []
+    for item in gmov_object.items:
+        if isinstance(item, Attribute) and item.name == "vid":
+            items.append(Attribute("sta", bytes([sta])))
+        items.append(item)
+    made = replace(made, objects=[made.objects[0], replace(gmov_object, items=items)])
+    return project_of(made, series="P", fonts=0)
 
 
 class PieceTest(PTypePieces, LoadSectionPieces, unittest.TestCase):
@@ -92,6 +109,42 @@ class EntryTest(unittest.TestCase):
         probe = p_probe(_PROBE_AT_ITS_DEFAULTS)
         self.assertEqual(p_values(gmov_object, _PLACE), piece(probe, "page0-1-memory"))
         self.assertEqual(p_entries(gmov_object, _PLACE), piece(probe, "page0-1-entries"))
+
+
+class OlderNameTest(unittest.TestCase):
+    """A gmov saved by the Nextion Editor 1.60.1, which stored its from under
+    the older name sta."""
+
+    def test_its_sta_is_its_from(self):
+        # At a sta of 0, the gmov has the same values and entries as the
+        # probe at its defaults.
+        gmov_object = _with_sta(0).pages[0].objects[1]
+        probe = p_probe(_PROBE_AT_ITS_DEFAULTS)
+        self.assertIsNone(gmov_object.attribute("sta"))
+        self.assertEqual(p_values(gmov_object, _PLACE), piece(probe, "page0-1-memory"))
+        self.assertEqual(p_entries(gmov_object, _PLACE), piece(probe, "page0-1-entries"))
+
+    def test_at_a_sta_of_1(self):
+        # At a sta of 1, the gmov plays a file, the same as at a from of 1.
+        gmov_object = _with_sta(1).pages[0].objects[1]
+        self.assertEqual(component_types.attribute_number(gmov_object, "from"), 1)
+        self.assertEqual(p_memory(gmov_object, _PLACE), p_memory(_gmov(**{"from": 1}), _PLACE))
+        self.assertEqual(p_entries(gmov_object, _PLACE), p_entries(_gmov(**{"from": 1}), _PLACE))
+
+    def test_its_from_wins_over_its_sta(self):
+        gmov_object = _with_sta(1, keep_from=True).pages[0].objects[1]
+        self.assertEqual(component_types.attribute_number(gmov_object, "from"), 0)
+        self.assertIsNone(gmov_object.attribute("sta"))
+
+    def test_it_is_compiled(self):
+        # The match check does not reject the sta, because the gmov has the
+        # same needs as one at its defaults.
+        def needs(project) -> list:
+            return [(need.kind, need.subject, need.value, need.where)
+                    for need in project_needs(project)]
+        self.assertEqual(needs(_with_sta(0)),
+                         needs(project_of(page(gmov_probes.gmov_component(), series="P"),
+                                          series="P", fonts=0)))
 
 
 class RuleTest(unittest.TestCase):

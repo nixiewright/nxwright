@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.4.4] - 2026-11-14
+
+- `nxwright compile` now compiles a gmov saved by Nextion Editor 1.60.1.
+
 ### [0.4.3] - 2026-11-14
 
 - `nxwright compile` no longer fails on a component that lacks an attribute, and uses its default.

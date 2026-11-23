@@ -19,11 +19,16 @@ A Component has every attribute of its type, even when the stored
 object lacks one. A stored object lacks an attribute when its table in
 the page file sets `defaults = false` and leaves the attribute out, or
 when an older Nextion Editor saved the project before the object's type
-had that attribute. The Component gets each missing
-attribute at its type's default (_with_missing_defaults), so every piece
-of the compile reads the object as if that default had been stored. When
-the Nextion Editor opened a project, it filled in a text's missing
-attributes with the type's defaults too.
+had that attribute. The Component gets each missing attribute at its
+type's default (_with_missing_defaults), so every piece of the compile
+reads the object as if that default had been stored. When the Nextion
+Editor opened a project, it filled in a text's missing attributes with
+the type's defaults too.
+
+Some older versions of the Nextion Editor also saved an attribute under a
+name that has since changed: the Nextion Editor 1.60.1 saved a gmov's
+`from` as `sta`. A Component renames such an attribute to its current
+name (_with_current_names).
 
 A Project keeps its code clean: program.s, each event's code, and each
 macro's lines, as plain_lines gives them. The Nextion Editor stores code
@@ -40,6 +45,7 @@ from nxwright.language.code_lines import declared_int_names, split_line
 from nxwright.project.component_defaults import nxwright_defaults
 from nxwright.project.container import HmiContainer
 from nxwright.project.device_settings import DeviceSettings, TextCodec, read_device_settings
+from nxwright.project.object_types import TYPES_BY_NAME
 from nxwright.project.page_block import Attribute, Event, PageObject, parse_page
 from nxwright.project.resources import parse_manifest
 from nxwright.source.macros_source import macros_from_block
@@ -59,6 +65,40 @@ RESOURCE_KINDS = {"i": "picture", "zi": "font", "gmov": "animation", "v": "video
 NOT_DESCRIBED = object()
 
 
+# The older names of some attributes, by type number: {older name: current name}.
+# The Nextion Editor 1.60.1 saved a gmov's `from` as `sta`. When it compiled a
+# TFT file, it also wrote a gmov's `from` where every other type has its `sta`
+# (decompiling/decoded_file.py).
+_OLDER_NAMES = {TYPES_BY_NAME["gmov"]: {"sta": "from"}}
+
+
+def _type_number(items: list):
+    """Returns the type number of the stored object whose records are
+    `items`, or None if it has no type."""
+    kind = next((item.value for item in items
+                 if isinstance(item, Attribute) and item.name == "type"), None)
+    return kind[0] if kind else None
+
+
+def _with_current_names(items: list) -> list:
+    """Returns `items`, the records of a stored object, with each attribute
+    that has an older name (_OLDER_NAMES) renamed to its current name. A
+    renamed attribute keeps its position in `items`. If the object also has
+    the attribute under its current name, the one under the older name is
+    dropped."""
+    older_names = _OLDER_NAMES.get(_type_number(items), {})
+    stored = {item.name for item in items if isinstance(item, Attribute)}
+    renamed = []
+    for item in items:
+        if isinstance(item, Attribute) and item.name in older_names:
+            name = older_names[item.name]
+            if name in stored:
+                continue
+            item = Attribute(name, item.value)
+        renamed.append(item)
+    return renamed
+
+
 def _with_missing_defaults(items: list) -> list:
     """Returns `items`, the records of a stored object, followed by each
     attribute of the object's type that the object lacks, at the type's
@@ -66,9 +106,7 @@ def _with_missing_defaults(items: list) -> list:
     defaults for the type, `items` is returned unchanged. The defaults
     leave out the attributes every object derives, such as its objname, so
     those stay missing."""
-    kind = next((item.value for item in items
-                 if isinstance(item, Attribute) and item.name == "type"), None)
-    defaults = nxwright_defaults().get(kind[0]) if kind else None
+    defaults = nxwright_defaults().get(_type_number(items))
     if defaults is None:
         return items
     stored = {item.name for item in items if isinstance(item, Attribute)}
@@ -91,7 +129,7 @@ class Component(PageObject):
     description: object = field(default=NOT_DESCRIBED, init=False, repr=False, compare=False)
 
     def __post_init__(self):
-        self.items = _with_missing_defaults(self.items)
+        self.items = _with_missing_defaults(_with_current_names(self.items))
         attributes = {}
         for item in self.items:
             if isinstance(item, Attribute):
