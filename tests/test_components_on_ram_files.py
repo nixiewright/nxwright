@@ -109,6 +109,71 @@ class DataRecordTest(DataFileHoldingTestCase):
             self.assertEqual(len((Path(folder) / "f.data").read_bytes()), SMALL_FILE)
             self.assertEqual(self.refusals(sent), 0)
 
+    # Each time the screen draws a data record that has no file open, the
+    # record tries again to open its file, or to create it. In the tests
+    # from here to test_a_record_of_mode_0_opens_a_file_that_appears, each
+    # expected answer is the one a real NX8048P070 gave.
+
+    def without_room(self) -> tuple:
+        """Starts a simulation whose d0 creates ram/d.data, then sets d0's
+        `path` to ram/e.data, which does not fit beside it. Returns
+        (simulation, sent)."""
+        simulation, sent = self.started(space=4096)
+        simulation.serial_input('d0.path="ram/e.data"')
+        self.assertEqual(self.refusals(sent), 1)
+        self.assertIs(simulation.listings()["d0"], FILE_LOST)
+        return simulation, sent
+
+    def test_a_delfile_that_frees_room_lets_the_record_create_its_file(self):
+        simulation, sent = self.without_room()
+        # The delfile frees room and draws the page again, so d0 creates
+        # ram/e.data.
+        simulation.serial_input('delfile "ram/d.data"')
+        self.assertEqual(simulation.listings()["d0"], [])
+        self.assertEqual(sorted(self.files(simulation)), ["ram/e.data"])
+        self.assertEqual(len(self.files(simulation)["ram/e.data"]), SMALL_FILE)
+        self.assertEqual(self.refusals(sent), 0)
+        simulation.serial_input('d0.insert("x^y")')
+        self.assertEqual(simulation.values()["d0.qty"], 1)
+
+    def test_room_alone_creates_no_file_until_the_record_is_drawn(self):
+        for drawing in ("ref 0", "ref d0", "d0.bco=63488"):
+            with self.subTest(drawing=drawing):
+                simulation, sent = self.without_room()
+                # A newfile of another size replaces ram/d.data, freeing room,
+                # and does not draw the page again.
+                simulation.serial_input('newfile "ram/d.data",8')
+                self.assertEqual(self.found(simulation, "ram/e.data"), 0)
+                simulation.serial_input(drawing)
+                self.assertEqual(self.found(simulation, "ram/e.data"), 1)
+                self.assertEqual(simulation.listings()["d0"], [])
+                self.assertEqual(self.refusals(sent), 0)
+
+    def test_each_drawing_without_room_answers_06_whatever_bkcmd_is(self):
+        simulation, sent = self.without_room()
+        simulation.serial_input("bkcmd=0")
+        for drawing in ("ref d0", "ref 0", "d0.bco=2016"):
+            simulation.serial_input(drawing)
+            self.assertEqual(sent, [b"\x06\xff\xff\xff"], drawing)
+            sent.clear()
+        self.assertEqual(sorted(self.files(simulation)), ["ram/d.data"])
+        self.assertIn("d0 cannot make ram/e.data: the file does not fit. A new file can have "
+                      "at most 984 of the 4096 bytes set aside for ram/ files",
+                      self.log(simulation))
+
+    def test_a_record_of_mode_0_opens_a_file_that_appears(self):
+        simulation, sent = self.started(space=8192)
+        simulation.serial_input("d0.mode=0")
+        simulation.serial_input('d0.path="ram/q.data"')
+        self.assertEqual(self.found(simulation, "ram/q.data"), 0)
+        # The refile draws the page again, and d0 keeps the file from then on.
+        simulation.serial_input('refile "ram/d.data","ram/q.data"')
+        self.assertEqual(self.refusals(sent), 0)
+        simulation.serial_input('rdfile "ram/q.data",0,0,0')
+        self.assertEqual(self.refusals(sent), 1)
+        simulation.serial_input('d0.insert("m^n")')
+        self.assertEqual(simulation.values()["d0.qty"], 1)
+
     def test_a_missing_file_with_mode_0(self):
         simulation, sent = self.started(space=4096, components=[record(mode=0)])
         self.assertIs(simulation.listings()["d0"], FILE_LOST)

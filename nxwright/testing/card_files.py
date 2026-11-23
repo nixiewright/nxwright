@@ -2,10 +2,11 @@
 
 - read_card_file and write_card_file read and write a file, on a card given
   a folder of the computer (sd_cards.py) or on the card kept in memory.
-- open_data_record opens a data record's file when its page opens, and
+- open_data_record opens a data record's file when its page opens, or when
+  the screen draws a record that has no file open (opens_when_drawn).
   data_record_values works out the values that follow from the file. Both
-  read a component's attributes with component_attributes, as the
-  simulation does too.
+  functions, and the simulation, read a component's attributes with
+  component_attributes.
 - DATA_FILES_HELD and DATA_RECORDS_SHUT_OUT record which data record keeps
   which data file, and which data records could not open theirs.
 - PLAYED_FILES_HELD records which sound or video keeps the file it plays.
@@ -309,6 +310,31 @@ def is_shut_out(cards, path: str, card_values: dict, holder: tuple) -> bool:
     not hold it now, though it may be free."""
     return holder in card_values.get(DATA_RECORDS_SHUT_OUT, {}) and \
         file_holder(cards, path, card_values) != holder
+
+
+def opens_when_drawn(cards, attributes: dict, card_values: dict, holder: tuple) -> bool:
+    """Returns whether the data record `holder`, (page, data record), with
+    `attributes`, opens its file when the screen draws the record again. It
+    does when its `path` is on an SD card or in ram/, and no data record
+    holds that file, `holder` included.
+
+    A real NX8048P070 opened such a record's file each time it drew the
+    record again (Simulation.drawn_again, Simulation._mark_stored), the
+    same way the record opens its file when its page opens
+    (open_data_record). A record whose `mode` is 1 then created a file that
+    had not fit in ram/ before. A record whose `mode` is 0 opened a file
+    that was missing when code set its `path`.
+
+    Returns False for a record that is shut out of its file
+    (is_shut_out), and for one that opens no file yet (opens_no_file).
+    Neither was tried on a screen."""
+    path = attributes.get("path", "")
+    if not isinstance(path, str) or (card_of(path) is None and not ram_files.is_ram_path(path)):
+        return False
+    if opens_no_file(attributes, card_values, holder) or \
+            holder in card_values.get(DATA_RECORDS_SHUT_OUT, {}):
+        return False
+    return file_holder(cards, path, card_values) is None
 
 
 def component_attributes(component: str, values: dict) -> dict:

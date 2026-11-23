@@ -4,6 +4,10 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.4.9] - 2026-11-15
+
+- A data record whose file is missing now creates or finds it when next drawn, matching physical screens.
+
 ### [0.4.8] - 2026-11-14
 
 - `redir` now renames a folder on an SD card that is simulated in memory.

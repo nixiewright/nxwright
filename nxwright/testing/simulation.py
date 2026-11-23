@@ -202,8 +202,8 @@ from nxwright.testing.card_files import (DATA_FILES_HELD, DATA_RECORDS_GIVEN_A_P
                                          component_attributes, data_file_at,
                                          data_record_values, has_lost_file, hold_played_file,
                                          is_shut_out, let_go_of_played_file,
-                                         open_data_record, opens_no_file, read_card_file,
-                                         write_card_file)
+                                         open_data_record, opens_no_file, opens_when_drawn,
+                                         read_card_file, write_card_file)
 from nxwright.testing import external_pictures
 from nxwright.testing.combo_boxes import ComboBoxes
 from nxwright.testing.editor_machine import (EEPROM_SIZE, PINYIN_COMMANDS, RECORD_STARTS, RECORDS,
@@ -305,6 +305,17 @@ _OPENING = "opening effects"
 
 # The values a machine is given that belong to no page and are not kept.
 _PER_RUN = ("dp", "text limits")
+
+# The types of component that do more than paint when the screen draws them
+# again (Simulation.drawn_again). An external picture reads its file, and a
+# data record opens its file if the record has none open
+# (card_files.opens_when_drawn).
+_READ_WHEN_DRAWN = ("external-picture", "data-record")
+# The attributes of a data record that code can store without the record
+# being drawn again. Setting `path` opens the file at once
+# (editor_machine.py), and opening the file sets the others
+# (card_files.data_record_values).
+_STORED_BY_OPENING = ("path", "qty", "txt", "val", "maxval_y", "maxval_x")
 
 
 @dataclass
@@ -624,10 +635,10 @@ class Simulation:
         # {slider: its knob's start along its track} where a touch put it on
         # the page shown, until code stores its `val` (_slide).
         self._knobs = {}
-        # The external pictures of the page shown that the screen will draw
-        # again once the running code ends, in the order they were marked
-        # (_draw_marked_pictures).
-        self._pictures_to_draw = {}
+        # The external pictures and data records of the page shown that the
+        # screen will draw again once the running code ends, in the order
+        # they were marked (_draw_marked).
+        self._to_draw_again = {}
         # Whether the page shown, entered while `ref_stop` held, waits for
         # `ref_star` to start its slides (page_changed).
         self._slides_wait = False
@@ -1740,18 +1751,20 @@ class Simulation:
         raise _EventEnded()
 
     def drawn_again(self, name: str):
-        """Marks external pictures for the screen to draw again once the code
-        ends (_draw_marked_pictures). `name` is the component or page given
-        to a `ref`, or the page that a file command draws again. If `name` is
-        the page shown, every external picture of that page is marked.
-        Otherwise `name` itself is marked, if it is an external picture."""
+        """Marks external pictures and data records for the screen to draw
+        again once the code ends (_draw_marked). `name` is the component or
+        page given to a `ref`, or the page that a file command draws again.
+        If `name` is the page shown, every external picture and data record
+        of that page is marked. Otherwise `name` itself is marked, if it is
+        one of them."""
         if self.page is None or self.loading:
             return
+        kinds = self._kinds[self.page]
         if name == self.page:
-            self._pictures_to_draw.update(
-                dict.fromkeys(self._of_kind(self.page, "external-picture")))
-        elif self._kinds[self.page].get(name) == "external-picture":
-            self._pictures_to_draw[name] = None
+            self._to_draw_again.update(dict.fromkeys(
+                component for component, kind in kinds.items() if kind in _READ_WHEN_DRAWN))
+        elif kinds.get(name) in _READ_WHEN_DRAWN:
+            self._to_draw_again[name] = None
 
     def stored(self, name: str, value, machine: EditorMachine, before=None):
         """Acts on a value the code stored, `before` being what the name
@@ -1763,10 +1776,9 @@ class Simulation:
         if self._drawing_held is not None and head is not None:
             self._drawing_held.changed.add(head)
         if self.page is not None and not self.loading:
-            # Values the load event stores mark no external picture, because
-            # the whole page, with its external pictures, is drawn after the
-            # event (_check_picture_files).
-            self._mark_pictures_stored(name, head, value, before, machine.values)
+            # Values the load event stores mark nothing to draw again, because
+            # the whole page is drawn after the event (_check_picture_files).
+            self._mark_stored(name, head, value, before, machine.values)
         if name == "%s.val" % head:
             # Its `val` places a slider's knob again, even storing the value it
             # had (_slide).
@@ -2388,8 +2400,8 @@ class Simulation:
 
         - the screen starts again, if the code ran `rest`;
         - `answer()` sends a typed line's answer, if one is given;
-        - the external pictures the code marked are drawn
-          (_draw_marked_pictures);
+        - the external pictures and data records the code marked are drawn
+          (_draw_marked);
         - the serial instructions that were held run, if the code ran
           `com_star`;
         - the moves the code queued start."""
@@ -2397,7 +2409,7 @@ class Simulation:
             self._start_again_by_rest()
         if answer is not None:
             answer()
-        self._draw_marked_pictures()
+        self._draw_marked()
         self._resume_when_asked()
         self._start_moves()
 
@@ -2482,7 +2494,7 @@ class Simulation:
         screen has already answered FD FF FF FF.
 
         Once the file is written, the screen draws its page again
-        (_draw_marked_pictures). A real NX8048P070 did so after it answered
+        (_draw_marked). A real NX8048P070 did so after it answered
         FD FF FF FF."""
         try:
             write_card_file(self.cards, path, data, self.globals)
@@ -2494,7 +2506,7 @@ class Simulation:
         self._write_log(LOGGED[record](entry, self.encoding))
         if record == "file commands" and self.page is not None:
             self.drawn_again(self.page)
-            self._draw_marked_pictures()
+            self._draw_marked()
 
     def _write_transferred(self, address: int, data: bytes):
         """Writes `data` to the EEPROM at `address`, and to its file, as
@@ -2752,10 +2764,11 @@ class Simulation:
         self._opening_due = None
         self._slid = {}
         self._slides_wait = False
-        # Its sliders' knobs are placed by `val` again. External pictures of
-        # the previous page that were waiting to be drawn again are dropped.
+        # Its sliders' knobs are placed by `val` again. External pictures and
+        # data records of the previous page that were waiting to be drawn
+        # again are dropped.
         self._knobs = {}
-        self._pictures_to_draw = {}
+        self._to_draw_again = {}
 
     def _start_opening(self, values: dict):
         """Starts the slides of the page shown as it is drawn, once its load
@@ -2846,12 +2859,12 @@ class Simulation:
             if self._switched("vis", name):
                 self._check_picture_file(name, fields.get(name + ".path", ""), card_values)
 
-    def _mark_pictures_stored(self, name: str, head, value, before, values: dict):
-        """Marks the external pictures on the page shown that the screen will
-        draw again because the code stored `name`. The screen draws them
-        once the code ends (_draw_marked_pictures). `head` is the component
-        that `name` is an attribute of, or None. `before` is the value `name`
-        held, and `values` are the values of the running code.
+    def _mark_stored(self, name: str, head, value, before, values: dict):
+        """Marks the external pictures and data records on the page shown
+        that the screen will draw again because the code stored `name`. The
+        screen draws them once the code ends (_draw_marked). `head` is the
+        component that `name` is an attribute of, or None. `before` is the
+        value `name` held, and `values` are the values of the running code.
 
         A real NX8048P070 drew an external picture again when code stored a
         value in any of its attributes, even the value already there, and
@@ -2859,11 +2872,20 @@ class Simulation:
         the picture again when `vis` showed a picture that was already
         shown. It also did not draw it again when code set an attribute that
         the picture's type lacks, such as `pco`, because the screen refused
-        that."""
+        that.
+
+        A data record is marked in the same cases as an external picture,
+        except when code stores one of the attributes in
+        _STORED_BY_OPENING. Of a data record's attributes, only `bco` was
+        tried on the real screen, and `vis` was not tried on a data
+        record."""
         kinds = self._kinds[self.page]
         if head is not None:
-            if kinds.get(head) == "external-picture" and name in self.pages[self.page].start:
-                self._pictures_to_draw[head] = None
+            kind = kinds.get(head)
+            attribute = name[len(head) + 1:]
+            if kind in _READ_WHEN_DRAWN and name in self.pages[self.page].start and \
+                    not (kind == "data-record" and attribute in _STORED_BY_OPENING):
+                self._to_draw_again[head] = None
             return
         if not name.startswith("vis ") or value != 1:
             return
@@ -2871,26 +2893,37 @@ class Simulation:
         if target == "255":
             # Each component's own `vis` value has not changed since before
             # `vis 255`.
-            hidden = [picture for picture in self._of_kind(self.page, "external-picture")
-                      if not values.get("vis " + picture, 1 if before is None else before)]
+            hidden = [component for component, kind in kinds.items()
+                      if kind in _READ_WHEN_DRAWN
+                      and not values.get("vis " + component, 1 if before is None else before)]
         else:
             was = values.get("vis 255", 1) if before is None else before
-            hidden = [target] if kinds.get(target) == "external-picture" and not was else []
-        self._pictures_to_draw.update(dict.fromkeys(hidden))
+            hidden = [target] if kinds.get(target) in _READ_WHEN_DRAWN and not was else []
+        self._to_draw_again.update(dict.fromkeys(hidden))
 
-    def _draw_marked_pictures(self):
-        """Draws the external pictures the code marked, each one once. This
-        runs after the code has ended (_after_code), because that is when a
-        real screen draws what the code changed. If a marked picture is
-        shown and its file is missing, the simulation answers 0x06
-        (_check_picture_file)."""
-        marked, self._pictures_to_draw = self._pictures_to_draw, {}
+    def _draw_marked(self):
+        """Draws the external pictures and data records the code marked, each
+        one once. This runs after the code has ended (_after_code), because
+        that is when a real screen draws what the code changed. A marked
+        component that `vis` hides is not drawn.
+
+        If a marked picture's file is missing, the simulation answers 0x06
+        (_check_picture_file). A marked data record opens its file if the
+        record has none open (card_files.opens_when_drawn,
+        _open_data_record)."""
+        marked, self._to_draw_again = self._to_draw_again, {}
         if self.page is None:
             return
         fields = self._fields_now()
+        kinds = self._kinds[self.page]
         for name in marked:
-            if self._switched("vis", name):
+            if not self._switched("vis", name):
+                continue
+            if kinds.get(name) == "external-picture":
                 self._check_picture_file(name, fields.get(name + ".path", ""), self.globals)
+            elif opens_when_drawn(self.cards, component_attributes(name, fields), self.globals,
+                                  (self.page, name)):
+                self._open_data_record(name, self.fields[self.page], drawn_again=True)
 
     def _check_picture_file(self, component: str, path, card_values: dict):
         """Checks the file at `path`, which the external picture `component`
@@ -3001,19 +3034,27 @@ class Simulation:
         except (CardRefusal, OSError):
             return None
 
-    def _open_data_record(self, record: str, values: dict):
+    def _open_data_record(self, record: str, values: dict, drawn_again: bool = False):
         """Opens the data file of the data record `record` when its page opens,
-        with card_files.open_data_record, which gives the rules. Writes each
-        note of what could not be opened, read, or created to the log, and
-        sends 0x06 as many times as open_data_record returns, when `bkcmd`
-        is 2 or 3."""
+        or when the screen draws the record again with no file open
+        (_draw_marked). See card_files.open_data_record for the rules.
+
+        Writes each note of what could not be opened, read, or created to the
+        log, and sends 0x06 as many times as open_data_record returns. If
+        `drawn_again` is False, the page is opening, and the simulation sends
+        each 0x06 only if `bkcmd` is 2 or 3. If `drawn_again` is True, the
+        screen is drawing the record again, and the simulation sends each
+        0x06 whatever `bkcmd` is, because a real NX8048P070 did."""
         refusals, notes = open_data_record(record, values, self.globals, self.cards,
                                            (self.page, record), TextCodec(self.encoding),
                                            self._memory_file_storage_size)
         for note in notes:
             self._write_log(note)
         for _ in range(refusals):
-            self._return_code(INVALID_FILE_OPERATION, False)
+            if drawn_again:
+                self._send_logged(bytes([INVALID_FILE_OPERATION]) + END)
+            else:
+                self._return_code(INVALID_FILE_OPERATION, False)
 
     def _is_shut_out(self, record: str, values: dict, card_values: dict) -> bool:
         """Whether the data record `record` of the page shown is shut out of

@@ -358,6 +358,8 @@ While a data record keeps a file, `rdfile`, `delfile`, `refile`, and `newfile` o
 
 A data record shows "File Lost:" and the path when its file is missing and the data record cannot create it. This happens when `mode` is 0, when the file does not fit in `ram/` ([Files in `ram/`](#files-in-ram)), or when the file cannot be created in the card's folder. A data record whose `path` is empty shows "File Lost:" alone. It does not keep a file, so it does not prevent any other data record from opening its file, and it does not send an error code.
 
+If a data record's file is missing, the data record looks for the file again each time the screen draws the data record. The data record opens and keeps the file if the file exists by then, or creates the file if `mode` is 1 and the file now fits. If `mode` is 1 and the file still does not fit, the screen sends 0x06, whatever `bkcmd` is. The screen draws a data record again after a `ref` of the data record or of its page, when code sets one of its attributes, and when a `delfile`, a `refile`, or a `twfile` draws the page again. Of the attributes, only `bco` was tried on a real screen.
+
 A data record whose `init` is 1 does not open the file its page file gives:
 
 - It shows its titles and no records, and its `qty` is 0. It does not create a missing file.
@@ -842,10 +844,10 @@ The screen ignores each of the following in `ram/`, and sends 0x06. The log give
 
 If a data record's file in `ram/` is missing, the data record shows "File Lost:" and the file's path. There are two ways for the file to be missing:
 
-- The file did not fit in the space left, so the data record could not create it. The screen sends 0x06 when the page opens and when code sets the data record's `path`, and the log gives the reason. The data record's `qty` is 0, and its methods do not change anything, and do not send an error code.
+- The file did not fit in the space left, so the data record could not create it. The screen sends 0x06 when the page opens, when code sets the data record's `path`, and each time the screen draws the data record again ([Data records](#data-records)). The log gives the reason. The data record's `qty` is 0, and its methods do not change anything, and do not send an error code.
 - `mode` is 0, so the data record does not create the file. The screen does not send an error code.
 
-These rules follow what the Nextion Editor's simulator does, and have not been checked on a real screen.
+A real NX8048P070 did the same with a data record whose file was missing from `ram/`. A data record's methods were not tried on that screen.
 
 ## Known differences
 
