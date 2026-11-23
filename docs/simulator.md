@@ -879,7 +879,7 @@ The simulator does not model:
 - A sound plays for exactly its length. The Nextion Editor's simulator takes about 400 ms for each play of a 50 ms sound.
 - An animation or a video plays at its set speed. The Nextion Editor's simulator gives each frame a little longer.
 - An animation or a video whose `dis` is 0 stands still. The Nextion Editor's simulator stops answering.
-- A file stream's `open` of a file that a video or a sound keeps answers 0x06, like a screen. The Nextion Editor's simulator does not send an error code.
+- A file stream's `open` answers 0x06 for a file that a video or a sound keeps, and does not send an error code for a missing file, like a screen. The Nextion Editor's simulator does the reverse: it answers 0x06 only for the missing file.
 - The screen's serial buffer has room for 1024 bytes, the size the vendor gives ([Holding instructions](#holding-instructions)). The Nextion Editor's simulator held more, and did not answer 0x24.
 - `dims` and `bauds` go back to the vendor's defaults at each start. The screen, and the Nextion Editor's simulator, keep them.
 - `appid` keeps what code stores in it, through `rest` and a start again, like a screen ([`appid`](screen-code.md#appid)). The Nextion Editor's simulator ignores what code stores in it: it reads 0.

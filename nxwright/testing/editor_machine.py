@@ -33,6 +33,7 @@ import re
 from nxwright import NxwrightError
 from nxwright.drawing.text_pictures import path_lines
 from nxwright.language.code_checks import (COMMAND_PARAMETERS, DATA_RECORD_ARGUMENTS,
+                                           FILE_BROWSER_ARGUMENTS, FILE_STREAM_ARGUMENTS,
                                            INVALID_COMMAND, INVALID_VARIABLES, LACKED_INSTRUCTION,
                                            LACKED_VARIABLE, PICTURE_ARGUMENTS, SCREEN_ESCAPES,
                                            XSTR_FONT_ARGUMENT, first_word_refusal, series_lacks)
@@ -166,6 +167,23 @@ _COMPARISON = re.compile(r"^(%s)(==|!=|<=|>=|<|>)(%s)$" % (OPERAND, OPERAND))
 _PLAIN_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # A text subtraction written out, t0.txt=t0.txt-3: the text, then the count.
 _TEXT_SUBTRACTION = re.compile(r"^(%s)-(.+)$" % OPERAND)
+# A method call, alone on its line or among a value's operands: its
+# component, the name called, and the arguments between its parentheses.
+_METHOD_CALL = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\((.*)\)")
+# A line that is only a component's attribute, such as `fs0.close`.
+_ATTRIBUTE_ALONE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)")
+# A method call in the start of a `for`. The Nextion Editor compiles such
+# a start without the call's parentheses and arguments, so the screen reads
+# the method as an attribute, and does not call it. In the Nextion Editor's
+# simulator, `for(sys0=fs0.close();sys0<0;sys0++)` left the file open, and
+# gave `sys0` the value that `close` has as an attribute, 101.
+_CALL_IN_A_FOR_S_START = re.compile(
+    r'((?:[A-Za-z_][A-Za-z0-9_]*\.)+[A-Za-z_][A-Za-z0-9_]*)\((?:"(?:\\.|[^"\\])*"|[^()"])*\)')
+# How many arguments each method takes, for each type of component that has
+# methods.
+_METHOD_ARGUMENTS = {
+    "file-stream": FILE_STREAM_ARGUMENTS, "file-browser": FILE_BROWSER_ARGUMENTS,
+    "data-record": {method: len(kinds) for method, kinds in DATA_RECORD_ARGUMENTS.items()}}
 # A loop still running after this many turns, or a goto that jumped back as
 # many times in one run of its event, is taken to never end.
 _MOST_TURNS = 10000
@@ -596,33 +614,39 @@ class EditorMachine:
     # the next read or write takes place, `qty` the open file's size, and
     # `en` whether one is open.
 
-    def _open_file(self, stream: str, path):
+    def _open_file(self, stream: str, path) -> bool:
         """Opens the file `path` on the file stream `stream`, with its
-        position at 0. The file is found the way a file command finds one
-        (_file_bytes). If the file is not found, or a data record, a sound,
-        or a video keeps it (_kept_reason), the stream closes the file it
-        has open, and the `open` is recorded with the file errors.
+        position at 0, and returns whether it opened. The file is found the
+        way a file command finds one (_file_bytes). If the file is not
+        found, or a data record, a sound, or a video keeps it
+        (_kept_reason), the stream closes the file it has open, and the
+        `open` is recorded with the file errors.
 
-        The answer to the `open` depends on what keeps the file. For a
-        sound or a video, the `open` answers 0x06, because a real screen
-        left the stream's `en` at 0 and answered 0x06. The Nextion Editor's
-        simulator did not send an answer. For a data record, the `open`
-        does not send an answer, because that case has only been tried in
-        the Nextion Editor's simulator, which left `en` at 0 and did not
-        send one."""
+        What a failed `open` answers depends on why it failed:
+          - For a missing file, the `open` does not send an error code. An
+            NX8048P070 sent nothing, and the Nextion Editor's simulator
+            sent 0x06.
+          - For a file that a sound or a video keeps, the `open` answers
+            0x06, because a real screen left the stream's `en` at 0 and
+            answered 0x06. The Nextion Editor's simulator did not send an
+            answer.
+          - For a file that a data record keeps, the `open` does not send
+            an answer, because that case has only been tried in the Nextion
+            Editor's simulator, which left `en` at 0 and did not send one."""
         kept = self._kept_reason(path)
         if kept:
             self._record("file errors", ("open", path), kept)
             self._close_file(stream)
             if not self._kept_by_a_data_record(path):
                 self._refused(INVALID_FILE_OPERATION)
-            return
+            return False
         data = self._file_bytes("open", path)
         if data is None:
             self._close_file(stream)
-            return
+            return False
         self.values[OPEN_FILE + stream] = path
         self._set_stream(stream, 0, len(data), 1)
+        return True
 
     def _kept_reason(self, path) -> str:
         """Returns what keeps the file `path`, worded for the simulator's
@@ -713,35 +737,42 @@ class EditorMachine:
         sent = len(data).to_bytes(4, "little") if count == 0 else data[offset:offset + count]
         self._record("sent", ("rdfile", sent + check_of(crc, sent)))
 
-    def _read_or_write(self, stream: str, method: str, text: str, start: str, count: str):
-        """Runs the file stream's `read` or `write`. `start` counts within
-        the text, not the file, and `start` and `count` are bytes in the
-        project's encoding. A read keeps the text's first `start` bytes and
-        puts `count` of the file's after them, the text ending at the first
-        zero byte; a write takes `count` bytes of the text from `start` and
-        writes them over the file's. Both work at the position, `val`, and
-        move it by `count`. One with no file open, whose file the card no
-        longer gives, or that would go past the end of the file, is recorded
-        with the file errors and does nothing, but that a read past the end
-        cuts its text after its first `start` + `count` bytes, as the Nextion
+    def _read_or_write(self, stream: str, method: str, text: str, start: str,
+                       count: str) -> bool:
+        """Runs the file stream's `read` or `write`, and returns whether it
+        read or wrote.
+
+        Both work at the stream's position, `val`, and move it on by
+        `count`. `start` is a place within the text, not the file, and
+        `start` and `count` are counted in bytes of the project's encoding.
+          - A read keeps the text's first `start` bytes, and puts `count`
+            bytes of the file after them. The text ends at the first zero
+            byte.
+          - A write takes `count` bytes of the text from `start`, and writes
+            them over the file's bytes.
+
+        The call has no effect, and is recorded with the file errors, if no
+        file is open, if the file can no longer be read, or if the call
+        would go past the end of the file. A read past the end still cuts
+        its text after the first `start` + `count` bytes: the Nextion
         Editor's simulator cut "IJ" to "I"."""
         path = self.values.get(OPEN_FILE + stream)
         if path is None:
             self._record("file errors", (method, None))
-            return
+            return False
         start, count = self._chain(start), self._chain(count)
         if start < 0 or count < 0:
             raise RefusedCode("a negative start or count is not modelled")
         data = self._file_bytes(method, path)
         if data is None:
-            return      # recorded (_file_bytes)
+            return False    # recorded (_file_bytes)
         position = self.values.get(stream + ".val", 0)
         own = self._codec.encode_keeping_bytes(self._operand(text), self._name(text))
         if position + count > len(data):
             self._record("file errors", (method, path))
             if method == "read" and len(own) > start + count:
                 self._store(self._name(text), self._codec.decode_keeping_bytes(own[:start + count]))
-            return
+            return False
         if method == "read":
             if start > len(own):
                 raise RefusedCode("a read past the end of its text is not modelled")
@@ -755,10 +786,11 @@ class EditorMachine:
             if self._on_card(path):
                 if self._on_folder("write", path, lambda: self.cards.write(path, changed),
                                    False) is False:
-                    return      # refused, and recorded: the position stays
+                    return False    # not written, and recorded: the position stays
             else:
                 self.values["file contents"][path] = changed
         self.values[stream + ".val"] = position + count
+        return True
 
     def _on_folder(self, command: str, path: str, work, refused=None):
         """Returns `work()` on a card's folder, or on the card in memory,
@@ -844,6 +876,8 @@ class EditorMachine:
         if lacked is not None:
             raise CompileRefusal(_LACKED_ANSWERS[lacked[0]],
                                  "the screen's series lacks %s" % lacked[1])
+        if self._is_a_method_alone(code):
+            return
         refusal = first_word_refusal(code)
         if refusal is not None:
             raise CompileRefusal(_NO_COMMAND_ANSWERS[refusal],
@@ -1136,7 +1170,7 @@ class EditorMachine:
 
     def _simple(self, line: str):
         """Runs one line that is not an if, while, or for."""
-        if line.startswith("//"):
+        if line.startswith("//") or self._is_a_method_alone(line):
             return
         if line == "doevents":
             # The screen draws what code changed, settling its lists.
@@ -1327,25 +1361,8 @@ class EditorMachine:
             path, target = _arguments(command[2])
             self._find_on_card(command[1], path, target, contents)
             return True
-        command = re.match(r"([A-Za-z_][A-Za-z0-9_]*)\.(open|read|write|close|find)\((.*)\)$",
-                           line)
-        if command:
-            stream, method = command[1], command[2]
-            arguments = _arguments(command[3]) if command[3] else []
-            if method == "open":
-                self._open_file(stream, self._operand(arguments[0]))
-            elif method == "close":
-                self._close_file(stream)
-            elif method in ("read", "write"):
-                self._read_or_write(stream, method, *arguments)
-            # find: the Nextion Editor's simulator answered it as a success
-            # and changed nothing seen, of a file the card has or lacks; what
-            # a screen does with it is not known.
-            return True
-        command = re.match(r"([A-Za-z_][A-Za-z0-9_]*)\.(insert|delete|up|clear)\((.*)\)$", line)
-        if command and _is_data_record(command[1], self._layered()):
-            self._data_record(command[1], command[2],
-                              _arguments(command[3]) if command[3] else [])
+        call = _METHOD_CALL.fullmatch(line)
+        if call and self._method_call(call[1], call[2], call[3]) is not None:
             return True
         command = re.match(r"(newdir|deldir|delfile|refile|redir|newfile) (.*)$", line)
         if command:
@@ -1354,13 +1371,89 @@ class EditorMachine:
         if line.startswith("rdfile "):
             self._rdfile(_arguments(line[len("rdfile "):]))
             return True
-        if re.fullmatch(r"[A-Za-z0-9_]+\.up\(\)", line):
-            browser = line[:-5]
-            self._record("file commands", ("up", browser))
-            if self.list_working is not None:
-                self.list_working.up(self.page, browser, self._layered(), self.values)
-            return True
         return False
+
+    def _method_call(self, component: str, method: str, written: str):
+        """Runs the call of `method` on `component`, with the arguments
+        `written` between its parentheses, and returns whether it succeeded.
+        Returns None, without running anything, if `method` is not a method
+        of `component`'s type, as in `fs0.insert("a")` on a file stream.
+
+        Where the call is an operand of a value, it gives 1 for True and 0
+        for False (_operand):
+          - `open` gives 1 when it opens the file, and 0 when it does not;
+          - `read` and `write` give 1 when they read or write, and 0 when no
+            file is open, or when they would go past the end of the file;
+          - `close` gives 1, with or without an open file;
+          - `find` gives 0, whatever the file. It has no visible effect, and
+            what it is for is not known;
+          - a data record's method gives 1 when it changes its file, and 0
+            when it does not: for a record that is not there, for a data
+            record whose `init` is 1, and for one whose file another data
+            record keeps;
+          - a file browser's `up()` gives 1 when it goes up a folder, and 0
+            when it is already in its card's own folder.
+
+        An NX8048P070 and the Nextion Editor's simulator both gave these
+        values for a file stream. Those of a data record and of a file
+        browser were seen in the Nextion Editor's simulator only.
+
+        Raises CompileRefusal, without running anything, for a call with
+        the wrong number of arguments. The Nextion Editor's simulator
+        answered 0x1E to `fs0.close(1)` and to `sys0=fs0.open()`."""
+        kind = self._type_with_method(component, method)
+        if kind is None:
+            return None
+        arguments = _arguments(written) if written else []
+        wanted = _METHOD_ARGUMENTS[kind][method]
+        if len(arguments) != wanted:
+            raise CompileRefusal(_INVALID_PARAMETER_COUNT, "%s.%s takes %d arguments: %r"
+                                 % (component, method, wanted, written))
+        if kind == "data-record":
+            return self._data_record(component, method, arguments)
+        if kind == "file-browser":
+            folder = self._layered().get(component + ".dir")
+            self._record("file commands", ("up", component))
+            if self.list_working is not None:
+                self.list_working.up(self.page, component, self._layered(), self.values)
+            return self._layered().get(component + ".dir") != folder
+        if method == "open":
+            return self._open_file(component, self._operand(arguments[0]))
+        if method == "close":
+            self._close_file(component)
+            return True
+        if method in ("read", "write"):
+            return self._read_or_write(component, method, *arguments)
+        return False    # find
+
+    def _type_with_method(self, component: str, method: str):
+        """Returns the type of `component` if `method` is one of that type's
+        methods, and None otherwise. The type is the name that page files
+        use for it, such as "file-stream".
+
+        The values do not always give the component's type, for example in
+        a test of the machine alone. The type is then a file stream if
+        `method` is one of a file stream's methods, else a data record if
+        the component has an `insert`, else a file browser."""
+        kind = TYPE_NAMES.get(self._type_of(component))
+        if kind is None:
+            if method in FILE_STREAM_ARGUMENTS:
+                kind = "file-stream"
+            elif _is_data_record(component, self._layered()):
+                kind = "data-record"
+            else:
+                kind = "file-browser"
+        return kind if method in _METHOD_ARGUMENTS.get(kind, {}) else None
+
+    def _is_a_method_alone(self, code: str) -> bool:
+        """Whether `code` is only a method of a component, without its
+        parentheses, such as `fs0.close`. Such a line does nothing: on an
+        NX8048P070, `fs0.close` typed alone left the file open, and sent
+        nothing."""
+        alone = _ATTRIBUTE_ALONE.fullmatch(code)
+        type_name = TYPE_NAMES.get(self._type_of(alone[1])) if alone else None
+        described = describe(type_name, alone[2]) if type_name is not None else None
+        return described is not None and described.method
 
     def _find_on_card(self, word: str, path: str, target: str, contents: dict):
         """Runs findfile or finddir, `word`: sets `target` to 1 when the card
@@ -1671,23 +1764,36 @@ class EditorMachine:
         if self.screen is not None:
             self.screen.recorded(record, entry, self, reason)
 
-    def _data_record(self, record: str, method: str, arguments: list):
-        """Runs the method of the data record `record` on its data file,
-        `path` (data_files.py): insert(text), delete(number, count),
-        up(text, number), or clear(), records being numbered from the
-        oldest. A call is refused as the Editor refuses it as it compiles:
-        one with too few or too many arguments, a text where a number goes,
-        or texts joined. The file is on a card's folder, or in
-        "file contents"; a missing one is made first when `mode` is 1. What
-        cannot be done is recorded with the file errors, changing nothing: a
-        number where a text goes, which the Editor compiles and the screen
-        ignores, a missing file with `mode` 0, a missing file in ram/ that
-        does not fit there, a damaged one, one the folder will not give or
-        take, a record longer than `lenth` bytes, or a number past the last
-        record. A record that opens no file, its `init`
-        being 1 (_opens_no_file), changes nothing, the call counting as
-        done. Afterwards `qty` counts the records, and `txt` holds the
-        chosen one's text (`val`), or nothing when `val` names none."""
+    def _data_record(self, record: str, method: str, arguments: list) -> bool:
+        """Runs a method of the data record `record` on its data file,
+        `path` (data_files.py), and returns whether the method changed the
+        file. The methods are insert(text), delete(number, count),
+        up(text, number), and clear(). Records are numbered from the oldest.
+
+        The file is in a card's folder, or in "file contents". If the file
+        is missing and `mode` is 1, the method creates it first. Afterwards,
+        `qty` is the number of records, and `txt` is the text of the record
+        that `val` selects, or empty if `val` selects none.
+
+        Raises RefusedCode for a call that the Nextion Editor rejects when
+        it compiles: one with too few or too many arguments, a text where a
+        number goes, or texts joined.
+
+        A call that cannot be done returns False without changing anything,
+        and is recorded with the file errors:
+          - a number where a text goes, which the Nextion Editor compiles
+            and the screen ignores;
+          - a missing file when `mode` is 0, or a missing file in ram/ that
+            does not fit there;
+          - a damaged file, or one that cannot be read from or written to
+            the card's folder;
+          - a record longer than `lenth` bytes, or a number past the last
+            record.
+
+        A data record whose `init` is 1 opens no file (_opens_no_file). Its
+        methods do not change anything and return False, and are not
+        recorded with the file errors. The same is true of a data record
+        whose file another data record keeps (_opening_refused)."""
         values = [self._chain(argument) for argument in arguments]
         kinds = DATA_RECORD_ARGUMENTS[method]
         places = list(zip(arguments, values, kinds))
@@ -1701,17 +1807,19 @@ class EditorMachine:
         path = self._layered().get(record + ".path", "")
         misplaced = any(kind is str and not isinstance(value, str) for _, value, kind in places)
         if not misplaced and self._opens_no_file(record):
-            # Its `init` is 1: done, changing nothing.
-            return
+            # The data record's `init` is 1, so it has no open file. The
+            # method does not change anything, and is not recorded as an
+            # error.
+            return False
         if not misplaced and self._opening_refused(record):
-            # Another record holds the file, or 8 others hold theirs. The
-            # method changes nothing, and counts as done.
+            # Another data record keeps the file, or 8 others keep theirs.
+            # This is not recorded as an error either.
             shut_out(self.values, self._holder(record))
-            return
+            return False
         data_file = None if misplaced else self._data_file(record)
         if data_file is None:
             self._record("file errors", (method, path))
-            return
+            return False
         hold_file(self.cards, path, self.values, self._holder(record))
         let_in(self.values, self._holder(record))
         where = "%s.%s" % (record, method)
@@ -1729,15 +1837,17 @@ class EditorMachine:
             done = True
         if not done:
             self._record("file errors", (method, path))
-            return
+            return False
         content = data_file.to_bytes()
-        # A file the folder will not take is left as it was.
+        # If the file cannot be written to the card's folder, it is left as
+        # it was.
         if self._on_folder(method, path,
                            lambda: write_card_file(self.cards, path, content, self.values),
                            refused=True):
-            return
+            return False
         self._record("file commands", (method, path))
         self._show_record(record, data_file)
+        return True
 
     def _data_file(self, record: str):
         """Returns the data file of the data record `record`, read from a
@@ -2225,9 +2335,15 @@ class EditorMachine:
             self.list_working.opened(self.page, name, kind, layered, self.values)
 
     def _operand(self, text: str):
-        """Returns the value of a number, a quoted text, or a name. An
-        attribute the screen does not hold (_unheld) reads 0 in event code,
-        and is an unknown name in a typed instruction."""
+        """Returns the value of a number, a quoted text, a name, or a method
+        call. A method call runs, and gives 1 when it succeeds and 0 when
+        it fails (_method_call). An attribute the screen does not hold
+        (_unheld) reads 0 in event code, and is an unknown name in a typed
+        instruction."""
+        call = _METHOD_CALL.fullmatch(text)
+        done = self._method_call(call[1], call[2], call[3]) if call else None
+        if done is not None:
+            return int(done)
         if re.fullmatch(NUMBER, text):
             if "x" not in text.lower():
                 return int(text)
@@ -2463,6 +2579,7 @@ def _block(lines: list, places: list, position: int) -> tuple:
                 statements.append(("for", "", line[6:-1], "", body, place))
             else:
                 start, condition, step = line[4:-1].split(";")
+                start = _CALL_IN_A_FOR_S_START.sub(r"\1", start)
                 statements.append(("for", start, condition, step, body, place))
         else:
             statements.append(("simple", line, place))

@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.5.4] - 2026-11-23
+
+- The simulator and the tests now run a method call used as a value, as in `sys0=fs0.open(t0.txt)`.
+- A method without parentheses, such as `fs0.close`, now does nothing in the simulator and tests.
+
 ### [0.5.3] - 2026-11-23
 
 - `nxwright compile` now compiles code that reads or sets a hotspot's `aph`.

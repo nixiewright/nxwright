@@ -349,6 +349,8 @@ Each file stream has its own open file.
 - Code may set `val`, even past the end of the file. A `val` below 0 is ignored (0x1C).
 - A `read` or `write` does nothing if no file is open, or if it would go past the end of the file from `val`. The one exception is a `read` past the end, which still cuts its text after the first `start` + `count` bytes, whatever `start` is. For example, it can cut "IJ" to "I".
 - `find` runs, but has no effect, whatever the file. What a screen does with it is not known.
+- A method call can be used as a value, as in `sys0=fs0.open(t0.txt)`. It gives 1 if the method succeeds, and 0 if it fails. `close` always gives 1, and `find` always gives 0. A data record's methods and a file browser's `up()` can be used the same way.
+- A method written without its parentheses, such as `fs0.close`, does nothing. A method call in the first part of a `for`, as in `for(sys0=fs0.close();sys0<3;sys0++)`, is not run either.
 
 ### Data records
 

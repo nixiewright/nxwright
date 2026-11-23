@@ -849,6 +849,14 @@ class MethodCallAsValueTest(_CodeOnFirstTestCase):
                 "cannot contain a call. Use a `while` loop.")):
             export_dump(self.source, self.folder / "rejected")
 
+    def test_a_folder_s_test_runs_a_call_as_a_value(self):
+        # An `open` of a missing file gives 0, and a `close` gives 1, so
+        # `n0.val` ends at 6. The last line, a method without its
+        # parentheses, does nothing.
+        self.write_code('n0.val=fs0.open("sd0/none.txt")+5', "n0.val+=fs0.close()", "fs0.close")
+        values = SourceFolderRunner(self.source).run("first", [("first", "down")])
+        self.assertEqual(values["n0.val"], 6)
+
     def test_a_method_alone_on_a_line(self):
         self.write_code("fs0.close", "fs0.open", "fs0.read", "d0.clear", "d0.up", "fb0.up",
                         "first.fs0.close")
