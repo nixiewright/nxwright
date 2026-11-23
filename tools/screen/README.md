@@ -1,6 +1,8 @@
 # A probe of `ram/` files for a real screen
 
-`ram_probe.py` checks whether a real screen follows the rules that nxwright's simulator took from the Nextion Editor's simulator for files in `ram/`, for the names of the SD cards, and for a data record or a file browser whose path is in `ram/`. The probe sends the screen the instructions that the Nextion Editor's simulator was given, and writes a report that shows where the screen answers differently. No real screen has been checked yet.
+`ram_probe.py` checks a real screen against the rules that nxwright's simulator follows for files in `ram/`, for the names of the SD cards, and for a data record or a file browser whose path is in `ram/`. The simulator took those rules from the Nextion Editor's simulator. The probe sends the screen the instructions that the Nextion Editor's simulator was given, and writes a report that shows where the screen answers differently.
+
+The probe's checks of a data record cannot run on a real screen yet. The project's data records have `init` 1. On an NX8048P070, the screen showed "Fat cache error" and stopped answering as soon as a check set a data record's `path`. Those checks need the project's data records to have `init` 0.
 
 ## What you need
 

@@ -71,6 +71,12 @@ An app can leave a screen black or unresponsive through a setting it saved, such
 
 See [rescue](commands.md#rescue) for the settings the file resets. Nextion describes the card in [Developing HMI projects](https://nextion.tech/2022/07/18/developing-hmi-projects-a-way-around-these-oops-moments/).
 
+### If the screen restarts when a sound plays
+
+A screen can restart as soon as a sound starts, or a moment later. The likely cause is a power supply that cannot deliver the extra current the speaker draws. An NX8048P070 powered through a USB serial adapter restarted with a tone at full volume, but not with the same tone at `volume=50`, or with a quieter tone at full volume.
+
+To avoid the restarts, power the screen from a supply that can deliver more current. You can also make the sound quieter, by setting `volume` below 100 or by lowering the level of the sound itself.
+
 ## Recovering a project from its TFT file
 
 If you still have your app's TFT file, but no longer have its project, `nxwright decompile` turns the file back into a source folder:
