@@ -173,6 +173,10 @@ In strict Nextion syntax, the build refuses a line the Nextion Editor cannot rea
 
 - A value that is not operands joined by operators, such as `n0.val=2+`, `n0.val=+2`, or `n0.val=(1+2)` ("Invalid Variables"). After an operator, a minus can start a number, as in `n0.val=2*-16`, but not a name: `n0.val=2*-n1.val` is refused.
 - A call of a name that is not a method, such as `n0.val()`, or a call that has another call among its arguments. A method call is also rejected in the last part of a `for`, and when its result is put in a text, as in `t0.txt=fs0.open(t0.txt)`. A valid call can be part of a value, as in `n0.val=fs0.open(t0.txt)+1`.
+  - In nxlang, only `n0.val()` is rejected. The other three build ([nxlang-compiled.md](nxlang-compiled.md#how-expressions-are-written)):
+    - `n0.val=fs0.read(t0.txt,fs0.close(),2)`: nxlang computes the inner call into a temporary variable first.
+    - `t0.txt=fs0.open(t0.txt)`: nxlang computes the call into a temporary variable, then puts its digits in the text.
+    - `for(n0.val=0;n0.val<3;n0.val+=fs0.close())`: nxlang rewrites the `for` as its first part followed by a `while` loop.
 - An assignment with no value: `n0.val=` ("Invalid command").
 - A line that is only an attribute, such as `n0.val` ("Invalid command"). A method can be alone on a line, as in `fs0.close`.
 - Where a command takes a number ([Texts and numbers](#texts-and-numbers)), an operand the Nextion Editor does not read, as in `cls 5a`, `cls 1_000`, `cls RED+*1`, or `cls -n0.val` ("Invalid Variables").
@@ -196,7 +200,7 @@ The build refuses a file stream call with the wrong number of arguments ("Invali
 
 - A text is fine as `open`'s path, as in `fs0.open(t0.txt)`.
 - Arithmetic is fine in `read`'s numbers, as in `fs0.read(t0.txt,n0.val+1,2)`.
-- nxlang passes a file stream call through as written, so the build refuses the wrong number of arguments in nxlang too.
+- The wrong number of arguments is rejected in nxlang too.
 
 ### First arguments
 

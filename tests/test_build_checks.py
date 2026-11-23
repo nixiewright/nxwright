@@ -26,7 +26,7 @@ from nxwright.source.source_folder import (app_text, export_dump, folder_reader,
                                            switch_to_nxlang)
 from nxwright.testing import SourceFolderRunner
 from tests.test_project_writer import edit_text
-from tests.test_source_folder import SourceFolderTestCase
+from tests.test_source_folder import SourceFolderTestCase, assert_same_dump_files
 
 
 def add_component(page_file: Path, name: str, text: str = None, limit: int = None,
@@ -856,6 +856,42 @@ class MethodCallAsValueTest(_CodeOnFirstTestCase):
         self.write_code('n0.val=fs0.open("sd0/none.txt")+5', "n0.val+=fs0.close()", "fs0.close")
         values = SourceFolderRunner(self.source).run("first", [("first", "down")])
         self.assertEqual(values["n0.val"], 6)
+
+    def test_in_nxlang(self):
+        switch_to_nxlang(self.source)
+        self.write_code("n0.val = fs0.open(t0.txt)", 'n0.val = 2 + d0.insert("a" + t0.txt)',
+                        "n0.val = fb0.up()", "if (fs0.close() == 1) {", "  n0.val = 0", "}",
+                        "for (n0.val = fs0.close(); n0.val < 3; n0.val++) {", "}")
+        export_dump(self.source, self.folder / "built")
+        page = next((self.folder / "built" / "pages").glob("*-first.txt")).read_text(
+            encoding="utf-8")
+        self.assertIn("| n0.val=fs0.open(t0.txt)\n", page)
+        self.assertRegex(page,
+                         r'\| (__s\w+\.txt)="a"\+t0\.txt\n\s*\| n0\.val=2\+d0\.insert\(\1\)\n')
+        self.assertIn("| n0.val=fb0.up()\n", page)
+        self.assertRegex(page, r"\| (__g\w+)=fs0\.close\(\)\n\s*\| if\(\1==1\)\n")
+        self.assertRegex(page, r"\| n0\.val=fs0\.close\(\)\n\s*\| while\(n0\.val<3\)\n")
+
+    def test_nxlang_rejects_an_invalid_call(self):
+        switch_to_nxlang(self.source)
+        for number, (line, message) in enumerate((
+                ("n0.val = n0.val()", "`n0.val` is not a method, it cannot be called"),
+                ("n0.val = fs0.close(1)", "`fs0.close` takes no arguments"))):
+            with self.subTest(line=line):
+                self.write_code(line)
+                with self.assertRaisesRegex(NxwrightError,
+                                            r"first\.nx:2: %s$" % re.escape(message)):
+                    export_dump(self.source, self.folder / ("rejected%d" % number))
+
+    def test_a_switch_to_nxlang_keeps_the_meaning_of_a_call_in_a_value(self):
+        self.write_code("n0.val=fs0.open(t0.txt)+1*2", "n0.val=fs0.read(t0.txt,n0.val+1*2,2)")
+        export_dump(self.source, self.folder / "before")
+        switch_to_nxlang(self.source)
+        self.assertEqual((self.source / "pages" / "first.nx").read_text(encoding="utf-8"),
+                         "on first.down:\n  n0.val=(fs0.open(t0.txt)+1)*2\n"
+                         "  n0.val=fs0.read(t0.txt,(n0.val+1)*2,2)\n")
+        export_dump(self.source, self.folder / "after")
+        assert_same_dump_files(self, self.folder / "before", self.folder / "after")
 
     def test_a_method_alone_on_a_line(self):
         self.write_code("fs0.close", "fs0.open", "fs0.read", "d0.clear", "d0.up", "fb0.up",

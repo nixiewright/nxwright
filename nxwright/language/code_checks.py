@@ -188,7 +188,8 @@ FILE_BROWSER_ARGUMENTS = {"up": 0}
 # The types whose calls are checked only for how many arguments they have.
 # A data record's calls are also checked for the kind of each argument
 # (DATA_RECORD_ARGUMENTS).
-_ARGUMENT_COUNTS = {"file-stream": FILE_STREAM_ARGUMENTS, "file-browser": FILE_BROWSER_ARGUMENTS}
+METHOD_ARGUMENT_COUNTS = {"file-stream": FILE_STREAM_ARGUMENTS,
+                          "file-browser": FILE_BROWSER_ARGUMENTS}
 # What comes just before the parenthesis that opens a call: the component,
 # named with or without its page, then the name called.
 _CALL_OPENING = re.compile(r"((?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*)\.([A-Za-z_]\w*)$")
@@ -1124,7 +1125,7 @@ def _object_type(named: str, objects: ObjectNames):
     return own.get(name) or (objects.pages.get(name) or {}).get(name)
 
 
-def _is_method(type_name: str, attribute: str) -> bool:
+def is_method(type_name: str, attribute: str) -> bool:
     """Whether `attribute` is a method of the type `type_name`. A method is
     an attribute that code calls, such as a file stream's `open`."""
     described = describe(type_name, attribute)
@@ -1153,7 +1154,7 @@ def _check_method_calls(code: str, objects: ObjectNames, number: int):
         type_name = _object_type(call.component, objects)
         if type_name is None:
             continue
-        if not _is_method(type_name, call.method):
+        if not is_method(type_name, call.method):
             raise NxwrightError("`%s`: `%s` is not a method, it cannot be called"
                                 % (code, call.name), line=number)
         if call.inside is not None:
@@ -1195,7 +1196,7 @@ def _check_method_arguments(call: _MethodCall, type_name: str, number: int):
     text's `dir`."""
     arguments = ARGUMENT.findall(call.arguments)
     if type_name != "data-record":
-        count = _ARGUMENT_COUNTS.get(type_name, {}).get(call.method)
+        count = METHOD_ARGUMENT_COUNTS.get(type_name, {}).get(call.method)
         if count is not None and len(arguments) != count:
             raise NxwrightError(method_count_refusal(call.name, count), line=number)
         return
@@ -1222,7 +1223,7 @@ def _check_attribute_alone(code: str, objects: ObjectNames, number: int):
     if alone is None:
         return
     type_name = _object_type(alone[1], objects)
-    if type_name is not None and not _is_method(type_name, alone[2]):
+    if type_name is not None and not is_method(type_name, alone[2]):
         raise NxwrightError("`%s` is not a method, so it cannot be alone on a line" % code,
                             line=number)
 

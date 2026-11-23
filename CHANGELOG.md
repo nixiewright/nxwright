@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.5.5] - 2026-11-23
+
+- nxlang now accepts a method call as a value, as in `n0.val = fs0.open(t0.txt)`.
+- In nxlang, a `for` can have a method call in its first or last part, and the call runs (unlike strict nextion syntax, which silently drops the call)
+
 ### [0.5.4] - 2026-11-23
 
 - The simulator and the tests now run a method call used as a value, as in `sys0=fs0.open(t0.txt)`.

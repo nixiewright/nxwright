@@ -25,8 +25,8 @@ import re
 from nxwright import NxwrightError
 from nxwright.language.code_lines import outside_strings, split_line
 from nxwright.language.nxlang import (COMPOUND_ASSIGNMENTS, LEVELS, PRECEDENCE, Binary, Literal,
-                                      NotParsed, OwnAttribute, Parser, Reference, Unary, kind_of,
-                                      same_as_editor, tokenize)
+                                      MethodCall, NotParsed, OwnAttribute, Parser, Reference,
+                                      Unary, kind_of, same_as_editor, tokenize)
 
 # The generated globals are declared this many to a line of program.s.
 DECLARATIONS_PER_LINE = 50
@@ -174,6 +174,9 @@ def write_expression(expression, parent: int = -1, right_side: bool = False) -> 
     if isinstance(expression, Reference):
         return ".".join(name if index is None else "%s[%s]" % (name, write_expression(index))
                         for name, index in expression.parts)
+    if isinstance(expression, MethodCall):
+        return "%s(%s)" % (expression.name, ",".join(write_expression(argument)
+                                                    for argument in expression.arguments))
     if isinstance(expression, Unary):
         return expression.operator + write_expression(expression.operand, len(LEVELS))
     level = PRECEDENCE[expression.operator]

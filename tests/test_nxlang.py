@@ -778,6 +778,190 @@ class DataRecordCallTest(unittest.TestCase):
                 self.compiled(code)
 
 
+class MethodCallAsValueTest(unittest.TestCase):
+    """A method call used as a value. Here `fs` is the page's file stream,
+    `d` its data record, and `fb` its file browser."""
+
+    TYPES = {"p": {"p": "page", "fs": "file-stream", "d": "data-record", "fb": "file-browser",
+                   "x": "number", "t0": "text", "t1": "text"}}
+
+    def compiled(self, code: str) -> list:
+        return compile_lines(code, components=COMPONENTS + ["fs", "fb"], object_types=self.TYPES)
+
+    def ran(self, code: str) -> dict:
+        return run(code, components=COMPONENTS + ["fs", "fb"], object_types=self.TYPES)
+
+    def test_a_call_in_a_number_value_is_written_as_it_is(self):
+        for code, lines in (
+                ("x.val = fs.open(t0.txt)", ["x.val=fs.open(t0.txt)"]),
+                ('x.val = d.insert("a^b")', ['x.val=d.insert("a^b")']),
+                ("x.val = fb.up()", ["x.val=fb.up()"]),
+                ("x.val = p.fs.close()", ["x.val=p.fs.close()"]),
+                ("x.val = 2 + fs.open(t0.txt)", ["x.val=2+fs.open(t0.txt)"]),
+                ("x.val += fs.close()", ["x.val+=fs.close()"]),
+                ("x.val = fs.open(t0.txt) + fs.find(t0.txt)",
+                 ["x.val=fs.open(t0.txt)+fs.find(t0.txt)"]),
+                # The call is an operand of the chain like any other.
+                ("x.val = a.val + fs.close() * 2", ["x.val=fs.close()*2+a.val"]),
+                ("x.val = a.val - fs.close() * 2", ["__g0_0=fs.close()*2", "x.val=a.val-__g0_0"])):
+            with self.subTest(code=code):
+                self.assertEqual(self.compiled(code), lines)
+
+    def test_calls_run_in_the_order_written(self):
+        # nxlang computes the right side of the first two on a line of its
+        # own. A call left as written on the left would run after it, so
+        # the left side's call is computed first.
+        for code, lines in (
+                ("x.val = fs.open(t0.txt) + fs.read(t0.txt, 0, 1) * 2",
+                 ["__g0_0=fs.open(t0.txt)", "__g0_1=fs.read(t0.txt,0,1)*2",
+                  "x.val=__g0_0+__g0_1"]),
+                ("x.val = fs.open(t0.txt) - fs.find(t0.txt) * 2",
+                 ["__g0_0=fs.open(t0.txt)", "__g0_1=fs.find(t0.txt)*2", "x.val=__g0_0-__g0_1"]),
+                # Swapping the sides keeps the order of these two calls.
+                ("x.val = a.val + fs.open(t0.txt) * fs.close()",
+                 ["x.val=fs.open(t0.txt)*fs.close()+a.val"]),
+                # A side without a call can still swap places with a call. As
+                # in C, whether that side is read before or after the call is
+                # not defined.
+                ("x.val = fs.close() + a.val * 2", ["x.val=a.val*2+fs.close()"]),
+                ("x.val = fs.read(t0.txt, 0, 2) + fs.val * 2",
+                 ["x.val=fs.val*2+fs.read(t0.txt,0,2)"])):
+            with self.subTest(code=code):
+                self.assertEqual(self.compiled(code), lines)
+
+    def test_a_method_call_runs_before_a_function_written_after_it(self):
+        compiled = compile_page(
+            "p", COMPONENTS + ["fs"], ProgramNames(), [("p.nx", [])],
+            {KEY: ("p.nx", _numbered("x.val = fs.close() + twice(a.val) * 3"))},
+            {"twice": ("p.nx", 10, "function twice(n: number) -> number:",
+                       [(11, "  return n * 2")])},
+            object_types=self.TYPES)
+        code = [line.strip() for line in preprocess(compiled.events[KEY], NO_NAMES)]
+        closes = next(place for place, line in enumerate(code) if "fs.close()" in line)
+        clicks = next(place for place, line in enumerate(code) if line.startswith("click "))
+        self.assertLess(closes, clicks)
+
+    def test_a_local_takes_a_call(self):
+        self.assertEqual(self.ran("var closed = fs.close()\nx.val = closed + 4")["x.val"], 5)
+
+    def test_an_argument_is_computed_first(self):
+        for code, lines in (
+                # Joined texts, which the Nextion Editor rejects in a path.
+                ('x.val = fs.open("sd0/" + t0.txt)',
+                 ['__s0.txt="sd0/"+t0.txt', "x.val=fs.open(__s0.txt)"]),
+                # Arithmetic in a number argument of a file stream's call
+                # stays in the call.
+                ("x.val = fs.read(t0.txt, a.val + 1, 2)", ["x.val=fs.read(t0.txt,a.val+1,2)"]),
+                ("x.val = fs.read(t0.txt, a.val * (b.val + 1), 2)",
+                 ["x.val=fs.read(t0.txt,b.val+1*a.val,2)"]),
+                ("x.val = fs.read(t0.txt, a.val - b.val * 2, 2)",
+                 ["__g0_0=b.val*2", "x.val=fs.read(t0.txt,a.val-__g0_0,2)"]),
+                # A data record's arguments, as in its call on its own line.
+                ('x.val = d.insert("Total: " + t0.txt)',
+                 ['__s0.txt="Total: "+t0.txt', "x.val=d.insert(__s0.txt)"]),
+                ("x.val = d.delete(a.val + 1, 2)", ["__g0_0=a.val+1", "x.val=d.delete(__g0_0,2)"]),
+                ("x.val = d.insert(a.val)",
+                 ["covx a.val,__s0.txt,0,0", "x.val=d.insert(__s0.txt)"])):
+            with self.subTest(code=code):
+                self.assertEqual(self.compiled(code), lines)
+
+    def test_a_call_among_a_call_s_arguments_is_computed_first(self):
+        # The Nextion Editor rejects a call among another call's arguments.
+        self.assertEqual(self.compiled("x.val = fs.read(t0.txt, fs.close(), 2)"),
+                         ["__g0_0=fs.close()", "x.val=fs.read(t0.txt,__g0_0,2)"])
+        self.assertEqual(self.compiled("x.val = fs.read(t0.txt, fs.close() + 1, 2)"),
+                         ["__g0_0=fs.close()", "x.val=fs.read(t0.txt,__g0_0+1,2)"])
+        self.assertEqual(self.compiled("x.val = d.insert(fs.close())"),
+                         ["__g0_0=fs.close()", "covx __g0_0,__s0.txt,0,0",
+                          "x.val=d.insert(__s0.txt)"])
+
+    def test_a_call_in_a_condition_is_computed_first(self):
+        self.assertEqual(self.compiled("if (fs.open(t0.txt) == 1) {\n  x.val = 1\n}"),
+                         ["__g0_0=fs.open(t0.txt)", "if(__g0_0==1)", "{", "  x.val=1", "}"])
+        self.assertEqual(self.compiled("if (!fs.open(t0.txt)) {\n  x.val = 1\n}"),
+                         ["__g0_0=fs.open(t0.txt)", "if(__g0_0==0)", "{", "  x.val=1", "}"])
+        # A while loop computes it again at the end of each pass.
+        self.assertEqual(self.compiled("while (fs.read(t0.txt, 0, 1) == 1) {\n  x.val++\n}"),
+                         ["__g0_0=fs.read(t0.txt,0,1)", "while(__g0_0==1)", "{", "  x.val++",
+                          "  __g0_0=fs.read(t0.txt,0,1)", "}"])
+
+    def test_a_call_after_and_runs_only_when_needed(self):
+        self.assertEqual(
+            self.compiled("if (a.val == 1 && fs.open(t0.txt) == 1) {\n  x.val = 1\n}"),
+            ["__g0_0=0", "if(a.val==1)", "{", "  __g0_1=fs.open(t0.txt)", "  if(__g0_1==1)", "  {",
+             "    __g0_0=1", "  }", "}", "if(__g0_0==1)", "{", "  x.val=1", "}"])
+
+    def test_a_call_in_a_command_s_argument_is_computed_first(self):
+        self.assertEqual(self.compiled("print fs.close()"), ["__g0_0=fs.close()", "print __g0_0"])
+
+    def test_a_call_in_an_index_is_computed_first(self):
+        self.assertEqual(self.compiled("x.val = b[fs.close()].val"),
+                         ["__g0_0=fs.close()", "x.val=b[__g0_0].val"])
+
+    def test_a_call_put_in_a_text_becomes_its_digits(self):
+        # The Nextion Editor rejects a call put in a text. Any number put
+        # in a text becomes its digits, through covx.
+        self.assertEqual(self.compiled("t0.txt = fs.open(t1.txt)"),
+                         ["__g0_0=fs.open(t1.txt)", "covx __g0_0,t0.txt,0,0"])
+        self.assertEqual(self.compiled('t0.txt = "n: " + fs.close()'),
+                         ["__g0_0=fs.close()", "covx __g0_0,__s0.txt,0,0", 't0.txt="n: "+__s0.txt'])
+        self.assertEqual(self.ran('t0.txt = "n: " + fs.close()')["t0.txt"], "n: 1")
+
+    def test_a_for_with_a_call_in_its_first_part_runs_the_call(self):
+        # The Nextion Editor compiles such a first part without the call's
+        # parentheses, so the screen does not run the call. If nxlang kept
+        # the for line, x would start at 101, the value that `close` has as
+        # an attribute, and the loop would not run.
+        code = "for (x.val = fs.close(); x.val < 3; x.val++) {\n  a.val++\n}"
+        self.assertEqual(self.compiled(code),
+                         ["x.val=fs.close()", "while(x.val<3)", "{", "  a.val++", "  x.val++", "}"])
+        values = self.ran(code)
+        self.assertEqual((values["x.val"], values["a.val"]), (3, 9))
+
+    def test_a_for_with_a_call_in_its_last_part_runs_the_call(self):
+        # The Nextion Editor rejects a call in the last part of a for.
+        code = "for (x.val = 0; x.val < 3; x.val += fs.close()) {\n  a.val++\n}"
+        self.assertEqual(self.compiled(code), ["x.val=0", "while(x.val<3)", "{", "  a.val++",
+                                               "  x.val+=fs.close()", "}"])
+        values = self.ran(code)
+        self.assertEqual((values["x.val"], values["a.val"]), (3, 10))
+
+    def test_a_for_without_a_call_stays_a_for(self):
+        self.assertEqual(self.compiled("for (x.val = 0; x.val < 3; x.val++) {\n  a.val++\n}"),
+                         ["for(x.val=0;x.val<3;x.val++)", "{", "  a.val++", "}"])
+
+    def test_rejections(self):
+        for code, pattern in (
+                ("x.val = x.val()", "`x.val` is not a method, it cannot be called"),
+                ("x.val = fs.val(5)", "`fs.val` is not a method, it cannot be called"),
+                # `up` is a method of a data record and of a file browser,
+                # not of a page.
+                ("x.val = p.up()", "`p.up` is not a method, it cannot be called"),
+                ("x.val = fs.close(1)", "`fs.close` takes no arguments"),
+                ("x.val = fs.open()", "`fs.open` takes 1 argument"),
+                ("x.val = 1 + fs.read(t0.txt)", "`fs.read` takes 3 arguments"),
+                ("x.val = fb.up(1)", "`fb.up` takes no arguments"),
+                ("x.val = d.clear(1)", "`d.clear` takes no arguments"),
+                ("x.val = d.delete(t0.txt, 1)",
+                 "argument 1 of `d.delete` must be a number, not text"),
+                ("if (fs.close(1) == 1) {\n}", "`fs.close` takes no arguments"),
+                ("x.val = q.open(t0.txt)",
+                 "`q.open` cannot be called, because the type of `q` is not known"),
+                ("fs.open(t0.txt) = 1", "a call cannot be assigned to")):
+            with self.subTest(code=code), self.assertRaisesRegex(
+                    NxwrightError, ":1: " + re.escape(pattern) + "$"):
+                self.compiled(code)
+
+    def test_a_call_on_its_own_line_is_written_as_it_is(self):
+        # nxlang writes it as it is, and the build checks it.
+        for code in ("fs.open(t0.txt)", "fs.close()", "fs.close", "fb.up()", "fs.close(1)",
+                     "x.val(5)"):
+            with self.subTest(code=code):
+                self.assertEqual(self.compiled(code), [code])
+        self.assertEqual(self.compiled("fs.read(t0.txt, x.val * (2 + 1), 2)"),
+                         ["fs.read(t0.txt,x.val*(2+1),2)"])
+
+
 class CommandArgumentTest(unittest.TestCase):
     """get, print, prints, and covx, whose first argument the Editor takes as
     one text or number: one of more operands is computed first. Their other
@@ -835,6 +1019,20 @@ class EditorMeaningTest(unittest.TestCase):
                   "  t0.txt=t1.txt+\"a\"", "}else", "{", "  x.val=0-a.val*2", "}"]
         nxlang_lines = keep_editor_meaning(list(enumerate(editor, start=1)))
         self.assertEqual(compile_lines("\n".join(text for _, text in nxlang_lines)),
+                         editor_equivalent(editor))
+
+    def test_a_method_call_in_a_value(self):
+        # The call is one operand of the chain, and its arguments are read
+        # from left to right too.
+        editor = ["x.val=fs.open(t0.txt)+1*2", "x.val=fs.read(t0.txt,a.val+1*2,2)",
+                  "x.val-=fs.close()+1", "x.val=2*a.val+fs.close()"]
+        nxlang_lines = keep_editor_meaning(list(enumerate(editor, start=1)))
+        self.assertEqual([text for _, text in nxlang_lines],
+                         ["x.val=(fs.open(t0.txt)+1)*2", "x.val=fs.read(t0.txt,(a.val+1)*2,2)",
+                          "x.val=x.val-fs.close()+1", "x.val=2*a.val+fs.close()"])
+        self.assertEqual(compile_lines("\n".join(text for _, text in nxlang_lines),
+                                       components=COMPONENTS + ["fs"],
+                                       object_types={"p": {"fs": "file-stream"}}),
                          editor_equivalent(editor))
 
     def test_hex_written_0X(self):

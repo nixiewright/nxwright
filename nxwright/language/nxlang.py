@@ -32,6 +32,15 @@ What the Editor allows, and so what the compiler works around:
     names are short and numbered.
   - A hotspot is at least 2 by 2, and `click` runs its Touch Press event
     at once, even with its touch turned off by `tsw`.
+  - The Nextion Editor rejects a method call, such as `fs0.open(t0.txt)`,
+    among another call's arguments and in the step of a `for`. In the start
+    of a `for`, it compiles the call without its parentheses, so the screen
+    does not run the call. A `for` with a call in its start or step
+    therefore becomes a `while` loop. In arithmetic, a call is an operand
+    like any other, and is written unchanged, as in
+    `x.val=2+fs0.open(t0.txt)`. In a condition, in an index, among another
+    call's arguments, and where a command takes one value, the call is
+    computed into a temporary first.
 
 A page has at most 250 components (editor_limits.MOST_COMPONENTS), so the
 compiler adds as few as it can. Every number it needs is an `int` global of
@@ -105,10 +114,11 @@ import re
 from nxwright import NxwrightError, listed_in_words
 from nxwright.language.code_checks import (COMPONENT_PLACES, CONDITIONAL_READ_PLACES,
                                            DATA_RECORD_ARGUMENTS,
-                                           DATA_RECORD_CALL, NUMBER_PLACES, ONE_OPERAND_FIRST,
+                                           DATA_RECORD_CALL, METHOD_ARGUMENT_COUNTS,
+                                           NUMBER_PLACES, ONE_OPERAND_FIRST,
                                            READ_ONE_OPERAND_PLACES, SCREEN_ARRAY,
                                            TEXTS_READ_BYTE_BY_BYTE, ends_in_escaped_backslash,
-                                           is_one_operand, method_count_refusal,
+                                           is_method, is_one_operand, method_count_refusal,
                                            misread_byte_by_byte, page_name_refusal,
                                            refused_page_name)
 from nxwright.language.code_lines import (LABEL, OWN_ATTRIBUTE, chain_parts, command_arguments,
@@ -122,7 +132,7 @@ from nxwright.project.editor_language import (EDITOR_COLOURS, EDITOR_PROGRAM_VAR
                                               EDITOR_SYSTEM_VARIABLES,
                                               UNDECLARED_PROGRAM_VARIABLE)
 from nxwright.project.editor_limits import LONGEST_LINES, NAME_LIMIT
-from nxwright.project.object_types import TYPES_BY_NAME
+from nxwright.project.object_types import TYPE_NAMES, TYPES_BY_NAME
 from nxwright.project.page_file_names import page_file_stem
 from nxwright.project.page_text import STRING_ATTRIBUTES, is_string_attribute
 from nxwright.project.screen_arithmetic import int32
@@ -333,6 +343,19 @@ class Call:
     arguments: tuple
 
 
+@dataclass(frozen=True)
+class MethodCall:
+    """A call of a component's method, such as `fs0.open(t0.txt)`, with its
+    argument expressions. Its value is a number: 1 if the method succeeds,
+    and 0 if it fails."""
+    name: str           # as written: fs0.open, or page1.fs0.open
+    # The type of the component, under the name that page files use for the
+    # type, such as "file-stream". None for code in strict Nextion syntax,
+    # which is read without the pages' types (editor_code.py).
+    type_name: str
+    arguments: tuple
+
+
 @dataclass
 class Generated:
     """A component the compiler adds to a page: a text variable (`kind` TEXT)
@@ -456,7 +479,8 @@ def _whole_expression(parser: "Parser"):
 class Parser:
     """Reads expressions from tokens. `left_to_right` reads them as the Editor
     does: one chain of operators, each applied in turn. With a `scope`, a
-    constant or local is read as its value, and a name before "(" as a call."""
+    constant or local is read as its value, and a name before "(" as a call.
+    Names joined by dots before "(" are a call of a component's method."""
 
     def __init__(self, tokens: list, number: int, scope=None, left_to_right: bool = False):
         self.tokens, self.position, self.number = tokens, 0, number
@@ -563,14 +587,7 @@ class Parser:
     def call(self, name: str) -> Call:
         """Reads the arguments of a call of the function `name`, from its "("."""
         function = self.scope.function(name, self.number)
-        self.take()
-        arguments = []
-        if self.peek() != ")":
-            arguments.append(self.expression())
-            while self.peek() == ",":
-                self.take()
-                arguments.append(self.expression())
-        self.expect(")")
+        arguments = self.call_arguments()
         if len(arguments) != len(function.parameters):
             wanted = len(function.parameters)
             raise NxwrightError("`%s` takes %d %s, not %d"
@@ -578,9 +595,44 @@ class Parser:
                                    len(arguments)), line=self.number)
         return Call(function, tuple(arguments))
 
+    def call_arguments(self) -> list:
+        """Reads a call's arguments, from its "(" to its ")", and returns
+        their expressions."""
+        self.expect("(")
+        arguments = []
+        if self.peek() != ")":
+            arguments.append(self.expression())
+            while self.peek() == ",":
+                self.take()
+                arguments.append(self.expression())
+        self.expect(")")
+        return arguments
+
+    def method_call(self, parts: list) -> MethodCall:
+        """Reads a call of a component's method from its "(", and returns
+        it. `parts` is the list that `reference` builds from the names
+        before the "(", each with its index: for `fs0.open`, the names
+        `fs0` and `open`. Raises NotParsed if the type of the component is
+        not known, or if a name has an index. _Emitter.method_call checks
+        that the name is a method, and that the arguments suit it, when the
+        call is used as a value. A call on its own line is written as it
+        is, and the build checks it."""
+        names = [name for name, _ in parts]
+        if any(index is not None for _, index in parts):
+            raise NotParsed("unexpected `(`", line=self.number)
+        type_name = None
+        if self.scope is not None:
+            type_name = _object_type(names[:-1], self.scope.page)
+            if type_name is None:
+                raise NotParsed("`%s` cannot be called, because the type of `%s` is not known"
+                                % (".".join(names), ".".join(names[:-1])), line=self.number)
+        return MethodCall(".".join(names), type_name, tuple(self.call_arguments()))
+
     def reference(self, first: str):
         """Reads a name and its fields after `first`, such as p[0].b[1].txt.
-        A bare name that is a constant or local gives its value instead."""
+        A bare name that is a constant or local gives its value instead.
+        Names joined by dots and followed by "(" are a call of a component's
+        method."""
         parts = [(first, self.index())]
         while self.peek() == ".":
             self.take()
@@ -588,6 +640,8 @@ class Parser:
             if kind != "name":
                 raise NotParsed("expected a name after `.`", line=self.number)
             parts.append((text, self.index()))
+        if self.peek() == "(" and len(parts) > 1:
+            return self.method_call(parts)
         if len(parts) == 1 and parts[0][1] is None and self.scope is not None:
             found = self.scope.lookup(first)
             if found is not None:
@@ -629,6 +683,25 @@ def _type_number(type_value):
     return type_value if isinstance(type_value, int) and not isinstance(type_value, bool) else None
 
 
+def _object_type(names: list, page):
+    """Returns the type of the object that code writes as `names`, under
+    the name that page files use for the type, such as "file-stream".
+    `names` can be a component of the page being compiled (`fs0`), a
+    component with its page (`page1.fs0`), or a page. `page` is the
+    _PageState of the page being compiled. Returns None if `page` has no
+    type for the object. The build's check finds an object the same way
+    (code_checks._object_type)."""
+    types = page.object_types
+    if len(names) == 1:
+        own = types.get(page.page_name) or {}
+        found = own.get(names[0]) or (types.get(names[0]) or {}).get(names[0])
+    elif len(names) == 2:
+        found = (types.get(names[0]) or {}).get(names[1])
+    else:
+        found = None
+    return TYPE_NAMES.get(_type_number(found))
+
+
 def kind_of(expression, number: int) -> str:
     """Returns NUMBER or TEXT, the kind of the expression's value. Raises
     NxwrightError for text in arithmetic, and for what has a value only in a
@@ -643,6 +716,8 @@ def kind_of(expression, number: int) -> str:
             raise NxwrightError("function `%s` has no result"
                                 % expression.function.name, line=number)
         return expression.function.result
+    if isinstance(expression, MethodCall):
+        return NUMBER
     if isinstance(expression, Unary):
         if expression.operator == "!":
             raise NxwrightError("`!` can only be used in a condition", line=number)
@@ -684,20 +759,26 @@ def _is_atomic(expression) -> bool:
     return isinstance(expression, (Literal, Local, Reference))
 
 
-def _count_calls(expression) -> int:
+def _count_calls(expression, methods: bool = False) -> int:
+    """Returns how many calls of a page's functions `expression` contains.
+    With `methods`, the calls of components' methods count too."""
     if isinstance(expression, Call):
-        return 1 + sum(_count_calls(argument) for argument in expression.arguments)
+        return 1 + sum(_count_calls(argument, methods) for argument in expression.arguments)
+    if isinstance(expression, MethodCall):
+        return methods + sum(_count_calls(argument, methods)
+                             for argument in expression.arguments)
     if isinstance(expression, Binary):
-        return _count_calls(expression.left) + _count_calls(expression.right)
+        return _count_calls(expression.left, methods) + _count_calls(expression.right, methods)
     if isinstance(expression, Unary):
-        return _count_calls(expression.operand)
+        return _count_calls(expression.operand, methods)
     if isinstance(expression, Conditional):
         # Both sides count, though only one runs: a result copied when it
         # need not be costs a line, never a wrong value.
-        return sum(_count_calls(part) for part in
+        return sum(_count_calls(part, methods) for part in
                    (expression.condition, expression.then, expression.otherwise))
     if isinstance(expression, Reference):
-        return sum(_count_calls(index) for _, index in expression.parts if index is not None)
+        return sum(_count_calls(index, methods)
+                   for _, index in expression.parts if index is not None)
     return 0
 
 
@@ -921,13 +1002,29 @@ class _Emitter:
         # With two calls or more in a statement, a result is copied at once:
         # a later call could overwrite it.
         self.copy_results = False
+        # Whether a method call is written unchanged as an operand of a
+        # number's chain (see `chain`). When this is False, the call is
+        # computed into a temporary first. That is needed among another
+        # call's arguments, where the Nextion Editor rejects a call, and in
+        # an index, where a call has not been tried in the Nextion Editor.
+        self.calls_stay_as_written = True
+        # Whether a line of this emitter contains a method call as written.
+        # A for line cannot contain one (_EventCompiler.for_head).
+        self.wrote_a_call = False
         self.lines = []     # Editor code, indentation included
 
     def part(self, indent: str) -> "_Emitter":
         """Returns an emitter for a part of this statement, at another indentation."""
         part = _Emitter(self.temporaries, indent, self.number, self.variables)
         part.copy_results = self.copy_results
+        part.calls_stay_as_written = self.calls_stay_as_written
         return part
+
+    def add_part(self, part: "_Emitter"):
+        """Adds the lines of `part`, an emitter returned by the method
+        `part`, after this emitter's own."""
+        self.lines += part.lines
+        self.wrote_a_call = self.wrote_a_call or part.wrote_a_call
 
     def emit(self, code: str, extra_indent: str = ""):
         self.lines.append(self.indent + extra_indent + code)
@@ -980,7 +1077,9 @@ class _Emitter:
             else:
                 if kind_of(index, self.number) != NUMBER:
                     raise NxwrightError("an index must be a number", line=self.number)
-                inner = self.value(index) if in_condition else _render_chain(self.chain(index))
+                with self.calls_computed_first():
+                    inner = (self.value(index) if in_condition
+                             else _render_chain(self.chain(index)))
                 parts.append("%s[%s]" % (name, inner))
         return ".".join(parts)
 
@@ -999,6 +1098,11 @@ class _Emitter:
             target = self.temporary(kind)
             self.emit(target + "=" + result)
             return target
+        if isinstance(expression, MethodCall):
+            call = self.method_call(expression)
+            target = self.temporary(NUMBER)
+            self.emit(target + "=" + call)
+            return target
         if isinstance(expression, Conditional):
             return self.conditional(expression)
         kind = kind_of(expression, self.number)
@@ -1007,25 +1111,119 @@ class _Emitter:
         self.emit_assignment(target, kind, "=", chain)
         return target
 
+    def joins_a_chain(self, expression) -> bool:
+        """Whether `expression` is written unchanged as an operand of a
+        number's chain: a literal, a local, a reference, or a method call
+        where calls stay as written (calls_stay_as_written)."""
+        return _is_atomic(expression) or (isinstance(expression, MethodCall)
+                                          and self.calls_stay_as_written)
+
+    def operand(self, expression) -> str:
+        """Returns `expression` in strict Nextion syntax. `expression` must
+        be an operand that joins a chain (joins_a_chain)."""
+        if isinstance(expression, MethodCall):
+            self.wrote_a_call = True
+            return self.method_call(expression)
+        return self.atom(expression)
+
     def chain(self, expression) -> list:
-        """Returns a chain (see _render_chain) that computes the expression."""
+        """Returns a chain (see _render_chain) that computes the expression.
+        A method call is an operand of a number's chain, as in
+        `x.val=2+fs0.open(t0.txt)`."""
         kind = kind_of(expression, self.number)
         if kind == TEXT:
             return self.text_chain(expression)
-        if isinstance(expression, (Call, Conditional)):
+        if self.joins_a_chain(expression):
+            return [(None, self.operand(expression))]
+        if isinstance(expression, (Call, Conditional, MethodCall)):
             return [(None, self.value(expression))]
-        if _is_atomic(expression):
-            return [(None, self.atom(expression))]
         if isinstance(expression, Unary):
             # The Editor refuses "-x"; "0-x" starts a chain the same way.
             return [(None, "0"), ("-", self.value(expression.operand))]
         left, right = expression.left, expression.right
-        if _is_atomic(right):
-            return self.chain(left) + [(expression.operator, self.atom(right))]
-        if expression.operator in _NUMBER_COMMUTATIVE and _is_atomic(left):
+        if self.joins_a_chain(right):
+            return self.chain(left) + [(expression.operator, self.operand(right))]
+        contains_a_method_call = _count_calls(left, methods=True) > _count_calls(left)
+        if contains_a_method_call and _count_calls(right, methods=True):
+            # The right side is computed on lines of its own, before the
+            # statement's last line. A method call left as written on the
+            # left would run on that last line, after the right side's
+            # calls. So the left side's calls are computed into temporaries
+            # before the right side, which keeps the calls in the order
+            # written.
+            with self.calls_computed_first():
+                left_chain = self.chain(left)
+            return left_chain + [(expression.operator, self.value(right))]
+        if expression.operator in _NUMBER_COMMUTATIVE and self.joins_a_chain(left):
             # `a+b*c` becomes `b*c+a`, with no temporary.
-            return self.chain(right) + [(expression.operator, self.atom(left))]
+            return self.chain(right) + [(expression.operator, self.operand(left))]
         return self.chain(left) + [(expression.operator, self.value(right))]
+
+    def method_call(self, call: MethodCall) -> str:
+        """Returns a method call used as a value, in strict Nextion syntax,
+        such as `fs0.read(t0.txt,n0.val+1,2)`, after emitting the lines
+        that compute its arguments. Raises NxwrightError if the name is not
+        a method of the component's type, or if the arguments are not the
+        ones the method takes.
+
+        The Nextion Editor 1.68.2 rejects joined texts and another call
+        among a call's arguments, so those are computed into a temporary
+        first. It compiles arithmetic in a number argument of a file
+        stream's call, so that arithmetic is written unchanged. A data
+        record's arguments are compiled by data_record_operands, the same
+        way as when the call is on its own line."""
+        method = call.name.rpartition(".")[2]
+        if not is_method(call.type_name, method):
+            raise NxwrightError("`%s` is not a method, it cannot be called" % call.name,
+                                line=self.number)
+        with self.calls_computed_first():
+            if call.type_name == "data-record":
+                operands = self.data_record_operands(call.name, method, call.arguments)
+            else:
+                count = METHOD_ARGUMENT_COUNTS.get(call.type_name, {}).get(method)
+                if count is not None and len(call.arguments) != count:
+                    raise NxwrightError(method_count_refusal(call.name, count), line=self.number)
+                operands = [self.value(argument)
+                            if kind_of(argument, self.number) == TEXT or _is_atomic(argument)
+                            else _render_chain(self.chain(argument))
+                            for argument in call.arguments]
+        return "%s(%s)" % (call.name, ",".join(operands))
+
+    @contextmanager
+    def calls_computed_first(self):
+        """For the length of a `with` block, makes the emitter compute every
+        method call into a temporary first (calls_stay_as_written)."""
+        stay, self.calls_stay_as_written = self.calls_stay_as_written, False
+        try:
+            yield
+        finally:
+            self.calls_stay_as_written = stay
+
+    def data_record_operands(self, name: str, method: str, arguments: list) -> list:
+        """Returns each argument of a call of a data record's method, in
+        strict Nextion syntax, after emitting the lines that compute them.
+        `name` is the call's name as written, such as d0.insert. The
+        Nextion Editor takes each argument as one text or number
+        (DATA_RECORD_ARGUMENTS), so an argument of more than one operand is
+        computed into a temporary first. A number given for text becomes
+        its digits, as in an assignment. Raises NxwrightError for the wrong
+        number of arguments, and for text given for a number."""
+        kinds = [TEXT if kind is str else NUMBER for kind in DATA_RECORD_ARGUMENTS[method]]
+        if len(arguments) != len(kinds):
+            raise NxwrightError(method_count_refusal(name, len(kinds)), line=self.number)
+        operands = []
+        for place, (argument, kind) in enumerate(zip(arguments, kinds), 1):
+            given = kind_of(argument, self.number)
+            if kind == NUMBER and given == TEXT:
+                raise NxwrightError("argument %d of `%s` must be a number, not text"
+                                    % (place, name), line=self.number)
+            if kind == TEXT and given == NUMBER:
+                text = self.temporary(TEXT)
+                self.emit("covx %s,%s,0,0" % (self.value(argument), text))
+                operands.append(text)
+            else:
+                operands.append(self.value(argument))
+        return operands
 
     def text_chain(self, expression) -> list:
         """Returns the chain of a text expression. Joining is associative, so
@@ -1135,7 +1333,10 @@ class _Emitter:
         temporary = self.temporary(NUMBER)
         head = temporary + "="
         while _utf8_size(target + "=" + _render_chain(chain)) > LONGEST_LINE:
-            # Operands are names, numbers, and temporaries, so two always fit.
+            # Operands are names, numbers, temporaries, and method calls, so
+            # two fit on a line. The exception is a call whose argument is a
+            # very long quoted text. The build then rejects the line as too
+            # long.
             count = 2
             while (count < len(chain)
                    and _utf8_size(head + _render_chain(chain[:count + 1])) <= LONGEST_LINE):
@@ -1190,7 +1391,7 @@ class _Emitter:
         step further in."""
         part = self.part(self.indent + "  ")
         part.assign(target, kind, "=", expression)
-        self.lines += part.lines
+        self.add_part(part)
 
     def condition(self, expression) -> str:
         """Returns the Editor text of a condition, after emitting the lines
@@ -1253,7 +1454,7 @@ class _Emitter:
         With `||`, it sets `target` to 1, and its `else` tests the rest."""
         part = self.part(indent)
         condition = part._condition(children[0])
-        self.lines += part.lines
+        self.add_part(part)
         rest = children[1:]
         self.lines += [indent + "if(%s)" % condition, indent + "{"]
         if operator == "&&" and rest:
@@ -1629,8 +1830,9 @@ def compile_page(page_name: str, component_names, program: ProgramNames, preambl
     `object_types` gives the types of the pages' objects, {page: {name:
     type}}, types as page files name them ("data-record"), as the build's
     checks hold them (code_checks.ObjectNames): the page's own at
-    least, a page's None while unknown. A component's type tells the kind of
-    its attributes (attribute_kind), and the page's data records have their
+    least, a page's None while unknown. A component's type gives the kind of
+    its attributes (attribute_kind) and the methods that code can call as
+    values (_Emitter.method_call), and the page's data records have their
     calls compiled (_EventCompiler.data_record_call). `owners` gives an
     event's owner, {(object, event): Owner}, the object whose event it is:
     its lines have the form '&name&' replaced before they are compiled, as
@@ -2449,14 +2651,20 @@ class _EventCompiler:
         if step_tokens:
             self.statement_lines(step_tokens, number, step)
         if (len(init.lines) <= 1 and not test.lines and len(step.lines) <= 1 and not flag
+                and not init.wrote_a_call and not step.wrote_a_call
                 and not _holds_semicolon_text(init.lines + [condition] + step.lines)):
             self.put(number, "%sfor(%s;%s;%s)%s%s" % (indent, "".join(init.lines)[len(indent):],
                                                       condition, "".join(step.lines), brace, comment))
             return _Block("for")
-        # Not expressible in one for line, as when a part needs temporaries
-        # or holds a text the Editor refuses there: the start, then a while
-        # loop that runs the step and recomputes its condition's parts at the
-        # end of each pass. After a break, the step does not run, as in C.
+        # Some for heads cannot be written as one for line, such as a head
+        # with a part that needs temporaries, with a text the Nextion Editor
+        # rejects there, or with a method call in its start or step. The
+        # Nextion Editor rejects a call in the step. It compiles the start
+        # without the call's parentheses, so the screen does not run the
+        # call.
+        # A head of this kind becomes its start, then a while loop that runs
+        # the step and recomputes the condition's parts at the end of each
+        # pass. After a break, the step does not run, as in C.
         if flag:
             self.put(number, indent + flag + "=0")
         for line in init.lines + test.lines:
@@ -2607,30 +2815,14 @@ class _EventCompiler:
         return "goto " + name if target is not None else name + ":"
 
     def data_record_call(self, number: int, indent: str, call, comment: str):
-        """Compiles a call of a data record's method, `call` matching
-        DATA_RECORD_CALL. The Editor takes each argument as one text or number
-        (DATA_RECORD_ARGUMENTS), so one of more operands is computed into a
-        temporary first. A number given for text becomes its digits, as in an
-        assignment; text given for a number is refused."""
+        """Compiles a call of a data record's method on its own line, `call`
+        matching DATA_RECORD_CALL. _Emitter.data_record_operands compiles
+        its arguments."""
         name = "%s.%s" % (call[1], call[2])
-        kinds = [TEXT if kind is str else NUMBER for kind in DATA_RECORD_ARGUMENTS[call[2]]]
         arguments = self.arguments(call[3], number)
-        if len(arguments) != len(kinds):
-            raise NxwrightError(method_count_refusal(name, len(kinds)), line=number)
         emitter = self.emitter(indent, number)
         emitter.copy_results = sum(_count_calls(argument) for argument in arguments) > 1
-        operands = []
-        for place, (argument, kind) in enumerate(zip(arguments, kinds), 1):
-            given = kind_of(argument, number)
-            if kind == NUMBER and given == TEXT:
-                raise NxwrightError("argument %d of `%s` must be a number, not text" % (place, name),
-                                    line=number)
-            if kind == TEXT and given == NUMBER:
-                text = emitter.temporary(TEXT)
-                emitter.emit("covx %s,%s,0,0" % (emitter.value(argument), text))
-                operands.append(text)
-            else:
-                operands.append(emitter.value(argument))
+        operands = emitter.data_record_operands(name, call[2], arguments)
         emitter.emit("%s(%s)" % (name, ",".join(operands)))
         self.put_lines(number, emitter.lines, comment)
 
@@ -2857,6 +3049,10 @@ class _EventCompiler:
                 emitter.copy_results = _count_calls(target) > 1
                 emitter.call(target)
                 return emitter.lines
+            if isinstance(target, MethodCall) and parser.at_end():
+                # A method call on its own line is a command: nxlang writes
+                # it as it is, and the build checks it.
+                raise NotParsed("a method call is not an assignment", line=number)
             operator = parser.peek()
             if target is None or not (operator == "=" or operator in COMPOUND_ASSIGNMENTS
                                       or operator in ("++", "--")):
@@ -2871,7 +3067,7 @@ class _EventCompiler:
         parser.take()
         if isinstance(target, Literal):
             raise NxwrightError("a constant cannot be assigned", line=number)
-        if isinstance(target, Call):
+        if isinstance(target, (Call, MethodCall)):
             raise NxwrightError("a call cannot be assigned to", line=number)
         target_text = emitter.atom(target)
         target_kind = kind_of(target, number)

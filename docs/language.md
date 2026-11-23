@@ -94,6 +94,8 @@ A number that does not fit in 32 bits keeps only its low 32 bits, as in C, and `
 - Texts compare with `==` and `!=` only.
 - `&&` and `||` evaluate their right side only when needed, as in C. So `b != 0 && a / b > 1` never divides by 0. In `ready.val == 1 && save() == 1`, `save` runs only when `ready.val` is 1.
 - `? :` chooses a value, as in C, and runs only the chosen side: `t0.txt = ready.val ? "Ready" : "Waiting"`. Both sides must be numbers, or both must be texts.
+- A method call can be part of any expression in a page's code, as in `n0.val = fs0.open(t0.txt)` or `if (fs0.open(t0.txt) == 1)`. Its value is 1 if the method succeeds, and 0 if it fails ([File streams](screen-code.md#file-streams)). A call in the first or last part of a `for` runs too, although it would not in strict Nextion syntax ([nxlang-compiled.md](nxlang-compiled.md#conditions-and-loops)).
+- Calls run in the order written. As in C, the other operands can be read before or after a call: in `fs0.read(t0.txt, 0, 2) + fs0.val * 2`, `fs0.val` is read before `read` runs, even though it is written after the call. If the order matters, put the call's result in a local variable first.
 - A command can take a `? :` in an argument that it only reads, as in `vis b0,ready.val ? 1 : 0`. The build refuses one where the command puts its result, such as the second argument of `substr`, and in a few other arguments ([nxlang-compiled.md](nxlang-compiled.md#arguments-of-commands)). In those places, write the command in an `if` and an `else`, once with each value.
 
 ## Constants

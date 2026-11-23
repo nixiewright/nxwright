@@ -81,6 +81,7 @@ The Nextion Editor accepts less than nxlang:
 - A number too large for 32 bits keeps its low 32 bits, as in C. For example, `4294967295` becomes `-1`, and `0x0100000005` becomes `0x00000005` ([language.md](language.md)).
 - A number joined to text is converted first, with `covx <number>,<temporary>,0,0`.
 - A text assignment that uses its own target anywhere but first, such as `t0.txt = "-" + t0.txt`, is built in a temporary first. On the screen, such a line would keep the old text and append the other pieces.
+- In arithmetic, a method call is an operand like any other, and is written unchanged: `x.val = 2 + fs0.open(t0.txt)` becomes `x.val=2+fs0.open(t0.txt)`. In a condition, in an index, among another call's arguments, or where a command takes one value, the call is computed into a temporary first: `if (fs0.open(t0.txt) == 1)` becomes `__g0_0=fs0.open(t0.txt)`, then `if(__g0_0==1)`. Joined texts among a call's arguments are computed first too, and so is a call that would otherwise run after a call written after it.
 
 ### Long lines
 
@@ -93,6 +94,7 @@ The Nextion Editor accepts less than nxlang:
 
 - A condition's operands are computed into temporaries just before it. A `while` loop computes them again at the end of each pass. A `for` loop whose header needs temporaries becomes a `while` loop.
 - The Nextion Editor refuses a text containing a semicolon anywhere in a `for`'s header, though it takes one in a `while`'s condition, so such a `for` loop becomes a `while` loop.
+- A `for` loop with a method call in its first or last part becomes a `while` loop too. The Nextion Editor rejects a call in the last part, and compiles the first part without the call's parentheses, so the screen would not run the call.
 - `!` is removed by reversing comparisons: `!(a == b)` becomes `a != b`.
 - A condition mixing `&&` and `||` computes each inner part into a temporary set to 0 or 1.
 - When the right side of `&&` or `||` needs computing first, the whole condition goes into a temporary set to 0 or 1. Nested `if` blocks compute each part only when it is needed.
