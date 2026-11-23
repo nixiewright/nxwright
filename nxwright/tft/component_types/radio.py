@@ -40,7 +40,7 @@ _BCO, _PCO, _VAL = 0, 2, 4
 MEMORY_VALUES = ("bco", "pco", "val")
 MEMORY_FORMAT = "<HHB3x"
 # Each attribute's entry, within the type.
-_ENTRY = {"type": 0, "id": 1, "vscope": 3, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
+_ENTRY = {"type": 0, "id": 1, "vscope": 3, "aph": 6, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
           "endy": 14, "bco": 19, "pco": 20, "val": 21}
 # The record's slots that give an entry, and which entry.
 _SLOTS = {1: "vscope", 4: "bco", 16: "pco", 20: "val", 42: "x", 43: "y", 44: "endx",

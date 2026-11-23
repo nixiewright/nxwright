@@ -4,6 +4,11 @@ The toolchain and the VS Code extension have [separate version numbers](CONTRIBU
 
 ## Toolchain
 
+### [0.5.1] - 2026-11-23
+
+- A method call can now be used as a value, as in `sys0=fs0.open(t0.txt)`.
+- `nxwright compile` now compiles code that uses `aph`, and a method alone on a line, such as `fs0.close`.
+
 ### [0.5.0] - 2026-11-15
 
 - A number of error messages have been reworded as part of a codebase wide audit.

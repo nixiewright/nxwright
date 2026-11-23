@@ -62,7 +62,7 @@ _PLACES = {"mode": 0, "sta": 1, "psta": 2, "wid": 3, "hig": 4, "dis": 5, "track"
            "cursor": 8, "val": 10, "maxval": 12, "minval": 14, "ch": 16, "track1": 22}
 # Each attribute's entry, within the type, but those from what lies behind
 # its track on.
-_ENTRY = {"type": 0, "id": 1, "vscope": 3, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
+_ENTRY = {"type": 0, "id": 1, "vscope": 3, "aph": 6, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
           "endy": 14, "mode": 19, "sta": 20, "psta": 21, "wid": 22, "hig": 23}
 # The entries from what lies behind its track on, in order: from entry 25
 # with a colour behind it, which gives its ch an entry too, or from entry 24

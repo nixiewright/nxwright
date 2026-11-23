@@ -43,7 +43,7 @@ FIRST_PASS_NUMBERS = 1
 SERIES = ("T", "K", "P", "E", "F")
 
 # Each attribute's entry, within the type.
-_ENTRY = {"type": 0, "id": 1, "vscope": 3, "tim": 7, "en": 8}
+_ENTRY = {"type": 0, "id": 1, "vscope": 3, "aph": 6, "tim": 7, "en": 8}
 # The record's slots that give an entry, and which entry.
 _SLOTS = {1: "vscope", 33: "tim", 34: "en", 49: "id", 62: "type"}
 # What the top byte of the owner field of tim's and en's entries gives, the

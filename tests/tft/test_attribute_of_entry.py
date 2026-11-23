@@ -64,8 +64,9 @@ class AttributeOfEntryTest(unittest.TestCase):
                             self.assertEqual((found[0].page_id, found[1].object_id, found[2]),
                                              (page.page_id, each.object_id, name))
                         compared += 1
-        # The attributes of the objects of _DECODED's types.
-        self.assertEqual(compared, 15224)
+        # The attributes of the objects of _DECODED's types. 15 754 since aph
+        # became an attribute code sets, 530 more entries than before.
+        self.assertEqual(compared, 15754)
 
     def test_an_entry_no_attribute_has(self):
         # The text's entry 2 is empty, and so is every entry past the last

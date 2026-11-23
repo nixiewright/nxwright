@@ -52,7 +52,7 @@ _P_VALUES_AT = 56
 MEMORY_VALUES = ("style", "borderw", "borderc", "bco", "pco", "val")
 MEMORY_FORMAT = "<BBHHHB3x"
 # Each attribute's entry, within the type, up to its style's.
-_ENTRY = {"type": 0, "id": 1, "vscope": 3, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
+_ENTRY = {"type": 0, "id": 1, "vscope": 3, "aph": 6, "x": 9, "y": 10, "w": 11, "h": 12, "endx": 13,
           "endy": 14, "style": 19}
 # The entries after its style's, in order: of style 1, its borderw and
 # borderc come before its bco, so each later entry is two on.

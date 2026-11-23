@@ -185,6 +185,16 @@ def code_cannot_change(type_name: str, attribute: str) -> bool:
 
 
 @functools.cache
+def is_a_method(name: str) -> bool:
+    """Whether `name`, the attribute of a component, is a method code calls,
+    as a file stream's close, rather than one code sets, on any type that
+    describes it so."""
+    return any(entry.get("method", False)
+               for table in _tables().values() for attribute, entry in table.items()
+               if attribute == name and isinstance(entry, dict))
+
+
+@functools.cache
 def _tables() -> dict:
     """The file's tables, read once."""
     return tomllib.loads(DESCRIPTIONS_FILE.read_text(encoding="utf-8"))

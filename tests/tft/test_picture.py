@@ -16,7 +16,7 @@ from nxwright.tft.compile_context import CompileContext
 from nxwright.tft.component_types import picture
 from nxwright.tft.matching import Need, matched_rules, project_needs, unmatched
 from tools.tft.probing import p_probes, picture_probes
-from nxwright.tft.statements import CodePlace, StatementError, encode_line
+from nxwright.tft.statements import CodePlace, encode_line
 from tests.tft.p_components import PTypePieces, p_entries, p_values
 from tests.tft.t_components import CodePieces, TypePieces
 from tests.tft.unit_inputs import page, place, probe_facts, probe_project, project_of
@@ -138,9 +138,11 @@ class CodeTest(unittest.TestCase):
                                      CompileContext(self.project)),
                          b"\x01\x34\x00\x00\x00=1")
 
-    def test_another_attribute_is_refused(self):
-        with self.assertRaisesRegex(StatementError, "p0's aph is not encoded"):
-            encode_line("p0.aph=64", CodePlace(0, "page0", "up"), CompileContext(self.project))
+    def test_its_aph(self):
+        # Its aph, entry 6: p0's first entry is 33, so its aph's is 39.
+        self.assertEqual(encode_line("p0.aph=64", CodePlace(0, "page0", "up"),
+                                     CompileContext(self.project)),
+                         b"\x01\x27\x00\x00\x00=64")
 
     def test_the_check_lets_its_pic_through(self):
         project = probe_project(probe_named("picture-pic-in-code"))
