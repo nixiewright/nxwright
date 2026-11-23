@@ -182,10 +182,12 @@ class LiveDebuggingTest(LiveTestCase):
         self.wait_for("terminated")
         failed = [body for body in self.events("output") if body["category"] == "stderr"]
         self.assertEqual(len(failed), 1)
-        self.assertIn("NxwrightError: %s:2: `nowhere`" % (self.root / "pages" / "page0.nx"),
-                      failed[0]["output"])
+        # The adapter names the file by its resolved path. The temporary folder's
+        # own path can differ from it, by a symbolic link or a short name.
+        page = (self.root / "pages" / "page0.nx").resolve()
+        self.assertIn("NxwrightError: %s:2: `nowhere`" % page, failed[0]["output"])
         self.assertEqual((Path(failed[0]["source"]["path"]).resolve(), failed[0]["line"]),
-                         ((self.root / "pages" / "page0.nx").resolve(), 2))
+                         (page, 2))
 
     def test_an_errors_file_is_written_as_its_full_path(self):
         path = Path("E:/app/pages/home.nx")
