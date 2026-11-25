@@ -38,6 +38,12 @@ Under build/, the runner deletes only files it wrote, one at a time, each
 by its full path (delete_built_file). Each probe's project is built in a
 temporary folder of its own, which Python's tempfile deletes after.
 
+A rejection probe is for code that nxwright's build rejects only because the
+Nextion Editor rejects it. The Nextion Editor does not write a TFT file for
+such code, so the runner has nothing to compare. It checks instead that the
+Nextion Editor still rejects the probe's project with the error that the
+probe expects (Probe.rejected_with).
+
 Every probe's project is built under one name, probe.HMI. The Editor tool
 keeps a copy of each project it opens, by the project's name, so one name
 keeps it to two copies, probe.HMI and probe (2).HMI, whatever the number of
@@ -102,6 +108,15 @@ class CouldNotRun(ProbeError):
     with why, and goes on (run_probes)."""
 
 
+class CompileFailed(ProbeError):
+    """The Nextion Editor did not compile a project. `output` is the text of
+    its Output panel, which gives the errors."""
+
+    def __init__(self, message: str, output: str):
+        super().__init__(message)
+        self.output = output
+
+
 class ProbeMismatch(Exception):
     """A Nextion Editor's file that a probe cannot cut its pieces from, as
     when a checksum it states does not hold. Its message says what."""
@@ -140,6 +155,11 @@ class Probe:
     - built_change: changes the project file nxwright built, given its path,
       before the Nextion Editor opens it, as an older Editor may need
       something nxwright does not write; None for no change.
+    - rejected_with: for a rejection probe, the words of the Nextion Editor's
+      error that say which error it is, such as "Invalid Variables". Such a
+      probe matches when the Nextion Editor rejects its project with that
+      error. It compares and keeps nothing, so its `ours`, `theirs`, and
+      `fixtures` are None. `rejected_with` is None for a probe that compares.
     """
     name: str
     base: str
@@ -150,6 +170,7 @@ class Probe:
     kept: Optional[Callable[[Path], dict]] = None
     borrows: Optional[Callable[[bytes], object]] = None
     built_change: Optional[Callable[[Path], None]] = None
+    rejected_with: Optional[str] = None
 
 
 @dataclass
@@ -284,8 +305,12 @@ def run_probes(probes: list, tool, again: set = frozenset(), say=print) -> RunRe
             say("%s: matches" % probe.name)
         else:
             result.failed.append(probe.name)
-            say("%s: %s; the Nextion Editor's file is kept as %s"
-                % (probe.name, difference, BUILD / _KEPT / (probe.name + ".tft")))
+            # A rejection probe keeps no file when the Nextion Editor rejects
+            # its project with another error.
+            kept = BUILD / _KEPT / (probe.name + ".tft")
+            say("%s: %s%s" % (probe.name, difference,
+                              "; the Nextion Editor's file is kept as %s" % kept
+                              if kept.exists() else ""))
     return result
 
 
@@ -468,10 +493,19 @@ class EditorTool:
                   "time ends: %s" % (self._holder, error), file=sys.stderr)
 
     def write_tft(self, project: Path, folder: Path) -> Path:
-        """Opens `project` in the Editor, has it write the project's TFT file
-        in `folder`, and returns the file's path."""
+        """Opens `project` in the Nextion Editor, has it write the project's
+        TFT file in `folder`, and returns the file's path. Raises
+        CompileFailed when the Nextion Editor does not compile the project."""
         self._command("open", "--as", self._holder, str(project))
-        output = self._command("tft", "--as", self._holder, str(folder))
+        try:
+            output = self._command("tft", "--as", self._holder, str(folder))
+        except ProbeError as error:
+            # The error of a failed compile contains the Editor tool's
+            # COMPILE_FAILED sentence, then the Output panel's text.
+            _, failed, panel = str(error).partition(self._editor.COMPILE_FAILED)
+            if not failed:
+                raise
+            raise CompileFailed(str(error), panel.replace("\r\n", "\n").strip()) from None
         first = output.splitlines()[0] if output else ""
         if not first.startswith("Wrote "):
             raise ProbeError("the Editor tool's tft command printed %r, not the file it wrote"
@@ -503,9 +537,12 @@ def _text(wrapper) -> str:
 
 
 def _refuse_uncompared(probes: list):
-    """Raises ProbeError for the probes of `probes` with nothing of nxwright's to
-    compare, those of an older Nextion Editor, whose `ours` is None."""
-    uncompared = [probe.name for probe in probes if probe.ours is None]
+    """Raises ProbeError if any of `probes` is a probe of an older Nextion
+    Editor. Such a probe has nothing of nxwright's to compare, so its `ours`
+    is None. A rejection probe's `ours` is None too, but the function does
+    not raise for it."""
+    uncompared = [probe.name for probe in probes
+                  if probe.ours is None and probe.rejected_with is None]
     if uncompared:
         raise ProbeError("these probes have nothing of nxwright's to compare, and are kept from "
                          "the Nextion Editor instead (probe keep): %s" % ", ".join(uncompared))
@@ -530,6 +567,14 @@ def _refuse_bad_probes(probes: list):
     if borrowing:
         raise ProbeError("probes that borrow from the Nextion Editor's file and keep fixtures "
                          "must make them with kept: %s" % ", ".join(borrowing))
+    # The Nextion Editor writes no TFT file for a rejection probe's project,
+    # so the runner would never use the probe's `ours`, `theirs`, or
+    # `fixtures`.
+    comparing = [probe.name for probe in probes if probe.rejected_with is not None
+                 and (probe.ours, probe.theirs, probe.fixtures) != (None, None, None)]
+    if comparing:
+        raise ProbeError("rejection probes must have ours, theirs, and fixtures set to None: %s"
+                         % ", ".join(comparing))
 
 
 def _built(probe: Probe, work: Path) -> Path:
@@ -550,6 +595,23 @@ def _built(probe: Probe, work: Path) -> Path:
     return project
 
 
+def change_built_pages(project: Path, change: Callable[[str], str]):
+    """Changes each page of the built project file `project`, for a probe's
+    built_change. `change` is given the text of a page's dump, and returns
+    the text to write in its place. The change goes through nxwright's dump
+    and project writer, so that the project's stamps are written again too."""
+    from nxwright.project.dumper import ProjectDumper
+    from nxwright.project.project_writer import ProjectWriter
+    with tempfile.TemporaryDirectory(prefix="nxwright-built-change-") as work:
+        dump, written = Path(work) / "dump", Path(work) / "project.HMI"
+        ProjectDumper(project, dump).dump()
+        for page in (dump / "pages").glob("*.txt"):
+            page.write_text(change(page.read_text(encoding="utf-8")), encoding="utf-8",
+                            newline="\n")
+        ProjectWriter(project, dump, written).write()
+        shutil.copyfile(written, project)
+
+
 def _fixtures_hold(probe: Probe, project: Path) -> bool:
     """Whether nxwright's output for the built `project` is still the probe's
     fixtures. A probe that keeps none has nothing to compare with: the
@@ -568,7 +630,10 @@ def _checked(probe: Probe, project: Path, tool) -> Optional[str]:
     where they differ, having kept the file. Raises CouldNotRun when the
     tool stops, as when the Nextion Editor refuses the project, having
     closed the messages the Editor shows: one left open would stop the
-    next probe's commands too."""
+    next probe's commands too. A rejection probe is checked by
+    _checked_rejection instead."""
+    if probe.rejected_with is not None:
+        return _checked_rejection(probe, project, tool)
     try:
         tft = tool.write_tft(project, BUILD / _TFT)
     except ProbeError as error:
@@ -604,6 +669,36 @@ def _checked(probe: Probe, project: Path, tool) -> Optional[str]:
     if kept.exists():
         delete_built_file(kept)
     return None
+
+
+def _checked_rejection(probe: Probe, project: Path, tool) -> Optional[str]:
+    """Has `tool` compile the built `project` of the rejection probe `probe`.
+    Returns None when the Nextion Editor rejects the project with the error
+    that the probe expects. Otherwise, returns a sentence that says what the
+    Nextion Editor did. The TFT file is kept if the Nextion Editor compiles
+    the project, and a file kept by an earlier run is deleted once the
+    Nextion Editor rejects the project. Raises CouldNotRun when the tool
+    stops for any reason other than a failed compile, after closing the
+    messages that the Nextion Editor shows."""
+    kept = BUILD / _KEPT / (probe.name + ".tft")
+    try:
+        tft = tool.write_tft(project, BUILD / _TFT)
+    except CompileFailed as error:
+        if kept.exists():
+            delete_built_file(kept)
+        # The words that the probe expects may also appear in the code that
+        # an error quotes, so the check looks for them only at the start of
+        # an error's line.
+        if any(line.startswith("Error:" + probe.rejected_with)
+               for line in error.output.splitlines()):
+            return None
+        return ("the Nextion Editor rejects the project, but not with the error \"%s\". Its "
+                "Output panel says:\n%s" % (probe.rejected_with, error.output))
+    except ProbeError as error:
+        raise CouldNotRun("%s\n%s" % (error, tool.close_messages())) from None
+    _keep(tft, kept)
+    return ("the Nextion Editor compiles the project, but the probe expects the error \"%s\""
+            % probe.rejected_with)
 
 
 def _keep(tft: Path, kept: Path):

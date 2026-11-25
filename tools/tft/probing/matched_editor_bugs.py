@@ -9,15 +9,23 @@ matches, the release may have fixed its bug, and nxwright should stop
 matching it. See tools/tft/README.md, Moving to a new release of the
 Nextion Editor, for how to run the probes.
 
+Most of the probes compare the TFT file that the Nextion Editor writes with
+nxwright's. Some bugs give no file to compare, because the Nextion Editor
+rejects code that ought to compile, and nxwright's build rejects it too. The
+probe of such a bug is a rejection probe, which matches while the Nextion
+Editor still rejects the code with the error that the probe expects
+(copied_rejections.py).
+
 The module takes its probes from other modules. Its name does not end in
 "_probes", so that anything reading every probe module, such as
 `tools.tft.probe run --all`, skips it and finds each probe only once.
 """
 from dataclasses import dataclass
 
-from tools.tft.probing import (device_and_buffer_command_probes, e_probes, f_probes,
-                               indirect_probes, k_probes, other_attribute_probes, overlap_probes,
-                               p_probes, statement_probes, text_command_probes, text_room_probes)
+from tools.tft.probing import (copied_rejections, device_and_buffer_command_probes, e_probes,
+                               f_probes, indirect_probes, k_probes, other_attribute_probes,
+                               overlap_probes, p_probes, statement_probes, text_command_probes,
+                               text_room_probes)
 
 
 @dataclass(frozen=True)
@@ -101,12 +109,37 @@ BUGS = [
              "texts 3, 2, 1, 2, and 3 with text 4.",
         matched_in=(("nxwright/tft/overlaps.py", "refreshed"),),
         probes=("overlap-chain-1-2-3-4",)),
+    EditorBug(
+        what="In shift-jis, the Nextion Editor reads a text in code in pairs of bytes, "
+             "although a half-width katakana, such as ｱ, is a single byte. It rejects "
+             "`t0.txt=\"aｱ\"` (\"Invalid Variables\"), because it reads ｱ and the closing quote "
+             "as one pair.",
+        matched_in=(("nxwright/language/code_checks.py", "_check_texts_in_pairs"),),
+        probes=("rejection-half-width-katakana-before-the-closing-quote",)),
+    EditorBug(
+        what="In a condition, the Nextion Editor also reads a text one byte at a time, and "
+             "takes each 0x5C byte for a backslash, even when the byte is the second byte of "
+             "a character. It rejects `if(t0.txt==\"表\")` in shift-jis (\"Invalid number of "
+             "arguments\"), because 表 ends in 0x5C, which then escapes the closing quote. The "
+             "same happens to a text before a comma in the arguments of `prints`, `spstr`, "
+             "`strlen`, `btlen`, and `crcputs`. In an event, nxlang does not have the bug, "
+             "because nxwright puts such a text into a temporary variable first.",
+        matched_in=(("nxwright/language/code_checks.py", "_check_texts_byte_by_byte"),),
+        probes=("rejection-text-ending-in-0x5c-in-a-condition",)),
+    EditorBug(
+        what="In a condition, the Nextion Editor rejects a text that ends in an escaped "
+             "backslash, as in `if(t0.txt==\"a\\\\\")` (\"SYNTAX ERROR\"). It compiles "
+             "such a text outside a condition, as in `t0.txt=\"\\\\\"`. In an event, nxlang does "
+             "not have the bug, because nxwright puts such a text into a temporary variable "
+             "first.",
+        matched_in=(("nxwright/language/code_checks.py", "_check_condition_texts"),),
+        probes=("rejection-escaped-backslash-ending-a-text-in-a-condition",)),
 ]
 
 # The modules that the bugs' probes are in.
 _MODULES = (text_room_probes, indirect_probes, statement_probes, text_command_probes,
             device_and_buffer_command_probes, other_attribute_probes, overlap_probes,
-            k_probes, f_probes, p_probes, e_probes)
+            k_probes, f_probes, p_probes, e_probes, copied_rejections)
 
 
 def _probes() -> list:

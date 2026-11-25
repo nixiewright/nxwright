@@ -29,10 +29,15 @@ Nextion Editors are left out, as their probes compare nothing: keep keeps
 their files instead.
 
 A probe that cannot run is listed apart, with why, and the run goes on. A
-probe cannot run when the Nextion Editor refuses its project, or when the
-Editor's folder lacks a firmware file the probe needs. run exits with 1
-when a probe does not match or could not run, and with 2 when the run
+probe cannot run when the Nextion Editor rejects its project, or when the
+Nextion Editor's folder lacks a firmware file the probe needs. run exits
+with 1 when a probe does not match or could not run, and with 2 when the run
 cannot go on.
+
+A rejection probe is the exception. It matches when the Nextion Editor
+rejects its project with the error that the probe expects
+(probing/copied_rejections.py). A module, such as matched_editor_bugs, can
+list rejection probes with its other probes.
 
 The probes package nxwright's file with the firmware of the Nextion Editor
 they drive (probing/packaging_probes.py, probe_firmware). To check another
@@ -74,6 +79,7 @@ nxwright changes what `nxwright new` writes.
 """
 import argparse
 import importlib
+import io
 from pathlib import Path
 import pkgutil
 import sys
@@ -127,6 +133,13 @@ def main(arguments: list) -> int:
     making.add_argument("series", nargs="*", choices=sorted(BASE_MODELS),
                         help="the series' letters (default: all)")
     options = parser.parse_args(arguments)
+    # The Nextion Editor's errors quote the probe's code, which may be in any
+    # language, and a Windows console may be unable to encode it. A stream
+    # that is not a console or a file, such as a test's, has no encoding to
+    # set.
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8")
     if options.action == "run" and (options.module is None) != (options.all or options.fixtures):
         running.error("give a module, or else --fixtures or --all, which take every module")
     try:

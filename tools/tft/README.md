@@ -48,8 +48,8 @@ To run a single module, give its name in place of `release_sample`. `--again` al
 
 Each run lists, by module, the probes that did not match and the probes that could not run.
 
-- For a probe that did not match, the run keeps the new release's file as `tools/tft/build/kept/<probe>.tft`.
-- A probe cannot run when the Nextion Editor refuses its project, or when the new release's folder lacks a firmware file that the probe's series needs.
+- For a probe that did not match, the run keeps the new release's file as `tools/tft/build/kept/<probe>.tft`, if the release wrote one.
+- A probe that compares files cannot run when the Nextion Editor rejects its project, or when the new release's folder lacks a firmware file that the probe's series needs.
 - When a probe that keeps fixtures matches the new release, it writes its fixtures again, so that nxwright's tests compare with the new release's bytes.
 
 ### The Nextion Editor's bugs that nxwright matches
@@ -62,7 +62,9 @@ python -m tools.tft.probe run matched_editor_bugs --again
 
 If one of these probes no longer matches, the new release may have fixed its bug, and nxwright should stop matching it. The bug's entry in the list gives the code to change.
 
-When you make nxwright match a bug in the Nextion Editor, add the bug to `matched_editor_bugs.py`.
+Some of these bugs make the Nextion Editor reject code that ought to compile, and nxwright's build rejects the same code. The probe of such a bug is a rejection probe (`tools/tft/probing/copied_rejections.py`), which matches while the Nextion Editor still rejects the code with the error that the probe expects.
+
+When you make nxwright match a bug in the Nextion Editor, add the bug to `matched_editor_bugs.py`. If the bug makes the Nextion Editor reject code, add its probe to `copied_rejections.py`.
 
 ### The steps
 

@@ -166,6 +166,12 @@ _TFT_MENU_ITEM = "TFT file output"
 _TFT_FOLDER_BOX = "1001"
 _TFT_OUTPUT_BUTTON = "buttonX2"
 _TFT_FILE_NAME = "label1"
+# What write_tft's error says before the Output panel's text, when the
+# Nextion Editor did not compile the project. The probe tool looks for it, to
+# tell a project that the Nextion Editor rejects from a command that failed
+# for another reason (tools/tft/probing/probe_runner.py).
+COMPILE_FAILED = ("the compile did not succeed, so no TFT file was written. The Output panel "
+                  "says:")
 # The File menu's item that saves the project as a new file.
 _SAVE_AS_MENU_ITEM = "Save as"
 # How long the window of a File menu item, such as the TFT output window,
@@ -1987,9 +1993,8 @@ def write_tft(editor: DedicatedEditor, folder: Path) -> tuple:
             text = _compile_output(editor, main, output, "Output", pressing_failed)
             size = compiled_file_size(text)
             if size is None:
-                raise EditorError("the compile did not succeed, so no TFT file was written. "
-                                  "The Output panel says:\n%s"
-                                  % text.replace("\r\n", "\n").rstrip("\n"))
+                raise EditorError("%s\n%s" % (COMPILE_FAILED,
+                                               text.replace("\r\n", "\n").rstrip("\n")))
             _wait_for(lambda: _written_anew(file, written_before, size), DIALOG_WAIT,
                       "%s, of %d bytes, to be written" % (file, size))
             _wait_for(lambda: not _shown(form.handle), DIALOG_WAIT,

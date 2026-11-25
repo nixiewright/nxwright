@@ -1,5 +1,7 @@
-"""The probe runner (tools/tft/probing/probe_runner.py): what it records, keeps,
-and deletes, and the first probes (tools/tft/probing/first_probes.py).
+"""Tests of the probe runner (tools/tft/probing/probe_runner.py): what it
+records, keeps, and deletes. The first probes
+(tools/tft/probing/first_probes.py) and the rejection probes
+(tools/tft/probing/copied_rejections.py) are tested here too.
 
 A fake tool stands in for nxwright's Editor tool, writing the bytes a test
 gives as the Nextion Editor's file. build/ and tests/fixtures/ are folders
@@ -10,6 +12,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import types
@@ -18,12 +21,18 @@ from unittest import mock
 
 from nxwright import NxwrightError
 
+from nxwright.project.device_settings import TextCodec
+from nxwright.project.dumper import ProjectDumper
+from nxwright.project.page_block import Event
+from nxwright.project.page_text import page_from_text
+from nxwright.source.project_files import build
 from nxwright.tft import firmware as tft_firmware
-from tools.tft.probing import component_probes, first_probes, packaging_probes, probe_runner
+from tools.tft.probing import (component_probes, copied_rejections, first_probes,
+                               packaging_probes, probe_runner)
 from tools.tft import probe as probe_command
-from tools.tft.probing.probe_runner import (EditorTool, Probe, ProbeError, ProbeMismatch, drop,
-                                        kept_from_the_editor, refuse_unless_deletable,
-                                        run_probes)
+from tools.tft.probing.probe_runner import (CompileFailed, EditorTool, Probe, ProbeError,
+                                        ProbeMismatch, drop, kept_from_the_editor,
+                                        refuse_unless_deletable, run_probes)
 from nxwright.tft.tft_file import firmware_names, read_tft
 from tests.tft.made_tft import made_tft, made_user_code
 from tests.tft.stand_in_firmware import stand_in_firmware, write_editor_folder
@@ -55,6 +64,25 @@ class FakeTool:
     def close_messages(self) -> str:
         self.closings += 1
         return "Closed 1 message:\n- 'Error': Invalid Pic ID"
+
+
+class RejectingTool(FakeTool):
+    """Stands in for the Editor tool when the Nextion Editor does not compile
+    a project. Its write_tft always raises CompileFailed, with `output` as
+    the text of the Output panel."""
+
+    def __init__(self, output: str):
+        super().__init__()
+        self.output = output
+
+    def write_tft(self, project: Path, folder: Path) -> Path:
+        self.calls += 1
+        raise CompileFailed("the Editor tool's tft command: the compile did not succeed",
+                            self.output)
+
+    def close_messages(self) -> str:
+        self.closings += 1
+        return "No message is open."
 
 
 class FolderPathsTest(unittest.TestCase):
@@ -295,6 +323,133 @@ class CouldNotRunTest(RunnerTestCase):
             result = self.run_quietly([self.probe({"code": b"ab"})], FakeTool())
         self.assertEqual(result.could_not_run,
                          {"p": "page0.toml: type text has no attribute disup"})
+
+
+class RejectionTest(RunnerTestCase):
+    """A rejection probe matches while the Nextion Editor rejects its project
+    with the error the probe expects. It does not match once the Nextion
+    Editor compiles the project, or rejects it with another error."""
+
+    INVALID_VARIABLES = ("Page:page0 Memory Occupied:20+88=108\n"
+                         "Error:Invalid Variables:t0.txt=\"a\"( Double click to jump to code)\n"
+                         "Error:Compile failed! 1 Errors, 0 Warnings,")
+    SYNTAX_ERROR = ("Error:SYNTAX ERROR#1:t0.txt=\"Invalid Variables\"( Double click to jump to "
+                    "code)\nError:Compile failed! 1 Errors, 0 Warnings,")
+
+    def rejection(self, name="r") -> Probe:
+        return Probe(name, "T", None, None, None, rejected_with="Invalid Variables")
+
+    def test_rejected_with_the_error_it_expects(self):
+        lines = []
+        result = run_probes([self.rejection()], RejectingTool(self.INVALID_VARIABLES),
+                            say=lines.append)
+        self.assertEqual((result.matched, result.failed, result.could_not_run), (["r"], [], {}))
+        self.assertEqual(lines, ["r: matches"])
+        self.assertEqual(probe_runner._read_record(), {"r": sha256(b"project").hexdigest()})
+        self.assertFalse(self.kept("r").exists())
+
+    def test_one_already_matched_is_skipped(self):
+        self.run_quietly([self.rejection()], RejectingTool(self.INVALID_VARIABLES))
+        tool = RejectingTool(self.INVALID_VARIABLES)
+        result = self.run_quietly([self.rejection()], tool)
+        self.assertEqual((result.skipped, tool.calls), (["r"], 0))
+
+    def test_compiled(self):
+        lines = []
+        result = run_probes([self.rejection()], FakeTool(b"file"), say=lines.append)
+        self.assertEqual((result.matched, result.failed), ([], ["r"]))
+        self.assertEqual(lines, [
+            "r: the Nextion Editor compiles the project, but the probe expects the error "
+            "\"Invalid Variables\"; the Nextion Editor's file is kept as %s" % self.kept("r")])
+        self.assertEqual(self.kept("r").read_bytes(), b"file")
+        self.assertEqual(probe_runner._read_record(), {})
+
+    def test_rejected_with_another_error(self):
+        # The Nextion Editor's error here is a SYNTAX ERROR. The words that
+        # the probe expects, "Invalid Variables", are only in the code that
+        # the error quotes.
+        lines = []
+        result = run_probes([self.rejection()], RejectingTool(self.SYNTAX_ERROR),
+                            say=lines.append)
+        self.assertEqual((result.matched, result.failed), ([], ["r"]))
+        self.assertEqual(lines, [
+            "r: the Nextion Editor rejects the project, but not with the error \"Invalid "
+            "Variables\". Its Output panel says:\n" + self.SYNTAX_ERROR])
+        self.assertFalse(self.kept("r").exists())
+        self.assertEqual(probe_runner._read_record(), {})
+
+    def test_rejected_after_compiling_deletes_the_kept_file(self):
+        for output in (self.SYNTAX_ERROR, self.INVALID_VARIABLES):
+            with self.subTest(output=output):
+                self.run_quietly([self.rejection()], FakeTool(b"file"))
+                self.assertTrue(self.kept("r").exists())
+                self.run_quietly([self.rejection()], RejectingTool(output))
+                self.assertFalse(self.kept("r").exists())
+
+    def test_one_that_also_compares_or_keeps_fixtures(self):
+        for probe in (Probe("r", "T", None, lambda project: {}, None, rejected_with="x"),
+                      Probe("r", "T", None, None, lambda data: {}, rejected_with="x"),
+                      Probe("r", "T", None, None, None, "phase", rejected_with="x")):
+            with self.subTest(probe=probe), \
+                    self.assertRaisesRegex(ProbeError, "fixtures set to None: r$"):
+                self.run_quietly([probe], RejectingTool(self.INVALID_VARIABLES))
+
+    def test_the_tool_stopping_for_another_reason(self):
+        tool = FakeTool(refused={1})
+        result = self.run_quietly([self.rejection()], tool)
+        self.assertEqual(list(result.could_not_run), ["r"])
+        self.assertEqual((result.matched, result.failed, tool.closings), ([], [], 1))
+
+    def test_a_probe_that_compares_still_cannot_run_on_a_failed_compile(self):
+        tool = RejectingTool(self.INVALID_VARIABLES)
+        result = self.run_quietly([self.probe({"code": b"ab"})], tool)
+        self.assertEqual(list(result.could_not_run), ["p"])
+        self.assertEqual(tool.closings, 1)
+
+
+class CopiedRejectionsTest(unittest.TestCase):
+    """The rejection probes of copied_rejections.py, without running the
+    Nextion Editor. The tests check that each probe's project has the
+    rejected line, which nxwright's own build would not write, and that
+    nxwright's build rejects that line."""
+
+    def test_each_line_has_a_probe_that_expects_its_error(self):
+        self.assertEqual(len(copied_rejections.PROBES), len(copied_rejections.LINES))
+        for line, probe in zip(copied_rejections.LINES, copied_rejections.PROBES):
+            with self.subTest(line.name):
+                self.assertEqual((probe.name, probe.rejected_with), (line.name, line.error))
+                self.assertIsNone(probe.ours)
+
+    def test_each_built_project_has_the_rejected_line_as_its_code(self):
+        for line, probe in zip(copied_rejections.LINES, copied_rejections.PROBES):
+            with self.subTest(line.name), tempfile.TemporaryDirectory() as work:
+                project = probe_runner._built(probe, Path(work))
+                # Read back through the dump, which gives the page that the
+                # Nextion Editor will open. The project file also keeps the
+                # page that it had before, as a block no longer in use.
+                ProjectDumper(project, Path(work) / "dump").dump()
+                page = page_from_text((Path(work) / "dump" / "pages" / "00-page0.txt")
+                                      .read_text(encoding="utf-8"))
+                code = [stored for page_object in page.objects for item in page_object.items
+                        if isinstance(item, Event) for stored in item.lines]
+                codec = TextCodec(line.encoding)
+                self.assertEqual(code, [codec.encode(each, "")
+                                        for each in (line.rejected, *line.builds[1:])])
+
+    def test_the_build_rejects_each_line(self):
+        # nxwright copies each of these rejections, so its build must reject
+        # the line when the line is in the source folder's code.
+        for line, probe in zip(copied_rejections.LINES, copied_rejections.PROBES):
+            with self.subTest(line.name), tempfile.TemporaryDirectory() as work:
+                source = Path(work) / "source"
+                shutil.copytree(probe_runner.BASES / "T", source)
+                probe.change(source)
+                page = source / "pages" / "page0.nx"
+                code = page.read_text(encoding="utf-8")
+                self.assertEqual(code.count(line.builds[0]), 1)
+                page.write_text(code.replace(line.builds[0], line.rejected), encoding="utf-8")
+                with self.assertRaisesRegex(NxwrightError, r"pages/page0\.nx:2: "):
+                    build(source, Path(work) / "probe.HMI")
 
 
 class PiecesTest(RunnerTestCase):
@@ -585,9 +740,11 @@ class EditorToolTest(unittest.TestCase):
     """The Editor tool's commands, run in this process. A fake module stands
     in for the tool, which needs packages of its own."""
 
-    def fake_tool(self, main):
+    def fake_tool(self, main, **constants):
         tool = types.ModuleType("tools.editor.editor")
         tool.main = main
+        for name, value in constants.items():
+            setattr(tool, name, value)
         package = types.ModuleType("tools.editor")
         package.editor = tool
         modules = {"tools": types.ModuleType("tools"), "tools.editor": package,
@@ -641,6 +798,37 @@ class EditorToolTest(unittest.TestCase):
                 self.assertRaisesRegex(ProbeError, "open command: Stopped, .* no such file"):
             with EditorTool() as tool:
                 tool.write_tft(Path("probe.HMI"), Path("tft"))
+
+    def test_a_compile_that_fails(self):
+        # The tool's own sentence, then the Output panel's text.
+        failed = "the compile did not succeed. The Output panel says:"
+
+        def main(arguments):
+            if arguments[0] == "tft":
+                print("Stopped, on test's Editor: %s\nPage:page0 Memory Occupied:108\n"
+                      "Error:Invalid Variables:t0.txt=\"a\"" % failed, file=sys.stderr)
+                return 1
+            return 0
+        self.fake_tool(main, COMPILE_FAILED=failed)
+        with mock.patch.dict(os.environ, {"NXWRIGHT_EDITOR_NAME": "test"}), \
+                self.assertRaisesRegex(CompileFailed, "tft command: Stopped, ") as raised:
+            with EditorTool() as tool:
+                tool.write_tft(Path("probe.HMI"), Path("tft"))
+        self.assertEqual(raised.exception.output, "Page:page0 Memory Occupied:108\n"
+                                                  "Error:Invalid Variables:t0.txt=\"a\"")
+
+    def test_a_tft_command_that_stops_for_another_reason(self):
+        def main(arguments):
+            if arguments[0] == "tft":
+                print("Stopped, on test's Editor: no project is open", file=sys.stderr)
+                return 1
+            return 0
+        self.fake_tool(main, COMPILE_FAILED="the compile did not succeed.")
+        with mock.patch.dict(os.environ, {"NXWRIGHT_EDITOR_NAME": "test"}), \
+                self.assertRaises(ProbeError) as raised:
+            with EditorTool() as tool:
+                tool.write_tft(Path("probe.HMI"), Path("tft"))
+        self.assertNotIsInstance(raised.exception, CompileFailed)
 
     def test_closing_the_editor_s_messages(self):
         commands = []
@@ -722,6 +910,23 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("first_probes lists no probe named no-such-probe", errors.getvalue())
 
+    def test_prints_characters_that_windows_console_cannot_encode(self):
+        # The Nextion Editor's errors quote the code, which may be in any
+        # language. A Windows console may print in cp1252, which has no ｱ.
+        def stand_in_run(probes, tool, again):
+            print('p: could not run: Error:Invalid Variables:t0.txt="aｱ"')
+            return probe_runner.RunResult([], [], [], {"p": "why"})
+        output = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+        errors = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+        with (mock.patch.object(probe_command, "EditorTool"),
+              mock.patch.object(probe_command, "run_probes", stand_in_run),
+              mock.patch("sys.stdout", output), mock.patch("sys.stderr", errors)):
+            self.assertEqual(probe_command.main(["run", "first_probes"]), 1)
+            self.assertEqual(probe_command.main(["run", "no_such_ｱ"]), 2)
+        for stream, said in ((output, 't0.txt="aｱ"'), (errors, "no_such_ｱ")):
+            stream.flush()
+            self.assertIn(said, stream.buffer.getvalue().decode("utf-8"))
+
     def test_only_and_again_together_are_refused(self):
         with mock.patch("sys.stderr", io.StringIO()), self.assertRaises(SystemExit):
             probe_command.main(["run", "first_probes", "--only", "a", "--again", "b"])
@@ -775,6 +980,8 @@ class AllModulesTest(unittest.TestCase):
         self.assertIn("blank-T", names)
         # The older Editors' probes are kept, and compare nothing.
         self.assertTrue(all(probe.ours is not None for probe in probes))
+        # A rejection probe compares nothing either.
+        self.assertTrue(all(probe.rejected_with is None for probe in probes))
         for module_probes, again in calls:
             self.assertEqual(again, {probe.name for probe in module_probes})
         self.assertIn("\nNot matching, by module:\n  timer_probes: timer-two\n", said)

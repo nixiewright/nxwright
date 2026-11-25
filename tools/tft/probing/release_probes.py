@@ -17,11 +17,9 @@ add it to the project nxwright built (with_disup).
 """
 from pathlib import Path
 import re
-import shutil
-import tempfile
 
 from tools.tft.probing import frame_probes, statement_probes
-from tools.tft.probing.probe_runner import Probe
+from tools.tft.probing.probe_runner import Probe, change_built_pages
 
 # The lines of each series' probe of program.s, on T and K, on P and E, and
 # on F.
@@ -78,19 +76,10 @@ def layout_probes(version: tuple, projects: dict) -> list:
 
 def with_disup(project: Path):
     """Gives each page of the project file `project` the attribute disup, a
-    byte of 0, after its drag, as the Nextion Editor 1.60.1 writes a page of
-    P, and needs to open one. It goes through nxwright's dump and write, so
-    that the project's stamps are written again too."""
-    from nxwright.project.dumper import ProjectDumper
-    from nxwright.project.project_writer import ProjectWriter
-    with tempfile.TemporaryDirectory(prefix="nxwright-disup-") as work:
-        dump, written = Path(work) / "dump", Path(work) / "project.HMI"
-        ProjectDumper(project, dump).dump()
-        for page in (dump / "pages").glob("*.txt"):
-            page.write_text(_page_with_disup(page.read_text(encoding="utf-8")),
-                            encoding="utf-8")
-        ProjectWriter(project, dump, written).write()
-        shutil.copyfile(written, project)
+    byte of 0, after its drag. The Nextion Editor 1.60.1 writes disup in
+    each page of a P project, and opens such a project only when each page
+    has it."""
+    change_built_pages(project, _page_with_disup)
 
 
 def _page_with_disup(text: str) -> str:
