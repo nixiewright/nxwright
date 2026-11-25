@@ -239,6 +239,12 @@ PROBES = [
         _FIXTURES),
     Probe("statements-printh-long-in-an-event", "T",
           event_lines([_printh(17), _printh(253)]), ours_in_event, theirs_in_event, _FIXTURES),
+    # Numbers that do not fit in 32 bits, as a page's number and in the value
+    # of an assignment. The Nextion Editor writes the low 32 bits of each, and
+    # does not report an error.
+    Probe("statements-numbers-past-32-bits", "T", beside_a_text_and_numbers(
+        ["page 2147483648", "sys0=2147483648", "sys0=4294967296", "sys0=4294967297+1"]),
+        ours_in_event, theirs_in_event, _FIXTURES),
     # Each arithmetic operator's own assigning operator, such as *= and <<=,
     # and a minus after one, which starts a number.
     _program_probe("statements-compound-assignments", [

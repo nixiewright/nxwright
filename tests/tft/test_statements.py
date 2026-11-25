@@ -40,7 +40,7 @@ class FixturesTest(unittest.TestCase):
         probes = [probe for probe in statement_probes.PROBES if probe.fixtures] + [
             probe for probe in p_probes.PROBES
             if probe.fixtures and probe.name.startswith("p-statements-")]
-        self.assertEqual(len(probes), 16)
+        self.assertEqual(len(probes), 17)
         for probe in probes:
             with self.subTest(probe=probe.name):
                 self.assertEqual(statement_probes.kept_blocks(probe, probe_project(probe)),
