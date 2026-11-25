@@ -66,6 +66,8 @@ Some of these bugs make the Nextion Editor reject code that ought to compile, an
 
 When you make nxwright match a bug in the Nextion Editor, add the bug to `matched_editor_bugs.py`. If the bug makes the Nextion Editor reject code, add its probe to `copied_rejections.py`.
 
+nxwright's simulator also matches some bugs in a screen's firmware, which have a list of their own, with checks that run on a real screen ([tools/screen/README.md](../screen/README.md#the-firmwares-bugs)).
+
 ### The steps
 
 1. Read the release notes that the check printed. Find each area they mention, such as the timers or a component type, in the [list of areas](#areas).

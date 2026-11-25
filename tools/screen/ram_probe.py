@@ -19,6 +19,9 @@ tools/screen/README.md gives the steps before that.
 The script creates files in `ram/`, and files on the SD card whose names
 start with `nxprobe`. It deletes each file it creates, and does not change
 any other file.
+
+The probe of the firmware's bugs (firmware_bug_probe.py) is built on this
+module's parts: its checks, its serial exchange, and its report's table.
 """
 import argparse
 from dataclasses import dataclass
@@ -27,6 +30,7 @@ import sys
 
 from PIL import Image
 
+from nxwright.project.device_settings import TextCodec
 from nxwright.project.media_files import CARD_PICTURE_QUALITIES, card_picture_file
 from nxwright.testing.file_packets import packets
 
@@ -37,6 +41,9 @@ END = b"\xff\xff\xff"
 IGNORED = b"\x06" + END
 READY = b"\xfe" + END
 FINISHED = b"\xfd" + END
+# The encoding of the probe's project. A check of how the screen reads the
+# texts of another encoding needs the project built in that encoding.
+ENCODING = "iso-8859-1"
 # The bytes the probe's project sets aside for `ram/` files, unless it is
 # built with none to run the checks of NO_SPACE_CHECKS.
 SPACE = 4096
@@ -63,28 +70,39 @@ def red_square() -> bytes:
 
 @dataclass(frozen=True)
 class Check:
-    """One check: a rule, the steps that test it, and the answer the
-    Nextion Editor's simulator gave.
+    """One check: a rule, the steps that test it, and the answer that the
+    check expects.
 
-    `steps` are sent in order. A text is an instruction, sent with the
-    three bytes that end it. Bytes are the file of the `twfile` before
-    them, sent in packets, because a screen takes the file only in
-    packets (nxwright/testing/file_packets.py).
+    `steps` are sent in order. A step that is a text is an instruction, sent
+    in the project's encoding with the three bytes that end it. A step that
+    is bytes is the file for the `twfile` before it, sent in packets,
+    because a screen takes the file only in packets
+    (nxwright/testing/file_packets.py).
 
-    `simulator` is everything the Nextion Editor's simulator sent for the
-    steps, or None if it could not run them.
+    `expected` is everything the screen is expected to send for the steps,
+    or None if the check has no answer to compare with. For the checks of
+    this module, it is what the Nextion Editor's simulator sent, or None if
+    that simulator could not run the steps.
 
     `question` is asked of the person at the screen, once the steps have
     run, for a rule that only eyes can check. `then` are steps sent after
-    the question, to put the screen back."""
+    the question, to put the screen back the way it was."""
     rule: str
     steps: tuple
-    simulator: bytes | None = None
+    expected: bytes | None = None
     question: str = ""
     then: tuple = ()
 
 
 PICTURE = red_square()
+
+# The probe of the firmware's bugs runs this check too
+# (tools/screen/matched_firmware_bugs.py).
+NEWFILE_THAT_DOES_NOT_FIT = Check(
+    "A newfile that does not fit deletes the file that was there",
+    ('newfile "ram/a.bin",3', 'newfile "ram/a.bin",3813', 'rdfile "ram/a.bin",0,0,0',
+     'delfile "ram/a.bin"'),
+    IGNORED + IGNORED)
 
 # The checks for a project that sets SPACE bytes aside. Each one deletes the
 # files it creates. Some checks also send a `delfile` for a file that the
@@ -107,10 +125,7 @@ CHECKS = (
            'findfile "ram/b.bin",sys0', "get sys0", 'delfile "ram/b.bin"',
            'delfile "ram/a.bin"'),
           number(1) + IGNORED + number(0)),
-    Check("A newfile that does not fit deletes the file that was there",
-          ('newfile "ram/a.bin",3', 'newfile "ram/a.bin",3813', 'rdfile "ram/a.bin",0,0,0',
-           'delfile "ram/a.bin"'),
-          IGNORED + IGNORED),
+    NEWFILE_THAT_DOES_NOT_FIT,
     Check("twfile needs room for its file beside the file it replaces",
           ('newfile "ram/a.bin",1773', 'twfile "ram/a.bin",1773', 'delfile "ram/a.bin"'),
           IGNORED),
@@ -212,36 +227,39 @@ class Answer:
 
     @property
     def differs(self) -> bool:
-        """Whether the screen differs from the Nextion Editor's simulator:
-        the screen sent other bytes, or the person at the screen answered
-        no. The bytes are not compared for a check that the Nextion
-        Editor's simulator could not run."""
-        return self.seen is False or (self.check.simulator is not None
-                                      and self.sent != self.check.simulator)
+        """Whether the screen differs from what the check expects: the
+        screen sent other bytes, or the person at the screen answered no.
+        The bytes are not compared for a check that has no answer to
+        compare with."""
+        return self.seen is False or (self.check.expected is not None
+                                      and self.sent != self.check.expected)
 
 
-def run_checks(checks, exchange, ask) -> list:
+def run_checks(checks, exchange, ask, encoding: str = ENCODING) -> list:
     """Runs `checks` on a screen, and returns an Answer for each.
 
     `exchange(data)` sends bytes to the screen and returns the bytes the
     screen answers. `ask(question)` puts a question to the person at the
-    screen, and returns True for yes."""
+    screen, and returns True for yes. Each instruction is sent in
+    `encoding`, the encoding of the project that the screen runs."""
+    codec = TextCodec(encoding)
     # With `bkcmd=2`, the screen sends a return code only for an instruction
-    # it ignores. The answers of the Nextion Editor's simulator were recorded
-    # with the same setting. The answer to this line itself is discarded.
+    # it ignores. The answers that the checks expect were recorded with the
+    # same setting. The answer to this line itself is discarded.
     exchange(b"bkcmd=2" + END)
     answers = []
     for check in checks:
-        sent = b"".join(_answer_to(step, exchange) for step in check.steps)
+        sent = b"".join(_answer_to(step, exchange, codec) for step in check.steps)
         seen = ask(check.question) if check.question else None
         for step in check.then:
-            _answer_to(step, exchange)
+            _answer_to(step, exchange, codec)
         answers.append(Answer(check, sent, seen))
     return answers
 
 
-def _answer_to(step, exchange) -> bytes:
-    """Sends a check's step, and returns what the screen answers.
+def _answer_to(step, exchange, codec: TextCodec) -> bytes:
+    """Sends a check's step, and returns what the screen answers. An
+    instruction is sent in the encoding of `codec`.
 
     After a file's packets, the screen answers only once it has stored the
     file. A real NX8048P070 took longer than half a second to store 1737
@@ -249,7 +267,7 @@ def _answer_to(step, exchange) -> bytes:
     file, _answer_to therefore keeps waiting until the screen answers that
     the transfer has finished, or until it has waited MOST_WAITS more
     times."""
-    answer = exchange(_bytes_of(step))
+    answer = exchange(_bytes_of(step, codec))
     if isinstance(step, bytes):
         waits = 0
         while not answer.endswith(FINISHED) and waits < MOST_WAITS:
@@ -258,36 +276,44 @@ def _answer_to(step, exchange) -> bytes:
     return answer
 
 
-def _bytes_of(step) -> bytes:
-    """Returns what is sent for a check's step: an instruction with the
-    bytes that end it, or a file's bytes as packets. Every file of the
-    checks fits in one packet, so the screen does not answer until the
-    file is complete."""
+def _bytes_of(step, codec: TextCodec) -> bytes:
+    """Returns what is sent for a check's step: an instruction in the
+    encoding of `codec` with the bytes that end it, or a file's bytes as
+    packets. Every file of the checks fits in one packet, so the screen does
+    not answer until the file is complete."""
     if isinstance(step, bytes):
         return b"".join(packets(step))
-    return step.encode("latin-1") + END
+    return codec.encode(step, "a check's step") + END
 
 
 def report(answers: list, screen: str) -> str:
     """Returns the report of `answers`, in Markdown. `screen` is what the
     screen answered to `connect`, which gives its model and firmware."""
-    lines = ["# Files in `ram/` and card names on a real screen", "",
-             "The screen answered `connect` with: `%s`" % screen, "",
-             "| Check | Sent | The Nextion Editor's simulator | The screen | Differs |",
+    differing = sum(answer.differs for answer in answers)
+    return "\n".join(["# Files in `ram/` and card names on a real screen", "",
+                      *answers_shown(answers, screen, "The Nextion Editor's simulator"), "",
+                      "The screen differs from the Nextion Editor's simulator on %d of %d checks."
+                      % (differing, len(answers)), ""])
+
+
+def answers_shown(answers: list, screen: str, expected: str) -> list:
+    """Returns the lines of a report, in Markdown, that show `answers`:
+    first `screen`, which is what the screen answered to `connect`, then a
+    table with a row for each answer. `expected` is the heading of the
+    column that gives what each check expects."""
+    lines = ["The screen answered `connect` with: `%s`" % screen, "",
+             "| Check | Sent | %s | The screen | Differs |" % expected,
              "| --- | --- | --- | --- | --- |"]
     for answer in answers:
         check = answer.check
-        simulator = "not run" if check.simulator is None else _shown(check.simulator)
         screen_did = _shown(answer.sent)
         if check.question:
             screen_did += "<br>%s %s" % (check.question, "Yes." if answer.seen else "No.")
         lines.append("| %s | %s | %s | %s | %s |" % (
             check.rule, "<br>".join(_step_shown(step) for step in check.steps + check.then),
-            simulator, screen_did, "**yes**" if answer.differs else "no"))
-    differing = sum(answer.differs for answer in answers)
-    lines += ["", "The screen differs from the Nextion Editor's simulator on %d of %d checks."
-              % (differing, len(answers)), ""]
-    return "\n".join(lines)
+            "not run" if check.expected is None else _shown(check.expected), screen_did,
+            "**yes**" if answer.differs else "no"))
+    return lines
 
 
 def _shown(data: bytes) -> str:
@@ -330,36 +356,55 @@ def _ask_at_the_terminal(question: str) -> bool:
     return input("%s [y/n] " % question).strip().lower().startswith("y")
 
 
+def add_screen_arguments(parser: argparse.ArgumentParser, report: str):
+    """Gives a probe's `parser` the arguments for where the screen is and
+    where the report goes. `report` is the report's default file."""
+    parser.add_argument("port", help="the screen's serial port, such as COM5 or /dev/ttyUSB0")
+    parser.add_argument("--baud", type=int, default=9600,
+                        help="the serial line's rate (default 9600, the project's)")
+    parser.add_argument("--quiet", type=float, default=0.5,
+                        help="how long the screen must stay silent, in seconds, before an "
+                             "answer counts as complete (default 0.5)")
+    parser.add_argument("--report", type=Path, default=Path(report),
+                        help="the report to write (default %s)" % report)
+
+
+def answers_of_a_screen(probe: str, checks, options, encoding: str = ENCODING):
+    """Runs `checks` on a screen, with each instruction sent in `encoding`.
+    `options` are the parsed arguments of add_screen_arguments. `probe` is
+    the name of the probe that runs the checks, for its messages.
+
+    Returns what the screen answered to `connect`, which gives its model
+    and firmware, and an Answer for each check. If no screen answered,
+    prints an error and returns None."""
+    exchange = SerialExchange(options.port, options.baud, options.quiet)
+    try:
+        screen = exchange(b"connect" + END).rstrip(b"\xff").decode("latin-1")
+        if not screen.startswith("comok"):
+            print("%s: no screen answered on %s at %d baud"
+                  % (probe, options.port, options.baud), file=sys.stderr)
+            return None
+        return screen, run_checks(checks, exchange, _ask_at_the_terminal, encoding)
+    finally:
+        exchange.close()
+
+
 def main(arguments: list = None) -> int:
     """Runs the probe on the port the command line gives, and writes its
     report. Returns the program's exit code: 1 if no screen answered."""
     parser = argparse.ArgumentParser(
         description="Checks nxwright's rules for ram/ files on a real screen that runs the "
                     "project in tools/screen/project, and writes a report.")
-    parser.add_argument("port", help="the screen's serial port, such as COM5 or /dev/ttyUSB0")
-    parser.add_argument("--baud", type=int, default=9600,
-                        help="the serial line's rate (default 9600, the project's)")
+    add_screen_arguments(parser, "ram-probe-report.md")
     parser.add_argument("--no-space", action="store_true",
                         help="run the checks for the project built with "
                              "memory_file_storage_size = 0")
-    parser.add_argument("--quiet", type=float, default=0.5,
-                        help="how long the screen must stay silent, in seconds, before an "
-                             "answer counts as complete (default 0.5)")
-    parser.add_argument("--report", type=Path, default=Path("ram-probe-report.md"),
-                        help="the report to write (default ram-probe-report.md)")
     options = parser.parse_args(arguments)
-    exchange = SerialExchange(options.port, options.baud, options.quiet)
-    try:
-        screen = exchange(b"connect" + END).rstrip(b"\xff").decode("latin-1")
-        if not screen.startswith("comok"):
-            print("ram_probe: no screen answered on %s at %d baud."
-                  % (options.port, options.baud),
-                  file=sys.stderr)
-            return 1
-        answers = run_checks(NO_SPACE_CHECKS if options.no_space else CHECKS, exchange,
-                             _ask_at_the_terminal)
-    finally:
-        exchange.close()
+    answered = answers_of_a_screen("ram_probe",
+                                   NO_SPACE_CHECKS if options.no_space else CHECKS, options)
+    if answered is None:
+        return 1
+    screen, answers = answered
     options.report.write_text(report(answers, screen), encoding="utf-8")
     print("The screen differs from the Nextion Editor's simulator on %d of %d checks. The "
           "report is in %s."

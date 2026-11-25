@@ -48,7 +48,11 @@ If the screen models report gives an error instead, the comparison could not rea
 
 Whatever the comparisons found, run the [TFT compile probes](../tft/README.md) against the new release, and fix the compile wherever nxwright's TFT files differ from the new release's.
 
-## 6. Move to the new release
+## 6. Check the firmware's bugs on a screen
+
+nxwright's simulator matches some bugs in the screen's firmware, and the new release's firmware may have fixed one of them. If you have a screen of the Intelligent series, have the new release compile the screen probes' project, upload its TFT file, and run the probe of the firmware's bugs. See [the screen probes' README](../screen/README.md#with-a-new-release-of-the-nextion-editor) for how. If the screen no longer shows a bug, make nxwright's simulator stop matching it.
+
+## 7. Move to the new release
 
 - Change the version nxwright is tested with in `tools/editor/tested_editor.toml`, nxwright's README, the Editor tool's README, `docs/screens.md`, and `docs/commands.md`. A test checks that they all agree.
 - Put the new release's firmware and installer hashes in `nxwright/tft/firmware_versions.py`. See step 4 of [the TFT compile probes' steps](../tft/README.md#the-steps) for how.

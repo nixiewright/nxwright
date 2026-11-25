@@ -1,14 +1,17 @@
 """The probe of `ram/` files for a real screen (tools/screen/ram_probe.py),
 run against nxwright's simulator in place of a screen."""
+import contextlib
+import io
 from pathlib import Path
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 from nxwright.testing.simulation import Simulation
 from tests.test_folder_check import edited_app
-from tools.screen.ram_probe import (CHECKS, END, NO_SPACE_CHECKS, SPACE, Check, number, report,
-                                    run_checks)
+from tools.screen.ram_probe import (CHECKS, ENCODING, END, NO_SPACE_CHECKS, SPACE, Check, main,
+                                    number, report, run_checks)
 
 PROJECT = Path(__file__).resolve().parent.parent / "tools" / "screen" / "project"
 
@@ -41,6 +44,10 @@ class ProbeTest(unittest.TestCase):
 
     def test_the_project_sets_the_space_the_checks_assume(self):
         self.assertIn("memory_file_storage_size = %d" % SPACE,
+                      (PROJECT / "app.toml").read_text(encoding="utf-8"))
+
+    def test_the_project_has_the_encoding_the_checks_assume(self):
+        self.assertIn('encoding = "%s"' % ENCODING,
                       (PROJECT / "app.toml").read_text(encoding="utf-8"))
 
     def test_nxwrights_simulator_gives_the_answers_of_the_nextion_editors_simulator(self):
@@ -78,6 +85,36 @@ class ProbeTest(unittest.TestCase):
         self.assertEqual(answer.sent, b"\xfe" + END + b"\xfd" + END + b"\x05\x00\x00\x00")
         # The instruction after the file went out only once the transfer had finished.
         self.assertEqual(sent[3:], [b"", b"", b'rdfile "ram/t.txt",0,0,0' + END])
+
+    def test_an_instruction_is_sent_in_the_projects_encoding(self):
+        sent = []
+
+        def screen(data: bytes) -> bytes:
+            sent.append(data)
+            return b""
+
+        run_checks([Check("A text", ('t0.txt="ｱ"',))], screen, lambda question: True,
+                   "shift-jis")
+        self.assertEqual(sent, [b"bkcmd=2" + END, b't0.txt="\xb1"' + END])
+
+    def test_the_command_with_no_screen_on_the_port(self):
+        class SilentPort:
+            """Stands in for the probe's serial exchange, on a port with no
+            screen, which answers nothing."""
+
+            def __call__(self, data: bytes) -> bytes:
+                return b""
+
+            def close(self):
+                pass
+
+        printed = io.StringIO()
+        on_the_port = mock.patch("tools.screen.ram_probe.SerialExchange",
+                                 lambda port, baud, quiet: SilentPort())
+        with on_the_port, contextlib.redirect_stderr(printed):
+            self.assertEqual(main(["COM9"]), 1)
+        self.assertEqual(printed.getvalue(),
+                         "ram_probe: no screen answered on COM9 at 9600 baud\n")
 
     def test_the_report(self):
         checks = [Check("A rule", ('newfile "RAM/a.bin",8',), number(0)),

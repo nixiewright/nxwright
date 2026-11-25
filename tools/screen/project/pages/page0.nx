@@ -1,0 +1,13 @@
+// The probe of the firmware's bugs runs this event with `click t0,0`
+// (tools/screen/matched_firmware_bugs.py). b[2] is the file stream fs0,
+// which has no bco. On a real screen, a condition that reads a missing
+// attribute counts as true, so both blocks run.
+on t0.up:
+  if(b[2].bco==1)
+  {
+    sys1+=1
+  }
+  if(b[2].bco!=1)
+  {
+    sys1+=2
+  }

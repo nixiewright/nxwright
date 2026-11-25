@@ -66,3 +66,13 @@ y = 40
 w = 120
 h = 120
 path = ""
+
+[[component]]
+name = "t1"
+type = "text"
+x = 320
+y = 0
+w = 300
+h = 30
+txt = ""
+txt_maxl = 30
